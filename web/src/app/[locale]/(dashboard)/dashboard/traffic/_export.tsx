@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useTranslations } from 'next-intl';
+import { useServerErrorText } from '@/hooks/use-server-error';
 import { ChevronDown, Download, FileArchive, FileSpreadsheet, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -51,6 +52,7 @@ export function useTrafficExport({
   search: string;
 }): TrafficExporter {
   const t = useTranslations('traffic.export');
+  const serverError = useServerErrorText();
   const [busy, setBusy] = useState<string | null>(null);
 
   async function run(format: ExportFormat, section?: TrafficExportSection) {
@@ -81,8 +83,8 @@ export function useTrafficExport({
         (await exportFileName(`ai-traffic.${format}`, '-'));
       link.click();
       URL.revokeObjectURL(url);
-    } catch {
-      toast.error(t('failed'));
+    } catch (err) {
+      toast.error(serverError(err, t('failed')));
     } finally {
       setBusy(null);
     }

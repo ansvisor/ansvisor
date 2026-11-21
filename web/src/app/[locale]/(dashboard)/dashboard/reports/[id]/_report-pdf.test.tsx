@@ -270,3 +270,36 @@ describe('ReportPdfDocument › Site Audit Score', () => {
     expect(text).not.toContain('+0');
   });
 });
+
+describe('ReportPdfDocument › numbers (GL-04)', () => {
+  it('writes counts with thousands separators', async () => {
+    const pdf = await draw(null, {
+      ...report,
+      payload: {
+        ...report.payload,
+        insights: {
+          avgVisibilityScore: 2.3,
+          visibilityChange: null,
+          totalMentions: 10262,
+          mentionsChange: null,
+          totalCitations: 1371,
+          citationsChange: null,
+          positiveSentimentPct: 60,
+          sentimentChange: null,
+        },
+        aiTraffic: {
+          totalVisits: 12500,
+          change: null,
+          platformBreakdown: [{ platform: 'chatgpt.com', visits: 11000 }],
+          topPages: [],
+        },
+      } as unknown as Report['payload'],
+    });
+    const text = pdf.textContent!;
+    expect(text).toContain('10,262');
+    expect(text).toContain('1,371');
+    expect(text).toContain('AI Traffic — 12,500 visits');
+    expect(text).toContain('11,000');
+    expect(text).not.toMatch(/10262|1371|12500|11000/);
+  });
+});

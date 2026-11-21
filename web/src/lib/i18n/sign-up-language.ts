@@ -1,10 +1,5 @@
 import { cookies, headers } from 'next/headers';
-import {
-  PSEUDO_LOCALE,
-  SELECTABLE_LOCALES,
-  TRANSLATED_LOCALES,
-  type AnyUiLocale,
-} from '@/i18n/locales';
+import { SELECTABLE_LOCALES, TRANSLATED_LOCALES, type AnyUiLocale } from '@/i18n/locales';
 import { canPreviewLocales } from '@/lib/i18n/preview';
 import { automaticLocale } from '@/lib/i18n/resolve-locale';
 import { UI_LOCALE_COOKIE, parseUiLocaleCookie } from '@/lib/i18n/ui-locale-cookie';
@@ -16,7 +11,7 @@ import { UI_LOCALE_COOKIE, parseUiLocaleCookie } from '@/lib/i18n/ui-locale-cook
  */
 export async function signUpLanguageOptions(): Promise<AnyUiLocale[]> {
   const preview = await canPreviewLocales().catch(() => false);
-  return preview ? [...SELECTABLE_LOCALES, PSEUDO_LOCALE] : [...TRANSLATED_LOCALES];
+  return preview ? [...SELECTABLE_LOCALES] : [...TRANSLATED_LOCALES];
 }
 
 /**

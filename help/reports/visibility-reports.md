@@ -1,11 +1,11 @@
 ---
 title: Generate visibility reports
 route: /dashboard/reports
-keywords: [reports, generate report, report templates, PDF, executive summary, snapshot, site audit score]
+keywords: [reports, generate report, report templates, PDF, executive summary, snapshot, site audit score, mention evidence, newest first]
 synonyms: [monthly report, client report, export a report, download PDF, report for my boss, score range, plus or minus]
 plan: all
 updated: 2026-11-19
-last_checked: 2026-11-05
+last_checked: 2026-11-19
 owner: Cihan
 app_version: 0.3.0
 approved: true
@@ -15,7 +15,9 @@ The **Reports** page makes point-in-time snapshots of your brand's AI visibility
 
 ## Generate a report
 
-Click **Generate Report** and pick a template. A template is a default set of sections, and you can switch any section on or off before generating. Then give the report a title if you like, pick the **Brand** and the **Date Range** (last 7, 30 or 90 days, or Custom), and check the **Sections**. Without a title, a report is named after its template, such as Weekly Visibility Summary; its period shows beside it. Generated reports appear under **Generated Reports** on the same page, newest first. To delete one, open its **⋯** menu, choose **Delete report** and confirm.
+Click **Generate Report** and pick a template. A template is a default set of sections, and you can switch any section on or off before generating. The template sets the **Date Range** right under it (last 7, 30 or 90 days, or Custom); change it there if you like. Then pick the **Brand**, check the **Sections** and give the report a title if you like. **Generate Report** stays at the bottom of the window as you scroll. Without a title, a report is named after its template, such as Weekly Visibility Summary; its period shows beside it. Generated reports appear under **Generated Reports** on the same page, newest first. To delete one, open its **⋯** menu, choose **Delete report** and confirm.
+
+When the brand already has a report of the same template and days, **Generate Report** asks first: **Open it** opens that report, **Generate anyway** makes a second one.
 
 ## Share or download from the list
 
@@ -34,7 +36,11 @@ The full picker offers KPIs, Trend, Share of Voice, Competitors, Topics, Prompts
 
 ## Read a report
 
-A report opens with its **Executive Summary**: a short account of what changed versus the previous period, such as the headline visibility movement, mention and citation growth, and sentiment and competitor shifts. One card per selected section follows, in a fixed order. Each metric is compared with the previous period of equal length, so a 30-day report is compared with the 30 days before it; **Site Audit Score** is the exception. Percentage changes read +X%, and point changes for visibility and sentiment +X pts. Because the snapshot is frozen, a report's numbers can differ from the live dashboards.
+A report opens with its **Executive Summary**: a short account of what changed versus the previous period, such as the headline visibility movement, mention and citation growth, and sentiment and competitor shifts. Its headline is your **Visibility score**, out of 100 with no % sign, and it calls the share of prompts that named or cited you **Prompts with a mention**. It names AI platforms as the rest of Ansvisor does, such as **Gemini**. One card per selected section follows, in a fixed order. Each metric is compared with the previous period of equal length, so a 30-day report is compared with the 30 days before it; **Site Audit Score** is the exception. Percentage changes read +X%, and point changes for visibility and sentiment +X pts. Because the snapshot is frozen, a report's numbers can differ from the live dashboards.
+
+## Mention Evidence
+
+Mention Evidence lists the answers that mentioned you most in the period, newest first. Each row shows the prompt, the platform, the date and the passage around your name, as plain text without the answer's formatting. Reports made earlier read the same way.
 
 ## Site Audit Score
 
@@ -53,6 +59,8 @@ In the **Competitor Leaderboard**, the **Visibility score** column shows each br
 ## Download a PDF
 
 **Download PDF** saves the report as a PDF with the same sections as the web view, the executive summary included. Its text stays selectable and sharp at any zoom, and the file is small enough to attach to an email. With white label in use, the report and its PDF carry your agency's logo, color, name and footer instead of Ansvisor's, with a "Prepared for" cover.
+
+Counts in a report and its PDF, such as mentions, citations and visits, are written with thousands separators in your interface language: **10,262** in English.
 
 ## Competitor Leaderboard ranking
 

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useFormatter, useTranslations } from 'next-intl';
+import { useServerErrorText } from '@/hooks/use-server-error';
 import { toast } from 'sonner';
 import { createDocument, getHTMLFromFragment } from '@tiptap/core';
 import { EditorContent, useEditor, type Editor } from '@tiptap/react';
@@ -631,6 +632,7 @@ export function DraftEditor({
     `${tRules('agent.now')}: ${ruleStatusDetail(tStatus, status)}`,
   ];
   const tStatus = useTranslations('contentEditor.editor.rules.status');
+  const serverError = useServerErrorText();
   // History keeps the page before the first suggestion accepted here.
   const agentBeforeKept = useRef(false);
   const onDecide = useRef<(id: string, decision: SuggestionDecision) => void>(() => {});
@@ -952,7 +954,7 @@ export function DraftEditor({
       .catch((err) => {
         console.error('Failed to save the author confirmation:', err);
         setAuthorConfirmed(before);
-        toast.error(t('quality.confirmFailed'));
+        toast.error(serverError(err, t('quality.confirmFailed')));
       })
       .finally(() => setConfirming(false));
   };
@@ -1328,7 +1330,7 @@ export function DraftEditor({
       } catch (err) {
         console.error('Failed to confirm the intro facts:', err);
         takeBack(keys.slice(i));
-        toast.error(t('quality.confirmCaseFailed'));
+        toast.error(serverError(err, t('quality.confirmCaseFailed')));
         return;
       }
     }
@@ -1349,7 +1351,7 @@ export function DraftEditor({
     } catch (err) {
       console.error('Failed to confirm the customer case:', err);
       takeBack();
-      toast.error(t('quality.confirmCaseFailed'));
+      toast.error(serverError(err, t('quality.confirmCaseFailed')));
     }
   };
   const confirmImage = async (src: string) => {
@@ -1368,7 +1370,7 @@ export function DraftEditor({
     } catch (err) {
       console.error('Failed to confirm the image:', err);
       takeBack();
-      toast.error(t('quality.confirmImageFailed'));
+      toast.error(serverError(err, t('quality.confirmImageFailed')));
     }
   };
   // Out of the editor (to Quality, to Before you publish): the block left
@@ -1458,11 +1460,11 @@ export function DraftEditor({
       // Only this one goes back: another kept meanwhile stays.
       setKeptSources((kept) => kept.filter((source) => source !== url));
       if (err instanceof Error && err.message === 'full') {
-        toast.error(t('quality.keepFull'));
+        toast.error(serverError(err, t('quality.keepFull')));
         return;
       }
       console.error('Failed to keep the source:', err);
-      toast.error(t('quality.keepFailed'));
+      toast.error(serverError(err, t('quality.keepFailed')));
     }
   };
   // E-E-A-T waiting for an author is a to-do, not a 0 in the average
@@ -1594,7 +1596,7 @@ export function DraftEditor({
     } catch (err) {
       console.error('Failed to set the reviewer:', err);
       if (pick === reviewerPick.current) setReviewerId(savedReviewer.current);
-      toast.error(t('reviewer.failed'));
+      toast.error(serverError(err, t('reviewer.failed')));
     }
   };
   // Quality's Add opens Brief › Your input.
@@ -1702,7 +1704,7 @@ export function DraftEditor({
     } catch (err) {
       console.error('Failed to set the author:', err);
       if (pick === authorPick.current) setAuthorId(savedAuthor.current);
-      toast.error(t('author.failed'));
+      toast.error(serverError(err, t('author.failed')));
     }
   };
   useEffect(() => {
@@ -2059,7 +2061,7 @@ export function DraftEditor({
       else toast(t('suggestions.undoneToast', { count: changed.length }));
     } catch (err) {
       console.error('Failed to decide the suggestions:', err);
-      toast.error(t('suggestions.saveFailed'));
+      toast.error(serverError(err, t('suggestions.saveFailed')));
     } finally {
       setDeciding(false);
     }
@@ -2433,7 +2435,7 @@ export function DraftEditor({
       else toast(t('rewrite.undoneToast'));
     } catch (err) {
       console.error('Failed to decide the rewritten page:', err);
-      toast.error(t('suggestions.saveFailed'));
+      toast.error(serverError(err, t('suggestions.saveFailed')));
     } finally {
       if (editable) editor.setEditable(true, false);
       setDeciding(false);
@@ -3121,7 +3123,7 @@ export function DraftEditor({
       );
     } catch (err) {
       console.error('Failed to export the page:', err);
-      toast.error(t('export.failed'));
+      toast.error(serverError(err, t('export.failed')));
     }
   };
 
@@ -3167,7 +3169,7 @@ export function DraftEditor({
       onAgentStarted?.('write');
     } catch (err) {
       console.error('Failed to start the Content Agent again:', err);
-      toast.error(t('agentFailed.errors.failed'));
+      toast.error(serverError(err, t('agentFailed.errors.failed')));
     } finally {
       setStarting(false);
     }
@@ -3259,7 +3261,7 @@ export function DraftEditor({
       onAgentStarted?.('rewrite');
     } catch (err) {
       console.error('Failed to start the page rewrite:', err);
-      toast.error(t('agentFailed.errors.failed'));
+      toast.error(serverError(err, t('agentFailed.errors.failed')));
     } finally {
       setRewriting(false);
     }
@@ -3420,8 +3422,8 @@ export function DraftEditor({
       // isn't marked ready.
       try {
         await autosave.settle();
-      } catch {
-        toast.error(t('markReadyUnsaved'));
+      } catch (err) {
+        toast.error(serverError(err, t('markReadyUnsaved')));
         return;
       }
       const next = await (anyway
@@ -3435,7 +3437,7 @@ export function DraftEditor({
       );
     } catch (err) {
       console.error('Failed to mark the draft ready:', err);
-      toast.error(t('markReadyFailed'));
+      toast.error(serverError(err, t('markReadyFailed')));
     } finally {
       setMarking(false);
     }
@@ -3885,7 +3887,7 @@ export function DraftEditor({
       } else toast(t('header.backInReview'));
     } catch (err) {
       console.error('Failed to move the draft back to review:', err);
-      toast.error(t('header.backInReviewFailed'));
+      toast.error(serverError(err, t('header.backInReviewFailed')));
     } finally {
       setUnmarking(false);
     }
@@ -3989,7 +3991,7 @@ export function DraftEditor({
       }
     } catch (err) {
       console.error('Failed to restore the version:', err);
-      toast.error(t('history.restoreFailed'));
+      toast.error(serverError(err, t('history.restoreFailed')));
     } finally {
       editor.setEditable(true, false);
       restoringNow.current = false;
@@ -4006,7 +4008,7 @@ export function DraftEditor({
     } catch (err) {
       console.error('Failed to set the page type:', err);
       setPicked(before);
-      toast.error(t('pageType.failed'));
+      toast.error(serverError(err, t('pageType.failed')));
       return;
     }
     // A type picked is a choice about the rules (the owner, 2026-11-14): its set

@@ -2,6 +2,7 @@
 
 import { useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
+import { useServerErrorText } from '@/hooks/use-server-error';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import {
@@ -43,6 +44,7 @@ export function TakeDownDialog({
   onDone: () => void;
 }) {
   const t = useTranslations('contentEditor.takeDown');
+  const serverError = useServerErrorText();
   const keepRef = useRef<HTMLButtonElement>(null);
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
@@ -55,7 +57,8 @@ export function TakeDownDialog({
     const result = await takeDownDraft(page.draftId);
     setBusy(false);
     if (!result.ok) {
-      setProblem(result.message || t('failed'));
+      // A refusal we map (no access, gone) in the person's language (LOC-008).
+      setProblem(serverError({ code: result.reason }, result.message || t('failed')));
       return;
     }
     toast.success(t('done', { cms: result.target ? CMS_NAMES[result.target] : cms }));

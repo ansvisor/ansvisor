@@ -2,6 +2,7 @@
 
 import { useCallback, useState } from 'react';
 import { useTranslations } from 'next-intl';
+import { useServerErrorText } from '@/hooks/use-server-error';
 import { toast } from 'sonner';
 import { FilePen, Loader2, MessageSquare } from 'lucide-react';
 import { useRouter } from '@/i18n/navigation';
@@ -195,6 +196,7 @@ function useChatStart(action: StartNowAction) {
   const t = useTranslations('actionCenter.actionsPage.runAgent');
   const tStart = useTranslations('actionCenter.actionsPage.startNow');
   const tActions = useTranslations('readOnly.actions');
+  const serverError = useServerErrorText();
   const { openUpgrade } = useUpgradeGate();
   const showChat = useShowChat();
   const [busy, setBusy] = useState(false);
@@ -208,7 +210,7 @@ function useChatStart(action: StartNowAction) {
       );
       if (!answer.ok) {
         if (answer.failure === 'subscription') openUpgrade(tActions('runAgentOnAction'));
-        else toast.error(answer.message ?? tStart('chatFailed'));
+        else toast.error(serverError(answer, answer.message ?? tStart('chatFailed')));
         return;
       }
       const words = { no: actionCodeNo(action) };

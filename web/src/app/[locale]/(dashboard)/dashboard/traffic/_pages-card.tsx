@@ -2,6 +2,7 @@
 
 import { useEffect, useState, type ReactNode } from 'react';
 import { useTranslations } from 'next-intl';
+import { useCaughtErrorText } from '@/hooks/use-server-error';
 import { toast } from 'sonner';
 import { FileSearch, Lightbulb, ListPlus, Loader2, MoreHorizontal, Send } from 'lucide-react';
 import { useRouter } from '@/i18n/navigation';
@@ -213,6 +214,7 @@ export function PagesCard({
   // prompts: admins and managers do both.
   const { canManage } = useUserRole();
   const tManagers = useTranslations('managersOnly');
+  const caughtError = useCaughtErrorText();
   // The page whose suggested prompts are open (part B2); each opening starts
   // afresh, and tracking some reads the list again for its prompt counts.
   const [promptsFor, setPromptsFor] = useState<string | null>(null);
@@ -278,7 +280,7 @@ export function PagesCard({
       }
       router.push(`/dashboard/audit/${started.audit.id}`);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : t('auditFailed'));
+      toast.error(caughtError(err, t('auditFailed')));
       setAuditing(null);
     }
   };

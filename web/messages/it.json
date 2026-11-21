@@ -14,6 +14,67 @@
     "upgrade": "Esegui l'upgrade",
     "choosePlan": "Scegli un piano"
   },
+  "locationPicker": {
+    "label": "Località",
+    "tracked": "monitorata",
+    "count": "· {count} {noun}",
+    "countOf": "· {count} di {max} disponibili",
+    "country": "Paese",
+    "countryMissing": "Paese · non presente su {engines}",
+    "usState": "Stati Uniti · stato",
+    "city": "Città · {country}",
+    "atCap": "Limite del piano raggiunto",
+    "add": "Aggiungi un paese, uno stato USA o una città",
+    "search": "Cerca località…",
+    "empty": "Nessuna località corrisponde.",
+    "already": "Già {noun}",
+    "atCapHint": "Limite del piano raggiunto: rimuova una località o passi a un piano superiore",
+    "remove": "Rimuovi {location}",
+    "cityNote": "Una città viene interrogata da Google AI Mode, AI Overviews e dai modelli API. ChatGPT, Gemini e Grok rispondono per paese, quindi monitori anche il paese per vederli."
+  },
+  "promptCard": {
+    "save": "Salva modifiche",
+    "cancelEdit": "Annulla modifica",
+    "edit": "Modifica Prompt",
+    "delete": "Elimina Prompt",
+    "deleteTitle": "Elimina Prompt",
+    "deleteBody": "Vuole davvero eliminare questo Prompt? Questa azione non può essere annullata.",
+    "cancel": "Annulla",
+    "confirmDelete": "Elimina"
+  },
+  "brandGuard": {
+    "noBrandsTitle": "Nessun brand al momento",
+    "noBrandsBody": "Crei il suo primo brand per iniziare a monitorare come i motori IA parlano di lei.",
+    "createBrand": "Crea brand",
+    "selectTitle": "Seleziona un brand",
+    "selectBody": "Scelga il brand con cui desidera lavorare."
+  },
+  "runSingle": {
+    "title": "Esegui singolo Prompt",
+    "description": "Scelga un Prompt da testare. Verrà eseguito solo quel Prompt sulle piattaforme attive.",
+    "empty": "Nessun Prompt attivo trovato. Aggiunga prima dei Prompt nelle impostazioni del brand.",
+    "loadFailed": "Impossibile caricare i Prompt",
+    "runFailed": "Impossibile eseguire il Prompt"
+  },
+  "responseDetail": {
+    "response": "Risposta IA",
+    "showLess": "Mostra meno",
+    "showFull": "Mostra risposta completa",
+    "citations": "Citazioni ({count})",
+    "fanOut": "Query fan-out ({count})"
+  },
+  "serverErrors": {
+    "invalid": "Operazione non riuscita: un elemento non è valido. Controlli e riprovi.",
+    "too_large": "Il file è troppo grande. Provi con uno più piccolo.",
+    "too_long": "Il testo è troppo lungo. Lo accorci e riprovi.",
+    "rate_limited": "Sta eseguendo questa azione troppe volte. Attenda qualche minuto e riprovi.",
+    "forbidden": "Non dispone dell'autorizzazione per farlo. Contatti un Amministratore.",
+    "duplicate": "Esiste già.",
+    "missing_ai_key": "Aggiunga prima una chiave di un provider IA in Impostazioni › Provider IA.",
+    "server_error": "Si è verificato un problema da parte nostra. Riprovi.",
+    "location_limit": "Le posizioni dei Prompt del Suo piano sono esaurite: ogni Prompt conta una volta per ogni posizione monitorata e i Prompt in pausa non contano. Ne rimuova o metta in pausa alcuni, oppure passi a un piano superiore.",
+    "brand_limit": "I brand del Suo piano sono tutti in uso. Passi a un piano superiore per aggiungerne altri."
+  },
   "aiUsage": {
     "meter": {
       "ai": "IA",
@@ -41,6 +102,19 @@
       "startPlan": "Attiva il tuo piano"
     },
     "getMoreWindow": {
+      "topUp": {
+        "title": "Ricarica di utilizzo IA",
+        "label": "Ricariche di utilizzo IA",
+        "buy": "Acquista {option} · {price}",
+        "confirm": "Pagare ora {price} con la carta registrata? Verrà aggiunto a questo periodo fino al rinnovo del piano.",
+        "pay": "Paga {price}",
+        "cancel": "Annulla",
+        "paying": "Pagamento in corso…",
+        "done": "Ricarica acquistata. Sarà conteggiata non appena il pagamento sarà confermato.",
+        "starter": "Growth include 5 volte l'utilizzo IA e ricariche IA ogni volta che ne ha bisogno.",
+        "seeGrowth": "Scopri Growth",
+        "oldCredits": "I pacchetti di crediti IA non sono più in vendita; i crediti acquistati restano validi fino alla scadenza."
+      },
       "titleAi": "Ottieni più crediti IA",
       "titleStorage": "Ottieni più spazio",
       "description": "Il tuo piano, lo stato dei tuoi limiti e i pacchetti per aggiungerne altri.",
@@ -49,7 +123,7 @@
       "aiLine": "Utilizzo IA questo mese: {percent} · {plan} · si ripristina il {date}",
       "aiLineNoDate": "Utilizzo IA questo mese: {percent} · {plan}",
       "ownKey": "Usa la tua chiave",
-      "askAi": "Acquista un pacchetto di crediti IA",
+      "askAi": "Acquista una ricarica di utilizzo IA",
       "askStorage": "Acquista un pacchetto di spazio",
       "estimates": {
         "title": "Cosa può coprire all'incirca un pacchetto",
@@ -673,6 +747,7 @@
     "billing": "Piani e fatturazione",
     "whatsNew": "Novità",
     "whatsNewUnread": "Nuovi aggiornamenti",
+    "language": "Lingua",
     "help": "Guida",
     "signOut": "Esci"
   },
@@ -841,6 +916,7 @@
         "starting": "In corso",
         "notYet": "Non ancora",
         "open": "{count} aperte",
+        "openBreakdown": "{onHold} in attesa · {mine} Suoi",
         "doneWeek": "{count} questa settimana",
         "noChange": "nessuna modifica",
         "tomorrow": "Domani"
@@ -919,7 +995,7 @@
           "openNewest": "Apri la più recente nella chat"
         },
         "drafts": {
-          "line": "Un agente ha preparato la bozza di {count, plural, one {una pagina} other {# pagine}}. Nulla verrà pubblicato senza la tua approvazione.",
+          "line": "{count, plural, one {# bozza} other {# bozze}} in attesa della Sua revisione. Nulla viene pubblicato senza il Suo OK.",
           "open": "{count, plural, one {Rivedi la bozza} other {Rivedi # bozze}}"
         },
         "due": {
@@ -1061,8 +1137,8 @@
         },
         "saved": {
           "title": "Salvati per te",
-          "drafts": "{count, plural, one {1 bozza dal tuo agente} other {# bozze dai tuoi agenti}}: {title}.",
-          "draftsUntitled": "{count, plural, one {1 bozza dal tuo agente} other {# bozze dai tuoi agenti}} in attesa di revisione.",
+          "drafts": "{count, plural, one {1 bozza} other {# bozze}} in attesa della Sua revisione: {title}.",
+          "draftsUntitled": "{count, plural, one {1 bozza} other {# bozze}} in attesa della Sua revisione.",
           "kept": "Scegli un piano per esaminarle e pubblicarle. I tuoi {prompts, plural, one {# prompt} other {# prompt}} e i tuoi {competitors, plural, one {# concorrente} other {# concorrenti}} vengono mantenuti."
         },
         "plan": {
@@ -1099,6 +1175,16 @@
       "content": "Contenuti"
     },
     "kpis": {
+      "newGoal": {
+        "prompt": "Obiettivo superato · Imposta un nuovo obiettivo",
+        "title": "Nuovo obiettivo per {name}",
+        "description": "Il valore è {value}, oltre l'obiettivo di {goal}. Il nuovo obiettivo parte dal 20% in più rispetto al valore attuale; lo modifichi se lo desidera.",
+        "label": "Nuovo obiettivo",
+        "cancel": "Annulla",
+        "save": "Salva obiettivo",
+        "saved": "Nuovo obiettivo salvato",
+        "failed": "Impossibile salvare l'obiettivo. Riprovi."
+      },
       "title": "KPI",
       "subtitle": "Monitora le metriche più importanti, allineate ai tuoi obiettivi.",
       "allKpis": "Tutti i KPI",
@@ -1121,6 +1207,7 @@
         "goal_reached": "Obiettivo raggiunto"
       },
       "pointsChange": "{value} pt",
+      "score": "{value}/100",
       "vsGoalAria": "{progress}% dell'obiettivo",
       "editKpis": "Modifica KPI",
       "addKpi": "Aggiungi KPI",
@@ -1193,7 +1280,8 @@
       },
       "targets": "Target",
       "targetAria": "Target per {name}",
-      "invalidTarget": "I target devono essere positivi; le percentuali non possono superare 100.",
+      "invalidTarget": "Gli obiettivi devono essere positivi; quelli in percentuale o punteggio non possono superare 100.",
+      "scoreSuffix": "/100",
       "callout": {
         "title": "Questo framework KPI guiderà il tuo Centro azioni.",
         "description": "Le azioni e i consigli vengono prioritizzati in base ai tuoi obiettivi KPI."
@@ -1244,7 +1332,8 @@
     },
     "signalsPage": {
       "title": "Segnali",
-      "subtitle": "Segnali in tempo reale dalla ricerca IA, dal tuo sito e dal web. Questi segnali alimentano il tuo Centro azioni.",
+      "subtitle": "Segnali dalle risposte IA, dal Suo sito e dal web. Alimentano il Suo Centro azioni.",
+      "subtitleRun": "Segnali dell'ultima esecuzione delle risposte IA ({ago}). Alimentano il Suo Centro azioni.",
       "cards": {
         "total": "Segnali totali",
         "totalPopulation": "attivi {days, plural, one {nell'ultimo giorno} other {negli ultimi # giorni}}",
@@ -1254,6 +1343,7 @@
         "newPopulation": "rilevati {days, plural, one {nell'ultimo giorno} other {negli ultimi # giorni}}",
         "resolved": "Segnali risolti",
         "resolvedPopulation": "risolti {days, plural, one {nell'ultimo giorno} other {negli ultimi # giorni}}",
+        "resolvedNote": "Può essere superiore a Nuovi: include i segnali aperti prima di questo periodo e risolti al suo interno.",
         "avgImpact": "Impatto medio segnale",
         "avgImpactPopulation": "tra i segnali attivi {days, plural, one {nell'ultimo giorno} other {negli ultimi # giorni}}",
         "noPrev": "nessun dato precedente",
@@ -1857,14 +1947,15 @@
       "choices": {
         "approve_first": {
           "label": "Approvo prima io",
-          "note": "Ogni modifica apportata da un agente attende l'approvazione di qualcuno, indipendentemente dalla modalità dell'agente."
+          "note": "Ogni modifica di un agente attende l'approvazione di qualcuno."
         },
         "auto_start": {
           "label": "L'agente si avvia da solo",
-          "note": "Ciascun agente opera nella propria modalità: Chiedi prima a me, Automatico o Completamente automatico."
+          "note": "Ogni agente segue la propria modalità: Chiedimi prima, Auto o Auto completa."
         }
       },
-      "goLive": "Nessuna delle due opzioni influisce sulla pubblicazione: un agente pubblica o invia solo con il clic di una persona, a meno che un Amministratore non gli consenta di pubblicare autonomamente.",
+      "goLive": "Gli agenti chiedono sempre conferma prima di pubblicare o inviare.",
+      "goLiveAdmin": "L'eccezione: un agente a cui un Amministratore ha consentito di pubblicare e inviare in autonomia.",
       "changedBy": "Modificato da {name} · {date}",
       "someone": "qualcuno non più presente nello spazio di lavoro",
       "neverChanged": "Non ancora modificato: ogni spazio di lavoro inizia con \"Approvo prima io\".",
@@ -1927,6 +2018,7 @@
         "actions": "Azioni"
       },
       "status": {
+        "open": "Aperta",
         "new": "Nuovo",
         "in_progress": "In corso",
         "on_hold": "In attesa",
@@ -1937,6 +2029,7 @@
       "stale": {
         "pill": "Inattivo",
         "hint": "Nello stato Nuovo da almeno {days} giorni, senza alcuna attività",
+        "quiet": "Nessun aggiornamento da {days} g",
         "notice": "Inattivo: questa azione è nello stato Nuovo da almeno {days} giorni e nessuno ci ha lavorato. Non è chiusa: mantienila se è ancora rilevante oppure ignorala.",
         "keep": "Ancora pertinente",
         "kept": "Mantenuta: non è più inattiva"
@@ -1946,6 +2039,7 @@
       "everyoneTitle": "Tutti nello spazio di lavoro: nessun assegnatario al momento",
       "tags": {
         "signals": "{count, plural, one {1 segnale} other {# segnali}}",
+        "signalResolved": "Segnale risolto, da rivedere",
         "prompts": "{count, plural, one {1 prompt} other {# prompt}}",
         "pages": "{count, plural, one {1 pagina} other {# pagine}}",
         "sources": "{count, plural, one {# fonte} other {# fonti}}",
@@ -1957,8 +2051,15 @@
       },
       "removed": {
         "note": "({items} rimosso dalla creazione di questa azione)",
-        "hover": "Non più monitorato dalla creazione di questa azione: {names}",
-        "hoverMore": "Non più monitorato dalla creazione di questa azione: {names} e altri {more}"
+        "title": "Non più monitorati dalla creazione di questa azione",
+        "more": "e altri {count}",
+        "reasons": {
+          "deleted": "Eliminato",
+          "paused": "In pausa"
+        },
+        "replanHint": "Più della metà dei Prompt di questa azione non esiste più, quindi le sue attività potrebbero non adattarsi {count, plural, one {al # Prompt rimasto} other {ai # Prompt rimasti}}.",
+        "replan": "Ripianifica con i Prompt rimanenti",
+        "replanConfirm": "Riscrivere le attività di questa azione per i Prompt rimasti? Le attività completate, in corso e aggiunte a mano restano."
       },
       "menu": {
         "label": "Azioni per questo elemento"
@@ -1983,6 +2084,8 @@
         "description": "Le azioni vengono generate dai tuoi segnali dopo l'esecuzione del monitoraggio giornaliero. Quando emergono attività rilevanti, appariranno qui: privilegiamo la qualità rispetto alla quantità."
       },
       "noResults": "Nessuna azione corrisponde a questi filtri.",
+      "noOpen": "Nessuna azione aperta. Quelle completate e archiviate si trovano in Tutti gli stati.",
+      "showAllStatuses": "Mostra tutti gli stati",
       "error": {
         "title": "Impossibile caricare le tue azioni.",
         "retry": "Riprova"
@@ -2002,6 +2105,10 @@
         },
         "notScored": "Non ancora valutata",
         "why": "Perché questa priorità?",
+        "lowConfidence": {
+          "tip": "In base a {why}. L'affidabilità è solo una parte del punteggio, quindi impatto e domanda possono comunque collocarla in alto. Verificala prima di agire.",
+          "sentTip": "Valutata in base a ciò con cui è stata inviata, non su risultati rilevati. Verificala prima di agire."
+        },
         "reason": {
           "change": {
             "lost": "Terreno perso su {subject}",
@@ -2163,7 +2270,7 @@
         "why": "Perché questa azione?",
         "goal": "Obiettivo",
         "kpis": "KPI",
-        "kpiTarget": "obiettivo {target}",
+        "kpiBrandGoal": "{timeframe, select, weekly {Obiettivo settimanale del brand} quarterly {Obiettivo trimestrale del brand} other {Obiettivo mensile del brand}}: {target}",
         "noKpis": "Nessun KPI configurato è collegato a questa azione.",
         "support": "{count, plural, =0 {Nessun segnale aperto supporta più questa azione.} one {# segnale supporta questa azione} other {# segnali supportano questa azione}}",
         "supportAll": "Tutti i segnali ({count})",
@@ -2304,6 +2411,8 @@
         "assignee": "Assegnatario",
         "assignTo": "Assegna a un membro del team",
         "dueDate": "Data di scadenza",
+        "goalPassed": "Data obiettivo superata",
+        "setNewDate": "Imposta una nuova data",
         "statusLabel": "Stato",
         "events": {
           "created": "{source, select, chat {Azione creata da Chat} ads {Azione creata da Ads} other {Azione creata}}",
@@ -5301,7 +5410,7 @@
       "addedLabel": "Aggiunto a un'azione di Centro azioni",
       "createdNote": "Il Centro azioni imposta il suo Punteggio di priorità. Puoi completare le sue attività lì.",
       "addedNote": "Aggiunto come prova. I suoi obiettivi non cambiano.",
-      "open": "Apri in Azioni",
+      "open": "Apri nel Centro azioni",
       "toastCreated": "Inviato a Centro azioni",
       "toastAdded": "Aggiunto all'azione nel Centro azioni"
     },
@@ -5376,6 +5485,8 @@
     "readOnly": "Sola lettura · {role}",
     "readOnlyTitle": "I {role} possono chiedere e leggere. Gli Amministratori e i Gestori possono apportare modifiche. Scopri cosa puoi fare.",
     "model": "Modello",
+    "modelPrefix": "Modello:",
+    "modelTip": "Il modello di IA con cui risponde la Chat e quanto approfondisce il lavoro. Auto ne sceglie uno per ogni passaggio.",
     "modelAuto": "Automatico",
     "modelWarn": "Modello · {usage}",
     "modelImage": "Immagine · {model}",
@@ -5442,7 +5553,7 @@
       "size": "I file devono avere dimensioni massime di 10 MB.",
       "count": "Puoi allegare fino a 5 file.",
       "failed": "Impossibile caricare {name}. Rimuovilo o riprova.",
-      "failedMany": "{count} files didn't upload. Remove them or try again.",
+      "failedMany": "{count} file non sono stati caricati. Rimuovili o riprova.",
       "retry": "Riprova"
     },
     "slash": {
@@ -5535,6 +5646,7 @@
     },
     "mode": {
       "label": "Modalità di esecuzione",
+      "prefix": "Modalità di esecuzione:",
       "current": "Modalità di esecuzione: {mode}",
       "ask_first": "Chiedi prima a me",
       "auto": "Automatica, chiedi prima di modificare",
@@ -5677,7 +5789,7 @@
       "save": "Salva",
       "inFiles": "Nei File",
       "openEditor": "Apri nell'editor",
-      "sendToActionCenter": "Invia ad Azioni"
+      "sendToActionCenter": "Invia al Centro azioni"
     }
   },
   "chatDeliverable": {
@@ -6070,7 +6182,8 @@
       "scheduledLabel": "Pianificati, {count, plural, one {# processo attivo} other {# processi attivi}}",
       "agents": "Agenti",
       "agentsShort": "Agenti",
-      "agentsLabel": "Agenti · nel Centro azioni"
+      "agentsLabel": "Agenti · nel Centro azioni",
+      "agentsTip": "Apre Centro azioni › Agenti, fuori dalla Chat"
     },
     "actions": {
       "more": "Altro per {name}",
@@ -6167,7 +6280,7 @@
         "whatsNew": "Novità"
       },
       "byFocus": {
-        "rivalRose": "Il tasso di menzioni di {rival} è aumentato di {points, number} punti questa settimana.",
+        "rivalRose": "Il tasso di menzioni di <link>{rival}</link> è salito di {points, number} punti questa settimana.",
         "startTitle": "Inizia con una domanda",
         "newForYou": {
           "title": "Novità per te",
@@ -8833,6 +8946,11 @@
       "createAgent": "Crea agente",
       "connect": "Connetti {name}",
       "notConnected": "{name} · non connesso",
+      "catalog": {
+        "name": "Un catalogo",
+        "connect": "Collega un catalogo (Shopify, URL del feed, CSV)"
+      },
+      "enabled": "Attivata",
       "toggle": "/{name} attivo per lo spazio di lavoro",
       "turnedOn": "/{name} è attivo per lo spazio di lavoro.",
       "turnedOff": "/{name} è disattivato per l'area di lavoro.",
@@ -9503,7 +9621,7 @@
       "pagesSubOther": "+ {count} su altri siti",
       "coverageOf": "su {count, plural, one {# pagina del sito} other {# pagine del sito}}",
       "coverageSub": "{never} mai sottoposte ad Audit · {stale} non verificate da {days} giorni",
-      "coverageTip": "Pagine del tuo sito con un Audit negli ultimi {days} giorni, tra quelle che Ansvisor monitora dalla tua sitemap, da Google Analytics e dalle pagine citate dall'IA (fino a 500). Le pagine escluse nelle impostazioni di Audit del sito, e le pagine di checkout, accesso e note legali, non vengono conteggiate.",
+      "coverageTip": "Pagine del tuo sito con un audit (quelle non sottoposte ad audit negli ultimi {days} giorni sono indicate accanto), tra quelle che Ansvisor conserva dalla tua sitemap, da Google Analytics e dalle pagine citate dall'IA (fino a 500). Le pagine escluse nelle impostazioni di Site Audit e le pagine di checkout, login e note legali non vengono conteggiate.",
       "seeNotAudited": "Vedi le {count} non sottoposte ad Audit →",
       "authority": "Autorevolezza · E-E-A-T",
       "authorityTip": "I punteggi di Autorevolezza ed E-E-A-T, calcolati come media dell'ultimo audit di ciascuna pagina, e i segnali che generano errori o avvisi sul maggior numero di pagine.",
@@ -9579,6 +9697,17 @@
       "saveFailed": "Impossibile salvare le impostazioni",
       "loadFailed": "Impossibile caricare le impostazioni"
     },
+    "batch": {
+      "title": "Audit in blocco",
+      "progress": "{done} di {total} completati",
+      "timeLeft": "mancano circa {minutes} min",
+      "estimating": "calcolo del tempo rimanente…",
+      "finished": "{total, plural, one {# audit completato} other {# audit completati}}",
+      "thisBatch": "Questo blocco",
+      "thisBatchTip": "Mostra solo le pagine di questo audit in blocco",
+      "allPages": "Tutte le pagine",
+      "dismiss": "Chiudi"
+    },
     "autoRun": {
       "label": "Audit automatico",
       "done": "{pages, plural, one {# pagina analizzata} other {# pagine analizzate}} · {issues, plural, one {# problema critico} other {# problemi critici}}",
@@ -9609,7 +9738,7 @@
       },
       "list": "{pages}{count, plural, =0 {} other { e altre #}}",
       "recent": "Escludi {count, plural, one {la # pagina sottoposta} other {le # pagine sottoposte}} ad audit negli ultimi {days} giorni",
-      "recentPages": "{pages}{count, plural, =0 {} other { e altre #}}. Una pagina che non è cambiata ottiene lo stesso punteggio.",
+      "recentPages": "{pages}{count, plural, =0 {} other { e altre #}}. Eseguite di nuovo l'audit dopo una modifica che interessa l'intero sito, come robots.txt o un template.",
       "recentPage": "{page} il {date}",
       "noLimit": "Il tuo piano non ha limiti mensili. Una pagina già sottoposta ad audit non viene avviata due volte.",
       "noneLeft": "Nessun audit rimasto questo mese.",
@@ -9745,7 +9874,7 @@
       "counts": {
         "official": "Siti governativi e accademici: .gov, .edu, .mil e le relative estensioni nazionali, come .gov.tr, .edu.tr, .ac.uk",
         "international": "Organismi internazionali: qualsiasi sito .int, un.org, unesco.org, europa.eu, oecd.org, worldbank.org, imf.org",
-        "research": "Fonti di riferimento e ricerca: wikipedia.org, doi.org, arxiv.org, nature.com, sciencedirect.com, iso.org, w3.org",
+        "research": "Riferimenti, ricerca, standard e documentazione di piattaforme: wikipedia.org, doi.org, arxiv.org, nature.com, iso.org, w3.org, rfc-editor.org, schema.org, developers.google.com, developer.mozilla.org",
         "news": "Principali testate giornalistiche: Reuters, Bloomberg, Financial Times, BBC, The New York Times, The Washington Post",
         "trusted": "Le tue fonti attendibili:"
       },
@@ -9785,6 +9914,7 @@
       "firewall": "{count, plural, one {{bots} è bloccato} other {{bots} sono bloccati}} dalla tua rete CDN o dal firewall, anche se robots.txt ne consente l'accesso.",
       "robots": "robots.txt blocca l'accesso a {bots}.",
       "allLetIn": "Tutti i bot IA testati sono stati ammessi.",
+      "unnamed": "robots.txt non nomina i bot IA, quindi l'audit non può confermare che siano i benvenuti. Aggiungi un gruppo per ciascuno (ad esempio \"User-agent: GPTBot\" con \"Allow: /\").",
       "inconclusive": "Il tuo sito ha rifiutato la richiesta di Ansvisor ({status}), quindi i bot non sono stati testati.",
       "note": "Richiesta effettuata una volta per ciascun bot dai server di Ansvisor. Un firewall che controlla gli indirizzi del crawler può trattare il crawler reale in modo diverso.",
       "cell": {
@@ -9827,6 +9957,7 @@
       "tipSame": "Gli ultimi {audits} audit di questa pagina hanno ottenuto tutti un punteggio pari a {low}."
     },
     "aiRecommendations": "Raccomandazioni IA",
+    "topRecommendations": "Raccomandazioni principali",
     "signals": "Segnali",
     "onlyIssues": "Solo problemi",
     "allSignals": "Tutti i segnali",
@@ -9839,6 +9970,327 @@
     "emptyTitle": "Esegui l'audit di qualsiasi pagina per la visibilità nella ricerca IA",
     "emptyBody": "Inserisci un URL qui sopra per valutarlo rispetto a 48 segnali AEO/GEO e ricevere soluzioni scritte dall'IA."
   },
+  "auditRubric": {
+    "categories": {
+      "structure": {
+        "label": "Struttura",
+        "description": "Quanto la tua pagina è interpretabile da un motore IA. Schema, titoli, elenchi, tabelle, testo alternativo, meta OG. Il substrato che rende leggibile tutto il resto."
+      },
+      "authority": {
+        "label": "Autorevolezza",
+        "description": "Se la tua pagina appare scritta da un esperto e cita fonti reali. Firme, citazioni, statistiche, virgolettati, aggiornamento, termini tecnici."
+      },
+      "content": {
+        "label": "Contenuti",
+        "description": "Se la pagina risponde davvero alla domanda dell'acquirente: in modo diretto, completo e con il registro giusto. BLUF, copertura della query, copertura delle sotto-domande, leggibilità e, nelle pagine prodotto, l'apertura della descrizione."
+      },
+      "trust": {
+        "label": "Affidabilità",
+        "description": "Segnali di affidabilità al momento della scansione e della condivisione: HTTPS, canonical, viewport, accesso dei bot IA tramite robots.txt e un fetch reale come ciascun bot IA, Twitter card, meta description. llms.txt è mostrato solo a titolo informativo."
+      },
+      "eeat": {
+        "label": "E-E-A-T",
+        "description": "Il framework di Google per Esperienza, Competenza, Autorevolezza e Affidabilità. Prove in prima persona, casi di studio, credenziali dell'autore, entità del brand su Wikidata, menzioni sulla stampa, informativa sulla privacy, informazioni di contatto."
+      }
+    },
+    "signals": {
+      "structural-depth": {
+        "label": "Profondità strutturale (GEO-SFE)",
+        "what": "Gerarchia dei titoli e profondità della struttura annidata: un annidamento H1→H2→H3 che rispecchia un vero schema del testo.",
+        "why": "arXiv:2603.29979 mostra un aumento delle citazioni del 17,3% per le pagine con profondità strutturale misurabile rispetto ai documenti piatti.",
+        "howToFix": "Raggruppa i contenuti in sottosezioni H2 con un nome. Usa H3 per i punti secondari. Non saltare livelli."
+      },
+      "internal-linking": {
+        "label": "Link interni",
+        "what": "Link da questa pagina ad altre pagine del tuo sito: segnale di un grafo navigabile.",
+        "why": "I crawler IA ampliano il contesto tramite i link interni, proprio come durante la scansione. Le pagine isolate vengono indicizzate meno.",
+        "howToFix": "Aggiungi 5–10 link interni per pagina verso concetti correlati, termini del glossario o pagine di supporto."
+      },
+      "page-weight": {
+        "label": "Peso della pagina",
+        "what": "Dimensione totale dell'HTML: meno è meglio. Segnaliamo le pagine oltre 500 KB.",
+        "why": "I bot di rendering IA hanno timeout più brevi degli utenti. Le pagine pesanti vengono troncate o saltate.",
+        "howToFix": "Elimina il JS inutilizzato, rimanda il caricamento delle immagini sotto la piega, rimuovi gli script di terze parti che bloccano il rendering."
+      },
+      "no-js-content": {
+        "label": "Testo principale senza JavaScript",
+        "what": "Quanta parte del testo principale della pagina è nell'HTML che un bot IA riceve prima dell'esecuzione di qualsiasi JavaScript, rispetto alla pagina resa da un browser. Fino al 10% nascosto è ok; fino al 30% genera un avviso.",
+        "why": "I crawler IA come GPTBot, ClaudeBot e PerplexityBot non eseguono JavaScript: il testo che compare solo dopo l'esecuzione non viene mai visto.",
+        "howToFix": "Genera il contenuto principale sul server (rendering lato server o pagine statiche), oppure prerenderizzalo per i bot, invece di caricarlo con JavaScript."
+      },
+      "json-ld-presence": {
+        "label": "Presenza di JSON-LD",
+        "what": "Se la pagina include almeno un blocco JSON-LD schema.org.",
+        "why": "Schema.org è il segnale con il maggiore impatto per l'idoneità ad AI Overviews: i motori lo analizzano prima del testo.",
+        "howToFix": "Aggiungi almeno un blocco Organization o Article. Il nostro /tools/schema-generator genera JSON-LD valido."
+      },
+      "json-ld-validity": {
+        "label": "Validità di JSON-LD",
+        "what": "Se il JSON-LD è analizzabile, ha @context = schema.org e un @type valido.",
+        "why": "Un JSON-LD malformato è peggio di nessun JSON-LD: i motori registrano un errore di analisi e riducono l'affidabilità.",
+        "howToFix": "Verifica il tuo JSON-LD con il Rich Results Test di Google prima della pubblicazione."
+      },
+      "json-ld-relevance": {
+        "label": "Pertinenza del tipo JSON-LD",
+        "what": "Verifica che il @type corrisponda all'intento della pagina (Article su un blog, Product su una scheda prodotto, FAQPage su una FAQ).",
+        "why": "Gli schema di tipo errato vengono ignorati: il markup Article su una homepage viene interpretato come rumore.",
+        "howToFix": "Scegli il tipo schema.org più vicino al contenuto effettivo della pagina, non un tipo generico."
+      },
+      "faq-schema": {
+        "label": "Schema FAQ",
+        "what": "JSON-LD FAQPage con almeno 2 coppie domanda/risposta.",
+        "why": "Secondo le indicazioni SGE di Google stesso, FAQPage è il singolo tipo che incrementa di più le citazioni in AI Overviews.",
+        "howToFix": "Aggiungi lo schema FAQPage con 3–5 coppie domanda/risposta che rispecchino le reali ricerche degli acquirenti."
+      },
+      "h1-quality": {
+        "label": "Qualità dell'H1",
+        "what": "Un solo H1, lungo 20–70 caratteri, che contenga un termine della query principale.",
+        "why": "I motori di IA considerano l'H1 come l'affermazione della pagina: più H1 confondono il modello tematico.",
+        "howToFix": "Un solo H1 per pagina, descrittivo, di 30–60 caratteri, con l'argomento principale della pagina."
+      },
+      "h2-coverage": {
+        "label": "Copertura H2",
+        "what": "≥3 sottosezioni H2 che suddividono i contenuti per una lettura veloce.",
+        "why": "I motori di IA estraggono gli H2 come ancore di sezione: le pagine che ne sono prive sono più difficili da riassumere.",
+        "howToFix": "Suddividi i contenuti in 3–6 sottosezioni H2, ciascuna dedicata a una sotto-domanda."
+      },
+      "lists": {
+        "label": "Elenchi",
+        "what": "≥1 <ul> o <ol> con ≥3 elementi.",
+        "why": "Gli elenchi sono l'unità che i motori di IA estraggono in via preferenziale per le query “come fare X” e “migliore Y”.",
+        "howToFix": "Trasforma almeno un paragrafo di motivi o passaggi enumerati in un vero <ul>/<ol>."
+      },
+      "tables": {
+        "label": "Tabelle",
+        "what": "≥1 <table> con <thead>/<tbody> corretti per i dati strutturati.",
+        "why": "Le tabelle sono il formato con il più alto tasso di estrazione per le query di confronto e di schede tecniche.",
+        "howToFix": "Se hai specifiche, prezzi o confronti, usa vere <table> e non immagini."
+      },
+      "alt-text": {
+        "label": "Testo alternativo",
+        "what": "≥80% dei tag <img> significativi ha attributi alt non vuoti. Le immagini decorative (alt=\"\", role=\"presentation\" o aria-hidden) sono escluse.",
+        "why": "I motori multimodali (Gemini, Claude, GPT-4o) leggono il testo alternativo come contesto semantico della pagina.",
+        "howToFix": "Aggiungi un alt descrittivo a ogni immagine significativa. Le immagini decorative usano alt=\"\"."
+      },
+      "open-graph": {
+        "label": "Metadati Open Graph",
+        "what": "og:title, og:description, og:image e og:type sono tutti presenti.",
+        "why": "Le anteprime dei link dei motori di IA e le condivisioni social usano i meta OG come scheda di citazione.",
+        "howToFix": "Aggiungi i 4 tag OG. Usa un og:image da 1200×630. Il nostro /tools/og-checker li convalida."
+      },
+      "outbound-authority-links": {
+        "label": "Link in uscita verso fonti autorevoli",
+        "what": "Link a siti ufficiali (enti governativi, accademici o internazionali), siti di riferimento e ricerca o testate giornalistiche importanti.",
+        "why": "Collegarsi a fonti affidabili trasferisce autorevolezza a ritroso (effetto grafo delle citazioni).",
+        "howToFix": "Cita le fonti primarie con veri tag <a>, non con semplici riferimenti testuali. Punta a 2–3 per ogni pagina lunga."
+      },
+      "citation-density": {
+        "label": "Densità di citazioni",
+        "what": "Citazioni inline ogni 1000 parole (obiettivo ≥2).",
+        "why": "Le pagine che citano fonti vengono citate come fonti. La densità di citazioni è il segnale di autorevolezza non basato su link più forte.",
+        "howToFix": "Sostituisci “gli studi dimostrano” con “uno studio di Stanford del 2024 (link)”. La specificità vince."
+      },
+      "statistic-density": {
+        "label": "Densità di statistiche",
+        "what": "Affermazioni quantitative con numeri ogni 1000 parole (obiettivo ≥3).",
+        "why": "I motori di IA citano di preferenza contenuti con affermazioni misurabili rispetto a testi vaghi.",
+        "howToFix": "Aggiungi numeri reali (percentuali, importi in dollari, durate) alle tue affermazioni."
+      },
+      "quotations": {
+        "label": "Citazioni dirette",
+        "what": "<blockquote> inline o attribuzioni tra virgolette.",
+        "why": "Le citazioni dirette suggeriscono una ricerca primaria. Aumentano i tassi di citazione di circa il 12% nel set di test del paper GEO.",
+        "howToFix": "Cita un cliente, un esperto o una fonte primaria per ogni pagina lunga."
+      },
+      "author-byline": {
+        "label": "Firma dell'autore",
+        "what": "Un autore con nome, almeno un nome reale, nell'area della firma.",
+        "why": "I contenuti anonimi sono considerati a basso E-E-A-T. I motori di IA danno risalto ai contenuti con autore.",
+        "howToFix": "Aggiungi 'Di [Nome]' in alto. Inserisci un link a una pagina biografica reale dell'autore. Usa lo schema Person."
+      },
+      "date-markup": {
+        "label": "Markup della data",
+        "what": "datePublished + dateModified in JSON-LD o <time datetime>.",
+        "why": "I motori penalizzano i contenuti senza data perché potenzialmente obsoleti. I contenuti datati ottengono un punteggio di freschezza.",
+        "howToFix": "Aggiungi datePublished + dateModified in JSON-LD, oppure un tag <time datetime> visibile."
+      },
+      "freshness": {
+        "label": "Freschezza",
+        "what": "Data di modifica negli ultimi 365 giorni.",
+        "why": "I contenuti obsoleti perdono posizioni per le query sensibili al tempo. Ripubblicare le date azzera il conteggio.",
+        "howToFix": "Aggiorna le pagine principali almeno una volta all'anno. Aggiorna dateModified quando lo fai."
+      },
+      "technical-terms": {
+        "label": "Densità di termini tecnici",
+        "what": "Terminologia specifica del settore che indica competenza reale rispetto a una scrittura superficiale.",
+        "why": "Le pagine che usano un vocabolario tecnico preciso indicano una competenza autentica.",
+        "howToFix": "Usa il linguaggio tecnico effettivo del settore. Collega a un glossario o definisci la prima occorrenza."
+      },
+      "direct-answer": {
+        "label": "Risposta diretta alla query",
+        "what": "Indica se la query dell'acquirente trova risposta nei primi 200 caratteri.",
+        "why": "I motori di IA estraggono di preferenza le risposte dirette. Nascondere la risposta = nessuna citazione.",
+        "howToFix": "Apri la pagina con una risposta diretta di 1–2 frasi alla query principale. Poi approfondisci."
+      },
+      "bluf-answer": {
+        "label": "BLUF (Bottom Line Up Front)",
+        "what": "Una tesi chiara nel primo paragrafo che esprime l'affermazione principale della pagina.",
+        "why": "Stile di scrittura di dottrina militare: il BLUF migliora enormemente l'estraibilità per l'IA.",
+        "howToFix": "Inizia con 'La risposta è X. Ecco perché.' Non nascondere la notizia principale."
+      },
+      "query-coverage": {
+        "label": "Copertura dei token della query",
+        "what": "Frazione dei token della query presenti nel corpo della pagina (obiettivo ≥80%).",
+        "why": "La copertura è un segnale di rilevanza di base: token mancanti significano che la pagina non risponde alla query.",
+        "howToFix": "Assicurati che ogni token significativo della query compaia almeno una volta nei contenuti del corpo."
+      },
+      "entity-coverage": {
+        "label": "Copertura delle entità",
+        "what": "Entità nominate menzionate che corrispondono allo spazio di entità della query.",
+        "why": "I motori di IA costruiscono un grafo di entità per pagina: l'assenza di entità correlate riduce l'autorevolezza tematica.",
+        "howToFix": "Se la pagina parla di X, menziona le entità correlate note di X (persone, luoghi, prodotti)."
+      },
+      "readability": {
+        "label": "Leggibilità",
+        "what": "Punteggio di facilità di lettura nella lingua della pagina: Flesch Reading Ease per l'inglese (obiettivo 50–70), Ateşman per il turco (50 o più), Amstad, Kandel–Moles o Fernández-Huerta per tedesco, francese o spagnolo (60 o più); per le altre lingue si usa la lunghezza di frasi e parole.",
+        "why": "I motori estraggono informazioni da contenuti leggibili dalle persone. I testi densi e accademici hanno rendimenti inferiori; in inglese, un testo molto semplice (oltre 70) può omettere i dettagli che i lettori si aspettano.",
+        "howToFix": "Sotto l'obiettivo: accorcia le frasi e usa parole più semplici, circa 16 parole per frase. Inglese oltre 70: scrivi frasi più complete con i dettagli che i lettori si aspettano."
+      },
+      "length": {
+        "label": "Lunghezza della pagina",
+        "what": "Numero di parole nei contenuti principali (obiettivo 800–3000).",
+        "why": "Troppo breve = contenuto scarno; troppo lungo = i motori lo troncano. Il punto ideale è un formato medio-lungo.",
+        "howToFix": "Se ha meno di 600 parole, amplia con esempi e sottosezioni. Se ne ha più di 4000, dividi in una pagina hub e pagine satellite."
+      },
+      "info-density": {
+        "label": "Densità informativa",
+        "what": "Rapporto tra contenuto sostanziale e riempitivi.",
+        "why": "I contenuti densi vengono citati con preferenza. I motori modellano implicitamente il «valore per token».",
+        "howToFix": "Elimina le frasi introduttive inutili. Sostituisci «È importante notare che» con il concetto vero e proprio."
+      },
+      "mega-page-coverage": {
+        "label": "Copertura mega-page",
+        "what": "Indica se la pagina copre più sottoargomenti strettamente correlati sotto un unico URL.",
+        "why": "Le mega-page superano le pagine scarne nei motori IA perché coprono interi insiemi di entità correlate.",
+        "howToFix": "Unisci 3 pagine scarne in un'unica pagina completa con sottoargomenti suddivisi in H2."
+      },
+      "youtube-embed": {
+        "label": "Video YouTube incorporato",
+        "what": "Video YouTube incorporato accanto all'articolo.",
+        "why": "I motori multimodali danno più peso alle pagine con video pertinenti. Correlazione di 0,737 con il tasso di citazione.",
+        "howToFix": "Crea o incorpora un video di 2–4 minuti sull'argomento della pagina. Aggiungi il markup con lo schema VideoObject."
+      },
+      "product-description-opening": {
+        "label": "Apertura della descrizione prodotto",
+        "what": "In una pagina prodotto, le prime 40 parole (o 250 caratteri) della descrizione indicano il tipo di prodotto e almeno due attributi chiave: una misura, un materiale, una vestibilità o un uso.",
+        "why": "ChatGPT sembra leggere solo i primi 50 token circa della descrizione di un prodotto quando associa i prodotti a una domanda di acquisto. Una descrizione che si apre con la storia del brand potrebbe non essere mai associata.",
+        "howToFix": "Inserisci il tipo di prodotto e gli attributi chiave nelle prime 40 parole."
+      },
+      "sub-query-coverage": {
+        "label": "Copertura delle sotto-query",
+        "what": "Quota delle sotto-domande scomposte a cui si risponde nel contenuto della pagina.",
+        "why": "I motori scompongono le query iniziali in 4–6 sotto-query (i «fanout» di Profound): risposte mancanti = citazioni mancanti.",
+        "howToFix": "Aggiungi una sezione di domande e risposte che affronti esplicitamente le 5 principali sotto-domande sul tuo argomento."
+      },
+      "definitions": {
+        "label": "Definizioni nel testo",
+        "what": "Termini definiti nel testo alla prima menzione («X (definizione…)»).",
+        "why": "Le pagine che definiscono i termini direttamente nel testo vengono citate come fonti di glossario. I motori IA tendono a collegarsi a esse.",
+        "howToFix": "Definisci nel testo i 3–5 termini chiave al primo utilizzo."
+      },
+      "ai-bot-access": {
+        "label": "Accesso dei bot IA",
+        "what": "Indica se robots.txt consente l'accesso ai bot IA e se la pagina risponde loro: viene richiesta una volta come GPTBot, OAI-SearchBot, ChatGPT-User, PerplexityBot e ClaudeBot per individuare blocchi di CDN o firewall.",
+        "why": "Un bot respinto dalla CDN o dal firewall non legge mai la pagina, qualunque cosa dica robots.txt. Indicare i bot IA in robots.txt mostra che sono i benvenuti.",
+        "howToFix": "Consenti GPTBot, OAI-SearchBot, ChatGPT-User, PerplexityBot, ClaudeBot e Google-Extended in robots.txt e nelle regole bot della CDN o del firewall."
+      },
+      "llms-txt-presence": {
+        "label": "Presenza di llms.txt",
+        "what": "Indica se /llms.txt esiste nella radice del sito, secondo la proposta llmstxt.org. Mostrato solo a titolo informativo: non modifica il punteggio.",
+        "why": "Proposto come mappa in testo semplice di un sito per i motori IA.",
+        "howToFix": "Facoltativo. Aggiungi /llms.txt nella radice del sito se lo desideri; non modifica il punteggio.",
+        "evidenceNote": "Prove deboli: Ahrefs ha rilevato che il 97% dei file llms.txt non viene mai richiesto e Google afferma che non ha alcun effetto."
+      },
+      "https": {
+        "label": "HTTPS",
+        "what": "Il sito risponde correttamente tramite TLS senza contenuti misti.",
+        "why": "I crawler IA si rifiutano di scansionare le pagine con contenuti misti. HTTPS è il requisito minimo.",
+        "howToFix": "Passa a HTTPS. Forza il reindirizzamento con HSTS. Correggi gli avvisi di contenuti misti."
+      },
+      "canonical": {
+        "label": "URL canonico",
+        "what": "<link rel=canonical> che punta all'URL preferito della pagina.",
+        "why": "Senza canonical, i motori IA possono suddividere le citazioni tra URL duplicati e penalizzarli tutti.",
+        "howToFix": "Aggiungi <link rel=canonical href=…> a ogni pagina. Usa un canonical autoreferenziale sulle pagine canoniche."
+      },
+      "viewport": {
+        "label": "Meta viewport",
+        "what": "<meta name=viewport content=…> presente.",
+        "why": "Segnale di rendering mobile: i crawler IA privilegiano i contenuti mobile-first.",
+        "howToFix": "Aggiungi <meta name=viewport content=\"width=device-width, initial-scale=1\">."
+      },
+      "twitter-card": {
+        "label": "Twitter card",
+        "what": "<meta name=twitter:card> + twitter:image presenti.",
+        "why": "I motori IA ripiegano sulla Twitter card sulle piattaforme senza supporto OG.",
+        "howToFix": "Aggiungi twitter:card=summary_large_image + twitter:image (puoi riutilizzare og:image)."
+      },
+      "meta-description": {
+        "label": "Meta description",
+        "what": "<meta name=description> con 80–160 caratteri di testo di riepilogo.",
+        "why": "I motori IA usano la meta description come principale candidato per il riepilogo quando generano le citazioni.",
+        "howToFix": "Scrivi una meta description di 130 caratteri per ogni pagina. Includi la query principale."
+      },
+      "first-person": {
+        "label": "Prove in prima persona",
+        "what": "Frasi in prima persona che mostrano un'esperienza reale: 'abbiamo testato', 'ho creato', e in turco desinenze verbali come 'gezdik' o 'düşünüyoruz'. Due o più superano il controllo. Citazioni e frasi fatte come 'Contattaci' non contano. Analisi in inglese e turco.",
+        "why": "L'aggiornamento E-E-A-T di Google dà priorità all'esperienza vissuta. La prima persona la segnala.",
+        "howToFix": "Usa la prima persona con parsimonia ma con precisione: 'abbiamo testato', 'secondo la nostra esperienza', 'ho scoperto che…'."
+      },
+      "case-study-evidence": {
+        "label": "Prove da casi di studio",
+        "what": "Risultati di clienti citati per nome, numeri o prove prima/dopo inseriti nel testo.",
+        "why": "I casi di studio sono il segnale E-E-A-T con la più alta conversione: dimostralo, non limitarti ad affermarlo.",
+        "howToFix": "Cita un cliente. Riporta un risultato con numeri. 'Abbiamo aiutato X a passare da Y → Z.'"
+      },
+      "author-credentials": {
+        "label": "Credenziali dell'autore",
+        "what": "L'autore ha credenziali visibili (anni di esperienza, ruolo precedente, formazione, certificazioni) in una firma, in un box autore ovunque nella pagina o nel JSON-LD Person (jobTitle, description).",
+        "why": "Le firme anonime non superano E-E-A-T. Gli autori con credenziali sono trattati come fonti esperte.",
+        "howToFix": "Ogni pagina autore elenca credenziali, ruoli precedenti, anni di esperienza e link a LinkedIn/Twitter."
+      },
+      "byline-depth": {
+        "label": "Profondità della firma",
+        "what": "La firma rimanda a una vera pagina biografica dell'autore con dettagli sufficienti, oppure al profilo dell'autore altrove (LinkedIn, sameAs nel JSON-LD Person).",
+        "why": "La catena firma → pagina bio → autore con credenziali è il grafo E-E-A-T che i motori tracciano.",
+        "howToFix": "Fai in modo che ogni firma rimandi a /authors/[name] con bio, foto, credenziali e lavori precedenti."
+      },
+      "brand-entity": {
+        "label": "Entità del brand in Wikidata",
+        "what": "Il brand ha un'entità Wikidata (numero Q) che i motori IA possono risolvere.",
+        "why": "Wikidata è il database di entità di riferimento: i motori lo usano per validare l'identità del brand. Nessuna entità = nessun punto di ancoraggio di fiducia.",
+        "howToFix": "Ottenga una voce su Wikidata: richiede 2–3 menzioni sulla stampa come fonti. Invii la richiesta su wikidata.org."
+      },
+      "press-mentions": {
+        "label": "Menzioni sulla stampa",
+        "what": "Riferimenti o link da testate di primo livello (NYT, WaPo, Bloomberg, FT, ecc.).",
+        "why": "Le menzioni sulla stampa trasferiscono autorevolezza lungo il grafo delle citazioni e convalidano le informazioni sull'entità del brand.",
+        "howToFix": "Ottenga visibilità sulla stampa. Mostri i loghi. Inserisca un link all'articolo originale (non al suo caso di studio)."
+      },
+      "privacy-terms": {
+        "label": "Privacy e termini",
+        "what": "Informativa sulla privacy e termini di servizio collegati da ogni pagina.",
+        "why": "Le categorie YMYL (Your-Money-Your-Life) li richiedono, e i motori li considerano ovunque segnali di legittimità.",
+        "howToFix": "Inserisca nel footer i link a privacy e termini in ogni pagina. Pagine reali, non segnaposto \"prossimamente\"."
+      },
+      "contact-info": {
+        "label": "Informazioni di contatto",
+        "what": "Informazioni di contatto reali: email, telefono o indirizzo visibili nella pagina o collegati a /contact.",
+        "why": "I brand anonimi non superano E-E-A-T. Contatti reali indicano un'entità reale dietro ai contenuti.",
+        "howToFix": "Aggiunga nel footer un'email e un indirizzo fisico (reale o sede legale)."
+      }
+    }
+  },
   "auth": {
     "signIn": "Accedi",
     "signUp": "Registrati",
@@ -9848,6 +10300,8 @@
     "email": "Email",
     "workEmail": "Email di lavoro",
     "workEmailSuggested": "Si consiglia un'email aziendale",
+    "language": "Lingua",
+    "languageFailed": "Impossibile cambiare la lingua. Riprovi.",
     "password": "Password",
     "forgotPassword": "Password dimenticata?",
     "noAccount": "Non hai un account?",
@@ -9986,6 +10440,53 @@
     },
     "errorRetry": "Riavvia la connessione dall'app. Se il problema persiste, l'app potrebbe non supportare l'accesso ad Ansvisor: usa invece una chiave API.",
     "errorCode": "Codice: {code}"
+  },
+  "invite": {
+    "fallbackTeam": "questo team",
+    "invalid": {
+      "not_found": {
+        "title": "Invito non trovato",
+        "description": "Il link che ha seguito non è valido."
+      },
+      "expired": {
+        "title": "Invito scaduto",
+        "description": "Chieda all'amministratore del suo team di inviare un nuovo invito."
+      },
+      "accepted": {
+        "title": "Invito già utilizzato",
+        "description": "Questo invito è già stato accettato."
+      },
+      "revoked": {
+        "title": "Invito revocato",
+        "description": "Questo invito è stato revocato dall'amministratore del team."
+      },
+      "pending": {
+        "title": "Invito non disponibile",
+        "description": "Riprovi o contatti l'amministratore del suo team."
+      }
+    },
+    "card": {
+      "title": "Unisciti a {organization}",
+      "invitedAs": "È stato invitato a unirsi come <b>{role}</b>",
+      "invitedEmail": "Email dell'invito",
+      "signedInAs": "Accesso effettuato come",
+      "wrongAccount": "Questo invito è stato inviato a <b>{email}</b>, ma ha effettuato l'accesso come {current}. Cambi account per continuare.",
+      "switching": "Cambio in corso...",
+      "switchAccount": "Esca e usi l'account corretto",
+      "fullName": "Nome completo",
+      "namePlaceholder": "Il suo nome",
+      "password": "Imposti una password",
+      "passwordPlaceholder": "Almeno 8 caratteri",
+      "confirmPassword": "Conferma password",
+      "confirmPlaceholder": "Ripeta la password",
+      "joining": "Accesso in corso...",
+      "accept": "Accetta e unisciti a {organization}",
+      "passwordNote": "Utilizzerà questa password al prossimo accesso.",
+      "passwordTooShort": "La password deve contenere almeno 8 caratteri",
+      "passwordsDiffer": "Le password non corrispondono",
+      "welcome": "Benvenuto in {organization}!",
+      "failed": "Impossibile accettare l'invito"
+    }
   },
   "dashboard": {
     "overview": "Panoramica",
@@ -10376,6 +10877,114 @@
         "failed": "Impossibile importare il file. Non è stato salvato nulla.",
         "back": "Indietro"
       }
+    },
+    "formulas": {
+      "button": "Formule",
+      "title": "Come vengono calcolate le metriche",
+      "visibility": {
+        "title": "Visibilità (0–100)",
+        "body": "Un unico punteggio che indica quanto è visibile il tuo brand in tutte le risposte IA corrispondenti ai filtri attuali. Conta ogni risposta, comprese quelle in cui non compari: far crescere il punteggio significa comparire di più, essere citati di più ed essere nominati prima.",
+        "formula": "Visibilità = 100 × ({mention} × tasso di menzione + {citation} × tasso di citazione + {position} × fattore di posizione × affidabilità)",
+        "confidence": "affidabilità = risposte che ti menzionano ÷ (risposte che ti menzionano + {support})",
+        "mentionRate": "<b>Tasso di menzione ({pct}%)</b> — quota di risposte IA che menzionano il tuo brand per nome.",
+        "citationRate": "<b>Tasso di citazione ({pct}%)</b> — quota di risposte che citano il tuo sito web come fonte.",
+        "positionFactor": "<b>Fattore di posizione ({pct}%)</b> — quanto presto vieni nominato nelle risposte che ti menzionano: primo = 1, secondo = 0,5, terzo = 0,33 e così via, in media. Il fattore di affidabilità lo pondera in base al numero di risposte che menzionano davvero il brand, così una posizione perfetta in poche risposte non può superare i brand che compaiono con costanza.",
+        "competitors": "I concorrenti in classifica sono valutati con la stessa identica formula sullo stesso insieme di risposte, quindi i numeri sono direttamente confrontabili."
+      },
+      "trend": {
+        "title": "Grafico dell'andamento della Visibilità",
+        "body": "Ogni punto è la Visibilità calcolata sull'intervallo di tempo selezionato che termina in quel giorno (finestra mobile). Per questo il punto più recente corrisponde sempre alla scheda Visibilità qui sopra. Con \"Sempre\" selezionato, ogni punto copre tutto fino a quel giorno."
+      },
+      "mentions": {
+        "title": "Menzioni",
+        "body": "Numero totale di volte in cui il tuo brand è stato citato per nome nelle risposte IA."
+      },
+      "citations": {
+        "title": "Citazioni",
+        "body": "Numero totale di volte in cui il tuo sito web è stato collegato come fonte nelle risposte IA. Le menzioni contano il tuo nome; le citazioni contano il tuo dominio."
+      },
+      "sentiment": {
+        "title": "Sentiment netto",
+        "body": "Tra le risposte che ti nominano, la quota positiva meno la quota negativa, in punti. Le risposte che citano solo il tuo sito non vengono conteggiate: sono sempre neutre. Il sentiment è mostrato accanto alla Visibilità ma non fa parte del punteggio.",
+        "formula": "Sentiment netto = % risposte positive − % risposte negative (tra le risposte che ti nominano, come nella pagina Menzioni)"
+      },
+      "position": {
+        "title": "Posizione media",
+        "body": "Dove vieni nominato nelle risposte che ti menzionano, in media. Più basso è meglio: #1 significa che di solito vieni nominato per primo.",
+        "formula": "Posizione media = somma delle tue posizioni ÷ risposte che ti nominano"
+      },
+      "citationRate": {
+        "title": "Tasso di citazione",
+        "body": "La quota di risposte IA che rimandano al tuo sito web come fonte.",
+        "formula": "Tasso di citazione = risposte che citano il tuo dominio ÷ tutte le risposte × 100"
+      },
+      "shareOfVoice": {
+        "title": "Share of Voice",
+        "body": "La tua fetta della conversazione complessiva sui brand: tra tutte le menzioni di brand nelle risposte IA, tue e dei concorrenti monitorati, la quota che è tua.",
+        "formula": "SOV = le tue menzioni ÷ (le tue menzioni + menzioni dei concorrenti) × 100"
+      },
+      "coverage": {
+        "title": "Copertura",
+        "body": "La quota di Prompt monitorati in cui sei comparso (nominato o citato) almeno una volta nel periodo selezionato, rispetto a tutti i Prompt che hanno prodotto risultati.",
+        "formula": "Copertura = Prompt in cui sei comparso ÷ Prompt con risposta × 100"
+      },
+      "changes": {
+        "title": "Variazioni",
+        "body": "La variazione di ogni scheda confronta il periodo selezionato con il periodo di pari durata immediatamente precedente, solo sui Prompt con risposta in entrambi i periodi, così l'aggiunta di Prompt non la altera; i numeri stessi coprono comunque tutti i Prompt. Con \"Sempre\" non esiste un periodo precedente, quindi non viene mostrata alcuna variazione."
+      }
+    },
+    "breakdownSheet": {
+      "title": "Dettaglio {metric, select, mentions {Menzioni} other {Visibilità}}",
+      "compareHint": "Confronto tra il periodo selezionato e il periodo precedente di pari durata.",
+      "allTimeHint": "Tutto il periodo. Non esiste un periodo precedente della stessa durata da confrontare.",
+      "lastVsPrevious": "{days, plural, one {Ultimo # giorno vs # giorno precedente} other {Ultimi # giorni vs # giorni precedenti}}",
+      "loadFailed": "Impossibile caricare il dettaglio",
+      "allTime": "Tutto il periodo",
+      "current": "Attuale {days}g",
+      "noSamePrompt": "Nessun Prompt ha ricevuto risposta in entrambi i periodi",
+      "samePrompts": "{count, plural, one {Stesso # Prompt:} other {Stessi # Prompts:}}",
+      "vsPrevious": "vs precedente",
+      "noData": "nessun dato",
+      "newNotCounted": "{count, plural, one {Non incluso nella variazione: # nuovo Prompt in questo periodo.} other {Non inclusi nella variazione: # nuovi Prompts in questo periodo.}}",
+      "newIncluded": "{count, plural, one {La variazione include # nuovo Prompt aggiunto in questo periodo.} other {La variazione include # nuovi Prompts aggiunti in questo periodo.}}",
+      "tabs": {
+        "prompts": "Prompts",
+        "platforms": "Piattaforme",
+        "topics": "Argomenti"
+      },
+      "biggest": "{direction, select, down {Calo maggiore} other {Crescita maggiore}}:",
+      "topPlatform": "{direction, select, down {Calo} other {Crescita}} principale della piattaforma: {platform}",
+      "empty": "Ancora nessun dato in questo periodo.",
+      "columns": {
+        "name": "Nome",
+        "prev": "Prec.",
+        "cur": "Att.",
+        "change": "Variazione"
+      },
+      "pts": "pt",
+      "signedPts": "{value} pt",
+      "contributionPts": "{direction, select, down {in calo di} other {in aumento di}} {value} pt",
+      "contributionMentions": "{direction, select, down {ha perso} other {ha guadagnato}} {count, plural, one {# menzione} other {# menzioni}}"
+    },
+    "page": {
+      "noDataTitle": "Ancora nessun dato di monitoraggio",
+      "noDataBody": "Esegui i tuoi Prompts sulle piattaforme IA per vedere come appare il tuo brand nelle risposte generate dall'IA.",
+      "testSingle": "Oppure prova un singolo Prompt",
+      "noResults": "Nessun risultato per {period, select, 24h {le ultime 24 ore} 7d {gli ultimi 7 giorni} 30d {gli ultimi 30 giorni} 90d {gli ultimi 90 giorni} other {il periodo selezionato}}",
+      "otherPeriods": "Sono disponibili dati di monitoraggio in altri periodi. Prova un intervallo più ampio o passa a \"Tutto il periodo\".",
+      "showAll": "Mostra tutti i dati",
+      "noCompetitorsTitle": "Ancora nessun concorrente monitorato",
+      "noCompetitorsBody": "Aggiungi concorrenti per vedere come ti posizioni nelle risposte IA.",
+      "headToHead": "Confronto diretto",
+      "loadFailed": "Impossibile caricare gli insight: riprova",
+      "exportCapped": "Esportazione limitata a 50.000 righe per evitare problemi di memoria",
+      "exportFailed": "Impossibile esportare il CSV",
+      "noTrend": "Ancora nessun dato sull'andamento",
+      "yourBrand": "Il tuo brand",
+      "avgCompetitor": "Media concorrenti",
+      "noShareOfVoice": "Nessun dato sulla share of voice disponibile",
+      "moreInfo": "Maggiori informazioni",
+      "overallShareOfVoice": "Share of voice complessiva"
     }
   },
   "topics": {
@@ -11076,6 +11685,7 @@
     },
     "editor": {
       "back": "Torna alla libreria",
+      "newContent": "Nuovo contenuto",
       "closeHere": "Chiudi",
       "untitled": "Senza titolo",
       "newPage": "Nuova pagina",
@@ -11545,7 +12155,8 @@
           "attach": "Allega un file"
         },
         "openLink": "Apri il link in una nuova scheda (oppure ⌘/Ctrl + clic sulla pagina)",
-        "counter": "{count} / {target} caratteri · {words, plural, one {# parola} other {# parole}}"
+        "counter": "{count} / {target} caratteri · {words, plural, one {# parola} other {# parole}}",
+        "counterRange": "{count} / {min}–{max} caratteri · {words, plural, one {# parola} other {# parole}}"
       },
       "link": {
         "title": "Aggiungi un link",
@@ -12777,6 +13388,7 @@
         "tooShort": "Scrivi alcuni paragrafi: la leggibilità viene valutata sulla pagina mentre scrivi.",
         "tooShortShort": "Ancora troppo breve",
         "notScored": "Non ancora valutato",
+        "needsAuthor": "Il punteggio viene calcolato quando la pagina ha un autore",
         "site": {
           "label": "Affidabilità del sito",
           "score": "Affidabilità del sito {score}/5",
@@ -13055,8 +13667,8 @@
           },
           "avgSentence": {
             "line": "Le frasi hanno una media di {words, number} parole",
-            "detail": "Punta a 15–20 parole: le frasi più brevi si leggono più rapidamente e le risposte dell'IA le citano per intero.",
-            "detailShort": "Punta a 15–20 parole: unisci alcune di quelle brevi, affinché ciascuna esprima un concetto completo."
+            "detail": "Punta a 20 parole o meno: le frasi più brevi si leggono più in fretta e le risposte IA le citano per intero.",
+            "detailShort": "Meno di 8 parole in media risulta frammentato: unisci alcune frasi brevi, così che ognuna esprima un concetto completo."
           },
           "longSentences": {
             "line": "{count, plural, one {# frase} other {# frasi}} con oltre 35 parole",
@@ -13372,11 +13984,12 @@
     "autoGeneratedHint": "Le opportunità vengono generate automaticamente man mano che arrivano i dati di monitoraggio.",
     "generating": "Generazione in corso…",
     "sendToWorkflow": "Invia a Workflow",
-    "generateBrief": "Genera brief",
-    "generatingBrief": "Generazione in corso...",
-    "briefGenerated": "Brief generato",
+    "generateBrief": "Crea brief",
+    "generatingBrief": "Creazione del brief in corso…",
+    "briefGenerated": "Brief creato",
+    "briefEmpty": "Crea un brief dei contenuti basato sull'IA con titolo suggerito, struttura, parole chiave target e approfondimenti sui concorrenti.",
     "briefLimitReached": "Hai esaurito i brief per i contenuti di questo mese",
-    "sendToActions": "Invia ad Azioni",
+    "sendToActions": "Invia al Centro azioni",
     "draftCheckFailed": "Impossibile verificare la presenza di una bozza · Riprova",
     "sendToEditor": "Invia all'editor",
     "writeThis": {
@@ -13391,7 +14004,7 @@
         "draftDetail": "L'Agente Contenuti scrive la pagina a partire dal brief, seguendo le tue regole e quelle del tipo di pagina.",
         "draftDetailPage": "L'Agente Contenuti suggerisce modifiche a {page} a partire dal brief, in base alle tue regole e a quelle del tipo di pagina.",
         "review": "Revisiona la bozza",
-        "reviewDetail": "L'editor si apre durante la scrittura, con una stima gratuita del punteggio dell'Audit del sito. Non viene pubblicato nulla."
+        "reviewDetail": "L'editor si apre mentre scrive. Quando lo segni come pronto, ricevi una stima gratuita del suo punteggio Site Audit. Nulla viene pubblicato."
       },
       "usage": "Utilizza circa il <b>{estimate}</b> del tuo {trial, select, yes {credito IA di prova} other {utilizzo mensile dell'IA}} · {used} utilizzato finora",
       "usageSmall": "Uses under <b>1%</b> of your {trial, select, yes {trial AI credit} other {monthly AI usage}} · {used} used so far",
@@ -13415,7 +14028,7 @@
       "word": "Esporta Word",
       "failed": "Impossibile esportare questa opportunità. Riprova."
     },
-    "openInActions": "Apri in Azioni",
+    "openInActions": "Apri nel Centro azioni",
     "sendAgain": "Invia di nuovo",
     "copyAllData": "Copia tutti i dati",
     "copiedToast": "Copiato negli appunti",
@@ -13476,7 +14089,9 @@
       "avgScore": "Punteggio medio",
       "shown": "{count} visualizzati",
       "opportunities": "opportunità",
+      "opportunitiesAll": "tutti gli stati, anche completate",
       "outOf100": "su 100",
+      "outOf100All": "su 100 · tutti gli stati",
       "fromSignals": "da {count, plural, one {# segnale analizzato} other {# segnali analizzati}}"
     },
     "filters": {
@@ -13665,6 +14280,7 @@
       "sentAt": "Inviato il {date}",
       "webhookResponse": "Risposta del webhook",
       "topCompetitor": "Concorrente più forte",
+      "gapPoints": "{gap, number} pt",
       "basketTitle": "Cestino delle opportunità",
       "basketSummary": "{prompts, plural, one {# prompt} other {# prompt}} · {included} ricerche incluse · {excluded} escluse",
       "basketIncluded": "Ricerche eseguite dai motori IA per questi prompt",
@@ -13781,7 +14397,8 @@
     "mergedIntoOpen": "Apri",
     "newSignal": "Rilevato nuovo segnale",
     "newSignalScoreRose": "Completata in precedenza, e l'opportunità è cresciuta da allora: il punteggio è salito da {from} a {to}.",
-    "newSignalGainLost": "Completata in precedenza, ma il miglioramento non è durato: la visibilità su questi prompt era del {after}% dopo l'intervento ed è del {now}% ora."
+    "newSignalGainLost": "Completata in precedenza, ma il miglioramento non è durato: la visibilità su questi prompt era del {after}% dopo l'intervento ed è del {now}% ora.",
+    "noWorkflowConnected": "Nessun workflow collegato."
   },
   "traffic": {
     "chat": {
@@ -14620,6 +15237,24 @@
           "query": "Gli indirizzi mancanti contengono una query: nessun reindirizzamento suggerito"
         }
       }
+    },
+    "page": {
+      "subtitle": "Visite al tuo sito provenienti dall'IA",
+      "range": "{start}–{end} di {total}",
+      "previous": "Precedente",
+      "next": "Successivo",
+      "platformBreakdown": "Ripartizione per piattaforma",
+      "referralsByPlatform": "Referral per piattaforma",
+      "topLandingPages": "Pagine di destinazione principali",
+      "recentVisits": "Visite recenti da referral IA",
+      "columns": {
+        "platform": "Piattaforma",
+        "page": "Pagina",
+        "visits": "Visite",
+        "change": "Variazione",
+        "time": "Ora",
+        "country": "Paese"
+      }
     }
   },
   "ads": {
@@ -14923,7 +15558,10 @@
         "bodyUnlimited": "C'è spazio nel tuo piano. I prompt in attesa non si avviano automaticamente: scegline uno da monitorare.",
         "show": "Mostra",
         "freeUp": "Libera una posizione",
-        "track": "Monitora un prompt in attesa"
+        "track": "Monitora un prompt in attesa",
+        "addTracking": "Aggiungi più tracciamento",
+        "moved": "{count, plural, one {Una di questi è stata tracciata fino al {date}} other {# di questi sono stati tracciati fino al {date}}}, quando il tracciamento del tuo piano è sceso a {limit, number} posizioni di Prompt.",
+        "movedNoLimit": "{count, plural, one {Una di questi è stata tracciata fino al {date}} other {# di questi sono stati tracciati fino al {date}}}, quando il tracciamento del tuo piano è diminuito."
       },
       "dialog": {
         "pill": "Limite prompt raggiunto · {used} di {max}",
@@ -14936,6 +15574,7 @@
         "needs": "È monitorato in {count} posizioni, quindi richiede {count} posti.",
         "howStarter": "Per monitorarlo, metti in pausa un prompt meno prioritario o passa a un piano superiore.",
         "howContact": "Per monitorarlo, metti in pausa un prompt meno prioritario o contattaci per aumentare il tuo limite.",
+        "howGrowth": "Per tracciarlo, metti in pausa un Prompt che ti serve meno o aggiungi più tracciamento al tuo piano.",
         "room": "C'è spazio nel tuo piano. I prompt in attesa non si avviano automaticamente, quindi resta in attesa che tu lo monitori.",
         "candidates": "Prompt che potresti mettere in pausa",
         "candidatesMany": "Prompt che potresti mettere in pausa: selezionane abbastanza per liberare {count} posti",
@@ -14954,6 +15593,7 @@
         "pauseMany": "Mettine in pausa {count} e monitora questo",
         "trackNow": "Monitoralo",
         "seeGrowth": "Vedi Growth: {count} prompt",
+        "addTracking": "Aggiungi più tracciamento",
         "contact": "Contattaci",
         "keepWaiting": "Lascialo in attesa",
         "keepPaused": "Lascialo in pausa",
@@ -15152,6 +15792,7 @@
       "showUsage": "Mostra utilizzo",
       "hideUsage": "Nascondi utilizzo",
       "locationsUsed": "{used} / {limit} località del prompt utilizzate",
+      "planEnded": "Il tuo piano è terminato: i Prompt non vengono monitorati finché non scegli un piano",
       "view": {
         "label": "Elenco dei prompt",
         "tracked": "Monitorati",
@@ -15170,6 +15811,95 @@
         "analyzing": "Analisi in corso…",
         "analyzingProgress": "Analisi di {done}/{total} in corso…",
         "limitReached": "Limite mensile raggiunto"
+      }
+    },
+    "info": {
+      "button": "Come funziona Ansvisor con i Prompt",
+      "whatTitle": "Che cos'è un Prompt?",
+      "whatText": "Una domanda o una richiesta che i tuoi potenziali clienti scrivono a un assistente IA come ChatGPT o Gemini, ad esempio <example>\"Qual è il miglior strumento AEO open source?\"</example> o <example>\"Confronta le migliori piattaforme AEO\"</example>",
+      "howTitle": "Come funziona Ansvisor",
+      "systemsLine": "Sistemi di IA intelligenti lavorano per te in background, ogni giorno.",
+      "steps": {
+        "find": {
+          "title": "Trova i Prompt migliori.",
+          "text": "La nostra IA legge il tuo sito, i tuoi concorrenti, ciò che le persone cercano (Search Console, Analytics) e ciò che le stesse piattaforme IA rispondono, e ti suggerisce quelli che contano."
+        },
+        "pick": {
+          "title": "Scegli tu cosa monitorare.",
+          "text": "Premi <b>+</b> su un suggerimento."
+        },
+        "ask": {
+          "title": "Interroga ogni giorno le piattaforme IA.",
+          "text": "ChatGPT, Gemini, Google AI Overviews e altre: ti menzionano, rimandano al tuo sito, ti posizionano sopra i concorrenti?"
+        },
+        "data": {
+          "title": "Costruisce i tuoi dati.",
+          "text": "Ogni risposta viene conservata, così tendenze, lacune e mosse dei concorrenti emergono nel tempo."
+        },
+        "next": {
+          "title": "Sistemi di IA intelligenti ti mostrano cosa fare dopo.",
+          "text": "Individuano i cali, trovano le lacune nei contenuti e preparano pagine e correzioni nel Centro azioni, per conquistare visibilità IA, traffico e ricavi."
+        }
+      },
+      "openGuide": "Apri la guida passo passo"
+    },
+    "guide": {
+      "title": "Come trovare i Prompt migliori e posizionarti nelle loro risposte",
+      "description": "Completa questi passaggi una volta, poi controlla i Suggerimenti ogni giorno. Ogni passaggio si apre in una nuova scheda, così questa guida resta qui.",
+      "progress": "{done} di {total} completati",
+      "progressLabel": "Passaggi completati",
+      "done": "Fatto",
+      "comingSoon": "In arrivo",
+      "footer": "Chiedi alla Chat di eseguire un passaggio per te: “Collega la mia Search Console”.",
+      "steps": {
+        "gsc": {
+          "title": "Collega Google Search Console",
+          "text": "Scopri cosa cercano già le persone per trovarti; lo trasformiamo in Prompt.",
+          "cta": "Collega"
+        },
+        "ga": {
+          "title": "Collega Google Analytics 4",
+          "text": "Scopri quali pagine portano visitatori, per trovare i Prompt che contano.",
+          "cta": "Collega"
+        },
+        "trafficCode": {
+          "title": "Aggiungi al tuo sito il codice per il traffico IA",
+          "text": "Conta le visite che ti inviano gli assistenti IA e i bot IA che leggono le tue pagine.",
+          "cta": "Ottieni il codice"
+        },
+        "suggestions": {
+          "title": "Controlla i Suggerimenti ogni giorno",
+          "text": "Nuovi Prompt dal tuo sito, dai concorrenti e dalle ricerche. Premi + per monitorare quelli buoni.",
+          "cta": "Apri Suggerimenti"
+        },
+        "content": {
+          "title": "Crea Contenuti dai suggerimenti",
+          "text": "Scrivi le pagine che mancano alle risposte dell'IA per i tuoi Prompt.",
+          "cta": "Apri Contenuti"
+        },
+        "optimize": {
+          "title": "Ottimizza le tue pagine",
+          "text": "Migliora le pagine esistenti nell'Editor affinché le risposte dell'IA le citino.",
+          "cta": "Apri Editor"
+        },
+        "audit": {
+          "title": "Risolvi i problemi tecnici",
+          "text": "Esegui il Site Audit e correggi ciò che impedisce all'IA di leggere il tuo sito.",
+          "cta": "Esegui un audit"
+        },
+        "moreTracking": {
+          "title": "Monitora più Prompt",
+          "text": "Aggiungi più Prompt, località o piattaforme IA al tuo piano.",
+          "cta": "Ottieni più monitoraggio"
+        },
+        "mentions": {
+          "title": "Fatti menzionare su altri siti",
+          "text": "Fatti citare per nome sui siti di terze parti di cui si fidano le risposte dell'IA."
+        },
+        "ads": {
+          "title": "Pubblica annunci IA",
+          "text": "Compari nelle risposte IA sponsorizzate."
+        }
       }
     },
     "trackNow": {
@@ -15219,6 +15949,7 @@
       "unlimited": "Illimitato",
       "cta": {
         "upgrade_growth": "Passa a Growth",
+        "add_more": "Aggiungi altro",
         "upgrade": "Aggiorna piano",
         "contact": "Contattaci",
         "choose_plan": "Scegli un piano"
@@ -15444,7 +16175,7 @@
       "unlimited": "{used} → {after} località monitorate · nessun limite per il tuo piano",
       "usageHint": "Ogni prompt in ogni località corrisponde a una località monitorata nel tuo piano, verificata ogni giorno. I prompt in pausa non vengono conteggiati.",
       "over": "Sono necessarie {adding, plural, one {# ulteriore località monitorata} other {# ulteriori località monitorate}}; ne {left, plural, =0 {rimangono 0} one {rimane #} other {rimangono #}} nel tuo piano {plan}.",
-      "overHint": "Seleziona meno prompt o luoghi. {plan, select, starter {Oppure passa a un piano superiore, o contattaci per un piano personalizzato.} growth {Oppure contattaci per un piano personalizzato.} other {Oppure contattaci per aumentare il tuo limite.}}",
+      "overHint": "Scegli meno Prompt o località. {plan, select, starter {Oppure passa a un piano superiore o contattaci per un piano personalizzato.} growth {Oppure aggiungi più monitoraggio al tuo piano.} other {Oppure contattaci per aumentare il tuo limite.}}",
       "nothing": "Questi prompt sono già monitorati in queste posizioni.",
       "cityBlocked": "Nessuno di questi prompt utilizza un motore che risponde da una città (Google AI Mode, AI Overviews o un modello API). Aggiunga prima uno di questi motori ai prompt.",
       "cityPartly": "{count, plural, one {# di questi prompt non utilizza} other {# di questi prompt non utilizzano}} un motore che risponde da una città; una città viene conteggiata nel piano per loro, ma non viene interrogata lì.",
@@ -15495,7 +16226,79 @@
         "usedUp": "Il budget di suggerimenti per questo mese è esaurito. Si azzererà al rinnovo dell'abbonamento.",
         "upgrade": "Esegui l'upgrade per averne di più",
         "startPlan": "Attiva il tuo piano"
+      },
+      "loadFailed": "Impossibile caricare i suggerimenti.",
+      "generateFailed": "Impossibile generare i suggerimenti.",
+      "notConfigured": "I suggerimenti IA non sono ancora configurati su questo server: manca una chiave del provider IA.",
+      "retry": "Riprova",
+      "introTitle": "Ottieni suggerimenti specifici per piattaforma",
+      "introBody": "Analizza le risposte di questo periodo su ogni piattaforma (le sotto-query eseguite, le fonti citate e i concorrenti posizionati sopra di te) e suggerisce cosa fare dove il brand manca o è posizionato in basso.",
+      "generate": "Genera suggerimenti",
+      "generating": "Generazione dei suggerimenti dalle risposte di questo periodo… può richiedere fino a 15 secondi.",
+      "stale": "Sono arrivate nuove esecuzioni da quando sono stati generati questi suggerimenti.",
+      "regenerate": "Rigenera",
+      "noRuns": "Nessuna esecuzione in questo periodo, quindi non c'è ancora nulla da migliorare.",
+      "allWell": "Nessun miglioramento necessario: in questo periodo il brand è menzionato per primo e citato presto su ogni piattaforma.",
+      "selection": "{selected} di {total} selezionati · {platforms, plural, one {# piattaforma} other {# piattaforme}}",
+      "generated": "Generato il {date}",
+      "sent": "Inviato il {date} · {code}",
+      "discardConfirm": "Vuoi scartare le modifiche?",
+      "keepEditing": "Continua a modificare",
+      "discardRegenerate": "Scarta e rigenera",
+      "openInActions": "Apri nel Centro azioni",
+      "sendActions": "Invia azioni",
+      "sentToast": "{count, plural, one {Azione creata con # attività} other {Azione creata con # attività}}",
+      "open": "Apri",
+      "states": {
+        "no_runs": "Nessuna esecuzione in questo periodo",
+        "not_mentioned": "Non menzionato",
+        "mentioned_late": "Menzionato · In ritardo",
+        "not_cited": "Menzionato presto · non citato",
+        "doing_well": "Va bene"
+      },
+      "mentionRate": "menzionato in {mentioned} su {runs, plural, one {# esecuzione} other {# esecuzioni}}",
+      "avgPosition": "posizione media n.{position} · {rate}",
+      "avgPositionOf": "posizione media n.{position} su {total} · {rate}",
+      "citedAt": "citato in posizione media n.{rank} su {total} fonti · {rate}",
+      "notCited": "non citato · {rate}",
+      "inputs": {
+        "fanouts": "{count, plural, one {# fan-out} other {# fan-out}}",
+        "citedDomains": "{count, plural, one {# dominio citato} other {# domini citati}}",
+        "competitorUrls": "{count, plural, one {# URL di competitor} other {# URL di competitor}}",
+        "answer": "Risposta IA",
+        "basedOn": "Basato su {parts}",
+        "basedOnAnswer": "Basato sulla risposta IA",
+        "noFanouts": "Nessun fan-out registrato. {based}"
+      },
+      "doingWell": "Ottimi risultati: nessun suggerimento.",
+      "noneHeldUp": "Nessun suggerimento ha retto al confronto con le evidenze di questa piattaforma. Aggiungine uno tuo o rigenera.",
+      "addOwn": "Aggiungi un tuo suggerimento",
+      "removed": "Rimosso: {title}",
+      "removedUntitled": "Rimosso: il tuo suggerimento",
+      "undo": "Annulla",
+      "titlePlaceholder": "Titolo",
+      "bodyPlaceholder": "Cosa fare e perché",
+      "select": "Seleziona \"{title}\"",
+      "edit": "Modifica suggerimento",
+      "remove": "Rimuovi suggerimento",
+      "alreadySent": "Già inviato",
+      "yourSuggestion": "Il tuo suggerimento",
+      "sources": {
+        "fanout": "Fan-out: {ref}",
+        "answer": "Risposta IA",
+        "brandPage": "La tua pagina: {url}"
+      },
+      "locked": {
+        "title": "Improve è disponibile nel piano Growth",
+        "body": "Ricevi suggerimenti specifici per piattaforma per migliorare la posizione di questo Prompt, basati su sotto-query, fonti e competitor presenti in ogni risposta IA.",
+        "upgrade": "Passa a un piano superiore"
       }
+    },
+    "errors": {
+      "updateFailed": "Impossibile aggiornare il Prompt. Riprova.",
+      "noRoomToResume": "Spazio insufficiente per riprendere",
+      "bulkFailed": "{action, select, resume {Impossibile riprendere i Prompt.} other {Impossibile mettere in pausa i Prompt.}}",
+      "bulkPartial": "{action, select, resume {{failed} su {total} non è stato possibile riprenderli.} other {{failed} su {total} non è stato possibile metterli in pausa.}}"
     }
   },
   "volumeEstimate": {
@@ -15902,6 +16705,7 @@
     }
   },
   "competitors": {
+    "forbiddenRole": "Solo un amministratore o un gestore può unire i competitor.",
     "title": "Concorrenti",
     "description": "Gestisci i concorrenti e confronta direttamente la Visibilità IA.",
     "addCompetitor": "Aggiungi concorrente",
@@ -15914,7 +16718,7 @@
     "citations": "Citazioni",
     "trackedCompetitors": "Concorrenti monitorati",
     "selectToCompare": "Seleziona un concorrente per visualizzare il confronto diretto.",
-    "windowLast30Days": "I punteggi si riferiscono agli ultimi 30 giorni.",
+    "windowLastDays": "{days, plural, one {I punteggi coprono l'ultimo giorno.} other {I punteggi coprono gli ultimi # giorni.}}",
     "windowAllTime": "I punteggi coprono tutta la cronologia monitorata.",
     "windowSelectedRange": "I punteggi riflettono l'intervallo di date selezionato.",
     "selected": "Selezionato",
@@ -16015,10 +16819,15 @@
     },
     "h2h": {
       "title": "{brand} vs {competitor}",
-      "yourAvg": "Il tuo punteggio medio",
-      "theirAvg": "Il loro punteggio medio",
-      "overallDiff": "Differenza di punteggio",
+      "yourAvg": "Il tuo punteggio di Visibilità",
+      "theirAvg": "Il loro punteggio di Visibilità",
+      "overallDiff": "Differenza",
+      "points": "{value} pt",
+      "scoreTip": "Punteggio di visibilità, da 0 a 100: indica con quale frequenza le risposte di questo periodo nominano il brand, citano il suo sito e quanto presto lo nominano, sul totale delle tue risposte. È lo stesso punteggio delle schede.",
       "platformBreakdown": "Dettaglio per piattaforma",
+      "viaBing": "· tramite Bing AI Mode",
+      "noAnswersEngine": "Nessuna risposta in questo periodo",
+      "notInPlan": "Non incluso nel tuo piano, quindi non mostrato: {engines}.",
       "promptByPrompt": "Confronto prompt per prompt",
       "promptByPromptDesc": "Fai clic su un prompt per espandere e vedere i dettagli per piattaforma.",
       "comparison": "Confronto",
@@ -16034,7 +16843,25 @@
       "noPromptData": "Nessun dato disponibile a livello di prompt. Esegui prima un controllo del monitoraggio.",
       "noDataTitle": "Nessun dato di confronto",
       "noDataDescription": "Esegui un controllo del monitoraggio da Visibilità per generare dati di confronto per questo concorrente.",
-      "loadError": "Impossibile caricare i dati di confronto."
+      "loadError": "Impossibile caricare i dati di confronto.",
+      "promptCounts": "{engines, plural, one {# piattaforma} other {# piattaforme}} · {runs, plural, one {# esecuzione} other {# esecuzioni}}",
+      "engineCounts": "{locations, plural, one {# località} other {# località}} · {runs, plural, one {# esecuzione} other {# esecuzioni}}",
+      "runs": "{count, plural, one {# esecuzione} other {# esecuzioni}}",
+      "noLocation": "Nessuna località",
+      "lowSample": "Campione ridotto",
+      "lowSampleTip": "Meno di 10 esecuzioni: una sola risposta può modificare molto questo punteggio.",
+      "list": {
+        "search": "Cerca Prompt",
+        "sortLabel": "Ordina Prompt",
+        "sortRecent": "Prima i più recenti",
+        "sortDiff": "Prima il divario maggiore",
+        "categoryLabel": "Categoria",
+        "allCategories": "Tutte le categorie",
+        "count": "{shown} di {total, plural, one {# Prompt} other {# Prompt}}",
+        "noMatch": "Nessun Prompt corrisponde.",
+        "more": "Mostra altri {count}",
+        "caseRepeats": "{count, plural, one {# Prompt ripete un altro, ma con maiuscole/minuscole diverse} other {# Prompt ripetono altri, ma con maiuscole/minuscole diverse}}: metti in pausa la copia in più in Prompts, così le relative risposte vengono contate una sola volta."
+      }
     },
     "timeline": {
       "title": "Pagine di {competitor} nel tempo",
@@ -16084,7 +16911,127 @@
     "excludeOwnDomain": "Escludi il proprio dominio",
     "competitorsOnly": "Solo concorrenti",
     "noBrandTitle": "Nessun brand selezionato",
-    "noBrandDescription": "Seleziona o crea un brand per visualizzare le citazioni utilizzate dalle piattaforme IA nelle risposte."
+    "noBrandDescription": "Seleziona o crea un brand per visualizzare le citazioni utilizzate dalle piattaforme IA nelle risposte.",
+    "addCompetitor": {
+      "added": "{domain} aggiunto come concorrente",
+      "failed": "Impossibile aggiungere questo dominio come concorrente. Riprova.",
+      "ariaLabel": "Aggiungi {domain} come concorrente",
+      "button": "Aggiungi come concorrente",
+      "title": "Aggiungere {domain} come concorrente?",
+      "description": "Monitora questo dominio come concorrente. Puoi modificare il nome qui sotto.",
+      "name": "Nome",
+      "namePlaceholder": "Nome del concorrente",
+      "add": "Aggiungi"
+    },
+    "url": {
+      "back": "Citazioni",
+      "noUrl": "Nessun URL fornito. Apri questa pagina da una riga di citazione nella scheda Citazioni di Visibilità.",
+      "noBrand": "Seleziona prima un brand dal selettore in alto.",
+      "owned": "Di proprietà",
+      "loadFailed": "Impossibile caricare questo URL. Riprova.",
+      "empty": "Nessuna citazione registrata per questo URL nel periodo selezionato.",
+      "kpis": {
+        "citations": "Citazioni totali",
+        "citationsSub": "{answers, plural, one {in # risposta} other {in # risposte}}",
+        "answers": "Risposte che citano",
+        "answersSub": "Le risposte IA includono questo URL",
+        "prompts": "Prompts",
+        "promptsSub": "Prompts distinti che lo attivano",
+        "platforms": "Piattaforme",
+        "lastSeen": "Ultima rilevazione",
+        "firstSeen": "rilevato per la prima volta il {date}"
+      },
+      "targeted": "{count, plural, one {Target in # Prompt} other {Target in # Prompts}}",
+      "targetedSub": "Prompts che monitorano questo URL come target nel flusso di lavoro dei Prompts",
+      "notTargeted": "Non ancora impostato come target: aggiungilo dalla scheda URL target di un Prompt.",
+      "citedCount": "citato {count}×",
+      "visits": "Visite da IA",
+      "visitsSub": "Visite a questa pagina da piattaforme IA nel periodo selezionato",
+      "noVisits": "Nessuna visita da IA registrata per questa pagina finora.",
+      "unknownPlatform": "Sconosciuta",
+      "citedIn": "Citato in",
+      "citedInSub": "Tutte le risposte IA che citano questo URL nel periodo selezionato",
+      "columns": {
+        "date": "Data",
+        "platform": "Piattaforma",
+        "prompt": "Prompt",
+        "sentiment": "Sentiment",
+        "brandMentioned": "Brand menzionato",
+        "position": "Posizione",
+        "answers": "Risposte",
+        "citations": "Citazioni",
+        "lastSeen": "Ultima rilevazione"
+      },
+      "sentiments": {
+        "positive": "Positivo",
+        "neutral": "Neutro",
+        "negative": "Negativo",
+        "mixed": "Misto"
+      },
+      "breakdown": "Dettaglio dei Prompts",
+      "breakdownSub": "Le query in cui questa pagina ottiene risultati, raggruppate per Prompt",
+      "noPrompts": "Nessun Prompt registrato per questo URL nel periodo selezionato."
+    },
+    "categories": {
+      "you": "Tu",
+      "competitor": "Concorrente",
+      "editorial": "Editoriale",
+      "forum": "Forum",
+      "social": "Social",
+      "review": "Recensione",
+      "institutional": "Istituzionale",
+      "other": "Altro"
+    },
+    "page": {
+      "noSources": "Nessuna fonte di citazione al momento.",
+      "columns": {
+        "rank": "Posizione",
+        "domain": "Dominio",
+        "url": "URL",
+        "platforms": "Piattaforme",
+        "usage": "Utilizzo",
+        "avgCitations": "Citazioni medie",
+        "citations": "Citazioni",
+        "addCompetitor": "Aggiungi come concorrente",
+        "sourceType": "Tipo di fonte",
+        "competitorAnswers": "Risposte dei concorrenti",
+        "whichCompetitors": "Quali concorrenti",
+        "strength": "Forza",
+        "answersFeeding": "Risposte alimentate",
+        "alsoCitesUs": "Cita anche noi?"
+      },
+      "openDomain": "Apri {domain} in una nuova scheda",
+      "openPage": "Apri la pagina citata in una nuova scheda",
+      "openPageTitle": "Apri la pagina citata",
+      "loadFailedTitle": "Impossibile caricare i dati delle citazioni",
+      "loadFailedBody": "Riprova.",
+      "retry": "Riprova",
+      "checking": "Verifica dei dati delle citazioni in corso…",
+      "noneInPeriod": "Nessuna citazione {period, select, 24h {nelle ultime 24 ore} 7d {negli ultimi 7 giorni} 30d {negli ultimi 30 giorni} 90d {negli ultimi 90 giorni} other {nel periodo selezionato}}",
+      "outsideWindow": "Esistono dati sulle citazioni al di fuori di questo intervallo.",
+      "showAll": "Mostra tutti i dati",
+      "noMatch": "Nessuna citazione corrisponde ai filtri",
+      "noMatchBody": "Prova ad ampliare l'intervallo di date o a rimuovere i filtri.",
+      "gapMethodology": "Fonti che compaiono nelle risposte che menzionano i concorrenti ma non voi, ponderate in base al numero di fonti di ciascuna risposta.",
+      "strengthTitle": "Forza {pct}%",
+      "noGaps": "Nessun dominio di gap per questi filtri",
+      "noGapsBody": "Ogni dominio che cita un concorrente cita anche voi, oppure non ci sono ancora dati sufficienti.",
+      "noCompetitorData": "Nessun dato sulle fonti dei concorrenti al momento",
+      "noCompetitorDataBody": "Aggiungete dei concorrenti (con i relativi domini) e attendete il completamento di alcune esecuzioni di monitoraggio.",
+      "competitor": "Concorrente",
+      "selectCompetitor": "Seleziona concorrente",
+      "yes": "✓ Sì",
+      "no": "✗ No",
+      "gapList": "Elenco dei gap",
+      "byCompetitor": "Per concorrente",
+      "howItWorks": "Come funziona",
+      "lowVisibility": "La tua visibilità è bassa in questo periodo, quindi questo elenco potrebbe essere ampio: concentrati prima sulla visibilità di base.",
+      "loadFailedToast": "Impossibile caricare i dati sulle citazioni",
+      "checkFailedToast": "Impossibile verificare i dati sulle citazioni",
+      "exportFailed": "Impossibile esportare il CSV",
+      "typesNotExportable": "Tipi di fonte è una suddivisione grafica e non è esportabile: passa a Domini, URL o Gap dei concorrenti per esportare.",
+      "tabGaps": "Gap dei concorrenti"
+    }
   },
   "shopping": {
     "title": "Visibilità del prodotto",
@@ -16588,6 +17535,16 @@
       "verifiedLabel": "Venditore verificato in ChatGPT",
       "verifiedStatus": "Sconosciuto",
       "verifiedDetail": "OpenAI non ha indicato come viene assegnato il badge di venditore verificato e, nei primi test, i negozi senza questo badge sono stati esclusi dalle risposte. In attesa di ulteriori informazioni, invia un feed prodotti diretto."
+    },
+    "page": {
+      "allTime": "Sempre",
+      "last": "Ultimi {period}",
+      "allPlatforms": "Tutte le piattaforme",
+      "allRegions": "Tutte le regioni",
+      "noProducts": "Nessun prodotto trovato con i filtri selezionati.",
+      "appearances": "{count, plural, one {# apparizione} other {# apparizioni}}",
+      "brandAppearances": "{brand} • {count, plural, one {# apparizione} other {# apparizioni}}",
+      "viewPrompt": "Visualizza dettagli del Prompt"
     }
   },
   "reports": {
@@ -16616,14 +17573,18 @@
         "trafficConnectLink": "Collega"
       },
       "method": {
-        "label": "Come viene misurato",
         "baseline": "Baseline: 14 giorni prima dell'implementazione",
         "checkpoints": "Punti di controllo: 7 · 14 · 30 · 90 giorni",
         "checkpointsTip": "7 giorni: in attesa, segnale iniziale · 14 giorni: primo verdetto · 30 giorni: confermato · 90 giorni: effetto duraturo",
         "control": "Controllo: Prompt simili non modificati",
         "minChange": "Variazione min.: 3 pt",
         "noCost": "Dati di monitoraggio pianificati · nessun costo aggiuntivo",
-        "correlation": "Correlazione, non causalità"
+        "correlation": "Correlazione, non causalità",
+        "howWeMeasure": "Come misuriamo",
+        "shippedDefinition": "Pubblicata significa che la modifica è andata online: pubblicata sul tuo CMS, con pull request unita o contrassegnata come pubblicata. Una bozza in attesa di revisione non è ancora pubblicata.",
+        "baselineHelp": "Ogni modifica parte dalla visibilità dei suoi Prompt target in quei giorni.",
+        "controlHelp": "Mostrano cosa sarebbe successo comunque.",
+        "correlationHelp": "Un risultato mostra che i dati si sono mossi insieme, non che la modifica da sola li abbia mossi."
       },
       "filterLabel": "Filtra per esito",
       "filters": {
@@ -16693,6 +17654,8 @@
       },
       "capped": "Mostrati i primi {count, number} interventi rilasciati a {month}; i conteggi sopra includono solo questi.",
       "empty": "Nessun intervento rilasciato a {month}.",
+      "emptyNext": "Pubblica un'azione per iniziare a misurare l'impatto.",
+      "emptyNextLink": "Apri Focus di oggi",
       "emptyFilter": "Nessuna azione con questo risultato a {month}.",
       "loadFailed": "Impossibile caricare le attività di Ansvisor. Riprova.",
       "retry": "Riprova",
@@ -16771,6 +17734,10 @@
     "deleteTitle": "Elimina report",
     "deleteConfirm": "Eliminare questo report?",
     "deleteFailed": "Impossibile eliminare il report",
+    "rowMenuLabel": "Altre azioni per {title}",
+    "copyLink": "Copia link",
+    "linkCopied": "Link copiato. Apre il report per le persone del tuo workspace.",
+    "copyLinkFailed": "Impossibile copiare il link. Apri il report e copia il suo indirizzo.",
     "selectDates": "Seleziona una data di inizio e di fine",
     "templateLabel": "Modello",
     "templates": {
@@ -16807,7 +17774,7 @@
       "mentionEvidence": "Prove delle menzioni",
       "citationEvidence": "Prove delle citazioni"
     },
-    "missingSections": "Impossibile recuperare alcune sezioni, non incluse in questo report:",
+    "missingSectionsAdmin": "Solo gli Amministratori vedono questo messaggio: non è stato possibile raccogliere {sections}, nemmeno al secondo tentativo, quindi il report le omette.",
     "brandLabel": "Brand",
     "sectionsLabel": "Sezioni",
     "selectSections": "Seleziona almeno una sezione",
@@ -16886,9 +17853,11 @@
     "generatedOn": "Generato il",
     "executiveSummary": "Riepilogo esecutivo",
     "kpi": {
-      "visibility": "Visibilità",
-      "visibilityRate": "Visibilità",
-      "visibilityRateSub": "{visible}/{total} Prompt",
+      "visibilityScore": "Punteggio di visibilità",
+      "scoreValue": "{score}/100",
+      "promptsWithMention": "Prompt con una menzione",
+      "promptsWithMentionSub": "{visible} di {total} Prompt",
+      "leaderboardPromptsSub": "{visible} di {total} Prompt con una menzione",
       "avgScore": "Punteggio medio",
       "mentions": "Menzioni",
       "citations": "Citazioni del brand",
@@ -17146,7 +18115,10 @@
       }
     },
     "notifications": "Notifiche",
-    "notificationsDescription": "Daily Pulse: un breve riepilogo per brand dopo ogni ciclo di monitoraggio, con punti salienti e avvisi.",
+    "notificationsDescription": "Ogni brand può inviare due e-mail: il Daily Pulse dopo le sue analisi di monitoraggio e il riepilogo settimanale AI Traffic ogni lunedì. Entrambe vanno ai destinatari del Daily Pulse del brand.",
+    "pulseSection": "Daily Pulse",
+    "pulseSectionDescription": "Un breve riepilogo per brand dopo ogni analisi di monitoraggio, con evidenze e avvisi. Scegli la frequenza e chi lo riceve.",
+    "pulseFrequencyLabel": "Frequenza del Daily Pulse di {brand}",
     "pulseFrequency_daily": "Giornaliera",
     "pulseFrequency_weekly": "Settimanale",
     "pulseFrequency_notable": "Solo se rilevante",
@@ -17157,7 +18129,9 @@
     "pulseRecipientsHint": "Indirizzi email separati da virgola. Lascia vuoto per inviare a ogni membro dell'organizzazione.",
     "pulseRecipientsInvalid": "Indirizzo email non valido: {emails}. Correggilo o rimuovilo prima di salvare.",
     "trafficDigest": "Riepilogo settimanale del traffico IA",
-    "trafficDigestHint": "Ogni lunedì: le visite da IA della settimana precedente in una singola riga di riepilogo, con le prime tre variazioni. Inviato ai destinatari sopra indicati.",
+    "trafficDigestDescription": "Ogni lunedì: le visite IA della settimana scorsa in una riga di riepilogo, con le tre principali variazioni. Va ai destinatari del Daily Pulse di ogni brand e viene salvato non appena lo selezioni o deselezioni.",
+    "trafficDigestTo": "A {emails}",
+    "trafficDigestToEveryone": "A tutti i membri dell'organizzazione",
     "trafficDigestPulseOff": "Non inviato quando Daily Pulse è disattivato. Riattiva il pulse per riceverlo di nuovo.",
     "pulseSaved": "Impostazioni delle notifiche salvate",
     "pulseSaveFailed": "Impossibile salvare le impostazioni delle notifiche. Riprova.",
@@ -17175,6 +18149,17 @@
       "empty": "Nessun fuso orario corrispondente.",
       "saved": "Fuso orario salvato",
       "saveFailed": "Impossibile salvare il fuso orario. Riprova."
+    },
+    "language": {
+      "label": "Lingua",
+      "automatic": "Automatica ({language})",
+      "hint": "La lingua delle schermate di Ansvisor, solo per Lei. La lingua dei contenuti dei Suoi brand non cambia.",
+      "loading": "Caricamento delle lingue…",
+      "moreSoon": "Altre lingue sono in arrivo.",
+      "preview": "Lo staff e le build di test vedono anche le lingue non ancora tradotte e una lingua di test con testi più lunghi. Dove manca il testo, viene mostrato l’inglese.",
+      "testLanguage": "{language} · test",
+      "saved": "Lingua salvata",
+      "saveFailed": "Impossibile salvare la lingua. Riprovi."
     },
     "save": "Salva modifiche",
     "saved": "Modifiche salvate!",
@@ -17294,6 +18279,81 @@
         }
       }
     },
+    "planAddOns": {
+      "title": "Aggiunga altro al Suo piano",
+      "description": "Tracciamento extra, brand aggiuntivi e ricariche di utilizzo IA per il Suo piano Growth. Tutto ciò che sceglie viene addebitato una sola volta sulla carta registrata.",
+      "tracking": {
+        "title": "Tracciamento extra",
+        "description": "Più località dei Prompt, monitorate ogni giorno sui motori del Suo piano. Un livello alla volta; può modificarlo o rimuoverlo in qualsiasi momento.",
+        "label": "Livelli di tracciamento extra",
+        "none": "Nessuno",
+        "tier": "+{units} località dei Prompt",
+        "price": "{price}/{interval, select, year {anno} other {mese}}",
+        "contactSales": "Contatta le vendite",
+        "yearly": "Prezzi annuali: 2 mesi gratis."
+      },
+      "brands": {
+        "title": "Brand extra",
+        "description": "Ogni brand ha i propri argomenti, concorrenti e report white-label. {price} al {interval, select, year {anno} other {mese}} per brand.",
+        "count": "{count} extra",
+        "fewer": "Un brand in meno",
+        "more": "Un brand in più",
+        "note": "Non può scendere sotto il numero di brand che ha: prima ne rimuova uno in Brand."
+      },
+      "topUp": {
+        "title": "Ricarica di utilizzo IA",
+        "description": "Un solo pagamento. Aggiunge utilizzo IA, brief e opportunità fino al rinnovo del piano il {date}; non si rinnova.",
+        "descriptionNoDate": "Un solo pagamento. Aggiunge utilizzo IA, brief e opportunità fino al rinnovo del piano; non si rinnova.",
+        "label": "Ricariche di utilizzo IA",
+        "none": "Nessuna",
+        "option": "+{multiplier}x",
+        "adds": "{multiplier}× l’utilizzo IA di questo mese · +{briefs} brief · +{opportunities} opportunità"
+      },
+      "summary": "{prompts} località dei Prompt · {brands} brand",
+      "nothing": "Scelga sopra cosa modificare.",
+      "review": "Verifica e paga",
+      "reviewing": "Verifica del prezzo…",
+      "dialog": {
+        "title": "Verifichi i Suoi componenti aggiuntivi",
+        "newLimits": "Nuovi limiti",
+        "tracking": "Tracciamento extra",
+        "trackingNone": "Nessun tracciamento extra",
+        "brands": "{count, plural, =0 {Nessun brand extra} one {# brand extra} other {# brand extra}}",
+        "topUp": "Ricarica di utilizzo IA +{multiplier}x, un solo pagamento",
+        "dueToday": "Da pagare oggi",
+        "dueTodayNote": "Il resto di questo periodo per il monitoraggio e i brand aggiuntivi, più una ricarica per intero.",
+        "total": "Dal prossimo rinnovo",
+        "totalValue": "{price} {interval, select, year {all'anno} other {al mese}}",
+        "credit": "Un livello inferiore o meno brand lasciano un credito per le prossime fatture.",
+        "pay": "Paga {price}",
+        "confirm": "Conferma",
+        "cancel": "Annulla",
+        "processing": "Elaborazione in corso…"
+      },
+      "done": "I tuoi add-on sono aggiornati. Una ricarica viene conteggiata non appena il pagamento è confermato.",
+      "states": {
+        "not_admin": "Solo gli amministratori possono modificare gli add-on. Rivolgiti a un amministratore del tuo workspace.",
+        "starter": "Gli add-on sono inclusi nel piano Growth. Passa a Growth per aggiungere monitoraggio, brand e utilizzo IA.",
+        "enterprise": "Il tuo contratto stabilisce i tuoi limiti. Contatta il tuo account manager per aumentarli.",
+        "trial": "Gli add-on possono essere acquistati una volta avviato il piano.",
+        "no_plan": "Gli add-on possono essere acquistati finché il piano è attivo.",
+        "ending": "Il tuo piano è in scadenza. Mantieni il piano per modificarne gli add-on."
+      },
+      "errors": {
+        "not_cloud": "Gli add-on non sono disponibili qui.",
+        "admin_only": "Solo gli amministratori possono modificare gli add-on.",
+        "not_growth": "Gli add-on sono inclusi nel piano Growth.",
+        "trial": "Gli add-on possono essere acquistati una volta avviato il piano.",
+        "no_plan": "Gli add-on possono essere acquistati finché il piano è attivo.",
+        "ending": "Il tuo piano è in scadenza. Mantieni il piano per modificarne gli add-on.",
+        "contact_sales": "Questo livello è venduto dal nostro team commerciale.",
+        "unavailable": "Questo add-on non può essere acquistato al momento.",
+        "below_usage": "Utilizzi {prompts} posizioni di Prompt e {brands} brand; i nuovi limiti sono {limitPrompts} e {limitBrands}. Metti prima in pausa i Prompt o rimuovi dei brand.",
+        "payment_failed": "Il pagamento non è andato a buon fine.",
+        "failed": "Impossibile modificare i tuoi add-on. Riprova."
+      },
+      "readFailed": "Impossibile leggere i tuoi add-on. Riprova più tardi."
+    },
     "cancelsOn": "L'abbonamento termina il {date}",
     "changePlan": "Modifica piano",
     "upgradeTo": "Passa a {plan}",
@@ -17374,21 +18434,22 @@
     "planChanged": "Piano aggiornato con successo.",
     "subscriptionCanceled": "Il tuo abbonamento è stato annullato.",
     "needCustomPlan": "Hai bisogno di un piano personalizzato?",
-    "customPlanDescription": "Per grandi aziende e agenzie che gestiscono la visibilità IA su larga scala. A partire da $499/mese.",
+    "customPlanDescription": "Per grandi aziende e agenzie che gestiscono la visibilità IA su larga scala. A partire da {price} $/mese.",
     "customPlanPoints": [
-      "Brand illimitati in un'area di lavoro personalizzata",
-      "Tutti i motori di risposta, Claude incluso",
-      "Monitoraggio personalizzato di Prompt e località",
-      "Framework di KPI personalizzati e integrazioni di dati",
-      "Supporto prioritario e sessioni di onboarding",
-      "SSO / SAML e richieste di funzionalità personalizzate",
-      "Le tue chiavi IA personali: OpenAI, Anthropic, Google, Azure o OpenRouter"
+      "1 brand e 3.000 Prompt per iniziare, di più su contratto",
+      "Tutti i motori di risposta, Claude su contratto",
+      "Brief di contenuti, opportunità e audit del sito illimitati",
+      "SSO / SAML, supporto prioritario e SLA",
+      "Fatturazione con fattura e accesso API",
+      "Le tue chiavi IA: OpenAI, Anthropic, Google, Azure o OpenRouter"
     ],
     "customPlanPointsChat": [
       "Chat e agenti",
       "Completamente automatico, con agenti che pubblicano autonomamente"
     ],
     "planCards": {
+      "expandable": "+ add-on",
+      "expandableHint": "Growth può aggiungerne in qualsiasi momento, in Impostazioni › Fatturazione: monitoraggio extra, brand extra e ricariche di utilizzo IA.",
       "starter": {
         "tagline": "Per piccoli team che iniziano con il monitoraggio e l'ottimizzazione della visibilità IA.",
         "engines": "Monitoraggio di ChatGPT e Gemini",
@@ -17600,6 +18661,8 @@
     "integrations_connectForbidden": "Solo gli amministratori e i gestori possono connettere le integrazioni.",
     "integrations_statusFailed": "Impossibile verificare se {label} è connesso. Riprova tra poco.",
     "integrations_statusTimedOut": "Il controllo di {label} ha richiesto troppo tempo. Riprova tra poco.",
+    "integrations_propertiesFailed": "Impossibile caricare le proprietà di {source}.",
+    "integrations_propertiesNoAccess": "Google non ha concesso ad Ansvisor l'accesso a {source}: una casella nella schermata di Google è rimasta deselezionata. Scollega la connessione qui sopra, poi collegala di nuovo e seleziona tutte le caselle.",
     "integrations_propertiesTimedOut": "La lettura delle proprietà ha richiesto troppo tempo. Riprova tra poco.",
     "integrations_retry": "Riprova",
     "integrations_propertyMapping": "Mappatura delle proprietà",
@@ -18409,14 +19472,30 @@
     "org_description": "Gestisci il nome della tua organizzazione e visualizza i dettagli del piano.",
     "org_name": "Nome organizzazione",
     "org_namePlaceholder": "Acme Inc.",
-    "org_slug": "Slug",
-    "org_slugHint": "Utilizzato nei riferimenti API e integrazioni. Contatta l'assistenza per modificarlo.",
     "org_plan": "Piano",
     "org_members": "Membri",
     "org_adminOnly": "Solo gli amministratori possono rinominare l'organizzazione.",
     "org_loadFailed": "Impossibile caricare i dettagli dell'organizzazione.",
     "org_saveFailed": "Impossibile salvare il nome dell'organizzazione. Riprova.",
-    "accountSaveFailed": "Impossibile salvare i dettagli dell'account. Riprova."
+    "accountSaveFailed": "Impossibile salvare i dettagli dell'account. Riprova.",
+    "teamErrors": {
+      "invalid_email": "Inserisci un indirizzo email valido.",
+      "no_brands": "Scegli almeno un brand.",
+      "already_member": "Questa persona è già membro del tuo team.",
+      "already_invited": "Esiste già un invito in sospeso per questa email.",
+      "admin_all_brands": "Gli amministratori hanno sempre accesso a Tutti i brand."
+    },
+    "changePlanFailed": "Impossibile modificare il piano. Riprova.",
+    "cancelFailed": "Impossibile annullare l'abbonamento. Riprova.",
+    "reactivateFailed": "Impossibile riattivare l'abbonamento. Riprova.",
+    "portalFailed": "Impossibile aprire il portale di fatturazione. Riprova.",
+    "agent_loadFailed": "Impossibile caricare i tuoi provider IA. Ricarica la pagina.",
+    "agent_saveFailed": "Impossibile salvare. Riprova.",
+    "agent_testFailed": "Impossibile testare la chiave. Riprova.",
+    "agent_clearFailed": "Impossibile rimuovere la chiave. Riprova.",
+    "integrations_disconnectFailed": "Impossibile disconnettere. Riprova.",
+    "integrations_propertySaveFailed": "Impossibile salvare la proprietà. Riprova.",
+    "integrations_propertiesLoadFailed": "Impossibile caricare le proprietà."
   },
   "brands": {
     "title": "Brand",
@@ -18513,6 +19592,7 @@
     },
     "description": "Gestisci tutti i brand che monitori sulle piattaforme IA.",
     "addBrand": "Aggiungi brand",
+    "addBrandAddOn": "Aggiungi un brand al tuo piano",
     "showAllBrands": "Mostra tutti i miei brand",
     "visitBrandSettings": "Vai alle impostazioni del brand",
     "workspaceSettings": "Impostazioni area di lavoro",
@@ -18814,6 +19894,14 @@
         "hint": "Le piattaforme abilitate verranno interrogate alla frequenza configurata per verificare la Visibilità del tuo brand nei prompt.",
         "loadError": "Impossibile caricare le impostazioni della piattaforma IA.",
         "saveError": "Impossibile salvare le impostazioni della piattaforma IA."
+      },
+      "errors": {
+        "save": "Salvataggio non riuscito. Riprova.",
+        "saveDomains": "Salvataggio dei domini non riuscito. Riprova.",
+        "loadCompetitors": "Caricamento dei concorrenti non riuscito.",
+        "addCompetitor": "Aggiunta del concorrente non riuscita. Riprova.",
+        "removeCompetitor": "Rimozione del concorrente non riuscita. Riprova.",
+        "deleteBrand": "Eliminazione del brand non riuscita. Riprova."
       }
     },
     "card": {

@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
+import { useServerErrorText } from '@/hooks/use-server-error';
 import dynamic from 'next/dynamic';
 import { Link } from '@/i18n/navigation';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -44,6 +45,7 @@ import { ScoreRangeMark, useScoreRangeTip } from '@/components/audit/score-range
 import { HeaderWithAiUsage } from '@/components/ai-usage/ai-usage-meter';
 import { useChatPageContext } from '@/components/chat/panel/chat-panel-context';
 import { rangeChipLabel } from '@/lib/chat/page-context';
+import { shownMentionEvidence } from '@/lib/reports/mention-evidence';
 import { useUserRole } from '@/hooks/use-user-role';
 
 const KNOWN_TEMPLATE_IDS = new Set<string>(REPORT_TEMPLATES.map((tpl) => tpl.id));
@@ -62,7 +64,11 @@ function Delta({
   unit?: '%' | '';
 }) {
   if (zeroBaseCount !== undefined) {
-    return <span className="text-xs font-medium text-emerald-600">+{zeroBaseCount} new</span>;
+    return (
+      <span className="text-xs font-medium text-emerald-600">
+        +{formatNumber(zeroBaseCount)} new
+      </span>
+    );
   }
   if (value === null) return null;
   const up = value >= 0;
@@ -191,6 +197,7 @@ export default function ReportDetailPage() {
   // saved report it holds open by its id, and the days it covers. Its sections are a snapshot:
   // get_report reads them whole, so no row is sent.
   const tChatRange = useTranslations('chatPanel.range');
+  const serverError = useServerErrorText();
   const period = report && {
     from: report.dateFrom.slice(0, 10),
     to: report.dateTo.slice(0, 10),
@@ -295,7 +302,7 @@ export default function ReportDetailPage() {
       await saveReportPdf(report, kit);
     } catch (err) {
       console.error('PDF download error:', err);
-      toast.error(t('downloadFailed'));
+      toast.error(serverError(err, t('downloadFailed')));
     } finally {
       setDownloading(false);
     }
@@ -389,7 +396,7 @@ export default function ReportDetailPage() {
             )}
             <KpiCard
               label={t('kpi.mentions')}
-              value={String(payload.insights.totalMentions)}
+              value={formatNumber(payload.insights.totalMentions)}
               change={payload.insights.mentionsChange}
               zeroBaseCount={
                 Object.hasOwn(payload.insights, 'prevMentions') &&
@@ -401,7 +408,7 @@ export default function ReportDetailPage() {
             />
             <KpiCard
               label={t('kpi.citations')}
-              value={String(payload.insights.totalCitations)}
+              value={formatNumber(payload.insights.totalCitations)}
               change={payload.insights.citationsChange}
               zeroBaseCount={
                 Object.hasOwn(payload.insights, 'prevCitations') &&
@@ -447,7 +454,10 @@ export default function ReportDetailPage() {
               ) : (
                 payload.shareOfVoice.byPlatform.map((p) => (
                   <div key={p.provider} className="flex items-center gap-3">
-                    <span className="w-32 shrink-0 truncate text-sm">{p.provider}</span>
+                    {/* Wide enough for "Google AI Overviews" (UX audit RP-14). */}
+                    <span className="w-44 shrink-0 truncate text-sm" title={p.provider}>
+                      {p.provider}
+                    </span>
                     <div className="h-2 flex-1 overflow-hidden rounded-full bg-muted">
                       <div
                         className="h-full rounded-full bg-primary"
@@ -538,8 +548,8 @@ export default function ReportDetailPage() {
                         <TableCell className="text-end">
                           <Delta value={typeof c.score === 'number' ? c.scoreChange : c.change} />
                         </TableCell>
-                        <TableCell className="text-end">{c.totalMentions}</TableCell>
-                        <TableCell className="text-end">{c.totalCitations}</TableCell>
+                        <TableCell className="text-end">{formatNumber(c.totalMentions)}</TableCell>
+                        <TableCell className="text-end">{formatNumber(c.totalCitations)}</TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
@@ -634,7 +644,7 @@ export default function ReportDetailPage() {
                                       : `${p.avgVisibility}/100`}
                                 </TableCell>
                                 <TableCell className="text-end text-muted-foreground">
-                                  {p.runs}
+                                  {formatNumber(p.runs)}
                                 </TableCell>
                               </TableRow>
                             ))}
@@ -651,7 +661,9 @@ export default function ReportDetailPage() {
           <Card>
             <CardHeader>
               <CardTitle className="text-base">{t('mentionEvidence')}</CardTitle>
-              <p className="text-sm text-muted-foreground">{t('mentionEvidenceDescription')}</p>
+              <p className="text-sm text-muted-foreground">
+                {t('mentionEvidenceDescription')} {t('newestFirst')}
+              </p>
             </CardHeader>
             <CardContent>
               <Table>
@@ -664,7 +676,7 @@ export default function ReportDetailPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {payload.mentionEvidence.map((m, idx) => (
+                  {shownMentionEvidence(payload.mentionEvidence).map((m, idx) => (
                     <TableRow key={`${m.promptText}-${idx}`}>
                       <TableCell className="max-w-[220px] truncate font-medium">
                         {m.promptText}
@@ -727,7 +739,7 @@ export default function ReportDetailPage() {
                       <TableCell className="text-muted-foreground">
                         {q.engines.map((e) => PLATFORM_LABELS[e] ?? e).join(', ')}
                       </TableCell>
-                      <TableCell className="text-end">{q.timesSearched}</TableCell>
+                      <TableCell className="text-end">{formatNumber(q.timesSearched)}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -741,7 +753,9 @@ export default function ReportDetailPage() {
             <CardHeader>
               <CardTitle className="flex items-baseline gap-2 text-base">
                 {t('aiTraffic')}
-                <span className="text-2xl font-bold">{payload.aiTraffic.totalVisits}</span>
+                <span className="text-2xl font-bold">
+                  {formatNumber(payload.aiTraffic.totalVisits)}
+                </span>
                 <Delta value={payload.aiTraffic.change} />
                 {/* No % on a handful of visits, as on the AI Traffic page. */}
                 {payload.aiTraffic.changeNote === 'new' && (
@@ -770,7 +784,7 @@ export default function ReportDetailPage() {
                   payload.aiTraffic.platformBreakdown.map((p) => (
                     <div key={p.platform} className="flex items-center justify-between text-sm">
                       <span className="truncate">{PLATFORM_LABELS[p.platform] ?? p.platform}</span>
-                      <span className="font-medium tabular-nums">{p.visits}</span>
+                      <span className="font-medium tabular-nums">{formatNumber(p.visits)}</span>
                     </div>
                   ))
                 )}
@@ -785,7 +799,9 @@ export default function ReportDetailPage() {
                   payload.aiTraffic.topPages.map((p) => (
                     <div key={p.url} className="flex items-center justify-between gap-3 text-sm">
                       <span className="min-w-0 truncate text-muted-foreground">{p.url}</span>
-                      <span className="shrink-0 font-medium tabular-nums">{p.visits}</span>
+                      <span className="shrink-0 font-medium tabular-nums">
+                        {formatNumber(p.visits)}
+                      </span>
                     </div>
                   ))
                 )}
@@ -929,7 +945,7 @@ export default function ReportDetailPage() {
                   {t('shopping.products')}
                 </p>
                 <p className="mt-1 text-2xl font-bold">
-                  {payload.shoppingVisibility.productsSurfaced}
+                  {formatNumber(payload.shoppingVisibility.productsSurfaced)}
                 </p>
               </div>
               <div>
@@ -1013,7 +1029,7 @@ export default function ReportDetailPage() {
                         <TableCell className="capitalize text-muted-foreground">
                           {d.category}
                         </TableCell>
-                        <TableCell className="text-end">{d.totalCitations}</TableCell>
+                        <TableCell className="text-end">{formatNumber(d.totalCitations)}</TableCell>
                         <TableCell className="text-end">{d.usagePct}%</TableCell>
                       </TableRow>
                     ))}
@@ -1056,7 +1072,7 @@ export default function ReportDetailPage() {
                           {c.domain}
                         </span>
                       </TableCell>
-                      <TableCell className="text-end">{c.totalCitations}</TableCell>
+                      <TableCell className="text-end">{formatNumber(c.totalCitations)}</TableCell>
                       <TableCell className="whitespace-normal text-xs text-muted-foreground">
                         {c.sourcedPrompts.join(' · ')}
                       </TableCell>

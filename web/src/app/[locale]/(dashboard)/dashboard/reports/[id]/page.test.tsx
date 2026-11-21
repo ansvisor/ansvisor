@@ -481,6 +481,47 @@ describe('ReportDetailPage › KPIs and leaderboard (RP-01, RP-02)', () => {
   });
 });
 
+describe('ReportDetailPage › numbers (GL-04)', () => {
+  it('writes counts with thousands separators', async () => {
+    getReport.mockResolvedValue({
+      ...report,
+      payload: {
+        ...report.payload,
+        insights: {
+          avgVisibilityScore: 2.3,
+          visibilityChange: null,
+          totalMentions: 10262,
+          mentionsChange: null,
+          totalCitations: 1371,
+          citationsChange: null,
+          positiveSentimentPct: 60,
+          sentimentChange: null,
+        },
+        queryFanout: [{ query: 'espresso beans', engines: ['chatgpt-web'], timesSearched: 2048 }],
+        queryFanoutEngines: [
+          { engine: 'chatgpt-web', distinctQueries: 1200, answersWithFanout: 3400 },
+        ],
+        aiTraffic: {
+          totalVisits: 12500,
+          change: null,
+          platformBreakdown: [{ platform: 'chatgpt.com', visits: 11000 }],
+          topPages: [{ url: 'https://shop.com/', visits: 5400 }],
+        },
+      },
+    });
+    await render();
+    const text = container.textContent!;
+    expect(text).toContain('Mentions10,262');
+    expect(text).toContain('1,371');
+    expect(text).toContain('2,048');
+    expect(text).toContain('1,200 distinct sub-queries across 3,400 answers');
+    expect(text).toContain('12,500');
+    expect(text).toContain('11,000');
+    expect(text).toContain('5,400');
+    expect(text).not.toMatch(/10262|1371|2048|12500|11000|5400/);
+  });
+});
+
 describe("what Chat's side panel sees (the owner's plan, step 9's detail pages)", () => {
   it('holds the saved report open by its id, with the days it covers, and no rows', async () => {
     await render();

@@ -195,7 +195,7 @@ export function WhyCard({ runId, why }: { runId: string; why: ChatWhy }) {
       </span>
 
       <Sheet open={drawer !== null} onOpenChange={(next) => !next && closeDrawer()}>
-        <SheetContent side="right" className="w-full sm:max-w-[420px]">
+        <SheetContent side="end" className="w-full sm:max-w-[420px]">
           {drawer?.kind === 'total' && (
             <>
               <SheetHeader>

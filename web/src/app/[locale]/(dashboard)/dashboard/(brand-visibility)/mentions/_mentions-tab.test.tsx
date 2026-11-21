@@ -219,7 +219,7 @@ describe('MentionsListTab', () => {
     await settle();
     expect(
       [...container.querySelectorAll('tbody td[colspan]')].map((td) => td.textContent),
-    ).toEqual(['Gemini · 12 mentions', 'Claude · 1 mention']);
+    ).toEqual(['Gemini · 12 mentions', 'Claude API · 1 mention']);
   });
 
   it('opens the answer: header, excerpt, the full response marked, and typed citations', async () => {
