@@ -1,4 +1,5 @@
 import { act } from 'react';
+import { pickDate } from '@/components/ui/date-picker-testing';
 import { createRoot, type Root } from 'react-dom/client';
 import { NextIntlClientProvider } from 'next-intl';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -218,7 +219,7 @@ describe('Enter numbers', () => {
   it('saves the entry, reads the card again and says so', async () => {
     actions.saveBusinessHubSnapshot.mockResolvedValue({ saved: true, replaced: false });
     await open();
-    await type('bh-last-day', '2026-11-03');
+    await pickDate(document.getElementById('bh-last-day')!, '2026-11-03');
     await type('bh-mentions', '1.240');
     await act(async () => button('Save')!.click());
     expect(actions.saveBusinessHubSnapshot).toHaveBeenCalledWith(BRAND, {
@@ -235,7 +236,7 @@ describe('Enter numbers', () => {
 
   it('says a save replaces the entry for the same days', async () => {
     await open();
-    await type('bh-last-day', '2026-11-10');
+    await pickDate(document.getElementById('bh-last-day')!, '2026-11-10');
     expect(text()).toContain('This replaces your entry for the same days.');
   });
 });

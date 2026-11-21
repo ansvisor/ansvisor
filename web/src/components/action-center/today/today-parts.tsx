@@ -5,7 +5,7 @@ import { useFormatter, useTranslations } from 'next-intl';
 import { Link } from '@/i18n/navigation';
 import { cn } from '@/lib/utils';
 import { dayIn } from '@/lib/time-zone';
-import type { TodayStanding } from '@/lib/action-center/focus';
+import { RANK_MIN_PROMPTS, type TodayStanding } from '@/lib/action-center/focus';
 import type { FirstRun } from '@/hooks/use-first-run';
 import { Skeleton } from '@/components/ui/skeleton';
 import type { TodayLoad } from './use-today';
@@ -192,10 +192,12 @@ export function useAnswersCell(
 /** The Results cell: the score and its change since the run before. */
 export function ResultsValue({ standing }: { standing: TodayStanding }) {
   const t = useTranslations('actionCenter.today.loop');
+  const tStand = useTranslations('actionCenter.today.stand');
   const { score, change } = useScore();
   return (
     <>
-      {score(standing.score)}{' '}
+      {score(standing.score)}
+      <span className="text-xs font-normal text-muted-foreground">{tStand('outOf')}</span>{' '}
       {standing.change !== null && (
         <span className={cn('text-[13px] font-semibold', changeTone(standing.change))}>
           {standing.change === 0 ? t('noChange') : change(standing.change)}
@@ -225,8 +227,13 @@ export function StandSection({ load }: { load: TodayLoad<TodayStanding | null> }
       ) : (
         load.data && (
           <div className="space-y-2">
+            {/* The Visibility score, out of 100 (D2), from the latest run (D7). */}
+            <p className="text-xs text-muted-foreground">{t('scoreLabel')}</p>
             <p className="text-3xl font-bold tracking-tight">
-              {score(load.data.score)}{' '}
+              {score(load.data.score)}
+              <span className="text-base font-semibold text-muted-foreground">
+                {t('outOf')}
+              </span>{' '}
               {load.data.change !== null && (
                 <span className={cn('text-sm font-semibold', changeTone(load.data.change))}>
                   {load.data.change === 0
@@ -243,8 +250,20 @@ export function StandSection({ load }: { load: TodayLoad<TodayStanding | null> }
                     count: load.data.of,
                     gap: format.number(load.data.neighbour.gap, { maximumFractionDigits: 1 }),
                     name: load.data.neighbour.name,
+                    set: load.data.set,
+                    min: RANK_MIN_PROMPTS,
                   })}
             </p>
+            {load.data.runAt && (
+              <p className="text-xs text-muted-foreground">
+                {t('run', {
+                  date: format.dateTime(new Date(load.data.runAt), {
+                    month: 'short',
+                    day: 'numeric',
+                  }),
+                })}
+              </p>
+            )}
           </div>
         )
       )}

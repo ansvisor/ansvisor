@@ -1,5 +1,6 @@
 'use client';
 
+import { DatePicker } from '@/components/ui/date-picker';
 import type { KeyboardEvent, ReactNode } from 'react';
 import { useTranslations } from 'next-intl';
 import { ChevronDown, Plus, X } from 'lucide-react';
@@ -568,14 +569,13 @@ export function TriggerStep({
               {draft.repeat === 'once' && (
                 <>
                   <span>{t('trigger.on')}</span>
-                  <input
-                    type="date"
+                  <DatePicker
                     aria-label={t('trigger.dateLabel')}
                     data-action="agentNew.date"
                     {...invalidOn('date')}
-                    value={draft.date}
-                    onChange={(event) => onTrigger(draft.key, { date: event.target.value })}
-                    className={TOK}
+                    value={draft.date || null}
+                    onChange={(day) => onTrigger(draft.key, { date: day ?? '' })}
+                    className="h-7 w-auto max-w-full text-[12.5px]"
                   />
                 </>
               )}
