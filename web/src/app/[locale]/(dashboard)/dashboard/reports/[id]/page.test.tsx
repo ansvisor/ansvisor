@@ -158,6 +158,46 @@ describe('ReportDetailPage with white label', () => {
   });
 });
 
+describe('ReportDetailPage › Competitor Leaderboard sample (RP-07)', () => {
+  const entry = (name: string, score: number, visiblePrompts: number) => ({
+    name,
+    isOwnBrand: false,
+    avgVisibilityScore: 0,
+    visibilityRate: Math.round((visiblePrompts / 308) * 1000) / 10,
+    visiblePrompts,
+    promptCount: 308,
+    change: null,
+    score,
+    scoreChange: null,
+    mentionAnswers: 0,
+    citationAnswers: 0,
+    totalMentions: 0,
+    totalCitations: 0,
+  });
+  const ranked: Report = {
+    ...report,
+    payload: {
+      ...report.payload,
+      // The audit's case: GeoGenie scored 10.3 from one prompt.
+      competitors: [
+        entry('GeoGenie', 10.3, 1),
+        entry('Opttab', 11, 14),
+        entry('Cognizo', 10.6, 93),
+      ] as unknown as Report['payload']['competitors'],
+    },
+  };
+
+  it('names its metric and lists a brand under the sample last, as Low sample', async () => {
+    getReport.mockResolvedValue(ranked);
+    await render();
+    expect(container.textContent).toContain('Ranked by Visibility score');
+    const rows = [...container.querySelectorAll('tbody tr')].map(
+      (tr) => tr.querySelector('td')!.textContent,
+    );
+    expect(rows).toEqual(['Opttab', 'Cognizo', 'GeoGenieLow sample']);
+  });
+});
+
 describe('ReportDetailPage › sections that could not be gathered (RP-06)', () => {
   const gapped: Report = {
     ...report,

@@ -37,3 +37,18 @@ export function brandPromptsLink(
 ): PickOnOpen & { href: string } {
   return { href: TRACKED_PROMPTS_HREF, ...pickOnOpen(() => setActiveBrand(brandId)) };
 }
+
+/**
+ * A brand's topics are looked at on the Prompts page too, on its Topics tab,
+ * for the brand picked in the app. The brand's own Topics page stays: renaming
+ * a topic happens there (Manage topics).
+ */
+export const PROMPTS_TOPICS_HREF = sectionFor('topics', 'tracked').href;
+
+/** A link to Prompts › Topics for one brand: it picks the brand, then opens the tab. */
+export function brandTopicsLink(
+  brandId: string,
+  setActiveBrand: (brandId: string) => void,
+): PickOnOpen & { href: string } {
+  return { href: PROMPTS_TOPICS_HREF, ...pickOnOpen(() => setActiveBrand(brandId)) };
+}
