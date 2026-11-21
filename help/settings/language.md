@@ -23,7 +23,7 @@ You can also pick a language while you sign up, in the **Language** field of the
 
 ## Dates and numbers
 
-Dates and numbers follow your language, for example 1,234.5 in English and 1.234,5 in German.
+Dates and numbers follow your language, for example 1,234.5 in English and 1.234,5 in German. In a language read right to left, such as Arabic, the page is laid out right to left too, and side panels open from the left, the edge the page reads towards.
 
 ## Text that isn't translated yet
 
