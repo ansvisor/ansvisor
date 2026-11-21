@@ -149,13 +149,13 @@ describe('History scorecard by play (AC plan P-4)', () => {
 });
 
 describe('History’s views and KPIs', () => {
-  it('are Actions, Scorecard and KPIs, a link to its page, and still switch in place', async () => {
+  it('are KPIs (a link to its page), Actions and Scorecard, and still switch in place', async () => {
     await renderAt('/');
     const group = container.querySelector('[role="group"][aria-label="view.label"]')!;
     expect([...group.querySelectorAll('button, a')].map((v) => v.textContent)).toEqual([
+      'view.kpis',
       'view.actions',
       'view.scorecard',
-      'view.kpis',
     ]);
     expect(group.querySelector('a')?.getAttribute('href')).toBe('/dashboard/action-center/kpis');
     await act(async () => button('view.scorecard').click());

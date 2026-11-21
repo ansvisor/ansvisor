@@ -215,6 +215,35 @@ describe('getVisibilitySummaryFor over whole days', () => {
     });
   });
 
+  it("gives every competitor named, with its prompts, only when asked (Today's rank, AC-02)", async () => {
+    db.payloads.competitor_aggregates_daily = {
+      ...AGGREGATES,
+      by_competitor: AGGREGATES.by_competitor.map((c, i) => ({ ...c, visible_prompts: 10 * i })),
+    };
+    const summary = await getVisibilitySummaryFor(AUTH, {
+      brandId: 'b1',
+      dateFrom: '2026-11-10',
+      dateTo: '2026-11-10',
+      everyCompetitor: true,
+    });
+    expect(summary?.topCompetitors).toHaveLength(5);
+    expect(summary?.everyCompetitor?.map((c) => [c.id, c.visiblePrompts])).toEqual([
+      ['c1', 0],
+      ['c2', 10],
+      ['c3', 20],
+      ['c4', 30],
+      ['c5', 40],
+      ['c6', 50],
+    ]);
+    expect(summary?.everyCompetitor?.[1].score).toBe(summary?.topCompetitors[0].score);
+    const plain = await getVisibilitySummaryFor(AUTH, {
+      brandId: 'b1',
+      dateFrom: '2026-11-10',
+      dateTo: '2026-11-10',
+    });
+    expect(plain).not.toHaveProperty('everyCompetitor');
+  });
+
   it('reads all time from the rollups too, with the filters asked', async () => {
     await getVisibilitySummaryFor(AUTH, {
       brandId: 'b1',

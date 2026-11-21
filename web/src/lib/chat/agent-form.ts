@@ -677,11 +677,12 @@ export function presetTriggerDraft(
  */
 export function formFromPreset(
   setup: Pick<AgentFormSetup, 'brands' | 'runShareDefault' | 'fullAuto'>,
-  preset: Pick<AgentPreset, 'skills' | 'triggers' | 'mode' | 'connections'>,
-  options: { timeZone: string; brandId: string | null },
+  preset: Pick<AgentPreset, 'skills' | 'triggers' | 'mode' | 'connections' | 'allBrands'>,
+  options: { timeZone: string; brandId: string | null; instructions?: string },
 ): AgentFormState {
   const skills = [...preset.skills];
-  const allBrands = preset.triggers.some((trigger) => trigger.kind === 'brand_added');
+  const allBrands =
+    preset.allBrands === true || preset.triggers.some((trigger) => trigger.kind === 'brand_added');
   // The AEO Operator's preset: the Operator's own form, on its preset's schedule.
   if (isOperatorSkills(skills)) {
     const form = operatorForm(
@@ -699,6 +700,7 @@ export function formFromPreset(
   return {
     ...newForm(setup, { ...options, skill: null, triggerKey: 'k0' }),
     ...(allBrands ? { allBrands, brandIds: [] } : {}),
+    instructions: options.instructions ?? '',
     skills,
     triggers: preset.triggers.map((trigger, i) =>
       presetTriggerDraft(trigger, `k${i}`, options.timeZone),
