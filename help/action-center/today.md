@@ -15,7 +15,7 @@ sources: [docs/guides/action-center.mdx]
 
 ## The tabs
 
-The Action Center has five tabs: **Today**, **Actions**, **Signals**, **Agents** and **History**. **Agents** (formerly Agent Center) is there when Chat's agents are on for your workspace and on your menu. **KPIs** opens from **History**, next to its Actions and Scorecard views. Admins and managers open **Needs review** from **Waiting for you** on Today.
+The Action Center has five tabs: **Today**, **Actions**, **Signals**, **Agents** and **History**. **Agents** (formerly Agent Center) is there when Chat's agents are on for your workspace and on your menu. **KPIs** opens from **History**, next to its Past actions and Results by kind views. Admins and managers open **Needs review** from **Waiting for you** on Today.
 
 Beside **Agents** is how many of your agent runs wait for you.
 
