@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslations } from 'next-intl';
+import { useServerErrorText } from '@/hooks/use-server-error';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import {
@@ -66,6 +67,7 @@ export function AddSourceDialog({
   onAdded: () => void;
 }) {
   const t = useTranslations('contentEditor.editor.sources.add');
+  const serverError = useServerErrorText();
   const [kind, setKind] = useState<AddKind>('prompt');
   const [prompts, setPrompts] = useState<PickerItem[] | null>(null);
   const [promptsFailed, setPromptsFailed] = useState(false);
@@ -147,7 +149,7 @@ export function AddSourceDialog({
       close(false);
     } catch (err) {
       console.error('Failed to add a draft source:', err);
-      toast.error(t('failed'));
+      toast.error(serverError(err, t('failed')));
     } finally {
       setSaving(false);
     }

@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useTranslations } from 'next-intl';
+import { useServerErrorText } from '@/hooks/use-server-error';
 import { toast } from 'sonner';
 import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 import { addDraftPrompts, getDraftSources, rebuildDraftBrief } from '@/lib/actions/content-drafts';
@@ -53,6 +54,7 @@ export function useBriefRebuild({
   // Impact, Next step's Build brief) opens the upgrade dialog instead.
   const { isLocked, openUpgrade } = useUpgradeGate();
   const tActions = useTranslations('readOnly.actions');
+  const serverError = useServerErrorText();
 
   const rebuild = async (
     options: {
@@ -108,7 +110,7 @@ export function useBriefRebuild({
       return true;
     } catch (err) {
       console.error('Failed to rebuild the brief:', err);
-      toast.error(t('rebuildErrors.failed'));
+      toast.error(serverError(err, t('rebuildErrors.failed')));
       return false;
     } finally {
       setRebuilding(false);

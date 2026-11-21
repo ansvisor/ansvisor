@@ -14,6 +14,14 @@
     "upgrade": "Upgrade",
     "choosePlan": "Choose a plan"
   },
+  "metrics": {
+    "promptsAnswered": "{count, plural, one {# prompt with answers in {period}} other {# prompts with answers in {period}}}",
+    "period": {
+      "lastDays": "{days, plural, one {the last day} other {the last # days}}",
+      "all": "all tracked history",
+      "custom": "the selected range"
+    }
+  },
   "locationPicker": {
     "label": "Locations",
     "tracked": "tracked",
@@ -53,8 +61,8 @@
     "title": "Run Single Prompt",
     "description": "Pick a prompt to test. Only that prompt will run across your enabled platforms.",
     "empty": "No active prompts found. Add prompts in brand settings first.",
-    "loadFailed": "Failed to load prompts",
-    "runFailed": "Failed to run prompt"
+    "loadFailed": "Couldn't load your prompts. Try again.",
+    "runFailed": "Couldn't run the prompt. Try again."
   },
   "responseDetail": {
     "response": "AI Response",
@@ -73,7 +81,9 @@
     "missing_ai_key": "Add an AI provider key in Settings › AI Providers first.",
     "server_error": "Something went wrong on our side. Try again.",
     "location_limit": "Your plan's prompt locations are full: each prompt counts once per location it tracks, and paused prompts don't count. Remove or pause some, or upgrade your plan.",
-    "brand_limit": "Your plan's brands are all in use. Upgrade your plan to add more."
+    "brand_limit": "Your plan's brands are all in use. Upgrade your plan to add more.",
+    "demo_brand": "This is the demo brand: its data is sample data, so it can't be changed or run. Make the change on your own brand.",
+    "admin_required": "Only an Admin can do this. Ask an Admin of your workspace."
   },
   "aiUsage": {
     "meter": {
@@ -502,7 +512,8 @@
       "companyName": "Company name",
       "competitorsToTrack": "Competitors to track",
       "finishingSetup": "Finishing setup...",
-      "competitorsTitle": "Competitors"
+      "competitorsTitle": "Competitors",
+      "saveCompetitorsFailed": "Couldn't save the competitors. Try again."
     },
     "prompts": {
       "removeTopic": "Remove topic",
@@ -961,6 +972,17 @@
           "rival": "Rival"
         },
         "actionAdded": "<link>An action was added</link>.",
+        "group": {
+          "competitor_leads": "{count} rivals are mentioned far more than you",
+          "competitor_momentum": "{count} rivals are gaining fast",
+          "competitor_surge": "{count} rivals' visibility surged",
+          "competitor_crossed": "{count} rivals passed your visibility",
+          "competitor_overtaken": "You overtook {count} rivals",
+          "other": "{title} and {more, plural, one {# similar change} other {# similar changes}}"
+        },
+        "groupActions": "{count, plural, one {# action} other {# actions}}",
+        "showGroup": "Show all {count}",
+        "hideGroup": "Hide",
         "quiet": {
           "none": "No big changes.",
           "held": "No big changes. Your score held at {score}.",
@@ -2034,7 +2056,7 @@
         "keep": "Still relevant",
         "kept": "Kept: it's no longer stale"
       },
-      "taskProgress": "{completed}/{total} tasks",
+      "taskProgress": "{completed}/{total} tasks done",
       "everyone": "Everyone",
       "everyoneTitle": "Everyone in the workspace: no one is assigned yet",
       "tags": {
@@ -2411,6 +2433,7 @@
         "assignee": "Assignee",
         "assignTo": "Assign to teammate",
         "dueDate": "Due date",
+        "noDueDate": "No due date",
         "goalPassed": "Goal date passed",
         "setNewDate": "Set a new date",
         "statusLabel": "Status",
@@ -3980,6 +4003,9 @@
         "inProgress": "In Progress",
         "noImprovement": "No Improvement",
         "dismissed": "Dismissed",
+        "onHold": "On Hold",
+        "closed": "Closed Actions",
+        "closedSub": "closed in this window",
         "ofTotal": "{percent}% of total"
       },
       "pagination": {
@@ -4227,6 +4253,13 @@
     "answerSub": "An answer from scheduled tracking",
     "loading": "Loading…",
     "answerFailed": "This answer couldn't be loaded."
+  },
+  "datePicker": {
+    "placeholder": "Pick a date",
+    "previousMonth": "Previous month",
+    "nextMonth": "Next month",
+    "today": "Today",
+    "clear": "Clear"
   },
   "chatTools": {
     "profile": { "name": "Read your profile", "step": "Read your profile" },
@@ -4659,7 +4692,7 @@
     "runsTray": {
       "label": "Your runs",
       "title": "Your runs",
-      "button": "{count, plural, =0 {Runs} other {# running}}",
+      "button": "{count, plural, =0 {Runs · none running} other {Runs · # running}}",
       "needsYouTip": "{count, plural, one {# needs you} other {# need you}}",
       "summary": "{running} running · {needsYou, plural, one {# needs you} other {# need you}}",
       "summaryRunning": "{running} running",
@@ -5810,8 +5843,7 @@
       "toggleMenu": "Show or hide the Menu section",
       "home": "Home",
       "inbox": "Inbox",
-      "inboxLabel": "Inbox · {count, plural, one {# item} other {# items}}",
-      "inboxLabelNeedsYou": "Inbox · {count, plural, one {# item} other {# items}} · {needsYou, plural, one {# needs you} other {# need you}}",
+      "inboxLabel": "Inbox · {needsYou, plural, one {# needs you} other {# need you}}",
       "skills": "Skills",
       "activity": "Activity",
       "capabilities": "What Chat can do",
@@ -5865,6 +5897,7 @@
       "agents": "Agents",
       "agentsShort": "Agents",
       "agentsLabel": "Agents · in Action Center",
+      "datedTitle": "{when} · ",
       "agentsTip": "Opens Action Center › Agents, outside Chat"
     },
     "actions": {
@@ -6255,10 +6288,7 @@
       "landsWithSuggestions": "Results from your agents and daily suggestions land here.",
       "nothingNeedsYou": "Nothing needs you.",
       "summary": {
-        "needsYou": "{count, plural, one {# needs you} other {# need you}}",
-        "running": "{count} running",
-        "doneToday": "{count} done today",
-        "suggestions": "{count, plural, one {# suggestion} other {# suggestions}} this week"
+        "needsYou": "{count, plural, one {# needs you} other {# need you}}"
       },
       "empty": "Nothing needs you. Results from your agents land here.",
       "tabs": {
@@ -10167,7 +10197,8 @@
       "doneCount": "{count, plural, one {Analysis complete — # answer saved.} other {Analysis complete — # answers saved.}}",
       "doneSoFar": "{count, plural, one {Almost done — # answer saved so far, the rest still arriving.} other {Almost done — # answers saved so far, the rest still arriving.}}",
       "failed": "Job failed: {reason}",
-      "unknownError": "Unknown error"
+      "unknownError": "Unknown error",
+      "startFailed": "Couldn't start tracking. Try again."
     },
     "runPrompts": "Run Prompts",
     "runPromptsNow": "Run Prompts Now",
@@ -10588,7 +10619,7 @@
       "compareHint": "Comparing the selected window with the previous equal-length window.",
       "allTimeHint": "All time. There is no earlier period of the same length to compare.",
       "lastVsPrevious": "{days, plural, one {Last # day vs previous # day} other {Last # days vs previous # days}}",
-      "loadFailed": "Failed to load breakdown",
+      "loadFailed": "Couldn't load the breakdown. Try again.",
       "allTime": "All time",
       "current": "Current {days}d",
       "noSamePrompt": "No prompt was answered in both periods",
@@ -10626,9 +10657,9 @@
       "noCompetitorsTitle": "No competitors tracked yet",
       "noCompetitorsBody": "Add competitors to see how you compare in AI answers.",
       "headToHead": "Head-to-Head Comparison",
-      "loadFailed": "Failed to load insights — please try again",
+      "loadFailed": "Couldn't load insights. Try again.",
       "exportCapped": "Export capped at 50,000 rows to prevent memory issues",
-      "exportFailed": "Failed to export CSV",
+      "exportFailed": "Couldn't export the CSV. Try again.",
       "noTrend": "No trend data available yet",
       "yourBrand": "Your Brand",
       "avgCompetitor": "Avg. Competitor",
@@ -13960,7 +13991,8 @@
       "setupFirst": "Set up a webhook to send opportunities to your workflow tools.",
       "urlRequired": "Webhook URL is required",
       "urlRequiredTest": "Enter a webhook URL first",
-      "saveError": "Failed to save webhook config"
+      "saveError": "Failed to save webhook config",
+      "testNotRun": "The test didn't run. Try again."
     },
     "loadError": "Failed to load content opportunities",
     "exportError": "Failed to export opportunities",
@@ -14605,7 +14637,8 @@
         "trackNotAllowed": "Only admins and managers can add prompts.",
         "failed": "Couldn't load these queries.",
         "noData": "Google Search Console has no queries for this brand yet.",
-        "empty": "Every Google query with clicks in this range is tracked."
+        "empty": "Every Google query with clicks in this range is tracked.",
+        "trackFailed": "Couldn't track these queries. Try again."
       }
     },
     "summaryLine": {
@@ -16341,7 +16374,18 @@
     "windowLastDays": "{days, plural, one {Scores cover the last day.} other {Scores cover the last # days.}}",
     "windowAllTime": "Scores cover all tracked history.",
     "windowSelectedRange": "Scores reflect the selected date range.",
+    "card": {
+      "prompts": "{visible}/{count} prompts",
+      "scoreTip": "Mentioned in {mentionAnswers} answers · cited in {citationAnswers} · position factor {position} · {mentions} mentions · {citations} citations"
+    },
     "selected": "Selected",
+    "rank": {
+      "short": "#{rank}",
+      "label": "Rank {rank} by Visibility score",
+      "you": "You",
+      "lowSample": "Low sample",
+      "lowSampleTip": "Named in fewer than 10 prompts in this period: not ranked yet."
+    },
     "noData": "No data",
     "emptyTitle": "No competitors yet",
     "emptyDescription": "Add competitor domains to compare their AI visibility against yours across all AI platforms.",
@@ -16391,7 +16435,7 @@
     },
     "merge": {
       "open": "Merge",
-      "openHint": "Merge competitors that are the same company",
+      "openHint": "Merge duplicate competitors (e.g. two domains of one brand)",
       "title": "Merge competitors",
       "description": "Pick the competitors that are the same company, then the one to keep.",
       "pickLabel": "Same company",
@@ -16646,9 +16690,9 @@
       "byCompetitor": "By competitor",
       "howItWorks": "How this works",
       "lowVisibility": "Your visibility is low in this window, so this list may be broad — focus on baseline visibility first.",
-      "loadFailedToast": "Failed to load citation data",
-      "checkFailedToast": "Failed to check citation data",
-      "exportFailed": "Failed to export CSV",
+      "loadFailedToast": "Couldn't load citation data. Try again.",
+      "checkFailedToast": "Couldn't check for citation data. Try again.",
+      "exportFailed": "Couldn't export the CSV. Try again.",
       "typesNotExportable": "Source Types is a chart breakdown, not exportable — switch to Domains, URLs, or Competitor Gaps to export.",
       "tabGaps": "Competitor Gaps"
     }
@@ -17400,6 +17444,12 @@
     "selectSections": "Pick at least one section",
     "dialogTitle": "Generate Report",
     "dialogDescription": "Snapshot your brand's AI visibility for a period, with an AI-written executive summary.",
+    "dateRangeHint": "The template sets it; change it here.",
+    "duplicate": {
+      "line": "Same period as an existing report, “{title}”. Open it?",
+      "open": "Open it",
+      "anyway": "Generate anyway"
+    },
     "reportTitleLabel": "Title (optional)",
     "reportTitlePlaceholder": "e.g. Q2 Executive Summary",
     "presets": {
@@ -17466,7 +17516,7 @@
     "worstPrompts": "Weakest Prompts",
     "queryFanout": "Query Fan-out",
     "queryFanoutDescription": "Sub-queries answer engines actually ran while answering your tracked prompts.",
-    "fanoutCoverage": "{queries} distinct sub-queries across {answers} answers",
+    "fanoutCoverage": "{queries, number} distinct sub-queries across {answers, number} answers",
     "loadReportFailed": "Couldn't load this report.",
     "notFound": "Report not found.",
     "backToReports": "Back to Reports",
@@ -17486,13 +17536,14 @@
     "shareOfVoice": "Share of Voice",
     "competitorLeaderboard": "Competitor Leaderboard",
     "topCitationSources": "Top Citation Sources",
-    "citationTotals": "{domains} domains · {citations} citations in this period",
+    "citationTotals": "{domains, number} domains · {citations, number} citations in this period",
     "noData": "No data for this period.",
     "you": "(you)",
     "kpiCitationsNote": "\"Brand Citations\" counts citations of your own site in AI answers.",
     "citationsSectionNote": "All sources AI answers cited around your brand — not just your own site.",
     "mentionEvidence": "Mention Evidence",
     "mentionEvidenceDescription": "The answers that mentioned you most in this period, with the passage around the mention.",
+    "newestFirst": "Newest first.",
     "citationEvidence": "Citation Evidence",
     "citationEvidenceDescription": "The URLs AI answers cited most in this period, and which tracked prompts surfaced them."
   },
@@ -17776,8 +17827,7 @@
       "hint": "The language of Ansvisor’s screens, for you only. Your brands’ content language doesn’t change.",
       "loading": "Loading languages…",
       "moreSoon": "More languages are on the way.",
-      "preview": "Staff and test builds also see the languages that have no translation yet, and a test language with longer text. They show English where text is missing.",
-      "testLanguage": "{language} · test",
+      "preview": "Staff and test builds also see the languages that have no translation yet. They show English where text is missing.",
       "saved": "Language saved",
       "saveFailed": "Couldn’t save your language. Try again."
     },
@@ -18091,6 +18141,8 @@
       "aiUsageHint": "A monthly allowance for Ansvisor's AI features: Improve suggestions, the Content Editor's AI and the Action Center's task writing. Agent Chat runs on your own AI key. The free trial comes with a smaller allowance.",
       "aiUsageCustomHint": "A monthly allowance for Ansvisor's AI features: Improve suggestions, the Content Editor's AI and the Action Center's task writing. Agent Chat runs on your own AI key. Ansvisor sets the amount with you.",
       "aiUsageHintChat": "A monthly allowance for Ansvisor's AI features: Chat and agents, Improve suggestions, the Content Editor's AI and the Action Center's task writing. Your own AI key comes with Enterprise only. The free trial comes with a smaller allowance.",
+      "contentEstimate": "Up to {pages, number} new pages or {optimizations, number} page optimizations a month",
+      "contentEstimateHint": "Uses your monthly AI allowance, shared with Chat and agents. Actual numbers vary with page length and the AI model you choose.",
       "aiUsageCustomHintChat": "A monthly allowance for Ansvisor's AI features: Chat and agents, Improve suggestions, the Content Editor's AI and the Action Center's task writing. On Enterprise, Chat can also run on your own AI key. Ansvisor sets the amount with you."
     },
     "contactUs": "Contact Us",

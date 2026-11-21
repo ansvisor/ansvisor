@@ -12,22 +12,25 @@
  */
 
 import { z } from 'zod';
+import { engineName } from '../config/engine-names.js';
 import { extractHostname } from './response-parser.js';
 import { FEATURE_CHECKS, featureGaps } from './action-center/page-features.js';
 import { describeSignal } from './audit/rubric.js';
 import { opportunityKey } from './audit/opportunities.js';
 
 /** Labels for the engines the Positions panel lists (web/src/lib/prompt-positions.ts). */
-export const IMPROVE_PLATFORM_LABELS = {
-  'chatgpt-web': 'ChatGPT',
-  'perplexity-web': 'Perplexity',
-  'google-aio': 'Google AI Overviews',
-  'google-aimode': 'Google AI Mode',
-  'gemini-web': 'Gemini',
-  'copilot-web': 'Microsoft Copilot',
-  'grok-web': 'Grok',
-  claude: 'Claude',
-};
+export const IMPROVE_PLATFORM_LABELS = Object.fromEntries(
+  [
+    'chatgpt-web',
+    'perplexity-web',
+    'google-aio',
+    'google-aimode',
+    'gemini-web',
+    'copilot-web',
+    'grok-web',
+    'claude',
+  ].map((id) => [id, engineName(id)]),
+);
 
 /**
  * - no_runs        — nothing tracked on this platform in the window

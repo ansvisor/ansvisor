@@ -573,7 +573,7 @@ describe('the tracking setup: prompts, topics and competitors (W2-06)', () => {
     expect(prompt(PROMPT).is_active).toBe(false);
     expect(row).toMatchObject({ summary_key: 'pauseTracking', target_id: PROMPT });
     // The plan's locations filled up since: nothing is resumed, and it says why (§11a).
-    db.rpcs.org_prompt_location_usage = () => [{ brand_id: BRAND, locations: 200 }];
+    db.rpcs.org_prompt_location_usage = () => [{ brand_id: BRAND, locations: 250 }];
     const full = await undo(row.id);
     expect(full).toMatchObject({ code: 'quota_exceeded' });
     expect(full.message).toContain('active prompt locations');

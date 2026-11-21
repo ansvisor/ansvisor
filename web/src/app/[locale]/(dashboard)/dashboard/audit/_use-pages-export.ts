@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useTranslations } from 'next-intl';
+import { useServerErrorText } from '@/hooks/use-server-error';
 import { toast } from 'sonner';
 import { getAuditPages, type AuditedPage } from '@/lib/actions/audits';
 import { BYTE_ORDER_MARK } from '@/lib/action-center/export';
@@ -37,6 +38,7 @@ export async function readAllPages(brandId: string): Promise<AuditedPage[]> {
 /** Export CSV / Excel of the Pages table: all pages, or the ones given. */
 export function usePagesExport(brandId: string | null) {
   const t = useTranslations('audit');
+  const serverError = useServerErrorText();
   const [exporting, setExporting] = useState(false);
 
   const labels = (): AuditExportLabels => ({
@@ -85,7 +87,7 @@ export function usePagesExport(brandId: string | null) {
       await download(await read(), format);
     } catch (err) {
       console.error('Site Audit export failed:', err);
-      toast.error(t('export.failed'));
+      toast.error(serverError(err, t('export.failed')));
     } finally {
       setExporting(false);
     }

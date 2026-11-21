@@ -262,7 +262,7 @@ export const PLANS: Record<PlanId, Plan> = {
     highlighted: true,
     limits: {
       maxBrands: 4,
-      maxPrompts: 200,
+      maxPrompts: 250,
       // The engines Growth tracks: ChatGPT, Gemini, Google AI Overviews,
       // Google AI Mode and Microsoft Copilot (through Bing AI Mode since
       // Perplexity went, 2026-11-06). ChatGPT Shopping feeds Product

@@ -2,6 +2,7 @@
 
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
+import { useCaughtErrorText, useServerErrorText } from '@/hooks/use-server-error';
 import dynamic from 'next/dynamic';
 const DynamicSourceTypeDonutChart = dynamic(
   () => import('./citations_charts').then((m) => m.SourceTypeDonutChartView),
@@ -903,6 +904,8 @@ export default function CitationsPage() {
   const tCommon = useTranslations('common');
   const tChat = useTranslations('chatPanel.suggest');
   const tChatRange = useTranslations('chatPanel.range');
+  const caughtError = useCaughtErrorText();
+  const serverError = useServerErrorText();
   const { getActiveBrand } = useBrandStore();
   const brand = getActiveBrand();
 
@@ -1111,11 +1114,11 @@ export default function CitationsPage() {
       if (stale() || kept) return;
       console.error('[citations] load failed', err);
       setLoadFailed(true);
-      toast.error(t('page.loadFailedToast'));
+      toast.error(serverError(err, t('page.loadFailedToast')));
     } finally {
       if (!stale()) setIsLoading(false);
     }
-  }, [activeBrandId, overviewFilters, cache, showOverview, t]);
+  }, [activeBrandId, overviewFilters, cache, showOverview, serverError, t]);
 
   useEffect(() => {
     if (!urlRead) return;
@@ -1151,13 +1154,13 @@ export default function CitationsPage() {
         if (!active || cache.get(hasCitationsKey) !== undefined) return;
         console.error('[citations] brandHasCitations failed', err);
         setCheckFailed(true);
-        toast.error(t('page.checkFailedToast'));
+        toast.error(serverError(err, t('page.checkFailedToast')));
       });
 
     return () => {
       active = false;
     };
-  }, [activeBrandId, urlRead, checkAttempt, hasCitationsKey, cache, t]);
+  }, [activeBrandId, urlRead, checkAttempt, hasCitationsKey, cache, serverError, t]);
 
   // Retry: the overview again, and the "any citations" check if it failed.
   const retry = useCallback(() => {
@@ -1294,11 +1297,11 @@ export default function CitationsPage() {
         triggerDownload(csv, await exportFileName(`${slug}_citations_gaps_${date}.csv`));
       }
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : t('page.exportFailed'));
+      toast.error(caughtError(err, t('page.exportFailed')));
     } finally {
       setIsExporting(false);
     }
-  }, [brand, data, gaps, sourceTab, t]);
+  }, [brand, data, gaps, sourceTab, caughtError, t]);
 
   // Chat's side panel sees the page (W1-08): its dates and filters, the
   // source cited most, and the sources table to ask about.

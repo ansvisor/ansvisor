@@ -201,7 +201,7 @@ describe('sendTrafficPagesToActionCenter (part B)', () => {
     );
     expect(
       await sendTrafficPagesToActionCenter('b1', undefined, ['/menu'], 'cited_not_clicked'),
-    ).toEqual({ error: 'None of these pages are on the list for this range' });
+    ).toEqual({ error: 'None of these pages are on the list for this range', status: 404 });
 
     session = null;
     expect(

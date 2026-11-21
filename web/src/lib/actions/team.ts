@@ -104,7 +104,12 @@ async function getCurrentUserAndOrg() {
 async function requireAdmin() {
   const { user, profile } = await getCurrentUserAndOrg();
   if (profile.role !== 'admin') {
-    throw new Error('Only admins can manage team members');
+    // A stable code as the digest too: production keeps only that, and the
+    // browser says it in the person's language (serverErrors.admin_required, LOC-008).
+    throw Object.assign(new Error('Only admins can manage team members'), {
+      code: 'admin_required',
+      digest: 'admin_required',
+    });
   }
   return { user, profile };
 }

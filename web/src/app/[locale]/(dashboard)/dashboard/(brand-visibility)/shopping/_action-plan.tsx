@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useTranslations } from 'next-intl';
+import { useServerErrorText } from '@/hooks/use-server-error';
 import { toast } from 'sonner';
 import { Loader2, Send } from 'lucide-react';
 import { useRouter } from '@/i18n/navigation';
@@ -33,6 +34,7 @@ export function ActionPlan({
   onSent?: () => void;
 }) {
   const t = useTranslations('shopping.plan');
+  const serverError = useServerErrorText();
   const router = useRouter();
   const [rows, setRows] = useState(() => plan.map((work) => ({ ...work, picked: true })));
   const [sending, setSending] = useState(false);
@@ -53,7 +55,10 @@ export function ActionPlan({
         promptIds,
       );
       if ('error' in result) {
-        toast.error(t('failed'), { id: toastId, description: result.error });
+        toast.error(t('failed'), {
+          id: toastId,
+          description: serverError(result, result.error, result.status),
+        });
         return;
       }
       const open = {
@@ -67,8 +72,8 @@ export function ActionPlan({
         { id: toastId, duration: 10_000, action: open },
       );
       onSent?.();
-    } catch {
-      toast.error(t('failed'), { id: toastId });
+    } catch (err) {
+      toast.error(serverError(err, t('failed')), { id: toastId });
     } finally {
       setSending(false);
     }

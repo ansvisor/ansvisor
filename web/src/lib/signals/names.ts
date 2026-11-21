@@ -60,11 +60,10 @@ export function platformFamily(slug: string): AIProviderKey | null {
  */
 export function platformName(slug: string): string {
   const family = platformFamily(slug);
-  if (!family) return PLATFORM_LABELS[slug] ?? slug;
-  const name = getAIProviderDisplayName(family);
-  if (PLATFORM_SLUGS.has(slug)) return name;
-  if (API_PLATFORMS.has(slug)) return `${name} API`;
-  return `${name} (${slug})`;
+  if (!family || PLATFORM_SLUGS.has(slug) || API_PLATFORMS.has(slug)) {
+    return PLATFORM_LABELS[slug] ?? slug;
+  }
+  return `${getAIProviderDisplayName(family)} (${slug})`;
 }
 
 /** Whether a signal's place includes an engine, for the Platform filter. */

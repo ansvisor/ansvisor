@@ -1,0 +1,19 @@
+{
+  "chatgpt-web": "ChatGPT",
+  "chatgpt-shopping": "ChatGPT Shopping",
+  "google-aio": "Google AI Overviews",
+  "google-aimode": "Google AI Mode",
+  "copilot-web": "Microsoft Copilot",
+  "grok-web": "Grok",
+  "perplexity-web": "Perplexity",
+  "gemini-web": "Gemini",
+  "chatgpt": "ChatGPT API",
+  "gemini": "Gemini API",
+  "claude": "Claude API",
+  "perplexity": "Perplexity",
+  "grok": "Grok",
+  "copilot": "Microsoft Copilot",
+  "meta-ai": "Meta AI",
+  "google-ai-overviews": "Google AI Overviews",
+  "google-ai-mode": "Google AI Mode"
+}

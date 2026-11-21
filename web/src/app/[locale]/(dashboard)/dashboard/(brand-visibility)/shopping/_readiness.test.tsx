@@ -71,7 +71,7 @@ describe('ReadinessTab', () => {
     expect(text).toContain(
       'ChatGPT ShoppingTracked, yours not shownGoogle Shopping · via Merchant Center',
     );
-    expect(text).toContain('Google GeminiShowing your productsGoogle Shopping Graph');
+    expect(text).toContain('GeminiShowing your productsGoogle Shopping Graph');
     expect(text).toContain('Google AI ModeNot tracked');
     // Copilot isn't a channel while Cloro doesn't serve it (#2181).
     expect(text).not.toContain('Microsoft Copilot');
@@ -149,10 +149,10 @@ describe('ReadinessTab', () => {
   });
 
   it("doesn't call a channel without the brand's products while every channel's shelves are read, or unread", () => {
-    expect(renderTab({})).toContain('Google GeminiTracked, yours not shown');
+    expect(renderTab({})).toContain('GeminiTracked, yours not shown');
     const reading = renderTab({ channelsRead: 'loading' });
     expect(reading).not.toContain('Tracked, yours not shown');
     expect(reading).not.toContain('Not tracked');
-    expect(renderTab({ channelsRead: 'failed' })).toContain("Google GeminiCouldn't read");
+    expect(renderTab({ channelsRead: 'failed' })).toContain("GeminiCouldn't read");
   });
 });
