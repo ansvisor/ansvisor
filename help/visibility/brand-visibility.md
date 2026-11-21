@@ -88,7 +88,7 @@ The volumes shown with these suggestions are an AI's guess, since no keyword beh
 
 Under the tabs:
 
-- **Date Range**: **24h** (the default, the latest completed run), **7d**, **30d**, **90d**, **All** or **Custom**.
+- **Date Range**: **24h** (the default, the latest completed run), **7d**, **30d**, **90d**, **All** or **Custom**. With **Custom**, **From** and **To** open a calendar in your language: pick a day with the mouse, or the arrow keys and Enter. The same calendar sets dates elsewhere in the app.
 - **Topic**: one topic, shown when the brand has topics.
 - **Region**: one region your prompts run in.
 - **AI Model**: one AI platform; versions of the same engine count as one.

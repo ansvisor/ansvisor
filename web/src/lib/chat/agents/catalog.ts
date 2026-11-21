@@ -206,6 +206,8 @@ export const agentPresetSchema = z
       .refine((list) => distinct(list.map((c) => c.key)), 'No repeats'),
     status: z.enum(['ready', 'soon']),
     needs: tags(PRESET_NEEDS),
+    /** Starts on All brands, as an agency's report on each client brand does. */
+    allBrands: z.boolean().optional(),
   })
   .refine((preset) => preset.status === 'soon' || preset.skills.length > 0, {
     message: 'A ready preset has a skill',

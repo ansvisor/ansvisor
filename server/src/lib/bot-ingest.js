@@ -32,7 +32,7 @@ export const CONNECTION_KINDS = [
   'vercel_drain',
   // Fastly HTTPS log streaming (#2164, 00495).
   'fastly_log_stream',
-  // Netlify log drain (#2167, 00553).
+  // Netlify log drain (#2167, 00557).
   'netlify_log_drain',
   // A generic sender of JSON lines (#2170, 00492).
   'log_webhook',

@@ -1,10 +1,10 @@
 ---
 title: Work with Action Center actions
 route: /dashboard/action-center/actions
-keywords: [actions, today, todays focus, agent work, i approve first, agent starts on its own, action status, assign action, dismiss action, export actions, top actions, run agent, run with chat, stale actions, still relevant, confidence, sort actions, recently updated, action number, find action by number, action code, previously, translated, your language]
+keywords: [actions, today, todays focus, agent work, i approve first, agent starts on its own, action status, assign action, dismiss action, export actions, top actions, run agent, run with chat, stale actions, still relevant, confidence, sort actions, recently updated, action number, find action by number, action code, previously, translated, your language, new since your last visit, closed this week, deleted actions, missing actions]
 synonyms: [recommendations, work items, to-dos, action list, let an agent do this, agent on an action, what should I do today, what to do first, who starts agent work, order actions, newest first, oldest first]
 plan: all
-updated: 2026-11-20
+updated: 2026-11-21
 last_checked: 2026-11-19
 owner: Cihan
 app_version: 0.3.0
@@ -56,6 +56,15 @@ The cards at the top count and filter the list, all but **Highest Priority**. Cl
 - **Highest Priority**: the highest level among open actions; it doesn't filter.
 
 Below them, filter by category, **Priority**, **Status** (including **Open** and **Stale**) and **Assignee**, or search. **Status** starts on **Open** (new, in progress and on hold, anyone's), the number Today shows; pick **All** to add closed ones. Each row shows the action's code under its title, such as AC-07, the code Chat uses for it: search for AC-07 or 7 to find it. For an online shop, the **From Products** chip lists only the actions sent from Products.
+
+## New and closed actions
+
+Above the list, a short line reads like "55 open · 12 closed this week · 3 new since your last visit". The open count doesn't always grow: a new finding on a subject with an open action joins that action, and completed or dismissed actions leave the count.
+
+- **New**: a mark beside the title of each action created since your last visit to the list, on this browser. It shows for the whole visit and is gone on the next one. An older action that a new signal updated moves to the top without it.
+- **Closed this week**: actions completed or dismissed in the last 7 days. Click it to list them; **Clear filters** goes back.
+
+Actions are never removed on their own. Closed ones stay under **Status: All**, with what happened in each one's **History**.
 
 ## Action codes
 

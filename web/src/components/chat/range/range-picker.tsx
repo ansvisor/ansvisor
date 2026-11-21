@@ -3,7 +3,7 @@
 import { useId, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+import { DatePicker } from '@/components/ui/date-picker';
 import {
   RANGE_PRESETS,
   customDays,
@@ -55,29 +55,27 @@ export function CustomRangeFields({
         <label htmlFor={`${id}-from`} className="mb-1 block text-xs text-muted-foreground">
           {t('from')}
         </label>
-        <Input
+        <DatePicker
           id={`${id}-from`}
-          type="date"
-          value={from}
+          value={from || null}
           max={to || max}
           disabled={busy}
-          onChange={(event) => setFrom(event.target.value)}
-          className="h-8 w-36 text-xs"
+          onChange={(day) => setFrom(day ?? '')}
+          className="w-36"
         />
       </div>
       <div>
         <label htmlFor={`${id}-to`} className="mb-1 block text-xs text-muted-foreground">
           {t('to')}
         </label>
-        <Input
+        <DatePicker
           id={`${id}-to`}
-          type="date"
-          value={to}
+          value={to || null}
           min={from || undefined}
           max={max}
           disabled={busy}
-          onChange={(event) => setTo(event.target.value)}
-          className="h-8 w-36 text-xs"
+          onChange={(day) => setTo(day ?? '')}
+          className="w-36"
         />
       </div>
       <Button
