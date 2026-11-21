@@ -158,6 +158,32 @@ export interface StandingSummary {
   brand: { name: string };
   totals: { aiVisibilityScore: number | null };
   topCompetitors: { name: string; score: number | null }[];
+  /** Every competitor named, when read (`everyCompetitor`): the rank's pool among rivals. */
+  everyCompetitor?: {
+    id: string;
+    name: string;
+    score: number | null;
+    visiblePrompts: number | null;
+  }[];
+}
+
+/**
+ * Fewer prompts than this naming a competitor is too small a sample to rank
+ * it by (D8), when the rank falls back from primary rivals to every competitor.
+ */
+export const RANK_MIN_PROMPTS = 10;
+
+/**
+ * Which brands the rank is among (AC-02, D5): the brand's primary rivals
+ * (its Direct competitors), else every competitor named in at least
+ * RANK_MIN_PROMPTS prompts, else (without the full list) the five named most.
+ */
+export type StandingSet = 'rivals' | 'competitors' | 'top';
+
+/** A primary rival: its id and name, so one AI answers didn't name still ranks, at 0. */
+export interface StandingRival {
+  id: string;
+  name: string;
 }
 
 /** Where the brand stands among the brands its answers name. */
@@ -169,6 +195,10 @@ export interface TodayStanding {
   rank: number;
   /** The brand and the competitors with a score. */
   of: number;
+  /** Which brands `of` counts; see StandingSet. */
+  set: StandingSet;
+  /** When the run the numbers are from finished (Today's read only, D7). */
+  runAt?: string | null;
   /** The brand just above (behind it), or just below when it leads; null alone. */
   neighbour: { name: string; gap: number; ahead: boolean } | null;
   /** Each competitor's score and change since the run before. */
@@ -178,6 +208,31 @@ export interface TodayStanding {
 const tenth = (value: number) => Math.round(value * 10) / 10;
 
 /**
+ * The competitors the rank is among, and which set they are. With the full
+ * list and primary rivals: the rivals, one AI answers didn't name at 0.
+ * With the full list and none: those named in enough prompts (a read
+ * without prompt counts keeps them all). Without the full list: the top 5.
+ */
+function rankPool(
+  current: StandingSummary,
+  rivals: readonly StandingRival[] | undefined,
+): { set: StandingSet; pool: { name: string; score: number | null }[] } {
+  const every = current.everyCompetitor;
+  if (!every) return { set: 'top', pool: current.topCompetitors };
+  if (rivals && rivals.length > 0) {
+    const byId = new Map(every.map((c) => [c.id, c]));
+    return {
+      set: 'rivals',
+      pool: rivals.map((rival) => ({ name: rival.name, score: byId.get(rival.id)?.score ?? 0 })),
+    };
+  }
+  return {
+    set: 'competitors',
+    pool: every.filter((c) => c.visiblePrompts === null || c.visiblePrompts >= RANK_MIN_PROMPTS),
+  };
+}
+
+/**
  * The brand's score, its change since the run before, its rank among the
  * competitors with a score and the gap to the next brand. Null when the
  * brand has no score on the latest run's answers.
@@ -185,14 +240,18 @@ const tenth = (value: number) => Math.round(value * 10) / 10;
 export function standingFrom(
   current: StandingSummary,
   previous: StandingSummary | null,
+  rivals?: readonly StandingRival[],
 ): TodayStanding | null {
   const score = current.totals.aiVisibilityScore;
   if (score === null || !Number.isFinite(score)) return null;
   const before = previous?.totals.aiVisibilityScore ?? null;
   const previousOf = new Map(
-    (previous?.topCompetitors ?? []).flatMap((c) => (c.score === null ? [] : [[c.name, c.score]])),
+    (previous?.everyCompetitor ?? previous?.topCompetitors ?? []).flatMap((c) =>
+      c.score === null ? [] : [[c.name, c.score]],
+    ),
   );
-  const competitors = current.topCompetitors.flatMap((c) =>
+  const { set, pool } = rankPool(current, rivals);
+  const competitors = pool.flatMap((c) =>
     c.score === null
       ? []
       : [
@@ -215,6 +274,7 @@ export function standingFrom(
     change: before === null ? null : tenth(score - before),
     rank: at + 1,
     of: ranked.length,
+    set,
     neighbour: other
       ? { name: other.name, gap: tenth(Math.abs(other.score - score)), ahead: at === 0 }
       : null,

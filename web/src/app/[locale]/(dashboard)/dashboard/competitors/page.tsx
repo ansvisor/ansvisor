@@ -36,7 +36,7 @@ import { slugify } from '@/lib/slug';
 import { readUrlChoice, readUrlParam, writeUrlParams } from '@/lib/url-state';
 import { DateRangeFilter, type DateRangePreset } from '@/components/filters/date-range-filter';
 import { getDateRange } from '@/lib/date-range';
-import { useChatPageContext } from '@/components/chat/panel/chat-panel-context';
+import { useChatPageContext, useChatPanel } from '@/components/chat/panel/chat-panel-context';
 import { rangeChipLabel } from '@/lib/chat/page-context';
 import { viewRows } from '@/lib/chat/page-view';
 import { MODEL_LABELS } from '@/config/platform-labels';
@@ -100,6 +100,7 @@ import {
   Download,
   Tag,
   Merge,
+  MessageSquarePlus,
 } from 'lucide-react';
 import { HeaderWithAiUsage } from '@/components/ai-usage/ai-usage-meter';
 import {
@@ -1259,7 +1260,81 @@ function groupGapStrengthByPrompt(items: HeadToHeadGroup[]): GapStrengthGroup[] 
     .sort((a, b) => a.avgDiff - b.avgDiff);
 }
 
-function GapStrengthList({ items, type }: { items: HeadToHeadGroup[]; type: 'gap' | 'strength' }) {
+/**
+ * A gap's next steps (UX audit CP-09): Create action and Ask Chat open Chat's
+ * side panel with the gap written in its box, for the person to send. Chat's
+ * Send to Action Center writes the action's tasks, checks for an action that
+ * already covers it and asks before creating. Nothing where the panel isn't.
+ */
+function GapNextSteps({
+  promptText,
+  platforms,
+  you,
+  them,
+  competitorName,
+}: {
+  promptText: string;
+  platforms: string[];
+  you: number;
+  them: number;
+  competitorName: string;
+}) {
+  const t = useTranslations('competitors');
+  const panel = useChatPanel();
+  if (!panel?.available) return null;
+  const values = {
+    competitor: competitorName,
+    prompt: promptText,
+    you,
+    them,
+    platforms: platforms.join(', '),
+    count: platforms.length,
+  };
+  return (
+    <div className="mt-2 flex flex-wrap items-center gap-1.5">
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        data-action="competitors.gapCreateAction"
+        title={t('h2h.gapPanelTip')}
+        className="h-7 gap-1.5 bg-background text-xs"
+        onClick={(e) => {
+          e.stopPropagation();
+          panel.fill(t('h2h.gapCreateText', values));
+        }}
+      >
+        <Plus className="h-3.5 w-3.5" aria-hidden />
+        {t('h2h.gapCreateAction')}
+      </Button>
+      <Button
+        type="button"
+        variant="ghost"
+        size="sm"
+        data-action="competitors.gapAskChat"
+        title={t('h2h.gapPanelTip')}
+        className="h-7 gap-1.5 text-xs"
+        onClick={(e) => {
+          e.stopPropagation();
+          panel.fill(t('h2h.gapAskText', values));
+        }}
+      >
+        <MessageSquarePlus className="h-3.5 w-3.5" aria-hidden />
+        {t('h2h.gapAskChat')}
+      </Button>
+    </div>
+  );
+}
+
+function GapStrengthList({
+  items,
+  type,
+  competitorName,
+}: {
+  items: HeadToHeadGroup[];
+  type: 'gap' | 'strength';
+  competitorName: string;
+}) {
   const t = useTranslations('competitors');
   const isGap = type === 'gap';
   const groups = groupGapStrengthByPrompt(items);
@@ -1366,6 +1441,15 @@ function GapStrengthList({ items, type }: { items: HeadToHeadGroup[]; type: 'gap
                     </span>
                   )}
                 </div>
+                {isGap && (
+                  <GapNextSteps
+                    promptText={group.promptText}
+                    platforms={[...new Set(group.items.map((item) => item.platform))]}
+                    you={group.avgBrandScore}
+                    them={group.avgCompetitorScore}
+                    competitorName={competitorName}
+                  />
+                )}
               </div>
               <div className="shrink-0">
                 <DiffBadge diff={group.avgDiff} />
@@ -1516,10 +1600,14 @@ function HeadToHeadSection({
                 </TabsTrigger>
               </TabsList>
               <TabsContent value="gaps">
-                <GapStrengthList items={data.gaps} type="gap" />
+                <GapStrengthList items={data.gaps} type="gap" competitorName={competitorName} />
               </TabsContent>
               <TabsContent value="strengths">
-                <GapStrengthList items={data.strengths} type="strength" />
+                <GapStrengthList
+                  items={data.strengths}
+                  type="strength"
+                  competitorName={competitorName}
+                />
               </TabsContent>
             </Tabs>
           </CardContent>

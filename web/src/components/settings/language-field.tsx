@@ -5,6 +5,7 @@ import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
+import { SuggestTranslationLink } from '@/components/settings/suggest-translation';
 import { useUiLanguage } from '@/hooks/use-ui-language';
 import { LOCALE_NAMES, type AnyUiLocale } from '@/i18n/locales';
 import { cn } from '@/lib/utils';
@@ -72,6 +73,8 @@ export function LanguageField() {
         <p className="text-xs text-muted-foreground">{t('moreSoon')}</p>
       )}
       {state?.preview && <p className="text-xs text-muted-foreground">{t('preview')}</p>}
+      {/* Only in a language but English (LOC-009). */}
+      <SuggestTranslationLink />
     </div>
   );
 }
