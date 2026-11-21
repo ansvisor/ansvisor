@@ -322,7 +322,7 @@ The steps it finished show as one grey line above the answer, such as **✓ Read
 
 ## Data used and action links
 
-Once Chat is done, **Data used** under the answer names each source it read and each page it opened. The answer says when it was generated and how fresh the data was, in your time zone.
+Once Chat is done, **Data used** under the answer names each source it read and each page it opened. When it read one record, it names that record: an action by its code, such as **AC-12**, or a report by its title. The answer says when it was generated and how fresh the data was, in your time zone.
 
 Each Action Center action an answer names comes with its title, and its code, such as AC-07, is a link, also when it's written as code: click it to open that action in Action Center in a new tab. When the code could also be an action's earlier code, the Actions list opens with both.
 
