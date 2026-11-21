@@ -21,6 +21,8 @@ const reports = vi.hoisted(() => ({
 vi.mock('@/lib/actions/reports', () => reports);
 const getReportBranding = vi.hoisted(() => vi.fn());
 vi.mock('@/lib/actions/white-label', () => ({ getReportBranding }));
+const brandHasShipped = vi.hoisted(() => vi.fn());
+vi.mock('@/lib/actions/impact-report', () => ({ brandHasShipped }));
 const saveReportPdf = vi.hoisted(() => vi.fn());
 vi.mock('./_save-pdf', () => ({ saveReportPdf }));
 const brand = { id: 'b1', name: 'Acme', shoppingModeEnabled: false };
@@ -67,6 +69,7 @@ const openUpgrade = vi.fn();
 
 beforeEach(() => {
   vi.clearAllMocks();
+  brandHasShipped.mockResolvedValue(false);
   plan.crm = true;
   reports.getReports.mockResolvedValue([
     {
@@ -193,12 +196,23 @@ describe('Reports', () => {
   });
 
   it('links What Ansvisor did for you only with the new Chat on (CHAT-22 §2 item 5)', async () => {
+    brandHasShipped.mockResolvedValue(true);
     await render(false);
     expect(container.querySelector('[data-action="reports.openImpact"]')).toBeNull();
+    expect(brandHasShipped).not.toHaveBeenCalled();
     await render(false, true);
+    expect(brandHasShipped).toHaveBeenCalledWith('b1');
     const link = container.querySelector('[data-action="reports.openImpact"]')!;
     expect(link.textContent).toBe('What Ansvisor did for you');
     expect(link.getAttribute('href')).toBe('/dashboard/reports/impact');
+  });
+
+  it('hides What Ansvisor did for you until the brand has shipped something', async () => {
+    brandHasShipped.mockResolvedValue(false);
+    await render(false, true);
+    expect(brandHasShipped).toHaveBeenCalledWith('b1');
+    expect(container.querySelector('[data-action="reports.openImpact"]')).toBeNull();
+    expect(generate()).toBeDefined();
   });
 
   it('offers the AI-sourced pipeline section on Growth, and shows it off with Growth below', async () => {

@@ -16,6 +16,7 @@ import {
   type ReportListItem,
 } from '@/lib/actions/reports';
 import { getReportBranding } from '@/lib/actions/white-label';
+import { brandHasShipped } from '@/lib/actions/impact-report';
 import { saveReportPdf } from './_save-pdf';
 import { useChatPageContext } from '@/components/chat/panel/chat-panel-context';
 import { viewRows } from '@/lib/chat/page-view';
@@ -129,6 +130,23 @@ export default function ReportsPage() {
   const [sections, setSections] = useState<Set<ReportSection>>(
     () => new Set(REPORT_TEMPLATES.find((tpl) => tpl.id === 'executive_summary')!.sections),
   );
+
+  // What Ansvisor did for you shows once the brand has shipped something:
+  // before, the report is empty. Shown only on a yes, so it never flashes.
+  const [shipped, setShipped] = useState<{ brandId: string; yes: boolean } | null>(null);
+  useEffect(() => {
+    if (!chatAgentic || !activeBrandId) return;
+    let current = true;
+    brandHasShipped(activeBrandId)
+      .then((yes) => {
+        if (current) setShipped({ brandId: activeBrandId, yes });
+      })
+      .catch(() => {});
+    return () => {
+      current = false;
+    };
+  }, [chatAgentic, activeBrandId]);
+  const showImpact = chatAgentic && shipped?.brandId === activeBrandId && shipped.yes;
 
   const reportBrand = brands.find((b) => b.id === (reportBrandId ?? activeBrandId));
   // Shopping is brand-pref-gated: hidden here exactly like the sidebar hides
@@ -313,8 +331,8 @@ export default function ReportsPage() {
             <p className="text-muted-foreground">{t('description')}</p>
           </div>
           <div className="flex items-center gap-2">
-            {/* What Ansvisor did for you (CHAT-22 §2 item 5): kept only with the new Chat on. */}
-            {chatAgentic && (
+            {/* What Ansvisor did for you (CHAT-22 §2 item 5): with the new Chat on, once the brand has shipped. */}
+            {showImpact && (
               <Link
                 href="/dashboard/reports/impact"
                 data-action="reports.openImpact"
