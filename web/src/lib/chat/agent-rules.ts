@@ -63,7 +63,9 @@ export type AgentEffort = (typeof AGENT_EFFORTS)[number];
 /**
  * The triggers kept as rows (§E): Run now and Run agent on an action are
  * always on and have none. `brand_added`: When a brand is added (00482),
- * once per brand, for an agent on All brands.
+ * once per brand, for an agent on All brands. `page_published`: When a page
+ * is published (00558), once per page sent live to a CMS, on the brands in
+ * the agent's scope.
  */
 export const AGENT_TRIGGER_KINDS = [
   'schedule',
@@ -71,6 +73,7 @@ export const AGENT_TRIGGER_KINDS = [
   'kpi',
   'watch_rule',
   'brand_added',
+  'page_published',
 ] as const;
 export type AgentTriggerKind = (typeof AGENT_TRIGGER_KINDS)[number];
 
@@ -223,6 +226,9 @@ const watchRuleConfigSchema = z.strictObject({ watch_rule_id: uuid });
 // A brand added to the workspace (00482): no settings.
 const brandAddedConfigSchema = z.strictObject({});
 
+// A page published (00558): no settings.
+const eventConfigSchema = z.strictObject({});
+
 const enabled = z.boolean().default(true);
 
 /** One trigger as the API takes it; `config` is chat_agent_triggers.config_json. */
@@ -232,6 +238,7 @@ export const agentTriggerSchema = z.discriminatedUnion('kind', [
   z.strictObject({ kind: z.literal('kpi'), config: kpiConfigSchema, enabled }),
   z.strictObject({ kind: z.literal('watch_rule'), config: watchRuleConfigSchema, enabled }),
   z.strictObject({ kind: z.literal('brand_added'), config: brandAddedConfigSchema, enabled }),
+  z.strictObject({ kind: z.literal('page_published'), config: eventConfigSchema, enabled }),
 ]);
 export type AgentTriggerInput = z.output<typeof agentTriggerSchema>;
 

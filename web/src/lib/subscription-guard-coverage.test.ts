@@ -195,6 +195,8 @@ const OPEN_ROUTES: Record<string, string> = {
     "the server's cron; it starts no agent run in a read-only workspace",
   'internal/chat/agents/signals:POST':
     "the server's signal hook; it starts no agent run in a read-only workspace",
+  'internal/chat/agents/events:POST':
+    "the server's event hook (a page published); it starts no agent run in a read-only workspace",
   // The same cron after the agents': a read-only workspace's due job is kept as
   // Skipped, and runs nothing (fireDueJobs).
   'internal/chat/schedules/tick:POST':
