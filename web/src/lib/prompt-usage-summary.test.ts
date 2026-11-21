@@ -18,7 +18,7 @@ describe('usagePlan', () => {
     expect(usagePlan(PLANS.growth)).toEqual({
       key: 'growth',
       name: 'Growth plan',
-      locationLimit: 200,
+      locationLimit: 250,
       cta: 'add_more',
     });
   });

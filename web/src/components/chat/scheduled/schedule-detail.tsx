@@ -2,6 +2,7 @@
 
 import { useMemo, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
+import { useServerErrorText } from '@/hooks/use-server-error';
 import { X } from 'lucide-react';
 import { toast } from 'sonner';
 import { ListDot } from '@/components/agentic/list-dot';
@@ -64,6 +65,12 @@ export function ScheduleDetail({
   const t = useTranslations('chatSchedules.page');
   const tDetail = useTranslations('chatSchedules.page.detail');
   const tErrors = useTranslations('chatSchedules.page.errors');
+  const serverError = useServerErrorText();
+  /** A refusal in the person's language (LOC-008): its reason's words, else the server's. */
+  const refusalText = (result: { reason?: string; message?: string }) =>
+    result.reason && tErrors.has(result.reason)
+      ? tErrors(result.reason)
+      : (result.message ?? tErrors('failed'));
   const tDeliver = useTranslations('chatSchedules.deliver');
   const tWhen = useTranslations('chatSchedules.when') as unknown as WhenWords;
   const router = useRouter();
@@ -115,11 +122,17 @@ export function ScheduleDetail({
     else router.push('/dashboard/chat/scheduled');
   };
 
-  const act = async (run: () => Promise<{ ok: boolean; message?: string }>, done?: string) => {
+  const act = async (
+    run: () => Promise<{ ok: boolean; reason?: string; message?: string }>,
+    done?: string,
+  ) => {
     setBusy(true);
     try {
-      const result = await run().catch(() => ({ ok: false, message: tErrors('failed') }));
-      if (!result.ok) toast.error(result.message ?? tErrors('failed'));
+      const result = await run().catch((err: unknown) => ({
+        ok: false,
+        message: serverError(err, tErrors('failed')),
+      }));
+      if (!result.ok) toast.error(refusalText(result));
       else if (done) toast.success(done);
       return result.ok;
     } finally {

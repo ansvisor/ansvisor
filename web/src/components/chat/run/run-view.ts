@@ -128,6 +128,12 @@ export function dataUsed(steps: readonly ChatStep[]): DataUsedChip[] {
       });
       continue;
     }
+    // A read of one record names it ("AC-12"), not its source ("action") (UX audit CH-10).
+    if (step.scope?.record) {
+      const key = `record:${step.scope.record}`;
+      if (!chips.has(key)) chips.set(key, { label: step.scope.record });
+      continue;
+    }
     const source = readSource(step.label);
     if (source === null) continue;
     const key = `read:${source}`;

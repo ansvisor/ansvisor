@@ -89,7 +89,7 @@ describe('the Prompt Volumes chart', () => {
   it('gives an engine the color AI Traffic gives the same platform', () => {
     const domains: Record<string, string> = {
       ChatGPT: 'chatgpt.com',
-      'Google Gemini': 'gemini.google.com',
+      Gemini: 'gemini.google.com',
       'Microsoft Copilot': 'copilot.microsoft.com',
       Perplexity: 'perplexity.ai',
       Claude: 'claude.ai',

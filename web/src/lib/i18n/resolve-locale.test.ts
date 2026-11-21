@@ -2,6 +2,12 @@
 import { describe, expect, it, vi } from 'vitest';
 import { chooseLocale } from './resolve-locale';
 import { formatUiLocaleCookie, parseUiLocaleCookie } from './ui-locale-cookie';
+// These tests cover a customer meeting a language that isn't offered yet, so the
+// customer list is pinned to English here (in the app every language is offered).
+vi.mock('@/i18n/locales', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/i18n/locales')>()),
+  TRANSLATED_LOCALES: ['en'],
+}));
 
 const staff = () => Promise.resolve(true);
 const nobody = () => Promise.resolve(false);

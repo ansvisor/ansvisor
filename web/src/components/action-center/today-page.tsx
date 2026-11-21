@@ -225,17 +225,16 @@ export function TodayPage() {
       : null,
   );
 
+  // Today's count of changes and things waiting reads under the date line (AC-07).
   const summary =
-    mode === 'ended'
-      ? tEnded('readOnly')
-      : mode !== 'normal'
-        ? null
-        : [
-            since ? t('summary.changes', since) : null,
-            waiting !== null ? t('summary.waiting', { count: waiting }) : null,
-          ]
-            .filter(Boolean)
-            .join(' · ') || null;
+    mode !== 'normal'
+      ? null
+      : [
+          since ? t('summary.changes', since) : null,
+          waiting !== null ? t('summary.waiting', { count: waiting }) : null,
+        ]
+          .filter(Boolean)
+          .join(' · ') || null;
   const count = (value: number | null | undefined, key: 'tracked' | 'open' | 'doneWeek') =>
     value === null || value === undefined ? null : tLoop(key, { count: value });
 
@@ -286,7 +285,11 @@ export function TodayPage() {
 
   return (
     <div className="space-y-6">
-      <ActionCenterHeader subtitle={subtitle} aside={summary} />
+      <ActionCenterHeader
+        subtitle={subtitle}
+        note={summary}
+        aside={mode === 'ended' ? tEnded('readOnly') : null}
+      />
       <ActionCenterTabs />
       {week ? (
         <LastWeekSection week={week} />

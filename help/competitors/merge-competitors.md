@@ -15,7 +15,7 @@ When one company is tracked as two competitors, say under two names or two websi
 
 ## Merge competitors
 
-Click **Merge** in **Tracked Competitors**. Tick the competitors that are the same company, choose **Keep this one** on the one to keep, read what will happen and click **Merge**.
+Click **Merge** in **Tracked Competitors** (point at it: "Merge duplicate competitors", such as two domains of one brand). Tick the competitors that are the same company, choose **Keep this one** on the one to keep, read what will happen and click **Merge**.
 
 The one you keep keeps its name, type and logo. The names and domains of the others become its other names, shown as **Also:** on its card. From the merge on, an answer that names any of them, or cites their sites, counts for the one you kept.
 

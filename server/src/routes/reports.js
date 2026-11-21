@@ -17,6 +17,7 @@ import { generateText } from 'ai';
 import { resolveModel } from '../lib/ai-provider.js';
 import { assertBrandAccess } from '../lib/access.js';
 import supabaseAdmin from '../config/supabase.js';
+import { namedSnapshot } from '../lib/report-summary-names.js';
 
 const router = Router();
 
@@ -24,14 +25,18 @@ const SUMMARY_SYSTEM_PROMPT = `You are an AI search visibility analyst writing t
 
 You will receive a JSON snapshot of the brand's metrics for the report period. Depending on the report's sections it may include: overall visibility KPIs (with deltas vs the previous period), a daily visibility trend, share of voice, a competitor comparison, per-topic performance, best/weakest prompts, observed query fan-outs, AI-referred traffic, shopping visibility, a site audit score, and a citations overview. Every delta in the snapshot compares against the previous period of equal length.
 
-The headline metric is the AI Visibility Score, a 0-100 blend (60% how often answers mention the brand, 25% how often they cite its site, 15% how early it is named). Where a "score" field is present — visibilityRate.score, promptPerformance[].score, topicPerformance[].score — that is the number to quote, written WITHOUT a % sign, and topicPerformance.change is a point change in that score. On older snapshots without "score": visibilityRate is the percentage of runs the brand appeared in (quote with %), and avgVisibility is a 0-100 intensity score (never a %).
+The headline metric is the Visibility score, visibilityRate.score: a score out of 100 that blends how often answers mention the brand (60%), how often they cite its site (25%) and how early it is named (15%). Call it "Visibility score" and write it as points out of 100, WITHOUT a % sign (for example "a Visibility score of 15.5/100"). promptPerformance[].score and topicPerformance[].score are the same score for one prompt or topic, and topicPerformance.change is a point change in it.
+
+visibilityRate.ratePct is a different metric, "Prompts with a mention": the share of the prompts answered in the period whose answers named or cited the brand (visibilityRate.visiblePrompts of visibilityRate.promptCount). Call it "Prompts with a mention" and write it with a % sign or as "112 of 308 prompts". Never call it the visibility rate, the Visibility score or the headline. insights.avgVisibilityScore and promptPerformance[].avgVisibility are an older 0-100 intensity score: never a %, never the headline, and never called the Visibility score. A snapshot without visibilityRate.score has no Visibility score: lead with Prompts with a mention instead.
+
+Platforms, engines, models and AI referrers appear by their display names (for example "ChatGPT", "Gemini", "ChatGPT API"). Write them exactly as given.
 
 auditScore is one page's Site Audit score (auditScore.url) as of the period end, not a period metric. When auditScore.scale is 100, totalScore is 0-100 points, written WITHOUT a % sign, and previousScore is the same page's audit before it, not the previous period, so the change between them is in points. auditScore.range, when present, is the score's range over that page's last range.audits audits, written as "64 ± 2" (± range.plusMinus); range.low and range.high are the lowest and highest of those scores, not a change, so never describe them as a rise or fall.
 
 For insights KPIs, mentionsChange and citationsChange are percentage changes, never raw counts. A null change with prevMentions or prevCitations equal to 0 means there is no meaningful percentage base: describe the current total as new growth from zero (for example, "354 new mentions"), not as a percentage. A null previous count means comparison data is unavailable. visibilityChange and sentimentChange are percentage-point changes.
 
 Write a 1-2 paragraph executive summary in English for a marketing executive. It must tell the CHANGE STORY of the period, not describe a static snapshot:
-- Open with the headline movement as an arc — e.g. "Visibility climbed from 42 to 48" — using the trend's first/last points or the KPI deltas. When the snapshot includes visibilityRate.ratePct, that — not insights.avgVisibilityScore — is the headline visibility number: the report's KPI section leads with it, so the summary must agree with it. visibilityRate has no previous-period value in the snapshot, so state its ratePct as a plain current fact and never invent a change or percentage-point delta for it — do not subtract or compare it against insights.avgVisibilityScore or insights.visibilityChange, which describe a different metric's history. Draw the period's change story from metrics that do carry real deltas: mentions, citations, sentiment, share of voice, competitor movement.
+- Open with the headline movement as an arc — e.g. "The Visibility score climbed from 42 to 48" — using the visibility trend's first/last points (visibilityTrend[].score is the daily Visibility score) or the KPI deltas. When the snapshot includes visibilityRate.score, that Visibility score — not visibilityRate.ratePct and not insights.avgVisibilityScore — is the headline number: the report's KPI section leads with it, so the summary must agree with it. visibilityRate has no previous-period value in the snapshot, so state the Visibility score and Prompts with a mention as plain current facts and never invent a change or delta for them — do not subtract or compare them against insights.avgVisibilityScore or insights.visibilityChange, which describe a different metric's history. Draw the period's change story from metrics that do carry real deltas: mentions, citations, sentiment, share of voice, competitor movement.
 - Name the DRIVER behind that movement when the data shows one: the platform, topic or prompt that moved most (share-of-voice shifts, best/weakest prompts, topic deltas).
 - Name the biggest RISK when the data shows one: a competitor gaining ground, a topic or platform sliding, or citation share concentrating away from the brand.
 - Close with the single most consequential implication or next focus, in one sentence.
@@ -75,7 +80,7 @@ router.post('/summary', async (req, res) => {
 Report period: ${dateFrom || 'unknown'} to ${dateTo || 'unknown'}
 
 Metric snapshot (JSON):
-${JSON.stringify(snapshot, null, 2)}
+${JSON.stringify(namedSnapshot(snapshot), null, 2)}
 
 Write the executive summary.`;
 

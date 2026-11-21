@@ -72,7 +72,8 @@ export interface NewBotConnection {
   fastlyLogFormat: string | null;
 }
 
-type Failure = { error: string; code?: 'plan_limit' };
+/** The API's stable code (plan_limit, or another it sends) and status, for the browser to say it in the person's language (LOC-008). */
+type Failure = { error: string; code?: string; status?: number };
 
 function connectionOf(row: Record<string, unknown>): BotConnection {
   return {
@@ -103,7 +104,12 @@ async function call(
   if (!res.ok) {
     return {
       error: String(body.message || body.error || `Server error: ${res.status}`),
-      ...(body.error === 'plan_limit' ? { code: 'plan_limit' as const } : {}),
+      ...(body.error === 'plan_limit'
+        ? { code: 'plan_limit' }
+        : typeof body.code === 'string'
+          ? { code: body.code }
+          : {}),
+      status: res.status,
     };
   }
   return { ok: true, status: res.status, body };
