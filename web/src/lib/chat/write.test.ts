@@ -63,6 +63,7 @@ vi.mock('@/lib/chat/actor/api-writes', () => ({
 }));
 vi.mock('@/lib/actions/cms-send', () => ({ sendDraftToCms: vi.fn() }));
 vi.mock('@/lib/actions/reports', () => ({ createReport: vi.fn() }));
+vi.mock('@/lib/chat/presentation-run', () => ({ makeChatPresentation: vi.fn() }));
 vi.mock('@/lib/actions/audits', () => ({ startSiteAudits: vi.fn(), getAuditQuota: vi.fn() }));
 vi.mock('@/lib/actions/content', () => ({ updateOpportunityStatus: vi.fn() }));
 vi.mock('@/lib/actions/prompt-suggestions', () => ({ dismissSuggestion: vi.fn() }));
@@ -115,6 +116,7 @@ const { optimizeDraftHere } = await import('@/lib/chat/page-optimize');
 const { updateOpportunityStatusFor } = await import('@/lib/chat/actor/api-writes');
 const { sendDraftToCms } = await import('@/lib/actions/cms-send');
 const { createReport } = await import('@/lib/actions/reports');
+const { makeChatPresentation } = await import('@/lib/chat/presentation-run');
 const { startSiteAudits } = await import('@/lib/actions/audits');
 const { updateOpportunityStatus } = await import('@/lib/actions/content');
 const { dismissSuggestion } = await import('@/lib/actions/prompt-suggestions');
@@ -140,6 +142,9 @@ type ChatTool = import('./registry/define-tool').ChatTool;
 const WRITES = CHAT_TOOLS.filter((tool) => tool.class === 'write');
 /** The Admin's own Me line, which forget_memory removes. */
 const MEMORY_LINE = 'dddddddd-0000-4000-8000-000000000001';
+/** The saved report make_presentation decks (issue #2298), and its filed deck. */
+const REPORT = 'eeeeeeee-0000-4000-8000-000000000001';
+const PRESENTATION_FILE = 'eeeeeeee-0000-4000-8000-000000000002';
 const INPUTS: Record<string, unknown> = {
   create_draft: {
     brand_id: BRAND,
@@ -202,6 +207,7 @@ const INPUTS: Record<string, unknown> = {
     date_from: '2026-10-01',
     date_to: '2026-10-07',
   },
+  make_presentation: { report_id: REPORT },
   run_site_audit: { brand_id: BRAND, urls: ['https://acme.example/pricing'] },
   // W3-05: a follow-up check on a page, 14 days on.
   set_follow_up_check: {
@@ -271,6 +277,13 @@ beforeEach(() => {
   );
   vi.mocked(sendDraftToCms).mockImplementation(fakeSendDraftToCms() as never);
   vi.mocked(createReport).mockImplementation(fakeCreateReport(db) as never);
+  vi.mocked(makeChatPresentation).mockImplementation(async () => ({
+    ok: true as const,
+    file_id: PRESENTATION_FILE,
+    title: 'Presentation · Weekly Visibility Summary',
+    report_id: REPORT,
+    slides: 8,
+  }));
   vi.mocked(startSiteAudits).mockImplementation(fakeStartSiteAudits() as never);
   db.rpcs.content_draft_keep_version = fakeKeepDraftVersion(db);
   vi.mocked(updateOpportunityStatus).mockImplementation(fakeUpdateOpportunity(db) as never);
@@ -372,6 +385,9 @@ describe('every WRITE that ran is in the Activity log (§21)', () => {
     '%s in Full auto: mode, approval, Undo window, label key, target and summary',
     async (name, tool) => {
       if (NEEDS_DRAFT.has(name)) seedDraft(db);
+      if (name === 'make_presentation') {
+        db.tables.reports.push({ id: REPORT, brand_id: BRAND, title: 'Weekly Visibility Summary' });
+      }
       const { decision, outcome } = await runAs(PEOPLE.admin, tool, 'full_auto');
       expect(decision).toEqual({ kind: 'run', via: 'full_auto' });
       expect(outcome).toMatchObject({ code: 'ok', repeated: false });
@@ -1218,7 +1234,7 @@ describe('the tracking setup, by role and mode (W2-06, CHAT-20 §9 rows 20–32)
 });
 
 describe('content, reports and Site Audit, by role and mode (W2-07, CHAT-20 §9 rows 37–64)', () => {
-  const OUTPUT = ['update_draft', 'build_report'];
+  const OUTPUT = ['update_draft', 'build_report', 'make_presentation'];
   async function decide(
     userId: string,
     name: string,
@@ -1231,7 +1247,10 @@ describe('content, reports and Site Audit, by role and mode (W2-07, CHAT-20 §9 
     const call = await readToolCall(ctx!, tool, input as Record<string, unknown>, false, before);
     return decideToolCall(tool, ctx!, call);
   }
-  beforeEach(() => seedDraft(db));
+  beforeEach(() => {
+    seedDraft(db);
+    db.tables.reports.push({ id: REPORT, brand_id: BRAND, title: 'Weekly Visibility Summary' });
+  });
 
   it.each(OUTPUT)(
     '%s: Admins and Managers, from a card unless Full auto; an Analyst is refused in every mode',
@@ -1443,11 +1462,15 @@ describe('content, reports and Site Audit, by role and mode (W2-07, CHAT-20 §9 
       db.tables.brands.push({ id: 'b-elsewhere', organization_id: OTHER_ORG });
       const theirDraft = '88888888-8888-4888-8888-888888888888';
       db.tables.content_drafts.push({ id: theirDraft, brand_id: 'b-elsewhere', title: 'Theirs' });
+      const theirReport = '88888888-8888-4888-8888-888888888889';
+      db.tables.reports.push({ id: theirReport, brand_id: 'b-elsewhere', title: 'Theirs' });
       const input = INPUTS[name] as Record<string, unknown>;
       const theirs =
         'draft_id' in input
           ? { ...input, draft_id: theirDraft }
-          : { ...input, brand_id: 'b-elsewhere' };
+          : 'report_id' in input
+            ? { ...input, report_id: theirReport }
+            : { ...input, brand_id: 'b-elsewhere' };
       expect(await decide(PEOPLE.admin, name, 'full_auto', theirs)).toMatchObject({
         kind: 'deny',
         denial: { code: 'brand_scope' },
