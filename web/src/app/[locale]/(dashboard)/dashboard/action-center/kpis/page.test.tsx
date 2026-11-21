@@ -289,9 +289,9 @@ describe('KPIs, one of History’s views', () => {
       v.getAttribute('aria-current'),
     ]);
     expect(views).toEqual([
+      ['view.kpis', null, 'page'],
       ['view.actions', '/dashboard/action-center/history', null],
       ['view.scorecard', '/dashboard/action-center/history?view=scorecard', null],
-      ['view.kpis', null, 'page'],
     ]);
     await act(async () => root.unmount());
   });
