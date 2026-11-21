@@ -192,15 +192,6 @@ describe('Reports', () => {
     expect(openUpgrade).not.toHaveBeenCalled();
   });
 
-  it('links What Ansvisor did for you only with the new Chat on (CHAT-22 §2 item 5)', async () => {
-    await render(false);
-    expect(container.querySelector('[data-action="reports.openImpact"]')).toBeNull();
-    await render(false, true);
-    const link = container.querySelector('[data-action="reports.openImpact"]')!;
-    expect(link.textContent).toBe('What Ansvisor did for you');
-    expect(link.getAttribute('href')).toBe('/dashboard/reports/impact');
-  });
-
   it('offers the AI-sourced pipeline section on Growth, and shows it off with Growth below', async () => {
     const section = () =>
       [...document.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')].find((b) =>

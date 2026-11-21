@@ -8741,7 +8741,6 @@
         "draftsNote": "Os rascunhos não são medidos até entrarem no ar.",
         "emptyTitle": "Nada deste agente entrou no ar ainda.",
         "emptyBody": "Quando uma página de uma das execuções dele entrar no ar, ela aparecerá aqui: um sinal inicial 7 dias depois, o primeiro veredito aos 14 dias.",
-        "openReports": "Abrir em Relatórios",
         "loadFailed": "Não foi possível carregar o que este agente fez."
       }
     },
@@ -17550,7 +17549,6 @@
     }
   },
   "reports": {
-    "impactLink": "O que a Ansvisor fez por você",
     "impact": {
       "title": "O que a Ansvisor fez por você",
       "subtitle": "{brand} · ações implementadas medidas em comparação com Prompts semelhantes não alterados",

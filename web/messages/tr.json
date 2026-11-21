@@ -8731,7 +8731,6 @@
         "draftsNote": "Taslaklar yayına girene kadar ölçülmez.",
         "emptyTitle": "Bu aracıdan henüz hiçbir şey yayına girmedi.",
         "emptyBody": "Çalıştırmalarından biri yayına girdiğinde burada gösterilir: 7 gün sonra erken bir sinyal, 14 gün sonra ise ilk değerlendirme.",
-        "openReports": "Raporlar'da aç",
         "loadFailed": "Bu aracının yaptıkları yüklenemedi."
       }
     },
@@ -17540,7 +17539,6 @@
     }
   },
   "reports": {
-    "impactLink": "Ansvisor sizin için neler yaptı",
     "impact": {
       "title": "Ansvisor sizin için neler yaptı",
       "subtitle": "{brand} · yayınlanan aksiyonlar, dokunulmamış benzer Prompt'lara göre ölçüldü",

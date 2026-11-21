@@ -8739,7 +8739,6 @@
         "draftsNote": "Concepten worden pas gemeten wanneer ze live gaan.",
         "emptyTitle": "Er staat nog niets van deze agent live.",
         "emptyBody": "Wanneer een pagina van een van de uitvoeringen live gaat, verschijnt deze hier: een vroeg signaal na 7 dagen, het eerste oordeel na 14 dagen.",
-        "openReports": "Openen in Rapporten",
         "loadFailed": "Laden van wat deze agent heeft gedaan is mislukt."
       }
     },
@@ -17548,7 +17547,6 @@
     }
   },
   "reports": {
-    "impactLink": "Wat Ansvisor voor u heeft gedaan",
     "impact": {
       "title": "Wat Ansvisor voor u heeft gedaan",
       "subtitle": "{brand} · uitgevoerde acties gemeten ten opzichte van ongewijzigde vergelijkbare Prompts",
