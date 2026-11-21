@@ -179,6 +179,7 @@ describe('Where you stand', () => {
       change: 0.4,
       rank: 2,
       of: 4,
+      set: 'top',
       neighbour: { name: 'Northbound', gap: 6.2, ahead: false },
       competitors: [
         { name: 'Northbound', score: 60.1, change: 0.1 },
@@ -203,5 +204,69 @@ describe('Where you stand', () => {
 
   it('has nothing to say without a score', () => {
     expect(standingFrom(summary(null, [['Rival', 50]]), null)).toBeNull();
+  });
+
+  describe('among primary rivals or enough-sample competitors (AC-02)', () => {
+    const every = (
+      score: number,
+      list: [string, number | null, number | null][],
+    ): StandingSummary => ({
+      ...summary(
+        score,
+        list.slice(0, 5).map(([name, s]) => [name, s]),
+      ),
+      everyCompetitor: list.map(([name, s, prompts]) => ({
+        id: `id-${name}`,
+        name,
+        score: s,
+        visiblePrompts: prompts,
+      })),
+    });
+    const current = every(27.4, [
+      ['Semrush', 40, 120],
+      ['Profound', 35, 90],
+      ['Ahrefs', 30, 80],
+      ['Scrunch', 50, 4],
+      ['Peec', 20, 30],
+      ['Otterly', 10, 12],
+      ['Tiny', 60, 2],
+    ]);
+
+    it('ranks among the primary rivals, a rival no answer named at 0', () => {
+      const rivals = ['Semrush', 'Profound', 'Peec', 'Nobody'].map((name) => ({
+        id: `id-${name}`,
+        name,
+      }));
+      const standing = standingFrom(current, null, rivals);
+      expect(standing).toMatchObject({ rank: 3, of: 5, set: 'rivals' });
+      expect(standing?.neighbour).toEqual({ name: 'Profound', gap: 7.6, ahead: false });
+      expect(standing?.competitors.map((c) => c.name)).toEqual([
+        'Semrush',
+        'Profound',
+        'Peec',
+        'Nobody',
+      ]);
+      expect(standing?.competitors.at(-1)?.score).toBe(0);
+    });
+
+    it('falls back to every competitor named in 10+ prompts, not the top 5 by mentions', () => {
+      const standing = standingFrom(current, null, []);
+      expect(standing).toMatchObject({ rank: 4, of: 6, set: 'competitors' });
+      expect(standing?.competitors.map((c) => c.name)).toEqual([
+        'Semrush',
+        'Profound',
+        'Ahrefs',
+        'Peec',
+        'Otterly',
+      ]);
+    });
+
+    it('takes the change since the run before from the full list', () => {
+      const previous = every(27, [['Otterly', 9, 11]]);
+      const otterly = standingFrom(current, previous)?.competitors.find(
+        (c) => c.name === 'Otterly',
+      );
+      expect(otterly?.change).toBe(1);
+    });
   });
 });

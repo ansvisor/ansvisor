@@ -456,10 +456,9 @@
           "required": false
         }
       ],
-      "status": "soon",
-      "needs": [
-        "brand_access"
-      ]
+      "status": "ready",
+      "needs": [],
+      "allBrands": true
     },
     {
       "id": "paid-opportunity",

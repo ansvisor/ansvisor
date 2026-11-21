@@ -67,6 +67,10 @@ Agents made for the site type of the brand you have open are marked **For your s
 
 **Shopping Feed Advisor** runs every Monday at 09:00 on **Auto, ask before changes**. It is made for e-commerce brands and needs a product catalog: connect one in **Settings › Integrations › Catalog**. Each run checks every live product in your catalog for what AI shopping answers need: a GTIN, a photo, a price, stock, a full description that says early on what the product is, a category and a brand. It lists the gaps by impact, the readiness points your catalog loses on each, and gives example products and a fix for each gap. It never changes your store or feed. Sending a fix to the Action Center is a card you approve. In Chat, the same skill is **/feed-advisor**.
 
+## Agency Client Reporter
+
+**Agency Client Reporter** runs on the 1st of each month at 09:00 on **Auto, ask before changes**. It is made for agencies. It starts on **All brands**, so each run writes one report per brand in its scope: last month against the month before, with citations, mentions, share of voice, what changed and the next actions. Its skill is **Weekly report** (**/report**), and its instructions ask for the month instead of the week; you can change them. Narrow it to a few client brands under **Scope**. Search Console is optional.
+
 ## What each card shows
 
 In **Your agents**, each agent has a card with:

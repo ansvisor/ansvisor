@@ -1,4 +1,5 @@
 import { act, type ReactNode } from 'react';
+import { pickDate } from '@/components/ui/date-picker-testing';
 import { createRoot, type Root } from 'react-dom/client';
 import { NextIntlClientProvider } from 'next-intl';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -422,21 +423,11 @@ describe('ChatSettings › Date range (owner request 2026-11-11)', () => {
     range.read.mockResolvedValue({ ok: true, range: '30d' });
     await render();
     await choose('custom');
-    const [from, to] = [
-      ...host.querySelectorAll<HTMLInputElement>('[data-slot="range-custom"] input'),
+    const pickers = () => [
+      ...host.querySelectorAll<HTMLElement>('[data-slot="range-custom"] [data-slot="date-picker"]'),
     ];
-    for (const [input, value] of [
-      [from, day(-9)],
-      [to, day(-2)],
-    ] as const) {
-      await act(async () => {
-        Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(
-          input,
-          value,
-        );
-        input.dispatchEvent(new Event('input', { bubbles: true }));
-      });
-    }
+    await pickDate(pickers()[0], day(-9));
+    await pickDate(pickers()[1], day(-2));
     await act(async () => action('chatSettings.dateRangeDates')[0].click());
     expect(range.save).toHaveBeenLastCalledWith(`${day(-9)}/${day(-2)}`);
     expect(host.querySelector('[data-slot="range-custom"]')).toBeNull();

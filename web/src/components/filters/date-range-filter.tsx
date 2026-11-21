@@ -1,7 +1,7 @@
 'use client';
 
 import { useTranslations } from 'next-intl';
-import { Input } from '@/components/ui/input';
+import { DatePicker } from '@/components/ui/date-picker';
 import { cn } from '@/lib/utils';
 import type { DateRangePreset } from '@/config/date-presets';
 
@@ -114,22 +114,22 @@ export function DateRangeFilter<P extends string = DateRangePreset>({
             <label className="mb-1.5 block text-xs font-medium text-muted-foreground">
               {t('from')}
             </label>
-            <Input
-              type="date"
-              value={from ?? ''}
-              onChange={(e) => onFromChange(e.target.value)}
-              className="h-8 w-36 text-xs"
+            <DatePicker
+              aria-label={t('from')}
+              value={from || null}
+              onChange={(day) => onFromChange(day ?? '')}
+              className="w-36"
             />
           </div>
           <div>
             <label className="mb-1.5 block text-xs font-medium text-muted-foreground">
               {t('to')}
             </label>
-            <Input
-              type="date"
-              value={to ?? ''}
-              onChange={(e) => onToChange(e.target.value)}
-              className="h-8 w-36 text-xs"
+            <DatePicker
+              aria-label={t('to')}
+              value={to || null}
+              onChange={(day) => onToChange(day ?? '')}
+              className="w-36"
             />
           </div>
         </>

@@ -155,6 +155,23 @@ export function ActionStatusBadge({ status }: { status: ActionStatus }) {
 }
 
 /**
+ * Created since the person's last visit to the list. Not the New status:
+ * a mark beside the title, gone on the next visit.
+ */
+export function NewMark() {
+  const t = useTranslations('actionCenter.actionsPage');
+  return (
+    <span
+      data-new-mark=""
+      title={t('newMark.hint')}
+      className="shrink-0 rounded-full bg-primary px-1.5 py-px text-[10px] font-semibold text-primary-foreground"
+    >
+      {t('newMark.label')}
+    </span>
+  );
+}
+
+/**
  * Stale (00432): New for a month with no one on it. Amber, as On Hold: it
  * waits on someone.
  */
@@ -444,8 +461,11 @@ export function ActionTable({
   busyIds,
   sort,
   onSortChange,
+  newIds,
 }: {
   actions: ActionItem[];
+  /** Actions created since the person's last visit: their rows say New. */
+  newIds?: Set<string>;
   onSelect: (action: ActionItem) => void;
   /** With these, each row gets its menu (status changes and Delete). */
   onStatusChange?: (
@@ -521,6 +541,7 @@ export function ActionTable({
                     <div className="min-w-0">
                       <div className="flex min-w-0 items-center gap-1">
                         <p className="truncate text-sm font-medium">{texts.title}</p>
+                        {newIds?.has(action.id) && <NewMark />}
                         <PageDot
                           dot={pickDot(actionDots(action, action.dotFacts, today), viewer)}
                         />
