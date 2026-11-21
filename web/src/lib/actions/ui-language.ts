@@ -5,7 +5,6 @@ import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
 import {
   HIDDEN_LOCALES,
-  PSEUDO_LOCALE,
   SELECTABLE_LOCALES,
   TRANSLATED_LOCALES,
   isAnyUiLocale,
@@ -71,7 +70,7 @@ export async function getUiLanguageState(): Promise<UiLanguageState> {
     selected = isUiLocale(data?.ui_language) ? data.ui_language : null;
   }
   // A pick the person may no longer have shows as Automatic.
-  const offered = preview ? [...SELECTABLE_LOCALES, PSEUDO_LOCALE] : TRANSLATED_LOCALES;
+  const offered = preview ? SELECTABLE_LOCALES : TRANSLATED_LOCALES;
   if (selected && !offered.includes(selected as never)) selected = null;
 
   return {

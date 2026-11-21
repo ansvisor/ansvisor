@@ -10,6 +10,7 @@ import {
   type SetStateAction,
 } from 'react';
 import { useFormatter, useNow, useTranslations } from 'next-intl';
+import { useServerErrorText } from '@/hooks/use-server-error';
 import { toast } from 'sonner';
 import { Plus, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -90,6 +91,7 @@ export function SourcesTab({
   // Rebuild open the upgrade dialog instead.
   const { guard } = useUpgradeGate();
   const tActions = useTranslations('readOnly.actions');
+  const serverError = useServerErrorText();
 
   // Where each source is used follows the page as it is written, a beat behind typing.
   const html = useDeferredValue(bodyHtml);
@@ -163,7 +165,7 @@ export function SourcesTab({
     } catch (err) {
       console.error('Failed to change a draft source:', err);
       setRead(withRow(before));
-      toast.error(t('toggleFailed'));
+      toast.error(serverError(err, t('toggleFailed')));
     }
   };
 

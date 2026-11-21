@@ -80,7 +80,7 @@ describe('ReportCardPdfDocument', () => {
     expect(status).toContain('Whole bean coffee');
     // The headline's base spelled out: 25 questions in Starter's two engines.
     expect(status).toContain(
-      'named in 8 of 50 answers: 25 questions × 2 engines (ChatGPT and Google Gemini)',
+      'named in 8 of 50 answers: 25 questions × 2 engines (ChatGPT and Gemini)',
     );
     expect(status).toContain('in 4 AI engines: 97 answers (3 got no answer)');
     // The competitor and the citations are counted over the headline's answers.
@@ -107,10 +107,10 @@ describe('ReportCardPdfDocument', () => {
 
   it('states one visibility figure on every page: the headline’s engines', () => {
     const pages = draw(SAMPLE_REPORT_CARD);
-    // ChatGPT 6 of 25 and Google Gemini 2 of 25.
+    // ChatGPT 6 of 25 and Gemini 2 of 25.
     expect(pages[0]).toContain('named in 8 of 50 answers');
     expect(pages[0]).toContain('Brewline Coffee (you)8 answers');
-    expect(pages[1]).toContain('in 8 of the 50 answers from ChatGPT and Google Gemini');
+    expect(pages[1]).toContain('in 8 of the 50 answers from ChatGPT and Gemini');
     expect(pages[2]).toContain('Your site is cited in 2 of 50 answers.');
     for (const page of pages) expect(page).not.toMatch(/\d+ of (all |the )?97 answers/);
   });
@@ -123,7 +123,7 @@ describe('ReportCardPdfDocument', () => {
       ),
     });
     expect(status).toContain(
-      'named in 8 of 49 answers from ChatGPT and Google Gemini (1 question got no answer from one engine)',
+      'named in 8 of 49 answers from ChatGPT and Gemini (1 question got no answer from one engine)',
     );
     expect(status).not.toContain('25 questions × 2 engines');
   });
@@ -136,7 +136,7 @@ describe('ReportCardPdfDocument', () => {
     });
     expect(status).toContain('Your starting point');
     expect(status).toContain(
-      'ChatGPT and Google Gemini don’t name you yet, but AI already reads your site: it cited your pages in 2 answers',
+      'ChatGPT and Gemini don’t name you yet, but AI already reads your site: it cited your pages in 2 answers',
     );
   });
 
@@ -145,7 +145,7 @@ describe('ReportCardPdfDocument', () => {
     expect(questions).toContain('Searches/mo');
     expect(questions).toContain('The 25 questions, and what each engine said');
     expect(questions).toContain(
-      'Named in 6 of the 25 questions: in 8 of the 50 answers from ChatGPT and Google Gemini.',
+      'Named in 6 of the 25 questions: in 8 of the 50 answers from ChatGPT and Gemini.',
     );
     expect(questions).toContain('Whole bean coffee · 14 questions · brewlinecoffee.example/beans');
     // Keyword Planner's ranges, never an exact count: 2,900 searches is 1K–10K.
@@ -212,7 +212,7 @@ describe('ReportCardPdfDocument', () => {
       'Ansvisor GrowthAdds Google’s engines$249/monthor $2,390 a year, paid yearly: 20% off',
     );
     expect(value).toContain(
-      'Tracks ChatGPT and Google Gemini every day: the engines this card’s visibility counts.',
+      'Tracks ChatGPT and Gemini every day: the engines this card’s visibility counts.',
     );
     expect(value).toContain('50 prompts tracked every day, 1 brand.');
     expect(value).toContain('AI usage included.');
@@ -224,7 +224,7 @@ describe('ReportCardPdfDocument', () => {
     expect(value).toContain(
       'Adds Google AI Overviews and Google AI Mode every day: the Growth band on page 1.',
     );
-    expect(value).toContain('200 prompts tracked every day, 4 brands.');
+    expect(value).toContain('250 prompts tracked every day, 4 brands.');
     expect(value).toContain('5× the AI usage: more content opportunities and drafts');
     expect(value).toContain('Site Audit: 500 pages a month.');
     expect(value).toContain('Full auto: the agents you choose publish on their own.');
@@ -261,7 +261,7 @@ describe('ReportCardPdfDocument', () => {
   it('page 4 doesn’t point at a Growth band an older card hasn’t got', () => {
     const [, , , value] = draw({ ...SAMPLE_REPORT_CARD, mainEngines: undefined });
     expect(value).toContain('Adds Google AI Overviews and Google AI Mode every day.');
-    expect(value).toContain('Tracks ChatGPT and Google Gemini every day.');
+    expect(value).toContain('Tracks ChatGPT and Gemini every day.');
   });
 
   it('page 4 prices nothing without enough ad data, or with a median too high to trust', () => {

@@ -2095,7 +2095,7 @@ export async function sendShoppingActions(
   promptIds: string[],
 ): Promise<
   | { actionId: string; actionNo: number; brandNo?: number | null; created: boolean }
-  | { error: string }
+  | { error: string; code?: string; status?: number }
 > {
   const supabase = await createClient();
   const {
@@ -2118,7 +2118,12 @@ export async function sendShoppingActions(
   // Returned, not thrown: a thrown error's message is masked in production.
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
-    return { error: body.details || body.error || `Server error: ${res.status}` };
+    return {
+      error: body.details || body.error || `Server error: ${res.status}`,
+      // The stable code too, for the browser to say it in the person's language (LOC-008).
+      ...(typeof body.code === 'string' ? { code: body.code } : {}),
+      status: res.status,
+    };
   }
   return res.json();
 }

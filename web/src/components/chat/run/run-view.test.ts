@@ -104,6 +104,26 @@ describe('doneSteps and dataUsed', () => {
     ]);
   });
 
+  it('names a read of one record by the record, not its source (UX audit CH-10)', () => {
+    const read = (n: number, record?: string) =>
+      step({ n, kind: 'read', label: 'Read action', ...(record ? { scope: { record } } : {}) });
+    expect(
+      dataUsed([
+        step({ n: 1, kind: 'read', label: 'Read Action Center' }),
+        read(2, 'AC-12'),
+        read(3, 'AC-07'),
+        read(4, 'AC-12'),
+        // A step from before records were kept: its source, as before.
+        read(5),
+      ]),
+    ).toEqual([
+      { label: 'Action Center' },
+      { label: 'AC-12' },
+      { label: 'AC-07' },
+      { label: 'action' },
+    ]);
+  });
+
   it('names each source once, never with its rows, and each page opened; skills, checks and failed reads aren’t sources', () => {
     expect(dataUsed(steps)).toEqual([{ label: 'Citations' }, { label: 'ansvisor.com/pricing' }]);
   });

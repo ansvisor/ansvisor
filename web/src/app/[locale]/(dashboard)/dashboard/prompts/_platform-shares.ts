@@ -65,7 +65,7 @@ const AIO_SHARE = (() => {
  */
 const OTHER_ENGINE_WEIGHTS: { name: string; weight: number }[] = [
   { name: 'ChatGPT', weight: 0.27 },
-  { name: 'Google Gemini', weight: 0.055 },
+  { name: 'Gemini', weight: 0.055 },
   { name: 'Microsoft Copilot', weight: 0.029 },
   { name: 'Perplexity', weight: 0.018 },
   { name: 'Claude', weight: 0.013 },

@@ -129,4 +129,17 @@ describe('ImportSkillDialog', () => {
     );
     expect(onImported).not.toHaveBeenCalled();
   });
+
+  it('says a shared refusal in the person’s language, not the API’s English (LOC-008)', async () => {
+    answer = Response.json(
+      { ok: false, code: 'rate_limited', error: 'Too many imports. Try again later.' },
+      { status: 429 },
+    );
+    await render('github');
+    await type('https://github.com/acme/skills');
+    await submit();
+    expect(dialog().querySelector('[role="alert"]')!.textContent).toBe(
+      messages.serverErrors.rate_limited,
+    );
+  });
 });

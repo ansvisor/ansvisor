@@ -408,7 +408,7 @@ describe('ChatMenuView', () => {
     vi.unstubAllGlobals();
   });
 
-  it('counts the Inbox, and lists Agents at work in three rows until See all', async () => {
+  it('counts what needs the person on the Inbox, and lists Agents at work in three rows until See all', async () => {
     const chats = [
       chat('a', { state: 'needsYou', progress: { done: 3, total: 6 } }),
       chat('b', {
@@ -422,10 +422,10 @@ describe('ChatMenuView', () => {
       chat('e'),
     ];
     await render(menu(chats));
-    // The Inbox counts its own and their unread results, with a dot while one needs the person.
+    // The Inbox counts what needs the person, as its Needs you tab (CH-04).
     const inbox = action('chatMenu.openInbox')[0];
-    expect(inbox.textContent).toBe('Inbox5');
-    expect(inbox.getAttribute('aria-label')).toBe('Inbox · 5 items · 1 needs you');
+    expect(inbox.textContent).toBe('Inbox1');
+    expect(inbox.getAttribute('aria-label')).toBe('Inbox · 1 needs you');
     // Agents at work: what is under way or waits (UX audit CH-03), not a finished answer.
     expect(text()).toContain('Agents at work4');
     expect(text()).toContain('Waiting for your OK · step 4 of 6');
@@ -504,8 +504,27 @@ describe('ChatMenuView', () => {
       ]),
     );
     const inbox = action('chatMenu.openInbox')[0];
-    expect(inbox.textContent).toBe('Inbox1');
-    expect(inbox.getAttribute('aria-label')).toBe('Inbox · 1 item');
+    expect(inbox.textContent).toBe('Inbox');
+    expect(inbox.getAttribute('aria-label')).toBeNull();
+  });
+
+  it('leads a title more than one chat has with its date, and keeps one menu scroll (CH-08, CH-15)', async () => {
+    await render(
+      menu([
+        chat('a', { title: 'What’s new in Ansvisor', lastMessageAt: '2026-10-30T10:00:00' }),
+        chat('b', { title: 'What’s new in Ansvisor', lastMessageAt: '2026-10-28T09:00:00' }),
+        chat('c', { title: 'Pricing citations', lastMessageAt: '2026-10-30T09:00:00' }),
+      ]),
+    );
+    const dates = [...host.querySelectorAll('[data-slot="chat-row-date"]')].map(
+      (el) => el.textContent,
+    );
+    expect(dates).toEqual(['10:00 · ', 'Oct 28 · ']);
+    // New chat and Search chats sit at the top of the one scroll area: the Chats list has none of its own.
+    const nav = host.querySelector('nav')!;
+    expect(nav.className).toContain('overflow-y-auto');
+    expect(host.querySelector('[data-slot="chat-menu-top"] #chat-menu-search')).not.toBeNull();
+    expect(nav.querySelectorAll('.overflow-y-auto')).toHaveLength(0);
   });
 
   it('groups the other chats by day, bold while unread, and folds Chats', async () => {

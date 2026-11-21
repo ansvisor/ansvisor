@@ -3,6 +3,7 @@
 import { useId, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import Image from 'next/image';
 import { useTranslations } from 'next-intl';
+import { useServerErrorText } from '@/hooks/use-server-error';
 import { toast } from 'sonner';
 import { AlertTriangle, Check, ChevronDown, Globe } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -219,6 +220,7 @@ export function ExportDialog({
   } | null;
 }) {
   const t = useTranslations('contentEditor.editor.exportDialog');
+  const serverError = useServerErrorText();
   const [destination, setDestination] = useState<ExportDestination>(
     () => initialDestination ?? storedDestination(),
   );
@@ -348,7 +350,7 @@ export function ExportDialog({
       );
     } catch (err) {
       console.error('Failed to export the page:', err);
-      toast.error(t('failed'));
+      toast.error(serverError(err, t('failed')));
     }
   };
   const act = async () => {

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
+import { useCaughtErrorText, useServerErrorText } from '@/hooks/use-server-error';
 import { toast } from 'sonner';
 import { Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -89,6 +90,8 @@ export function AuditSettingsDialog({
   const { guard, isLocked } = useUpgradeGate();
   const tActions = useTranslations('readOnly.actions');
   const tReadOnly = useTranslations('readOnly');
+  const caughtError = useCaughtErrorText();
+  const serverError = useServerErrorText();
   const [settings, setSettings] = useState<AuditSettings | null>(null);
   const [autoAudit, setAutoAudit] = useState(false);
   const [emailAfterRun, setEmailAfterRun] = useState(false);
@@ -114,14 +117,14 @@ export function AuditSettingsDialog({
       .catch((err) => {
         console.error('Failed to load the Site Audit settings:', err);
         if (!cancelled) {
-          toast.error(t('loadFailed'));
+          toast.error(serverError(err, t('loadFailed')));
           onOpenChange(false);
         }
       });
     return () => {
       cancelled = true;
     };
-  }, [open, brandId, t, onOpenChange]);
+  }, [open, brandId, t, onOpenChange, serverError]);
 
   // Only what changed is sent: the switch stays on the plan's default until
   // someone turns it.
@@ -143,7 +146,7 @@ export function AuditSettingsDialog({
       onSaved();
       onOpenChange(false);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : t('saveFailed'));
+      toast.error(caughtError(err, t('saveFailed')));
     } finally {
       setSaving(false);
     }
@@ -159,7 +162,7 @@ export function AuditSettingsDialog({
       toast.success(t('unpinned'));
       onSaved();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : t('saveFailed'));
+      toast.error(caughtError(err, t('saveFailed')));
     } finally {
       setUnpinning(null);
     }

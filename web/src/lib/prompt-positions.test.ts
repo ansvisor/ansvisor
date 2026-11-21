@@ -24,7 +24,7 @@ describe('POSITION_PLATFORMS', () => {
       'Google AI Overviews',
       'Google AI Mode',
       'Grok',
-      'Claude',
+      'Claude API',
     ]);
   });
 });
