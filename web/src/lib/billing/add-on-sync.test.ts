@@ -170,8 +170,8 @@ describe('syncAddOns', () => {
     capacity.waitOverCapacity.mockResolvedValue(3);
     stripeApi.retrieve.mockResolvedValue(subscription('active', [planItem, trackingItem(100)]));
     await syncAddOns('sub_1');
-    // Growth's 200 locations plus the 100 the add-on now adds.
-    expect(capacity.waitOverCapacity).toHaveBeenCalledWith(ORG, 300);
+    // Growth's 250 locations plus the 100 the add-on now adds.
+    expect(capacity.waitOverCapacity).toHaveBeenCalledWith(ORG, 350);
 
     capacity.waitOverCapacity.mockClear();
     stripeApi.retrieve.mockResolvedValue(subscription('canceled', [planItem]));

@@ -18,6 +18,10 @@ export const SERVER_ERROR_CODES = [
   'duplicate',
   'missing_ai_key',
   'server_error',
+  // The demo brand's sample data can't be changed (DEMO_BRAND, lib/subscription-guard.ts).
+  'demo_brand',
+  // An Admin-only change by someone else (requireAdmin in the team and organization actions).
+  'admin_required',
 ] as const;
 export type ServerErrorCode = (typeof SERVER_ERROR_CODES)[number];
 
@@ -43,7 +47,7 @@ export function serverErrorKey(body: unknown, status = 0): string | null {
   const e = typeof error === 'string' ? error : '';
 
   // The same words as the toasts of useFailureToast (apiFailure).
-  if (c === 'subscription_inactive' || c === 'demo_brand') return 'apiFailure.subscription';
+  if (c === 'subscription_inactive') return 'apiFailure.subscription';
   if (c === 'not_in_workspace' || c === 'no_brand_access') return 'apiFailure.workspace';
   if (c === 'not_found') return 'apiFailure.not_found';
   // The plan's prompt locations are full (locationLimitMessage): a count, not a missing feature.
@@ -59,6 +63,8 @@ export function serverErrorKey(body: unknown, status = 0): string | null {
   if (c === 'not_allowed' || c === 'forbidden_role' || c === 'role_required') {
     return 'serverErrors.forbidden';
   }
+  // The plan routes' Admin-only refusal says the same.
+  if (c === 'admin_only') return 'serverErrors.admin_required';
   if (isServerErrorCode(c)) return `serverErrors.${c}`;
   return null;
 }

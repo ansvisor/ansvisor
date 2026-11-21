@@ -2,6 +2,7 @@
 
 import { useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { useTranslations } from 'next-intl';
+import { useServerErrorText } from '@/hooks/use-server-error';
 import { toast } from 'sonner';
 import { ArrowUp, AtSign, Building2, CalendarDays, FileText, ListFilter } from 'lucide-react';
 import { Link, useRouter } from '@/i18n/navigation';
@@ -312,6 +313,7 @@ export function ChatComposer({
   const tRoles = useTranslations('chatAccess.roleNames');
   const tAsk = useTranslations('chatAccess.askAdmin');
   const tMeter = useTranslations('aiUsage.meter');
+  const serverError = useServerErrorText();
   const { usage: aiUsage } = useAiUsage();
   const router = useRouter();
   const { role, canAdmin, canManage } = useUserRole();
@@ -569,8 +571,8 @@ export function ChatComposer({
       if (result.ok) toast.success(tAsk('sent'));
       else if (result.reason === 'already_today') toast.info(tAsk('alreadyToday'));
       else toast.error(tAsk('failed'));
-    } catch {
-      toast.error(tAsk('failed'));
+    } catch (err) {
+      toast.error(serverError(err, tAsk('failed')));
     }
   }
 

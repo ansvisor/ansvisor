@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useTranslations } from 'next-intl';
+import { useCaughtErrorText } from '@/hooks/use-server-error';
 import { Loader2, ShoppingBag } from 'lucide-react';
 import { toast } from 'sonner';
 import { useUpgradeGate } from '@/components/providers/upgrade-gate';
@@ -21,6 +22,7 @@ import type { Brand } from '@/types';
 export function ShoppingModeOff({ brand }: { brand: Pick<Brand, 'id' | 'name'> }) {
   const t = useTranslations('shopping.off');
   const tActions = useTranslations('readOnly.actions');
+  const caughtError = useCaughtErrorText();
   // Admins and managers, as the brands, prompts and brand_platforms writes allow.
   const { canManage } = useUserRole();
   // A read-only workspace (plan not active): the button opens the upgrade dialog instead.
@@ -35,7 +37,7 @@ export function ShoppingModeOff({ brand }: { brand: Pick<Brand, 'id' | 'name'> }
       updateBrand(brand.id, { shoppingModeEnabled: true });
       toast.success(promptsUpdated > 0 ? t('onWithPrompts', { count: promptsUpdated }) : t('on'));
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : t('failed'));
+      toast.error(caughtError(err, t('failed')));
     } finally {
       setSaving(false);
     }

@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import type { Signal } from '@/lib/signals/map';
-import { asSentence, changeDirection, largestRivalMove, pickChanges, sinceStart } from './since';
+import {
+  asSentence,
+  changeDirection,
+  groupChanges,
+  largestRivalMove,
+  pickChanges,
+  sinceStart,
+} from './since';
 
 const now = new Date('2026-11-17T09:00:00Z');
 
@@ -52,18 +59,57 @@ describe('Since yesterday: the window', () => {
 describe('Since yesterday: the changes', () => {
   it('lists high then medium impact, the biggest change first, at most 5', () => {
     const signals = [
-      signal('m-big', { impact: 'medium', changeValue: 9 }),
-      signal('h-small', { changeValue: -2 }),
+      signal('m-big', { impact: 'medium', kind: 'prompt_gain', changeValue: 9 }),
+      signal('h-small', { kind: 'visibility_slipping', changeValue: -2 }),
       signal('low', { impact: 'low', changeValue: -40 }),
       signal('h-big', { changeValue: -12 }),
-      signal('m-1', { impact: 'medium', changeValue: 1 }),
-      signal('m-2', { impact: 'medium', changeValue: 2 }),
-      signal('m-3', { impact: 'medium', changeValue: 3 }),
+      signal('m-1', { impact: 'medium', kind: 'platform_gap', changeValue: 1 }),
+      signal('m-2', { impact: 'medium', kind: 'new_engine', changeValue: 2 }),
+      signal('m-3', { impact: 'medium', kind: 'first_citation', changeValue: 3 }),
     ];
     const { items, total, small } = pickChanges(signals, new Set());
     expect(items.map((s) => s.id)).toEqual(['h-big', 'h-small', 'm-big', 'm-3', 'm-2']);
     expect(total).toBe(6);
     expect(small).toBe(1);
+  });
+
+  it('counts changes of one kind as one row, and keeps all of them (AC-06)', () => {
+    const rival = (id: string, changeValue: number, actionId: string | null) =>
+      signal(id, {
+        category: 'competitor',
+        kind: 'competitor_leads',
+        changeValue,
+        actionId,
+        payload: { name: id },
+      });
+    const signals = [
+      rival('r1', 20, 'a1'),
+      rival('r2', 19, 'a1'),
+      rival('r3', 18, null),
+      rival('r4', 17, 'a1'),
+      rival('r5', 16, 'a1'),
+      signal('drop', { changeValue: -12 }),
+      signal('gain', { kind: 'prompt_gain', changeValue: 9 }),
+      signal('slip', { kind: 'visibility_slipping', changeValue: -5 }),
+      signal('gap', { kind: 'platform_gap', changeValue: -4 }),
+      signal('cite', { kind: 'first_citation', changeValue: 3 }),
+    ];
+    const { items, total } = pickChanges(signals, new Set());
+    // Five rows: the five rivals, then four others; the fifth other is left for All signals.
+    expect(items).toHaveLength(9);
+    expect(items.map((s) => s.id)).not.toContain('cite');
+    expect(total).toBe(10);
+    const groups = groupChanges(items);
+    expect(groups.map((g) => g.kind)).toEqual([
+      'competitor_leads',
+      'sharp_drop',
+      'prompt_gain',
+      'visibility_slipping',
+      'platform_gap',
+    ]);
+    expect(groups[0].signals.map((s) => s.id)).toEqual(['r1', 'r2', 'r3', 'r4', 'r5']);
+    expect(groups[0].actionIds).toEqual(['a1']);
+    expect(groups[1].actionIds).toEqual([]);
   });
 
   it("leaves out signals whose section is off the person's menu", () => {

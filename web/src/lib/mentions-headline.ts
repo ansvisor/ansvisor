@@ -1,5 +1,4 @@
-import { PLATFORM_LABELS } from '@/config/platform-labels';
-import { POSITION_PLATFORMS } from '@/lib/prompt-positions';
+import { platformLabel } from '@/config/platform-labels';
 import {
   changeBasis,
   isLowSample,
@@ -11,11 +10,7 @@ import {
 
 /** A platform id as the filter bar names it ("gemini-web" → "Gemini"). */
 export function mentionPlatformLabel(platform: string): string {
-  return (
-    POSITION_PLATFORMS.find((p) => p.id === platform)?.label ??
-    PLATFORM_LABELS[platform] ??
-    platform
-  );
+  return platformLabel(platform);
 }
 
 /** Net sentiment in whole points, as the page shows it; null with no mentions. */

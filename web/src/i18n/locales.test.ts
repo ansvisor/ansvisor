@@ -62,11 +62,18 @@ describe('the interface languages', () => {
   });
 });
 
+describe('languages offered to customers', () => {
+  it('are every selectable language, Arabic included', () => {
+    expect([...TRANSLATED_LOCALES]).toEqual([...SELECTABLE_LOCALES]);
+    expect(TRANSLATED_LOCALES).toContain('ar');
+  });
+});
+
 describe('Arabic', () => {
-  it('is known and right to left, but offered to no one', () => {
+  it('is known, right to left, and listed like the others', () => {
     expect(LOCALES).toContain('ar');
-    expect(HIDDEN_LOCALES).toEqual(['ar']);
-    expect(SELECTABLE_LOCALES).not.toContain('ar');
+    expect(HIDDEN_LOCALES).toEqual([]);
+    expect(SELECTABLE_LOCALES).toContain('ar');
     expect(localeDirection('ar')).toBe('rtl');
     expect(localeDirection('en')).toBe('ltr');
     expect(localeDirection('zh-CN')).toBe('ltr');

@@ -101,7 +101,7 @@ describe('GET /api/prompts/usage', () => {
     expect(body.plan).toEqual({
       key: 'growth',
       name: 'Growth plan',
-      locationLimit: 200,
+      locationLimit: 250,
       cta: 'choose_plan',
       ended: true,
     });

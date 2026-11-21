@@ -131,6 +131,21 @@ describe('UntrackedQueriesCard', () => {
     expect(onTracked).toHaveBeenCalledTimes(1);
   });
 
+  it('says a refusal in the person’s language, never the server’s English (LOC-008)', async () => {
+    // A server action's thrown refusal keeps only its digest in production.
+    trackPagePrompts.mockRejectedValueOnce(
+      Object.assign(new Error('masked'), { digest: 'subscription_inactive' }),
+    );
+    await render();
+    await act(async () => button('Track')!.click());
+    expect(toast.error).toHaveBeenLastCalledWith(messages.apiFailure.subscription);
+
+    // A masked error with no code we map: the page's own words.
+    trackPagePrompts.mockRejectedValueOnce(Object.assign(new Error('masked'), { digest: '42' }));
+    await act(async () => button('Track')!.click());
+    expect(toast.error).toHaveBeenLastCalledWith(messages.traffic.google.untracked.trackFailed);
+  });
+
   it('asks for a topic first on a brand without one, with a way to the Topics tab', async () => {
     trackPagePrompts.mockResolvedValue({
       promptIds: [],
