@@ -4,14 +4,16 @@ route: /dashboard/audit
 keywords: [site score, pages audited, audit opportunities, audited pages, score over time, first score, current score, not audited, audit coverage, score range]
 synonyms: [audit overview, audit history, which pages to audit, audit priority]
 plan: all
-updated: 2026-11-19
-last_checked: 2026-11-19
+updated: 2026-11-21
+last_checked: 2026-11-21
 owner: Cihan
 app_version: 0.3.0
 approved: true
 sources: [docs/guides/site-audit.mdx]
 ---
 The **Site Audit** page sums up your audits: a summary line, four cards and a chart, then two tabs. **Opportunities** lists the pages worth auditing next, and **Pages** lists every page you audited.
+
+The page opens in one go: until its numbers are in, grey placeholders hold the place of the summary line, the chart and the lists, so nothing moves when they fill in.
 
 ## Summary and cards
 
