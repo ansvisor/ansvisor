@@ -1,7 +1,7 @@
 ---
 title: Ads Connections: ad platforms and Google Analytics
 route: /dashboard/ads
-keywords: [ads connections, chatgpt ads, chatgpt ads api key, google ads, microsoft advertising, meta ads, linkedin ads, notify me, connect an ad account, google analytics in ads]
+keywords: [ads connections, chatgpt ads, chatgpt ads api key, google ads, google ads manager account, microsoft advertising, meta ads, linkedin ads, notify me, connect an ad account, google analytics in ads]
 synonyms: [connect google ads, link ad account, ad integrations, facebook ads, instagram ads, ad platform billing]
 plan: growth
 updated: 2026-11-22
@@ -9,7 +9,7 @@ last_checked: 2026-11-22
 owner: Cihan
 app_version: 0.3.0
 approved: false
-sources: [web/messages/en.json, web/src/app/[locale]/(dashboard)/dashboard/ads/_connections.tsx, web/src/app/[locale]/(dashboard)/dashboard/ads/_chatgpt-ads.tsx, server/src/routes/ads.js, server/src/routes/ads-accounts.js]
+sources: [web/messages/en.json, web/src/app/[locale]/(dashboard)/dashboard/ads/_connections.tsx, web/src/app/[locale]/(dashboard)/dashboard/ads/_chatgpt-ads.tsx, web/src/app/[locale]/(dashboard)/dashboard/ads/_google-ads.tsx, server/src/routes/ads.js, server/src/routes/ads-accounts.js]
 ---
 The **Connections** tab of **Ads** lists the ad platforms Ads works with, and Google Analytics. Ansvisor only reads your ad accounts: it never changes a campaign or a budget.
 
@@ -23,7 +23,11 @@ The card shows each account's name, currency and status. **Disconnect** deletes 
 
 ## Google Ads
 
-This shows **Coming soon**. It includes ads in AI Overviews and AI Mode.
+Google Ads includes ads in AI Overviews and AI Mode. An Admin clicks **Connect**. If the brand has no Google Ads sign-in yet, a Google sign-in window opens first.
+
+Then pick the accounts this brand reads and click **Connect**. You can only pick accounts that sign-in reaches. A **Manager account** has no campaigns of its own, so pick the accounts under it. **Add account** picks more later.
+
+**Disconnect** removes an account and the numbers Ansvisor read. The Google sign-in stays in **Settings › Integrations**.
 
 Billing stays with each platform: ChatGPT Ads Manager, Google Ads or Microsoft Advertising. Ansvisor never sees or changes how you pay for ads.
 

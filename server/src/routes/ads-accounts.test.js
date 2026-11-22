@@ -16,6 +16,7 @@ const assertBrandAccess = vi.fn();
 const assertRole = vi.fn();
 const readsEveryOpportunity = vi.fn();
 const lib = { listAccounts: vi.fn(), connectChatGptAccount: vi.fn(), disconnectAccount: vi.fn() };
+const google = { listGoogleCustomers: vi.fn(), connectGoogleAccounts: vi.fn() };
 const logError = vi.fn();
 
 vi.mock('../config/supabase.js', () => ({ default: {} }));
@@ -31,6 +32,12 @@ vi.mock('../lib/ads/accounts.js', async (importOriginal) => ({
   listAccounts: (...a) => lib.listAccounts(...a),
   connectChatGptAccount: (...a) => lib.connectChatGptAccount(...a),
   disconnectAccount: (...a) => lib.disconnectAccount(...a),
+}));
+
+vi.mock('../lib/ads/google-accounts.js', async (importOriginal) => ({
+  ...(await importOriginal()),
+  listGoogleCustomers: (...a) => google.listGoogleCustomers(...a),
+  connectGoogleAccounts: (...a) => google.connectGoogleAccounts(...a),
 }));
 
 const { AdsAccountError } = await import('../lib/ads/accounts.js');
@@ -61,10 +68,12 @@ afterEach(() => vi.unstubAllEnvs());
 
 beforeEach(() => {
   vi.stubEnv('ADS_ENABLED', 'true');
-  assertBrandAccess.mockReset().mockResolvedValue({ brand: { id: BRAND }, orgId: 'o1' });
+  assertBrandAccess
+    .mockReset()
+    .mockResolvedValue({ brand: { id: BRAND, organization_id: 'o1' }, orgId: 'o1' });
   assertRole.mockReset().mockResolvedValue('admin');
   readsEveryOpportunity.mockReset().mockResolvedValue(true);
-  for (const fn of Object.values(lib)) fn.mockReset();
+  for (const fn of [...Object.values(lib), ...Object.values(google)]) fn.mockReset();
   logError.mockReset();
 });
 
@@ -182,5 +191,82 @@ describe('DELETE /api/ads/accounts/:accountId', () => {
     expect(
       (await fetch(`${baseUrl}/${ACCOUNT}?brandId=${BRAND}`, { method: 'DELETE' })).status,
     ).toBe(403);
+  });
+});
+
+describe('Google Ads (Phase 1, G2)', () => {
+  const pick = (body) =>
+    fetch(`${baseUrl}/google`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+  const customers = () => fetch(`${baseUrl}/google/customers?brandId=${BRAND}`);
+
+  it("lists the customers the brand's sign-in reaches, for an Admin", async () => {
+    google.listGoogleCustomers.mockResolvedValue({ customers: [{ id: '1234567890' }], more: 0 });
+    const res = await customers();
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ customers: [{ id: '1234567890' }], more: 0 });
+    expect(google.listGoogleCustomers).toHaveBeenCalledWith({
+      orgId: 'o1',
+      brandId: BRAND,
+      userId: 'u1',
+    });
+  });
+
+  it('connects the ids picked, scoped to the brand and workspace the route checked', async () => {
+    google.connectGoogleAccounts.mockResolvedValue([{ id: ACCOUNT, platform: 'google' }]);
+    const res = await pick({ brandId: BRAND, customerIds: ['1234567890'] });
+    expect(res.status).toBe(201);
+    expect(await res.json()).toEqual({ accounts: [{ id: ACCOUNT, platform: 'google' }] });
+    expect(google.connectGoogleAccounts).toHaveBeenCalledWith({
+      orgId: 'o1',
+      brandId: BRAND,
+      userId: 'u1',
+      customerIds: ['1234567890'],
+    });
+  });
+
+  it('refuses ids that are not 10 digits, none, or too many', async () => {
+    for (const customerIds of [['123-456-7890'], [], Array(21).fill('1234567890')]) {
+      expect((await pick({ brandId: BRAND, customerIds })).status).toBe(400);
+    }
+    expect(google.connectGoogleAccounts).not.toHaveBeenCalled();
+  });
+
+  it('refuses a brand of another workspace, the demo brand, a non-Admin and Starter', async () => {
+    assertBrandAccess.mockResolvedValueOnce({
+      brand: { id: BRAND, organization_id: 'o2' },
+      orgId: 'o1',
+    });
+    expect((await customers()).status).toBe(404);
+    assertBrandAccess.mockResolvedValueOnce({
+      brand: { id: BRAND, organization_id: 'o1', is_demo: true },
+      orgId: 'o1',
+    });
+    expect((await pick({ brandId: BRAND, customerIds: ['1234567890'] })).status).toBe(402);
+    assertRole.mockRejectedValueOnce(Object.assign(new Error('no'), { status: 403 }));
+    expect((await customers()).status).toBe(403);
+    readsEveryOpportunity.mockResolvedValueOnce(false);
+    const starter = await pick({ brandId: BRAND, customerIds: ['1234567890'] });
+    expect([starter.status, (await starter.json()).code]).toEqual([403, 'plan_limit']);
+    expect(google.listGoogleCustomers).not.toHaveBeenCalled();
+    expect(google.connectGoogleAccounts).not.toHaveBeenCalled();
+  });
+
+  it('answers each refusal of the library with its own status and code', async () => {
+    const cases = [
+      ['not_connected', 409],
+      ['not_configured', 503],
+      ['not_accessible', 422],
+      ['manager_account', 422],
+      ['upstream', 502],
+    ];
+    for (const [code, status] of cases) {
+      google.connectGoogleAccounts.mockRejectedValueOnce(new AdsAccountError(code, 'x'));
+      const res = await pick({ brandId: BRAND, customerIds: ['1234567890'] });
+      expect([res.status, (await res.json()).code]).toEqual([status, code]);
+    }
   });
 });

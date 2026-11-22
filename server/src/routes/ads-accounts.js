@@ -9,6 +9,11 @@ import {
   listAccounts,
 } from '../lib/ads/accounts.js';
 import { ChatGptAdsKeyError, ChatGptAdsUnavailableError } from '../lib/ads/chatgpt-ads.js';
+import {
+  connectGoogleAccounts,
+  listGoogleCustomers,
+  MAX_CONNECT,
+} from '../lib/ads/google-accounts.js';
 import { readsEveryOpportunity } from '../lib/ads/opportunities.js';
 import { DEMO_BRAND } from '../middleware/demo-brand.js';
 
@@ -24,8 +29,15 @@ import { DEMO_BRAND } from '../middleware/demo-brand.js';
  *     the customer's own key. Admins only, on a plan that reads every
  *     opportunity (Ads' writes, routes/ads.js), never on the demo brand. The
  *     key is checked with ChatGPT Ads before it is kept, sealed.
+ *   - GET /google/customers?brandId=…: the Google Ads customers the brand's
+ *     Google Ads sign-in reaches, for the picker (Phase 1, G2). Admins only,
+ *     on such a plan, never on the demo brand.
+ *   - POST /google { brandId, customerIds }: connects the customers picked.
+ *     Only ids the brand's own sign-in lists count, and only a sign-in of the
+ *     caller's workspace (lib/ads/google-accounts.js). Admins only, as above.
  *   - DELETE /:accountId?brandId=…: removes one, with its key and metrics.
- *     Admins only.
+ *     Admins only. A Google account's sign-in stays: Settings › Integrations
+ *     manages it.
  *
  * The key is in a request body only: it is never logged or answered back.
  */
@@ -47,7 +59,16 @@ function failed(req, res, err, what) {
       .json({ error: err.message, code: err.status === 404 ? 'not_found' : 'forbidden' });
   }
   if (err instanceof AdsAccountError) {
-    const status = { invalid_key: 422, not_configured: 503, not_found: 404 }[err.code] ?? 400;
+    const status =
+      {
+        invalid_key: 422,
+        not_configured: 503,
+        not_found: 404,
+        not_connected: 409,
+        not_accessible: 422,
+        manager_account: 422,
+        upstream: 502,
+      }[err.code] ?? 400;
     return res.status(status).json({ error: err.message, code: err.code });
   }
   if (err instanceof ChatGptAdsKeyError) {
@@ -97,6 +118,76 @@ router.post('/chatgpt', async (req, res) => {
     return res.status(201).json({ account });
   } catch (err) {
     return failed(req, res, err, 'ads chatgpt connect error');
+  }
+});
+
+/**
+ * The checks every Google Ads write and the picker share: the brand is the
+ * caller's workspace's (rule 3), not the demo brand, the caller an Admin, the
+ * plan one that reads every opportunity. Answers the refusal itself and
+ * returns null, or the brand and workspace.
+ */
+async function googleAdmin(req, res, brandId) {
+  const { brand, orgId } = await assertBrandAccess(brandId, req.user.id);
+  if (!orgId || brand.organization_id !== orgId) {
+    res.status(404).json({ error: 'Brand not found', code: 'not_found' });
+    return null;
+  }
+  if (brand.is_demo) {
+    res.status(402).json(DEMO_BRAND);
+    return null;
+  }
+  await assertRole(req.user.id, ADMIN_ONLY, 'Only admins can connect ad accounts.');
+  if (!(await readsEveryOpportunity(orgId, brand))) {
+    planLimit(res);
+    return null;
+  }
+  return { brand, orgId };
+}
+
+// GET /api/ads/accounts/google/customers?brandId=…
+router.get('/google/customers', async (req, res) => {
+  const parsed = z.guid().safeParse(req.query.brandId);
+  if (!parsed.success) return res.status(400).json({ error: 'invalid', code: 'invalid' });
+  try {
+    const checked = await googleAdmin(req, res, parsed.data);
+    if (!checked) return undefined;
+    return res.json(
+      await listGoogleCustomers({
+        orgId: checked.orgId,
+        brandId: checked.brand.id,
+        userId: req.user.id,
+      }),
+    );
+  } catch (err) {
+    return failed(req, res, err, 'ads google customers read error');
+  }
+});
+
+// POST /api/ads/accounts/google { brandId, customerIds }
+router.post('/google', async (req, res) => {
+  const body = z
+    .object({
+      brandId: z.guid(),
+      customerIds: z
+        .array(z.string().regex(/^\d{10}$/))
+        .min(1)
+        .max(MAX_CONNECT),
+    })
+    .safeParse(req.body);
+  if (!body.success) return res.status(400).json({ error: 'invalid', code: 'invalid' });
+  try {
+    const checked = await googleAdmin(req, res, body.data.brandId);
+    if (!checked) return undefined;
+    const accounts = await connectGoogleAccounts({
+      orgId: checked.orgId,
+      brandId: checked.brand.id,
+      userId: req.user.id,
+      customerIds: body.data.customerIds,
+    });
+    return res.status(201).json({ accounts });
+  } catch (err) {
+    return failed(req, res, err, 'ads google connect error');
   }
 });
 

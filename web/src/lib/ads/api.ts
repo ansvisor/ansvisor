@@ -373,3 +373,38 @@ export function disconnectAdsAccount(brandId: string, accountId: string) {
     method: 'DELETE',
   });
 }
+
+/** A Google Ads customer the brand's Google Ads sign-in reaches, for the picker. */
+export interface AdsGoogleCustomer {
+  /** 10 digits. */
+  id: string;
+  name: string | null;
+  currencyCode: string | null;
+  timeZone: string | null;
+  /** A manager account (MCC): no campaigns of its own, so it can't be picked. */
+  manager: boolean;
+  testAccount: boolean;
+  /** Google Ads wouldn't describe it (closed, or no access): it can't be picked. */
+  unavailable: boolean;
+  /** The brand reads it already. */
+  connected: boolean;
+}
+
+/**
+ * The customers the brand's Google Ads sign-in reaches (Admins), the first
+ * 50 with `more` past them. Refused with 409 not_connected before the brand
+ * signs in, 503 not_configured, 502 upstream, 403 plan_limit or 402 demo_brand.
+ */
+export function readGoogleAdsCustomers(brandId: string) {
+  const query = new URLSearchParams({ brandId });
+  return call<{ customers: AdsGoogleCustomer[]; more: number }>(
+    `accounts/google/customers?${query}`,
+  );
+}
+
+/** Connects the customers picked to the brand (Admins): only ids its own sign-in reaches. */
+export async function connectGoogleAds(brandId: string, customerIds: string[]) {
+  const body = { brandId, customerIds };
+  return (await call<{ accounts: AdsAccount[] }>('accounts/google', { method: 'POST', body }))
+    .accounts;
+}

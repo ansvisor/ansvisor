@@ -15202,7 +15202,6 @@
       }
     },
     "connections": {
-      "soon": "Coming soon",
       "later": "Coming later",
       "notify": "Notify me",
       "notified": "We'll tell you",
@@ -15239,6 +15238,34 @@
         "error": {
           "invalid_key": "ChatGPT Ads didn't accept this key. Check it and try again.",
           "upstream": "ChatGPT Ads didn't answer. Try again in a minute.",
+          "other": "Couldn't connect. Try again."
+        }
+      },
+      "google": {
+        "name": "Google Ads",
+        "connect": "Connect",
+        "addAnother": "Add account",
+        "billing": "Google Ads",
+        "pickTitle": "Pick Google Ads accounts",
+        "pickLine": "These are the accounts your Google sign-in reaches. Ansvisor reads the ones you pick; it never changes a campaign or a budget.",
+        "noCustomers": "This Google sign-in reaches no Google Ads account. Sign in with the Google account that manages your ads.",
+        "unnamed": "Unnamed account",
+        "more": "{count, plural, one {# more account isn't listed.} other {# more accounts aren't listed.}}",
+        "why": {
+          "connected": "Connected",
+          "manager": "Manager account",
+          "unavailable": "Unavailable",
+          "test": "Test account"
+        },
+        "cancel": "Cancel",
+        "save": "{count, plural, =0 {Connect} one {Connect # account} other {Connect # accounts}}",
+        "connectedToast": "{count, plural, one {Connected # Google Ads account.} other {Connected # Google Ads accounts.}}",
+        "error": {
+          "not_configured": "Google Ads isn't set up on this server yet.",
+          "not_connected": "Sign in to Google Ads first, then try again.",
+          "not_accessible": "This Google sign-in no longer reaches that account. Close and connect again.",
+          "manager_account": "A manager account has no campaigns of its own. Pick the accounts under it.",
+          "upstream": "Google Ads didn't answer. Try again in a minute.",
           "other": "Couldn't connect. Try again."
         }
       },
