@@ -17238,6 +17238,10 @@
   "reports": {
     "impactLink": "What Ansvisor did for you",
     "impact": {
+      "firstShip": {
+        "title": "Nothing has shipped on this brand yet",
+        "body": "This report fills in after your first Send to CMS or an agent's first go-live."
+      },
       "title": "What Ansvisor did for you",
       "subtitle": "{brand} · shipped actions measured against untouched similar prompts",
       "subtitleNoBrand": "Shipped actions measured against untouched similar prompts",

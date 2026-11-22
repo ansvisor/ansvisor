@@ -5411,11 +5411,11 @@
         "what changed after publishing"
       ],
       "plan": "all",
-      "updated": "2026-11-01",
+      "updated": "2026-11-21",
       "sections": [
         {
           "heading": null,
-          "text": "**What Ansvisor did for you** lists the changes you shipped in a month, such as a page published to your CMS, and what each one did in AI answers. Open it from **Reports** with **What Ansvisor did for you**, and go back with **Back to Reports**. It shows the brand you have open."
+          "text": "**What Ansvisor did for you** lists the changes you shipped in a month, such as a page published to your CMS, and what each one did in AI answers. Open it from **Reports** with **What Ansvisor did for you**, and go back with **Back to Reports**. It shows the brand you have open.\n\nThe button appears once the brand has shipped its first change: a page your CMS confirmed after **Send to CMS**, or an agent's first go-live. Until then the page says it fills in after that first change."
         },
         {
           "heading": "What shipped means",
