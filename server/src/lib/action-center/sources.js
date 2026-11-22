@@ -11,6 +11,7 @@
  */
 
 import supabaseAdmin from '../../config/supabase.js';
+import { adsEnabled } from '../ads-flag.js';
 import { brandConnection } from '../brand-integrations.js';
 
 /**
@@ -35,6 +36,8 @@ export const SOURCES = Object.freeze([
   'ai_traffic',
   /** Prompts organised into topics. */
   'topics',
+  /** A Google Ads account of the brand, read by the Ads sync (00560), while Ads is on. */
+  'google_ads',
 ]);
 
 const DAY_MS = 86_400_000;
@@ -55,33 +58,51 @@ export async function resolveBrandSources(brandId) {
   const available = new Set(['tracking']);
   const recent = new Date(Date.now() - 30 * DAY_MS).toISOString();
 
-  const [competitors, audits, gscRows, analyticsPages, snippetRows, topics, volumes, analytics] =
-    await Promise.all([
-      hasRow(supabaseAdmin.from('competitors').select('id').eq('brand_id', brandId)),
-      hasRow(supabaseAdmin.from('site_audits').select('id').eq('brand_id', brandId)),
-      hasRow(supabaseAdmin.from('gsc_query_stats').select('id').eq('brand_id', brandId)),
-      hasRow(
-        supabaseAdmin
-          .from('ga_ai_traffic_stats')
-          .select('id')
-          .eq('brand_id', brandId)
-          .gte('date', recent.slice(0, 10)),
-      ),
-      hasRow(
-        supabaseAdmin
-          .from('ai_traffic_logs')
-          .select('id')
-          .eq('brand_id', brandId)
-          .gte('created_at', recent),
-      ),
-      hasRow(
-        supabaseAdmin.from('topics').select('id').eq('brand_id', brandId).eq('is_active', true),
-      ),
-      hasVolumes(brandId),
-      // The Google sign-in the brand uses for Analytics: every brand of a
-      // workspace uses its one connection until a brand picks its own (PR 15).
-      brandConnection(brandId, 'google-analytics'),
-    ]);
+  const [
+    competitors,
+    audits,
+    gscRows,
+    analyticsPages,
+    snippetRows,
+    topics,
+    volumes,
+    analytics,
+    googleAds,
+  ] = await Promise.all([
+    hasRow(supabaseAdmin.from('competitors').select('id').eq('brand_id', brandId)),
+    hasRow(supabaseAdmin.from('site_audits').select('id').eq('brand_id', brandId)),
+    hasRow(supabaseAdmin.from('gsc_query_stats').select('id').eq('brand_id', brandId)),
+    hasRow(
+      supabaseAdmin
+        .from('ga_ai_traffic_stats')
+        .select('id')
+        .eq('brand_id', brandId)
+        .gte('date', recent.slice(0, 10)),
+    ),
+    hasRow(
+      supabaseAdmin
+        .from('ai_traffic_logs')
+        .select('id')
+        .eq('brand_id', brandId)
+        .gte('created_at', recent),
+    ),
+    hasRow(supabaseAdmin.from('topics').select('id').eq('brand_id', brandId).eq('is_active', true)),
+    hasVolumes(brandId),
+    // The Google sign-in the brand uses for Analytics: every brand of a
+    // workspace uses its one connection until a brand picks its own (PR 15).
+    brandConnection(brandId, 'google-analytics'),
+    adsEnabled()
+      ? hasRow(
+          supabaseAdmin
+            .from('ads_accounts')
+            .select('id')
+            .eq('brand_id', brandId)
+            .eq('platform', 'google')
+            .in('status', ['active', 'error'])
+            .not('synced_through', 'is', null),
+        )
+      : false,
+  ]);
 
   if (competitors) available.add('competitors');
   if (audits) available.add('site_audits');
@@ -90,6 +111,7 @@ export async function resolveBrandSources(brandId) {
   if (topics) available.add('topics');
   if (volumes) available.add('volumes');
   if (analytics?.connected) available.add('analytics');
+  if (googleAds) available.add('google_ads');
 
   return available;
 }
