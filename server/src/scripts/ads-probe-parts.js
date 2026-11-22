@@ -5,9 +5,8 @@
  * themselves never run in CI.
  *
  * The probes answer the questions the Phase 1 plan rests on before any of it
- * is built: can Ansvisor read a Google Ads account through Composio with our
- * developer token, at what access level, and what does the ChatGPT Ads key
- * read. Both are read-only: GET or Google Ads' search (a read), never a write.
+ * is built: can Ansvisor read a Google Ads account through Composio, at what
+ * access level, and what does the ChatGPT Ads key read. Both are read-only: GET or Google Ads' search (a read), never a write.
  */
 
 /** "123-456-7890" or "customers/1234567890" → "1234567890". */
@@ -19,12 +18,15 @@ export function customerId(value) {
 }
 
 /**
- * Google Ads' own headers. The developer token goes on every call;
+ * Google Ads' own headers. Since 9 September 2026 Google issues no new
+ * developer tokens and ignores the header: access sits with the Google Cloud
+ * project behind the OAuth client. So the token goes on only when one is set;
  * `login-customer-id` only when the account is reached through a manager
  * account, and it is that manager's id (the customer's, not ours).
  */
 export function googleAdsHeaders({ developerToken, loginCustomerId }) {
-  const headers = { 'developer-token': developerToken };
+  const headers = {};
+  if (developerToken) headers['developer-token'] = developerToken;
   const login = customerId(loginCustomerId);
   if (login) headers['login-customer-id'] = login;
   return headers;

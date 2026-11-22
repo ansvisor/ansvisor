@@ -30,6 +30,11 @@ describe('Google Ads headers and ids', () => {
     expect(
       googleAdsHeaders({ developerToken: 'dev-tok', loginCustomerId: '123-456-7890' }),
     ).toEqual({ 'developer-token': 'dev-tok', 'login-customer-id': '1234567890' });
+    // Google issues no developer tokens since 9 Sep 2026: none, no header.
+    expect(googleAdsHeaders({ loginCustomerId: '123-456-7890' })).toEqual({
+      'login-customer-id': '1234567890',
+    });
+    expect(googleAdsHeaders({})).toEqual({});
   });
 
   it('reads customer ids from resource names and dashed numbers', () => {

@@ -22,7 +22,10 @@
  * printed error names the ones the tool wants.
  *
  * composio and direct need, in server/.env:
- *   GOOGLE_ADS_DEVELOPER_TOKEN   our developer token (server-side only);
+ *   GOOGLE_ADS_DEVELOPER_TOKEN   optional: Google stopped issuing tokens on
+ *                                9 Sep 2026 and access now sits with the
+ *                                Cloud project behind the OAuth client (with
+ *                                Composio's app, Composio's project);
  *   GOOGLE_ADS_API_VERSION       e.g. v26, a version Google still serves;
  *   GOOGLE_ADS_LOGIN_CUSTOMER_ID optional: the MANAGER account's id when the
  *                                account is reached through one.
@@ -31,8 +34,8 @@
  *   Merchant Center already work, so the OAuth token never reaches us.
  *   Needs COMPOSIO_API_KEY and the id of a Composio connected account whose
  *   auth config asks for the Google Ads scope
- *   (https://www.googleapis.com/auth/adwords). This answers whether the
- *   proxy passes our developer-token header on.
+ *   (https://www.googleapis.com/auth/adwords). This answers whether
+ *   Composio's proxy reaches real accounts with no token of ours.
  * - direct: our own OAuth client, for comparison. Needs
  *   GOOGLE_ADS_CLIENT_ID, GOOGLE_ADS_CLIENT_SECRET and GOOGLE_ADS_REFRESH_TOKEN
  *   (e.g. from Google's OAuth Playground with the Google Ads scope).
@@ -108,7 +111,6 @@ if (mode !== 'composio' && mode !== 'direct') {
     'Usage: probe-google-ads.js composio <connectedAccountId> | direct | composio-tools <entityId> <connectedAccountId>',
   );
 }
-if (!developerToken) stop('GOOGLE_ADS_DEVELOPER_TOKEN is not set (server/.env).');
 if (!/^v\d+$/.test(version ?? '')) {
   stop(
     'Set GOOGLE_ADS_API_VERSION (e.g. v26) to a version Google still serves; see the Google Ads API release notes.',
