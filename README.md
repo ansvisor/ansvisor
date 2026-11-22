@@ -1,6 +1,6 @@
 <div align="center">
 
-[![Ansvisor: Open-Source Agentic AI Search Execution Platform](.github/assets/ansvisor-readme-banner.png)](https://www.ansvisor.com)
+[![Ansvisor: The Open-Source AI Marketing Platform to Win in ChatGPT, Gemini and Google AI](.github/assets/ansvisor-readme-banner.png)](https://www.ansvisor.com)
 
 [![🚀 Try the Cloud — ansvisor.com](https://img.shields.io/badge/🚀_Try_the_Cloud-ansvisor.com-6366f1?style=for-the-badge&logoColor=white&logo=vercel)](https://www.ansvisor.com)
 [![📚 Docs](https://img.shields.io/badge/📚_Docs-docs.ansvisor.com-10b981?style=for-the-badge&logoColor=white&logo=readthedocs)](https://docs.ansvisor.com)
@@ -9,7 +9,7 @@
 
 </div>
 
-# Ansvisor — Open-Source Agentic AI Search Execution Platform
+# Ansvisor — The Open-Source AI Marketing Platform to Win in ChatGPT, Gemini and Google AI
 
 **[AI Visibility Platform](https://www.ansvisor.com/)** · **[Documentation](https://docs.ansvisor.com/)**
 
