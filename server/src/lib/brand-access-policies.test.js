@@ -50,6 +50,8 @@ const SERVER_ONLY = [
   'ads_ad_drafts',
   'ads_decision_overrides',
   'ads_opportunity_snapshots',
+  // Ads Phase 1's ad accounts (00560): spend and keys are served by the API to the roles and plans that read them.
+  'ads_accounts',
   'brand_fact_pages',
   // Each brand's last action and signal number (00534).
   'brand_number_counters',
