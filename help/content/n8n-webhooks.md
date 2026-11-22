@@ -4,7 +4,7 @@ route: /dashboard/content
 keywords: [n8n, webhook, workflow, automation, brand events]
 synonyms: [connect n8n, send events to n8n, n8n integration]
 plan: all
-updated: 2026-11-08
+updated: 2026-11-21
 last_checked: 2026-11-08
 owner: Ansvisor
 app_version: 0.3.0
@@ -15,7 +15,7 @@ Send a brand's Ansvisor events to an n8n workflow with the n8n community node. E
 
 ## Configure the brand webhook
 
-Open **Content** for the brand and choose **Configure Webhook**. Enter the Production URL from the n8n **Ansvisor Trigger** node, choose the events the workflow should receive, and set a secret key. Save the webhook. Use an HTTPS address so the secret is protected while it is sent.
+Open **Content** for the brand and choose **Webhook Settings**, the settings icon at the top right. Enter the Production URL from the n8n **Ansvisor Trigger** node, choose the events the workflow should receive, and set a secret key. Save the webhook. Use an HTTPS address so the secret is protected while it is sent.
 
 ## Connect the trigger in n8n
 
@@ -23,4 +23,4 @@ In n8n, add **Ansvisor Trigger** and create a credential containing the same sec
 
 ## Choose which events to receive
 
-Select the events in **Content › Configure Webhook**. Ansvisor can send content opportunities, Daily Pulse updates, Action Center tasks, Content Editor pages and a test event. The test option lets you check the connection before relying on it. Each event is delivered once, so check the workflow's execution history if a delivery does not arrive.
+Select the events in **Content › Webhook Settings**. Ansvisor can send content opportunities, Daily Pulse updates, Action Center tasks, Content Editor pages and a test event. The test option lets you check the connection before relying on it. Each event is delivered once, so check the workflow's execution history if a delivery does not arrive.

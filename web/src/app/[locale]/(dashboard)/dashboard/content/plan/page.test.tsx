@@ -282,12 +282,12 @@ describe('the Content plan', () => {
 
   it('reads the other periods, a quarter too, and keeps the period in the URL', async () => {
     await renderPage();
-    await act(async () => button('Last 7 days').click());
+    await act(async () => button('7 days').click());
     expect(getContentPlan).toHaveBeenLastCalledWith('brand-1', 7);
     expect(window.location.search).toBe('?days=7');
     expect(container.querySelector('thead')!.textContent).toContain('Why · last 7 days');
 
-    await act(async () => button('Last 90 days').click());
+    await act(async () => button('90 days').click());
     expect(getContentPlan).toHaveBeenLastCalledWith('brand-1', 90);
     expect(getContentPlanInsights).toHaveBeenLastCalledWith('brand-1', 90);
     expect(window.location.search).toBe('?days=90');
@@ -536,7 +536,7 @@ describe('the Content plan', () => {
         { url: 'https://acme.example/blog/latte-art', title: null, own: true, citations: 5 },
       ],
     });
-    await act(async () => button('Last 7 days').click());
+    await act(async () => button('7 days').click());
     await act(async () => button('Protect').click());
     expect(container.textContent).not.toContain('Filtered');
     expect(rowTexts()).toHaveLength(3);
@@ -564,7 +564,7 @@ describe('the Content plan', () => {
       answers: { cur: 100, prev: 0 },
       tracking: { prevFrom: '2026-04-24', trackedSince: '2026-09-09' },
     });
-    await act(async () => button('Last 90 days').click());
+    await act(async () => button('90 days').click());
     expect(container.textContent).toContain(
       "No page reads as losing ground yet: tracking began Sep 9, so the 90 days before aren't tracked to compare with.",
     );
@@ -602,7 +602,7 @@ describe('the Content plan', () => {
     const mounts = shopping.mounts;
     let resolve: (plan: typeof PLAN) => void = () => {};
     getContentPlan.mockReturnValueOnce(new Promise((r) => (resolve = r)));
-    await act(async () => button('Last 7 days').click());
+    await act(async () => button('7 days').click());
     // The list loads: one spinner, the section kept but not shown.
     expect(section()).toBeNull();
     await act(async () => resolve(PLAN));
@@ -682,7 +682,7 @@ describe('a Plan row’s menu', () => {
       ...PLAN,
       marks: [{ rowKey: 'opportunity:o1', priority: false, hidden: true }],
     });
-    await act(async () => button('Last 7 days').click());
+    await act(async () => button('7 days').click());
     expect(rowTexts()).toHaveLength(2);
     expect(button('Create').textContent).toBe('Create0New pages AI needs');
     expect(container.textContent).not.toContain('Show again');

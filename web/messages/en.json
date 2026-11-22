@@ -10770,6 +10770,8 @@
       "selectBrand": "Select a brand to see its content plan.",
       "period": "Period",
       "periods": "Last {days} days",
+      "periodLast": "Last",
+      "periodDays": "{days} days",
       "newContent": "New content",
       "cards": {
         "create": { "title": "Create", "hint": "New pages AI needs" },
