@@ -169,6 +169,8 @@ const OPEN_ROUTES: Record<string, string> = {
     'pinning, renaming, sharing or archiving your own chat starts no cost',
   'chat/conversations/[id]:DELETE':
     'deleting your own chat starts no cost, as the old Agent chats (#1613)',
+  'chat/conversations/bulk:POST':
+    'clearing your own chats, or undoing that, starts no cost, as Delete does for one',
   // Memory (W3-11): a person's own Me lines are their personal data (KVKK/GDPR).
   'chat/memory/[id]:DELETE':
     "deleting your own Me memory line stays open; the store answers 402 for a brand's or the workspace's",

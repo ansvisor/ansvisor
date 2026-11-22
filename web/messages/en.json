@@ -5843,6 +5843,8 @@
     },
     "menu": {
       "label": "Chat menu",
+      "clearGroup": "Clear",
+      "clearGroupLabel": "{count, plural, one {Delete your # chat from {where}} other {Delete your # chats from {where}}}",
       "strip": "Chat menu shortcuts",
       "hide": "Hide chat menu",
       "show": "Show chat menu",
@@ -5951,7 +5953,12 @@
       "failed": "Couldn't save that. Try again.",
       "deleteTitle": "Delete this chat?",
       "deleteBody": "“{name}” will be deleted for everyone. Files it made stay in Files. A running agent is stopped first.",
-      "cancel": "Cancel"
+      "cancel": "Cancel",
+      "clearTitle": "{count, plural, one {Delete # chat from {where}?} other {Delete # chats from {where}?}}",
+      "deleteManyTitle": "{count, plural, one {Delete # chat?} other {Delete # chats?}}",
+      "deleteManyBody": "Only your own chats are deleted; chats teammates shared with you stay. Files they made stay in Files, and running agents are stopped first. You can undo for a few seconds, then this can't be undone.",
+      "deleteMany": "{count, plural, one {Delete # chat} other {Delete # chats}}",
+      "deletedMany": "{count, plural, one {# chat deleted} other {# chats deleted}}"
     },
     "home": {
       "greeting": {
@@ -6455,6 +6462,7 @@
       "select": "Select chat",
       "selectFirst": "Select chats to change them together",
       "archiveSelected": "Archive selected",
+      "deleteSelected": "Delete selected",
       "unarchiveSelected": "Unarchive selected",
       "archivedMany": "{count} archived · find them under Archived",
       "unarchivedMany": "{count} unarchived · back in Chats",
