@@ -15235,16 +15235,20 @@
         "connectedToast": "Connected {name}.",
         "accountLine": "ChatGPT Ads account · {currency}",
         "accountLineNoCurrency": "ChatGPT Ads account",
-        "disconnect": "Disconnect",
-        "disconnectTitle": "Disconnect {name}?",
-        "disconnectLine": "Ansvisor deletes its key and the numbers it read. Your ads keep running in ChatGPT Ads Manager.",
-        "disconnectedToast": "Disconnected {name}.",
+        "billing": "ChatGPT Ads Manager",
         "error": {
           "invalid_key": "ChatGPT Ads didn't accept this key. Check it and try again.",
           "upstream": "ChatGPT Ads didn't answer. Try again in a minute.",
-          "other": "Couldn't connect. Try again.",
-          "disconnect": "Couldn't disconnect. Try again."
+          "other": "Couldn't connect. Try again."
         }
+      },
+      "account": {
+        "disconnect": "Disconnect",
+        "disconnectTitle": "Disconnect {name}?",
+        "disconnectLine": "Ansvisor deletes what it keeps for this account: its key, if any, and the numbers it read. Your ads keep running in {billing}.",
+        "disconnectedToast": "Disconnected {name}.",
+        "disconnectFailed": "Couldn't disconnect. Try again.",
+        "cancel": "Cancel"
       },
       "platforms": {
         "chatgpt": {
