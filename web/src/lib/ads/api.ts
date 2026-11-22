@@ -110,6 +110,12 @@ export interface AdsOverview {
   paidSov: number | null;
   /** The period's AI-assisted signups; null with conversions off or unread. */
   signups: number | null;
+  /**
+   * The period's ad spend on every read ad account, per currency, and the
+   * cost per AI-assisted signup in one currency with signups (else null).
+   * Null until an ad account of the brand is read.
+   */
+  cost: { spend: AdsSpend[]; perSignup: AdsSpend | null } | null;
 }
 
 export function readAdsOverview(brandId: string, period: AdsPeriod): Promise<AdsOverview> {
