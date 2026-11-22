@@ -105,6 +105,7 @@ export const FILE_FORMATS = [
   'pdf',
   'csv',
   'xlsx',
+  'pptx',
   'json',
   'jsonld',
   'txt',
@@ -113,6 +114,10 @@ export const FILE_FORMATS = [
   'webp',
 ] as const;
 export type ChatFileFormatName = (typeof FILE_FORMATS)[number];
+
+/** A report deck's own type in Files (#2298): it downloads as it was made. */
+export const PPTX_MIME =
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation';
 
 /** An image's own format in Files (W4-08): it downloads as it was made. */
 export type ChatImageFormat = 'png' | 'jpg' | 'webp';

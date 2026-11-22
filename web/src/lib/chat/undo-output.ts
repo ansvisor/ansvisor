@@ -181,6 +181,24 @@ const generateImage: UndoRule = {
   href: () => '/dashboard/chat/files',
 };
 
+// ─── make_presentation: recorded, no Undo (the deck is deleted in Files, as an image set) ─
+
+const makePresentation: UndoRule = {
+  ...NO_UNDO,
+  targetType: 'chat_file',
+  async record(input, output): Promise<WriteRecord> {
+    const made = asObject(output);
+    return {
+      target: { type: 'chat_file', id: textOf(made.file_id) },
+      summaryParams: {
+        title: summaryValue(textOf(made.title)),
+      },
+      undo: null,
+    };
+  },
+  href: () => '/dashboard/chat/files',
+};
+
 // ─── save_ad_drafts: recorded, no Undo (a newer draft takes its place on the Pay card) ─
 
 const saveAdDrafts: UndoRule = {
@@ -210,6 +228,7 @@ export const OUTPUT_UNDO_RULES: Readonly<Record<string, UndoRule>> = {
   // The AEO Operator's plan, started (AEO Operator PR 4).
   run_agent_plan: runAgentPlan,
   generate_image: generateImage,
+  make_presentation: makePresentation,
   // Ad drafts saved through the claims gate (Ads Phase 0 PR 15).
   save_ad_drafts: saveAdDrafts,
 };
