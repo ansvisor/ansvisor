@@ -15222,6 +15222,17 @@
         "error": "Needs attention",
         "disconnected": "Disconnected"
       },
+      "sync": {
+        "syncedAt": "Numbers read {when}",
+        "pending": "First read within a day: the last 90 days",
+        "error": {
+          "key_refused": "ChatGPT Ads refused the key. Paste a new one.",
+          "key_missing": "The key is gone. Connect the account again.",
+          "signin_gone": "The Google Ads sign-in is gone. Connect Google Ads again.",
+          "upstream": "The ad platform didn't answer. Ansvisor tries again within a day.",
+          "failed": "Couldn't read the numbers. Ansvisor tries again within a day."
+        }
+      },
       "chatgpt": {
         "connect": "Connect",
         "addAnother": "Add account",

@@ -104,6 +104,8 @@ import { startDailySuggestions } from './lib/chat-suggestions/job.js';
 import { startImpactLedger } from './lib/impact-ledger/job.js';
 import { startFollowUpChecks } from './lib/impact-ledger/follow-up.js';
 import { startReportCardQueue } from './lib/report-card/queue.js';
+import { startAdsSync } from './lib/ads/sync.js';
+import { adsSyncers } from './lib/ads/syncers.js';
 
 // Before anything starts: a stray rejection is logged, not a crash.
 handleProcessErrors();
@@ -975,6 +977,10 @@ server.listen(PORT, async () => {
   // Ansvisor's own marketing, so the cloud server's only. Every minute the
   // due cards start within the day's cap and the month's budget.
   if (isCloud()) startReportCardQueue();
+
+  // Ads' connected ad accounts (Ads Phase 1, lib/ads/sync.js): daily, with
+  // ADS_ENABLED on, each account's campaign days from its platform.
+  startAdsSync({ syncers: adsSyncers() });
 
   registerSelfHostedCron({
     cronLib: cron,
