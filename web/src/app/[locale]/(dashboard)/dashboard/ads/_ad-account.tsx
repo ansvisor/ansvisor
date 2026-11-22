@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { useTranslations } from 'next-intl';
+import { useFormatter, useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 import { useUpgradeDialog } from '@/components/providers/upgrade-gate';
 import { Badge } from '@/components/ui/badge';
@@ -16,6 +16,38 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { AdsApiError, disconnectAdsAccount, type AdsAccount } from '@/lib/ads/api';
+
+/** Reasons the daily sync keeps in last_error (server lib/ads/sync.js SYNC_ERRORS). */
+const SYNC_ERRORS = ['key_refused', 'key_missing', 'signin_gone', 'upstream', 'failed'];
+
+/**
+ * The account's sync, under its line: why it failed, when it last read its
+ * numbers, or that the first read is still to come.
+ */
+function SyncLine({ account }: { account: AdsAccount }) {
+  const t = useTranslations('ads.connections.sync');
+  const format = useFormatter();
+  if (account.status !== 'active' && account.lastError) {
+    const code = SYNC_ERRORS.includes(account.lastError) ? account.lastError : 'failed';
+    return (
+      <p data-slot="ads-sync" className="text-xs text-destructive">
+        {t(`error.${code}`)}
+      </p>
+    );
+  }
+  return (
+    <p data-slot="ads-sync" className="truncate text-xs text-muted-foreground">
+      {account.lastSyncedAt
+        ? t('syncedAt', {
+            when: format.dateTime(new Date(account.lastSyncedAt), {
+              dateStyle: 'medium',
+              timeStyle: 'short',
+            }),
+          })
+        : t('pending')}
+    </p>
+  );
+}
 
 /** Refusals that the plan dialog explains: the demo brand, a lapsed plan, Starter. */
 export const UPGRADE_CODES = new Set(['demo_brand', 'subscription_inactive', 'plan_limit']);
@@ -121,6 +153,7 @@ export function AdAccountRow({
       <div className="min-w-0">
         <p className="truncate text-sm font-medium">{account.name ?? account.externalId}</p>
         <p className="truncate text-xs text-muted-foreground">{line}</p>
+        <SyncLine account={account} />
       </div>
       <div className="flex shrink-0 items-center gap-1">
         <Badge variant={account.status === 'active' ? 'secondary' : 'outline'}>
