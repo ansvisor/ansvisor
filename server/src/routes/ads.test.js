@@ -55,6 +55,8 @@ vi.mock('../lib/ads/activity.js', () => ({
 }));
 const readOverview = vi.fn();
 vi.mock('../lib/ads/overview.js', () => ({ readOverview: (...a) => readOverview(...a) }));
+const readCampaigns = vi.fn();
+vi.mock('../lib/ads/campaigns.js', () => ({ readCampaigns: (...a) => readCampaigns(...a) }));
 const sendEarn = vi.fn();
 vi.mock('../lib/ads/earn.js', () => ({ sendEarn: (...a) => sendEarn(...a) }));
 const createAdDrafts = vi.fn();
@@ -136,6 +138,7 @@ const PATHS = [
   ['GET', '/activity'],
   ['GET', `/opportunities?brandId=${BRAND}`],
   ['GET', `/overview?brandId=${BRAND}`],
+  ['GET', `/campaigns?brandId=${BRAND}`],
   ['PATCH', `/opportunities/${PROMPT}/decision`],
   ['GET', '/settings'],
   ['GET', `/activity?brandId=${BRAND}`],
@@ -378,6 +381,24 @@ describe('opportunities, decisions and settings while ADS_ENABLED is on', () => 
     );
     expect((await send(`/overview?brandId=${BRAND}`)).status).toBe(403);
     expect(readOverview).toHaveBeenCalledTimes(2);
+  });
+
+  it("reads the brand's campaigns over the period, on a plan that reads every opportunity", async () => {
+    readCampaigns.mockReset().mockResolvedValue({ accounts: [], campaigns: [] });
+    const res = await send(`/campaigns?brandId=${BRAND}&period=7d`);
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ accounts: [], campaigns: [] });
+    expect(readCampaigns).toHaveBeenLastCalledWith({ orgId: 'o1', brandId: BRAND, period: '7d' });
+    expect((await send(`/campaigns?brandId=${BRAND}&period=1y`)).status).toBe(400);
+    ads.readsEveryOpportunity.mockResolvedValue(false);
+    const locked = await send(`/campaigns?brandId=${BRAND}`);
+    expect(locked.status).toBe(403);
+    expect((await locked.json()).code).toBe('plan_limit');
+    assertBrandAccess.mockRejectedValue(
+      Object.assign(new Error("This brand isn't in your workspace"), { status: 403 }),
+    );
+    expect((await send(`/campaigns?brandId=${BRAND}`)).status).toBe(403);
+    expect(readCampaigns).toHaveBeenCalledTimes(1);
   });
 
   it('lets admins and managers set a decision, and no one else', async () => {

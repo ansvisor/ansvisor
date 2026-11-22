@@ -15187,14 +15187,31 @@
         "channel": "Channel",
         "status": "Status",
         "spend": "Spend",
-        "signups": "AI-assisted signups",
-        "cost": "Cost per signup"
+        "clicks": "Clicks",
+        "cpc": "CPC",
+        "conversions": "Conversions",
+        "costPerConversion": "Cost per conversion"
       },
-      "empty": "Connect an ad account · coming soon",
-      "emptyNote": "Your campaigns will be listed here, read-only to start.",
+      "channels": {
+        "google": "Google Ads",
+        "chatgpt": "ChatGPT Ads"
+      },
+      "statuses": {
+        "active": "Active",
+        "paused": "Paused",
+        "ended": "Ended"
+      },
+      "empty": "No ad account connected yet",
+      "emptyNote": "Connect Google Ads or ChatGPT Ads to see your campaigns here, read-only.",
+      "openConnections": "Open Connections",
+      "failed": "Couldn't load your campaigns. Try again in a moment.",
+      "firstRead": "Your first numbers arrive within a day of connecting.",
+      "noneInPeriod": "No campaign ran in this period.",
+      "attention": "{count, plural, one {# ad account needs attention.} other {# ad accounts need attention.}}",
+      "currencyNote": "Each campaign is shown in its ad account's currency. Numbers are read once a day.",
       "safety": {
         "title": "Safety",
-        "note": "Enforced by Ansvisor, not by an agent. Nothing reaches an ad account today.",
+        "note": "Enforced by Ansvisor, not by an agent. Today Ansvisor only reads your ad accounts.",
         "click": "Every enable, pause, budget or bid change needs a person's click and confirmation, in every mode.",
         "agents": "Agents never spend: an agent can suggest a change, and only a person can make it.",
         "cap": "Admins set a monthly cap for each channel. A change over the cap is blocked, counting the changes of the last 24 hours.",

@@ -15,8 +15,14 @@ const network = vi.fn<(url: string, init?: RequestInit) => Promise<Response>>(
   async () => new Response('{}'),
 );
 vi.stubGlobal('fetch', network);
-const { AdsApiError, connectChatGptAds, createAdsDrafts, disconnectAdsAccount, sendAdsEarn } =
-  await import('./api');
+const {
+  AdsApiError,
+  connectChatGptAds,
+  createAdsDrafts,
+  disconnectAdsAccount,
+  readAdsCampaigns,
+  sendAdsEarn,
+} = await import('./api');
 
 describe('the Ads writes of the drawer', () => {
   it('go to the two Ads routes only, each with its own key', async () => {
@@ -68,5 +74,15 @@ describe('ad accounts (Phase 1, C2)', () => {
       undefined,
     ]);
     expect(remove?.headers).not.toHaveProperty('Content-Type');
+  });
+});
+
+describe('campaigns (Phase 1, P1)', () => {
+  it("read the brand's campaigns over the period with a GET", async () => {
+    network.mockClear();
+    network.mockResolvedValueOnce(new Response(JSON.stringify({ accounts: [], campaigns: [] })));
+    expect(await readAdsCampaigns('b1', '7d')).toEqual({ accounts: [], campaigns: [] });
+    const [[url, init]] = network.mock.calls;
+    expect([url, init?.method]).toEqual(['/api/aeo/api/ads/campaigns?brandId=b1&period=7d', 'GET']);
   });
 });
