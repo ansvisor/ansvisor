@@ -6602,11 +6602,11 @@
         "audit priority"
       ],
       "plan": "all",
-      "updated": "2026-11-19",
+      "updated": "2026-11-21",
       "sections": [
         {
           "heading": null,
-          "text": "The **Site Audit** page sums up your audits: a summary line, four cards and a chart, then two tabs. **Opportunities** lists the pages worth auditing next, and **Pages** lists every page you audited."
+          "text": "The **Site Audit** page sums up your audits: a summary line, four cards and a chart, then two tabs. **Opportunities** lists the pages worth auditing next, and **Pages** lists every page you audited.\n\nThe page opens in one go: until its numbers are in, grey placeholders hold the place of the summary line, the chart and the lists, so nothing moves when they fill in."
         },
         {
           "heading": "Summary and cards",

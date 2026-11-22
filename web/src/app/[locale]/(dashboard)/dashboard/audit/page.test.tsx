@@ -542,3 +542,40 @@ describe('SiteAuditPage bulk audit progress', () => {
     expect(toggle().textContent).toBe('This batch');
   });
 });
+
+// It opened in steps: the cards and the trend, then the inbox and the run's
+// notice, each pushing the lists down. Both reads now go out together and
+// the page shows once both are in, in its final layout.
+describe('SiteAuditPage opening', () => {
+  it('reads the hub and the inbox together, and shows them at once', async () => {
+    audits.getAuditHub.mockResolvedValue({
+      pages: { pages: [], total: 0, primaryHost: 'acme.com' },
+      quota: { used: 0, limit: 10, remaining: 10 },
+      trend: {
+        primaryDomain: 'acme.com',
+        points: [{ createdAt: new Date().toISOString(), totalScore: 0.7, categoryScores: {} }],
+      },
+      overview: null,
+    });
+    let resolveExtras!: (value: unknown) => void;
+    audits.getAuditHubExtras.mockReturnValue(new Promise((resolve) => (resolveExtras = resolve)));
+    await render(false);
+
+    expect(audits.getAuditHub).toHaveBeenCalledOnce();
+    expect(audits.getAuditHubExtras).toHaveBeenCalledOnce();
+    // The hub is in, the inbox isn't: its places hold, nothing fills in yet.
+    expect(container.querySelector('[data-testid="audit-trend-skeleton"]')).not.toBeNull();
+    expect(container.textContent).not.toContain('Score over time');
+    expect(container.querySelector('[role="tablist"]')).toBeNull();
+
+    await act(async () =>
+      resolveExtras({
+        opportunities: { opportunities: [], excluded: [{ url: 'https://acme.com/x' }] },
+        latestRun: null,
+      }),
+    );
+    expect(container.querySelector('[data-testid="audit-trend-skeleton"]')).toBeNull();
+    expect(container.textContent).toContain('Score over time');
+    expect(container.querySelector('[role="tablist"]')).not.toBeNull();
+  });
+});
