@@ -504,13 +504,23 @@ describe('AdsView', () => {
       useBrandStore.setState({ activeBrandId: 'b1' });
     });
 
-    it('shows ChatGPT, Google and Microsoft coming soon with nothing to click, each billing on its own', async () => {
+    it('shows ChatGPT and Google coming soon with nothing to click, each billing on its own', async () => {
       await render();
-      for (const id of ['chatgpt', 'google', 'microsoft']) {
+      for (const id of ['chatgpt', 'google']) {
         expect(card(id).textContent).toMatch(/Billing stays in .+Coming soon$/);
         expect(card(id).querySelectorAll('a, button')).toHaveLength(0);
       }
+    });
+
+    it('shows Microsoft Advertising coming later, with Notify me', async () => {
+      await render();
+      api.notifyAdsPlatform.mockResolvedValueOnce({ platform: 'microsoft', logged: true });
       expect(card('microsoft').textContent).toContain('Microsoft Advertising');
+      expect(card('microsoft').textContent).toContain('Coming later');
+      expect(card('microsoft').textContent).not.toContain('Coming soon');
+      await act(async () => action('conn.notify', card('microsoft'))!.click());
+      expect(api.notifyAdsPlatform).toHaveBeenCalledWith('b1', 'microsoft');
+      expect(card('microsoft').textContent).toContain("We'll tell you");
     });
 
     it('logs Notify me once for Meta or LinkedIn, then says "We\'ll tell you"', async () => {
@@ -561,6 +571,7 @@ describe('AdsView', () => {
       await render();
       const controls = [...slot('connections')!.querySelectorAll('a, button')];
       expect(controls.map((c) => c.getAttribute('data-action'))).toEqual([
+        'conn.notify',
         'conn.notify',
         'conn.notify',
         'conn.manage',
