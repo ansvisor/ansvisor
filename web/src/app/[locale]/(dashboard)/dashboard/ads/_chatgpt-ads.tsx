@@ -18,17 +18,8 @@ import {
 import { Label } from '@/components/ui/label';
 import { PasswordInput } from '@/components/ui/password-input';
 import { useUserRole } from '@/hooks/use-user-role';
-import {
-  AdsApiError,
-  connectChatGptAds,
-  disconnectAdsAccount,
-  type AdsAccount,
-} from '@/lib/ads/api';
-
-/** Refusals that the plan dialog explains: the demo brand, a lapsed plan, Starter. */
-const UPGRADE_CODES = new Set(['demo_brand', 'subscription_inactive', 'plan_limit']);
-
-const codeOf = (err: unknown) => (err instanceof AdsApiError ? err.code : null);
+import { connectChatGptAds, type AdsAccount } from '@/lib/ads/api';
+import { AdAccountRow, codeOf, UPGRADE_CODES } from './_ad-account';
 
 /**
  * Paste key (`conn.chatgpt.connect`, Admins): ChatGPT Ads checks the key
@@ -132,70 +123,6 @@ function ConnectDialog({
   );
 }
 
-/** Disconnect (`conn.chatgpt.disconnect`, Admins), confirmed: the key and the metrics go with it. */
-function DisconnectButton({
-  brandId,
-  account,
-  onGone,
-}: {
-  brandId: string;
-  account: AdsAccount;
-  onGone: (id: string) => void;
-}) {
-  const t = useTranslations('ads.connections.chatgpt');
-  const upgrade = useUpgradeDialog();
-  const [open, setOpen] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const name = account.name ?? account.externalId;
-  const remove = async () => {
-    setBusy(true);
-    try {
-      await disconnectAdsAccount(brandId, account.id);
-      setOpen(false);
-      onGone(account.id);
-      toast.success(t('disconnectedToast', { name }));
-    } catch (err) {
-      const code = codeOf(err);
-      setOpen(false);
-      if (code && UPGRADE_CODES.has(code)) upgrade?.openUpgrade();
-      else toast.error(t('error.disconnect'));
-    } finally {
-      setBusy(false);
-    }
-  };
-  return (
-    <>
-      <Button
-        size="sm"
-        variant="ghost"
-        data-action="conn.chatgpt.disconnect"
-        onClick={() => setOpen(true)}
-      >
-        {t('disconnect')}
-      </Button>
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="sm:max-w-sm">
-          <DialogHeader>
-            <DialogTitle>{t('disconnectTitle', { name })}</DialogTitle>
-            <DialogDescription>{t('disconnectLine')}</DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <DialogClose render={<Button variant="outline" />}>{t('cancel')}</DialogClose>
-            <Button
-              variant="destructive"
-              data-action="conn.chatgpt.disconnectConfirm"
-              disabled={busy}
-              onClick={() => void remove()}
-            >
-              {t('disconnect')}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </>
-  );
-}
-
 /**
  * ChatGPT Ads on Ads' Connections (Ads Phase 1, C2): the brand's accounts,
  * each connected with its own Ads API key, as a key reaches one ad account.
@@ -219,32 +146,19 @@ export function ChatGptAdsAccounts({
   return (
     <div className="flex w-full flex-col gap-2">
       {mine.map((account) => (
-        <div
+        <AdAccountRow
           key={account.id}
-          data-slot="ads-account"
-          className="flex items-center justify-between gap-2 rounded-md border px-2 py-1.5"
-        >
-          <div className="min-w-0">
-            <p className="truncate text-sm font-medium">{account.name ?? account.externalId}</p>
-            <p className="text-xs text-muted-foreground">
-              {account.currencyCode
-                ? t('chatgpt.accountLine', { currency: account.currencyCode })
-                : t('chatgpt.accountLineNoCurrency')}
-            </p>
-          </div>
-          <div className="flex shrink-0 items-center gap-1">
-            <Badge variant={account.status === 'active' ? 'secondary' : 'outline'}>
-              {t(`accountStatus.${account.status}`)}
-            </Badge>
-            {canAdmin && (
-              <DisconnectButton
-                brandId={brandId}
-                account={account}
-                onGone={(id) => onChange(accounts.filter((a) => a.id !== id))}
-              />
-            )}
-          </div>
-        </div>
+          brandId={brandId}
+          account={account}
+          line={
+            account.currencyCode
+              ? t('chatgpt.accountLine', { currency: account.currencyCode })
+              : t('chatgpt.accountLineNoCurrency')
+          }
+          billing={t('chatgpt.billing')}
+          canAdmin={canAdmin}
+          onGone={(id) => onChange(accounts.filter((a) => a.id !== id))}
+        />
       ))}
       <div className="flex items-center justify-between gap-2">
         {mine.length === 0 && <Badge variant="outline">{t('status.not_connected')}</Badge>}
