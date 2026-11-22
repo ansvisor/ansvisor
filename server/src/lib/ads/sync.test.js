@@ -12,6 +12,7 @@ const {
   syncAccount,
   syncWindows,
   writeCampaignDays,
+  writeSearchTermDays,
 } = await import('./sync.js');
 
 /**
@@ -215,5 +216,23 @@ describe('runAdsSync', () => {
     const totals = await runAdsSync({ syncers: { chatgpt }, db, now: NOW });
     expect(totals).toMatchObject({ accounts: 2, active: 1, error: 1 });
     expect(chatgpt.mock.calls.every(([arg]) => arg.account.id === 'a')).toBe(true);
+  });
+});
+
+describe('writeSearchTermDays', () => {
+  it('upserts on (account, campaign, term, day) and skips a row without a term', async () => {
+    const db = fakeDb();
+    const written = await writeSearchTermDays(
+      'acc',
+      [
+        { campaignId: 'c1', searchTerm: 'best crm', day: '2026-11-20', clicks: 2 },
+        { campaignId: 'c1', searchTerm: '  ', day: '2026-11-20', clicks: 9 },
+      ],
+      { db },
+    );
+    expect(written).toBe(1);
+    const [, rows, options] = db.calls[0].ops.find(([op]) => op === 'upsert');
+    expect(rows[0]).toMatchObject({ search_term: 'best crm', clicks: 2 });
+    expect(options).toEqual({ onConflict: 'account_id,campaign_id,search_term,day' });
   });
 });

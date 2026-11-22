@@ -9,7 +9,7 @@ last_checked: 2026-11-22
 owner: Cihan
 app_version: 0.3.0
 approved: false
-sources: [web/messages/en.json, web/src/app/[locale]/(dashboard)/dashboard/ads/_connections.tsx, web/src/app/[locale]/(dashboard)/dashboard/ads/_chatgpt-ads.tsx, web/src/app/[locale]/(dashboard)/dashboard/ads/_google-ads.tsx, server/src/routes/ads.js, server/src/routes/ads-accounts.js, server/src/lib/ads/sync.js]
+sources: [web/messages/en.json, web/src/app/[locale]/(dashboard)/dashboard/ads/_connections.tsx, web/src/app/[locale]/(dashboard)/dashboard/ads/_chatgpt-ads.tsx, web/src/app/[locale]/(dashboard)/dashboard/ads/_google-ads.tsx, server/src/routes/ads.js, server/src/routes/ads-accounts.js, server/src/lib/ads/sync.js, server/src/lib/ads/google-sync.js]
 ---
 The **Connections** tab of **Ads** lists the ad platforms Ads works with, and Google Analytics. Ansvisor only reads your ad accounts: it never changes a campaign or a budget.
 
@@ -25,7 +25,9 @@ The card shows each account's name, currency and status. **Disconnect** deletes 
 
 Once a day Ansvisor reads each connected account's campaigns: impressions, clicks and spend per day, in the account's currency. The first read covers the last 90 days; every later read refreshes the last 30, since platforms correct recent days.
 
-Under each account the card says when it last read the numbers. If a read fails, the account shows **Needs attention** and why, for example a refused key. Ansvisor tries again the next day. ChatGPT Ads conversions aren't read yet.
+For Google Ads it also reads conversions and the search terms that showed your ads. ChatGPT Ads conversions aren't read yet.
+
+Under each account the card says when it last read the numbers. If a read fails, the account shows **Needs attention** and why, for example a refused key. Ansvisor tries again the next day. If the Google Ads sign-in was removed, the account shows **Disconnected**: connect Google Ads again.
 
 ## Google Ads
 
