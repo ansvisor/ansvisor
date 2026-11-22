@@ -4,8 +4,8 @@ route: /dashboard/prompts/suggestions
 keywords: [prompt suggestions, add all, clear all, suggested prompts, source filter, product prompts, catalog suggestions, generate by topic, edit suggestion, regenerate prompts]
 synonyms: [prompt ideas, recommended prompts, new prompt ideas, suggest queries, ai generate prompts, prompts for a topic]
 plan: all
-updated: 2026-11-18
-last_checked: 2026-11-18
+updated: 2026-11-21
+last_checked: 2026-11-21
 owner: Cihan
 app_version: 0.3.0
 approved: true
@@ -44,6 +44,10 @@ Use **Search prompts…** to narrow the list, **+** to add a suggestion, **×** 
 Suggestions expire after 48 hours. Click **New** for fresh ideas, for example after you change your content.
 
 A prompt added from suggestions gets its first results with the next daily run.
+
+## New suggestions on their own
+
+When every group of prompts already has a content opportunity, Ansvisor writes a fresh list by itself after the daily run, so you have new prompts to add and new opportunities can follow. It does that at most once a week, only when no suggestion is waiting for you, and for a brand with a topic. The **Suggestions** dot in the sidebar then shows there's something new.
 
 ## Edit a suggestion before adding it
 
