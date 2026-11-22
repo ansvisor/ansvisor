@@ -137,18 +137,18 @@ describe('ActionDrawer', () => {
   it('puts status, assignee and due date under the header, ahead of the tabs', async () => {
     await renderDrawer();
     const drawer = document.body.querySelector('[role="dialog"]')!;
-    const labels = [...drawer.querySelectorAll('label')].map((l) => l.textContent);
-    expect(labels).toEqual(['Status', 'Assignee', 'Due date']);
-
+    // Quiet chips (drawer mockup 1), each named for hover and screen readers.
+    const ids = ['action-drawer-status', 'action-drawer-assignee', 'action-drawer-due-date'];
     const tabs = drawer.querySelector('nav')!;
-    for (const label of drawer.querySelectorAll('label')) {
-      expect(before(label, tabs)).toBe(true);
-    }
-    // Each field once (no second copy below the content), named by its label.
-    for (const label of drawer.querySelectorAll('label')) {
-      const control = drawer.querySelectorAll(`#${label.htmlFor}`);
+    for (const id of ids) {
+      // Each field once (no second copy below the content), ahead of the tabs.
+      const control = drawer.querySelectorAll<HTMLElement>(`#${id}`);
       expect(control).toHaveLength(1);
+      expect(before(control[0], tabs)).toBe(true);
     }
+    expect(
+      ids.map((id) => drawer.querySelector(`#${id}`)!.getAttribute('aria-label')?.split(':')[0]),
+    ).toEqual(['Status', 'Assignee', 'Due date']);
     expect(drawer.querySelector<HTMLElement>('#action-drawer-due-date')!.dataset.value).toBe(
       '2026-11-01',
     );
@@ -159,12 +159,10 @@ describe('ActionDrawer', () => {
     const drawer = document.body.querySelector('[role="dialog"]')!;
     const id = drawer.querySelector<HTMLElement>('[title^="Action ID"]')!;
     expect(id.title).toBe(`Action ID: AC-${action.actionNo}`);
-    expect(id.textContent).toBe(`Action ID: AC-${action.actionNo}`);
-    // Only the label gives way, and only beside Run agent.
-    const label = id.firstElementChild as HTMLElement;
+    // On screen only the code, after the priority; the label is for screen readers.
+    expect(id.textContent).toBe(`· Action ID: AC-${action.actionNo}`);
+    const label = id.querySelector('.sr-only')!;
     expect(label.textContent).toBe('Action ID: ');
-    expect(label.className).toBe('group-has-[[data-run-agent]]/top:sr-only');
-    expect(id.closest('.group\\/top')).not.toBeNull();
   });
 
   // The owner's ask (14 Nov): each brand numbers its actions from AC-01 (00534).
@@ -174,7 +172,13 @@ describe('ActionDrawer', () => {
     expect(drawer.querySelector<HTMLElement>('[title^="Action ID"]')!.title).toBe(
       'Action ID: AC-03',
     );
-    const previous = [...drawer.querySelectorAll('span')].find(
+    // In the ⋯ menu, under the exports.
+    const more = drawer.querySelector<HTMLButtonElement>('[data-action-more]')!;
+    await act(async () => {
+      more.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+      more.click();
+    });
+    const previous = [...document.querySelectorAll('p')].find(
       (el) => el.textContent === 'Previously AC-648',
     );
     expect(previous?.className).toContain('text-muted-foreground');
@@ -344,7 +348,7 @@ describe('ActionDrawer', () => {
 
       const button = (name: string) =>
         [...document.querySelectorAll<HTMLButtonElement>('button')].find(
-          (b) => b.textContent?.trim() === name || b.textContent?.startsWith(`${name} (`),
+          (b) => b.textContent?.trim() === name || b.textContent?.startsWith(`${name} `),
         )!;
       await act(async () => button('Tasks').click());
       await act(async () => button('Add task').click());
@@ -357,7 +361,7 @@ describe('ActionDrawer', () => {
       await renderDrawer();
       const button = (name: string) =>
         [...document.querySelectorAll<HTMLButtonElement>('button')].find(
-          (b) => b.textContent?.trim() === name || b.textContent?.startsWith(`${name} (`),
+          (b) => b.textContent?.trim() === name || b.textContent?.startsWith(`${name} `),
         )!;
       await act(async () => button('Tasks').click());
       await act(async () => button('Add task').click());
@@ -391,7 +395,7 @@ describe('ActionDrawer', () => {
   describe('from Chat', () => {
     const button = (name: string) =>
       [...document.querySelectorAll<HTMLButtonElement>('button')].find(
-        (b) => b.textContent?.trim() === name || b.textContent?.startsWith(`${name} (`),
+        (b) => b.textContent?.trim() === name || b.textContent?.startsWith(`${name} `),
       )!;
     const attached = (fileId: string) => ({
       fileId,
@@ -536,7 +540,7 @@ describe('ActionDrawer', () => {
       await renderDrawer();
       const button = (name: string) =>
         [...document.querySelectorAll<HTMLButtonElement>('button')].find(
-          (b) => b.textContent?.trim() === name || b.textContent?.startsWith(`${name} (`),
+          (b) => b.textContent?.trim() === name || b.textContent?.startsWith(`${name} `),
         )!;
       await act(async () => button('Tasks').click());
       await act(async () => button(`1. ${title}`).click());
@@ -575,7 +579,7 @@ describe('ActionDrawer', () => {
     });
     const button = (name: string) =>
       [...document.querySelectorAll<HTMLButtonElement>('button')].find(
-        (b) => b.textContent?.trim() === name || b.textContent?.startsWith(`${name} (`),
+        (b) => b.textContent?.trim() === name || b.textContent?.startsWith(`${name} `),
       );
     const openTask = async (title: string) => {
       await act(async () => button('Tasks')!.click());
@@ -767,7 +771,7 @@ describe('ActionDrawer Check now (AC-010)', () => {
   };
   const button = (name: string) =>
     [...document.querySelectorAll<HTMLButtonElement>('button')].find(
-      (b) => b.textContent?.trim() === name || b.textContent?.startsWith(`${name} (`),
+      (b) => b.textContent?.trim() === name || b.textContent?.startsWith(`${name} `),
     );
   const openTask = async () => {
     await act(async () => button('Tasks')!.click());
