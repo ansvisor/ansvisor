@@ -78,6 +78,21 @@ describe('GET /api/chat/files/{id}', () => {
     expect((await get()).status).toBe(404);
     expect((await get('', 'nope')).status).toBe(404);
   });
+
+  it('takes pptx as a format (#2298): the deck reaches its download', async () => {
+    files.readChatFile.mockResolvedValue({ formats: ['pptx'] });
+    fileExport.exportChatFile.mockResolvedValue({
+      fileName: 'presentation-weekly-visibility-summary-2026-10-30.pptx',
+      contentType: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+      body: new Uint8Array([80, 75, 3, 4]),
+    });
+    const res = await get('?format=pptx');
+    expect(res.status).toBe(200);
+    expect(res.headers.get('Content-Type')).toBe(
+      'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+    );
+    expect(fileExport.exportChatFile.mock.calls[0][1]).toBe('pptx');
+  });
 });
 
 describe('POST /api/chat/files/zip', () => {
