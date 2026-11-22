@@ -34,6 +34,13 @@ export const PROVIDERS = {
     label: 'Google Merchant Center',
     authConfigEnv: 'COMPOSIO_GMC_AUTH_CONFIG_ID',
   },
+  // Ads Phase 1 (G1): Composio's managed Google Ads app. Its own GOOGLEADS_*
+  // tools read with Composio's access, so no developer token of ours is
+  // needed (#2668's probe). Hidden while ADS_ENABLED is off (routes/integrations.js).
+  'google-ads': {
+    label: 'Google Ads',
+    authConfigEnv: 'COMPOSIO_GADS_AUTH_CONFIG_ID',
+  },
 };
 
 export function isKnownProvider(provider) {
@@ -228,6 +235,33 @@ export async function queryGscSearchAnalytics(connection, args) {
     throw new Error(result?.error || 'Search analytics query failed');
   }
   return result?.data?.rows ?? [];
+}
+
+// ─── Google Ads ──────────────────────────────────────────────────────────────
+
+/**
+ * Same pinning rule as Search Console. 20261116_00 is the version #2668's
+ * probe read real accounts with (Google Ads API v26).
+ */
+const GADS_TOOLKIT_VERSION = process.env.COMPOSIO_GADS_TOOLKIT_VERSION || '20261116_00';
+
+/**
+ * One Google Ads tool (Ads Phase 1, lib/ads/google-ads.js), on the connected
+ * account `connection` names (toolTarget). Read tools only: the caller builds
+ * the arguments, never a model. Returns the tool's `data`, which Composio
+ * documents as a string; lib/ads/google-ads.js parses it. Throws when the
+ * tool says it failed.
+ */
+export async function executeGoogleAdsTool(slug, connection, args) {
+  const result = await getClient().tools.execute(slug, {
+    ...toolTarget(connection),
+    arguments: args,
+    version: GADS_TOOLKIT_VERSION,
+  });
+  if (result?.successful === false) {
+    throw new Error(result?.error || `${slug} failed`);
+  }
+  return result?.data ?? null;
 }
 
 // ─── Google Analytics ────────────────────────────────────────────────────────
