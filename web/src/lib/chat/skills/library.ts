@@ -92,6 +92,8 @@ export const SKILL_ORDER = [
   // Ads Phase 0 PR 15: only with Ads on (flagged.ts ADS_SKILLS).
   'earn-or-pay',
   'ad-drafts',
+  // Ads Phase 1 P3: Google spend matched to the prompts, only with Ads on.
+  'paid-overlap',
   // AEO Operator plan §4.2 step 4: the Operator's own, agent-only, with CHAT_OPERATOR on.
   'operator',
 ] as const;

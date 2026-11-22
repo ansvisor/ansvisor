@@ -86,7 +86,8 @@ const MCP_COACH_SKILLS = ['ansvisor-aeo-coach', 'ansvisor-aeo-coach-standalone']
  * the Seasonal Prompt Planner's, and /traffic, AI Traffic → Signups'; each
  * line says what the agent's card does. Then /ai-revenue: customers and
  * revenue from AI visits, and what to set up to measure them. Then Ads' two
- * (Ads Phase 0 PR 15), offered only with ADS_ENABLED (flagged.ts ADS_SKILLS).
+ * (Ads Phase 0 PR 15), offered only with ADS_ENABLED (flagged.ts ADS_SKILLS),
+ * and /paid-overlap, the Google spend Ads matched to the prompts, with them.
  */
 const ANSVISOR_SKILLS: Record<string, { title: string; description: string }> = {
   winback: {
@@ -232,6 +233,11 @@ const ANSVISOR_SKILLS: Record<string, { title: string; description: string }> = 
     description:
       'Writes or rewrites ad drafts for ChatGPT, Google and Microsoft from your approved brand facts, and saves those that pass the claims check.',
   },
+  'paid-overlap': {
+    title: 'Paid overlap',
+    description:
+      'Shows what you pay on Google for buying prompts AI already cites you for, and where you pay without being cited, with the next step.',
+  },
   // AEO Operator plan §4.2 step 4: the Operator's own, agent-only (metadata.agent_only).
   operator: {
     title: 'AEO Operator',
@@ -281,7 +287,7 @@ const folders = files.map((file) => file.folder);
 const playbookFiles = allFiles.filter(isHidden);
 
 describe('the skills in /skills', () => {
-  it("are Ansvisor's thirty-two and the Operator's own, with their titles and descriptions", () => {
+  it("are Ansvisor's thirty-three and the Operator's own, with their titles and descriptions", () => {
     expect([...folders].sort()).toEqual([...LIBRARY_NAMES].sort());
     const shown = Object.fromEntries(
       files.map(({ folder, text }) => {
@@ -481,10 +487,14 @@ describe('a skill behind a flag (flagged.ts)', () => {
     vi.stubEnv('CHAT_AGENTIC_ORGS', '');
     vi.stubEnv('ADS_ENABLED', '');
     const names = () => enabledSkills('org-1').map((skill) => skill.name);
-    expect([...ADS_SKILLS]).toEqual(['earn-or-pay', 'ad-drafts']);
+    expect([...ADS_SKILLS]).toEqual(['earn-or-pay', 'ad-drafts', 'paid-overlap']);
     expect(names().filter((name) => ADS_SKILLS.has(name))).toEqual([]);
     vi.stubEnv('ADS_ENABLED', 'true');
-    expect(names().filter((name) => ADS_SKILLS.has(name))).toEqual(['earn-or-pay', 'ad-drafts']);
+    expect(names().filter((name) => ADS_SKILLS.has(name))).toEqual([
+      'earn-or-pay',
+      'ad-drafts',
+      'paid-overlap',
+    ]);
   });
 
   it('leaves the AEO Operator’s skill out unless CHAT_OPERATOR is on for the workspace', () => {
@@ -532,6 +542,11 @@ describe("Ads' skills (Ads Phase 0 PR 15)", () => {
     expect(body('earn-or-pay')).toContain('call `create_action` once');
     expect(body('earn-or-pay')).toContain('by its title with its code');
     expect(body('ad-drafts')).toContain('save them with `save_ad_drafts`');
+    // Paid overlap reads only what Ads matched: no estimate, no sum across currencies, no ad change.
+    expect(body('paid-overlap')).toContain('`get_ads_paid_overlap`');
+    expect(body('paid-overlap')).toContain('Never estimate savings');
+    expect(body('paid-overlap')).toContain('Never add amounts in different currencies');
+    expect(body('paid-overlap')).toContain('Never change a bid, budget or campaign');
     for (const rule of [
       "Never state a fact that isn't in approvedFacts",
       'never write a number',

@@ -1,5 +1,10 @@
 import { API_BASE_URL } from '@/config/api';
-import type { AdsOpportunities, AdsOpportunityDetail } from '@/lib/ads/api';
+import type {
+  AdsOpportunities,
+  AdsOpportunity,
+  AdsOpportunityDetail,
+  AdsOverview,
+} from '@/lib/ads/api';
 import { DEFAULT_ADS_PERIOD, type AdsPeriod } from '@/lib/ads/tabs';
 import { actorOf } from '@/lib/chat/actor/access';
 import { actingOpen, actingRefusalOf, apiAs, type ApiAnswer } from '@/lib/chat/actor/api';
@@ -61,11 +66,20 @@ async function adsGetFor(auth: McpAuthContext): Promise<AdsGet | null> {
   return (path) => apiAs(actor, `/api/ads/${path}`, { method: 'GET', signal: signal() });
 }
 
-export async function getAdsOpportunitiesFor(
+/** A read of /api/ads as the run's person; null for a path the server refuses (403, 404). */
+type AdsRead = <T>(path: string) => Promise<T | null>;
+
+/**
+ * Runs `readWith` with the run's person's way to /api/ads, for a brand in
+ * their scope: null outside it, and the server's refusal of the way said in
+ * their words.
+ */
+async function withAds<R>(
   auth: McpAuthContext,
-  params: { brandId: string; promptId?: string; period?: AdsPeriod },
-) {
-  if (!(await brandAllowed(auth, params.brandId))) return null;
+  brandId: string,
+  readWith: (get: AdsRead) => Promise<R>,
+): Promise<R | { note: string } | null> {
+  if (!(await brandAllowed(auth, brandId))) return null;
   const read = await adsGetFor(auth);
   if (!read) return { note: NO_WAY };
   // A brand or prompt the server refuses (another workspace's, past the plan's rows) is null.
@@ -76,7 +90,7 @@ export async function getAdsOpportunitiesFor(
     return res.body as T;
   };
   try {
-    return await readAds(auth, params, get);
+    return await readWith(get);
   } catch (err) {
     // The server took no one to act as, or Chat is off: said in the person's words.
     const refused = actingRefusalOf(err);
@@ -85,10 +99,103 @@ export async function getAdsOpportunitiesFor(
   }
 }
 
+export function getAdsOpportunitiesFor(
+  auth: McpAuthContext,
+  params: { brandId: string; promptId?: string; period?: AdsPeriod },
+) {
+  return withAds(auth, params.brandId, (get) => readAds(auth, params, get));
+}
+
+/** One prompt where Google spend matched, as the overlap read gives it. */
+function paidPrompt(row: AdsOpportunity) {
+  const paid = row.paid!;
+  return {
+    promptId: row.promptId,
+    text: row.text,
+    decision: row.decision,
+    recommended: row.recommended,
+    leaderName: row.leader === 'us' ? 'you' : row.leaderName,
+    ourPosition: row.ourPosition,
+    weCited: row.weCited,
+    volume: row.volume,
+    spend: paid.spend,
+    clicks: paid.clicks,
+    conversions: paid.conversions,
+    termCount: paid.termCount,
+    terms: paid.terms,
+  };
+}
+
+/** The largest amount first: amounts in different currencies are never added. */
+const bySpend = (a: { spend: { amount: number }[] }, b: { spend: { amount: number }[] }) =>
+  (b.spend[0]?.amount ?? 0) - (a.spend[0]?.amount ?? 0);
+
+/**
+ * Chat's read of paid overlap (Ads Phase 1 P3, get_ads_paid_overlap): what
+ * the brand paid on Google for search terms matched to its buying-intent
+ * prompts (server lib/ads/paid.js), from the Overview's totals and the
+ * Opportunities rows the person's plan shows, as the run's person:
+ *
+ *  - overlap: prompts AI already cites the brand for, where it also pays;
+ *  - paidOnly: prompts it pays for and AI doesn't cite it on.
+ *
+ * Until a Google Ads account is read, `measured` is false and nothing is a
+ * number. ChatGPT Ads spend isn't matched to prompts. Null for a brand
+ * outside their scope.
+ */
+export function getAdsPaidOverlapFor(
+  auth: McpAuthContext,
+  params: { brandId: string; period?: AdsPeriod },
+) {
+  return withAds(auth, params.brandId, async (get) => {
+    const period = params.period ?? DEFAULT_ADS_PERIOD;
+    const query = new URLSearchParams({ brandId: params.brandId, period });
+    const [overview, list] = await Promise.all([
+      get<AdsOverview>(`overview?${query}`),
+      get<AdsOpportunities>(`opportunities?${query}`),
+    ]);
+    if (!overview || !list) return null;
+    const notes = {
+      chatgptNote:
+        "ChatGPT Ads spend isn't matched to prompts: ChatGPT Ads don't say which question an ad showed on. Campaign totals are on Ads › Campaigns.",
+      ...(list.locked
+        ? {
+            lockedNote: `${list.locked} more prompts are past what this plan shows: never guess them. The spend totals cover every prompt.`,
+          }
+        : {}),
+    };
+    if (!overview.spend) {
+      return {
+        period,
+        measured: false,
+        note: "Google spend isn't measured: no Google Ads account of this brand has been read yet (Ads › Connections). Never guess spend, cost per click or savings.",
+        ...notes,
+      };
+    }
+    const paid = list.rows.filter((r) => r.paid);
+    return {
+      period,
+      measured: true,
+      spend: overview.spend,
+      bar: overview.bar,
+      total: overview.total,
+      overlap: paid
+        .filter((r) => r.weCited)
+        .map(paidPrompt)
+        .sort(bySpend),
+      paidOnly: paid
+        .filter((r) => !r.weCited)
+        .map(paidPrompt)
+        .sort(bySpend),
+      ...notes,
+    };
+  });
+}
+
 async function readAds(
   auth: McpAuthContext,
   params: { brandId: string; promptId?: string; period?: AdsPeriod },
-  get: <T>(path: string) => Promise<T | null>,
+  get: AdsRead,
 ) {
   const period = params.period ?? DEFAULT_ADS_PERIOD;
   const query = new URLSearchParams({ brandId: params.brandId, period });

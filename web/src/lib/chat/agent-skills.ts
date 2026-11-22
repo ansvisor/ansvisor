@@ -137,6 +137,8 @@ export const ANSVISOR_SKILLS: readonly AgentSkill[] = [
   // Ads Phase 0 PR 15, only with Ads on: Ansvisor's own Ads reads, and drafts saved in it.
   { id: 'earn-or-pay', uses: [] },
   { id: 'ad-drafts', uses: [] },
+  // Ads Phase 1 P3: the Google spend Ads matched to the prompts; the ad account is Ads' own.
+  { id: 'paid-overlap', uses: [] },
   // AEO Operator plan §4.2: the Operator's own, its only skill, with CHAT_OPERATOR on. It reads
   // the workspace's own numbers and starts other agents' runs: no connection of its own.
   { id: 'operator', uses: [] },

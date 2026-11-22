@@ -4511,6 +4511,7 @@
     "agentRuns": { "name": "Read an agent's runs", "step": "Read agent runs" },
     "signalsSummary": { "name": "Read the signals summary", "step": "Read Signals summary" },
     "adsOpportunities": { "name": "Read Ads opportunities", "step": "Read Ads opportunities" },
+    "adsPaidOverlap": { "name": "Read paid overlap", "step": "Read paid overlap" },
     "adDrafts": { "name": "Save ad drafts", "step": "Saved ad drafts" },
     "operatorPlan": { "name": "Start today’s agents", "step": "Started today’s agents" },
     "agentPlan": { "name": "Read today’s agent plan", "step": "Read today’s agent plan" }
@@ -7654,6 +7655,7 @@
       "ai-revenue": "Customers and revenue from AI",
       "earn-or-pay": "Earn or pay",
       "ad-drafts": "Ad drafts",
+      "paid-overlap": "Paid overlap",
       "operator": "AEO Operator"
     },
     "form": {
@@ -8258,7 +8260,7 @@
       },
       "paid-opportunity": {
         "name": "Paid Opportunity",
-        "description": "Each week, says which buying prompts to earn with content or pay for, flags what changed, like a rival now paying on your name, and drafts ads in Ansvisor."
+        "description": "Each week, says which buying prompts to earn with content or pay for, flags what changed, like a rival now paying on your name, shows what you pay on Google where AI already cites you, and drafts ads in Ansvisor."
       },
       "ai-ads-watch": {
         "name": "AI Ads Watch",

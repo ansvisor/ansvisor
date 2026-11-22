@@ -2,8 +2,12 @@ import { adsEnabled } from '@/lib/ads/flag';
 import { businessHubEnabled } from '@/lib/business-hub/flag';
 import { chatOperatorOn } from '../flag';
 
-/** Ads' skills (ADS-01 §6, Ads Phase 0 PR 15): only with Ads on, as its Chat tools are. */
-export const ADS_SKILLS: ReadonlySet<string> = new Set(['earn-or-pay', 'ad-drafts']);
+/** Ads' skills (ADS-01 §6, Ads Phase 0 PR 15, Phase 1 P3): only with Ads on, as its Chat tools are. */
+export const ADS_SKILLS: ReadonlySet<string> = new Set([
+  'earn-or-pay',
+  'ad-drafts',
+  'paid-overlap',
+]);
 
 /**
  * Library skills that wait on a feature flag. While its flag is off, a skill
