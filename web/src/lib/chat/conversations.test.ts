@@ -15,7 +15,10 @@ import { BRAND, ORG, OTHER_ORG, PEOPLE } from './testing/chat-fixtures';
 vi.mock('@/lib/supabase/admin', async () => ({
   supabaseAdmin: (await import('./testing/fake-supabase')).createFakeSupabase(),
 }));
-vi.mock('./engine', () => ({ stopChatRun: vi.fn(async () => ({ ok: true })) }));
+vi.mock('./engine', async (real) => ({
+  stopChatRun: vi.fn(async () => ({ ok: true })),
+  titleOf: (await real<typeof import('./engine')>()).titleOf,
+}));
 
 const { supabaseAdmin } = await import('@/lib/supabase/admin');
 const db = supabaseAdmin as unknown as FakeSupabase;
@@ -383,6 +386,30 @@ describe('deleteChat and restoreChat', () => {
   it("doesn't delete another workspace's chat", async () => {
     db.tables.chat_conversations = [chat(1, { organization_id: OTHER_ORG })];
     expect(await chats.deleteChat(ME, CHAT(1))).toEqual({ ok: false, reason: 'not_found' });
+  });
+});
+
+describe('askAgainChatId', () => {
+  const message = 'What’s new in Ansvisor and how can it help me?';
+  it("finds the person's own newest chat named by the question, for the brand", async () => {
+    const asked = { title: message, brand_id: BRAND };
+    const late = '2026-10-30T10:00:00.000Z';
+    db.tables.chat_conversations = [
+      chat(1, asked),
+      chat(2, asked),
+      chat(3, { ...asked, last_message_at: late, archived_at: late }),
+      chat(4, { ...asked, last_message_at: late, deleted_at: late }),
+      chat(5, { ...asked, last_message_at: late, user_id: TEAMMATE.userId, shared_at: late }),
+      chat(6, { ...asked, last_message_at: late, title: 'My updates' }),
+      chat(7, { ...asked, last_message_at: late, organization_id: OTHER_ORG }),
+      chat(8, {
+        ...asked,
+        last_message_at: late,
+        brand_id: '99999999-0000-4000-8000-000000000000',
+      }),
+    ];
+    expect(await chats.askAgainChatId(reader, ME, { message, brandId: BRAND })).toBe(CHAT(2));
+    expect(await chats.askAgainChatId(reader, ME, { message: 'Something else' })).toBeNull();
   });
 });
 
