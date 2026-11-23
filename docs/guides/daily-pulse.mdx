@@ -12,7 +12,9 @@ It is delivered two ways:
 
 ## Configure it
 
-Open **Settings → Notifications**. Every active brand in your organization has its own row with a frequency and a recipient list. Admins and managers can change them; other members see the settings read-only.
+Open **Settings → Notifications**. Under **Your e-mails**, each person picks how often the pulse comes to them (**Brand Visibility › Daily Pulse**), for all their brands or one brand apart. Until someone saves their own choices, they get the pulse as the brand's settings below send it, so nothing changes by itself.
+
+Admins set each brand's own settings under **Send to people outside the workspace**: a frequency and a recipient list. The frequency also applies to the webhook and the Slack post, and to teammates who haven't saved their own choices.
 
 The **Manage notification settings** link at the bottom of every pulse email opens this tab.
 
@@ -31,9 +33,9 @@ A brand with no saved setting uses **Daily**.
 
 ### Recipients
 
-Enter a comma-separated list of email addresses.
+Enter a comma-separated list of email addresses, such as a client's.
 
-- **Leave it empty to send to every member of the organization.**
+- Teammates who haven't saved their own choices get the pulse while the list is empty, or when they are on it. Teammates who saved get it by their own choice.
 - Each address is checked when you save. If any entry is not a valid email address, the save is rejected and the invalid entries are listed under the field — fix or remove them and save again. A mistyped address is never silently dropped, because an empty list would widen the audience to the whole organization.
 - Up to 50 addresses are stored.
 

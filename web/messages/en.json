@@ -4098,10 +4098,13 @@
       },
       "positionResult": "{measurable, plural, =0 {Positions: not enough data} other {Position improved on {improved} of # platforms}}",
       "view": {
-        "actions": "Actions",
-        "scorecard": "Scorecard",
+        "actions": "Past actions",
+        "scorecard": "Results by kind",
         "kpis": "KPIs",
-        "label": "History views"
+        "label": "History views",
+        "actionsHint": "Each action that's underway or closed, one by one: what it set out to do and what was measured since.",
+        "scorecardHint": "What each kind of action achieved overall: how many were completed, their success rate and the median change.",
+        "kpisHint": "Your brand's goals and how close each one is."
       },
       "scorecard": {
         "note": "What each kind of action did at this brand, from its own actions only. Results are the readings so far; each is final a month after its action closed. Median change is in each action's main metric.",
@@ -17898,24 +17901,139 @@
       }
     },
     "notifications": "Notifications",
-    "notificationsDescription": "Each brand can send two e-mails: the Daily Pulse after its tracking runs, and the AI Traffic weekly digest every Monday. Both go to the brand's Daily Pulse recipients.",
-    "pulseSection": "Daily Pulse",
-    "pulseSectionDescription": "A short digest per brand after each tracking run, with highlights and warnings. Choose how often it comes and who gets it.",
-    "pulseFrequencyLabel": "How often {brand}'s Daily Pulse comes",
+    "yourEmails": {
+      "title": "Your e-mails",
+      "description": "Pick which e-mails Ansvisor sends you and how often. These are yours only: everyone on the team sets their own.",
+      "carriedOver": "These are the e-mails you get today. Save to keep them as your own choices.",
+      "for": "For",
+      "scopeAll": "All my brands ({count})",
+      "deliveryHint": "Brand e-mails come one per brand, or together in one e-mail:",
+      "delivery_per_brand": "One e-mail per brand",
+      "delivery_combined": "All brands in one e-mail (coming soon)",
+      "brandOnly": "Set for {brand} only",
+      "useAll": "Use my All my brands choice",
+      "notableNote": "Your first pulse, then only when something notable happens.",
+      "comingSoon": "Coming soon",
+      "comingSoonHint": "E-mails marked Coming soon keep the choice you save and start once they're ready.",
+      "admins": "Admins",
+      "groups": {
+        "visibility": "Brand Visibility",
+        "traffic": "AI Traffic",
+        "actions": "Action Center",
+        "agents": "Agents and Chat",
+        "audit": "Site Audit",
+        "content": "Content",
+        "account": "Account"
+      },
+      "kinds": {
+        "daily_pulse": {
+          "name": "Daily Pulse",
+          "description": "How each brand showed up in AI answers: Visibility score, mentions, citations, highlights and warnings."
+        },
+        "traffic_digest": {
+          "name": "Weekly digest",
+          "description": "Last week's AI visits in one line, with the top three changes. Mondays."
+        },
+        "critical_action": {
+          "name": "New critical action",
+          "description": "A new action with Critical priority for your brands."
+        },
+        "due_actions": {
+          "name": "Overdue and due today",
+          "description": "Actions and tasks assigned to you that are due or late."
+        },
+        "weekly_actions": {
+          "name": "Weekly action summary",
+          "description": "What was done, what's open and what's next. Mondays."
+        },
+        "run_finished": {
+          "name": "Run finished",
+          "description": "An agent run you started has finished, with what it did."
+        },
+        "audit_finished": {
+          "name": "Audit finished",
+          "description": "A bulk or scheduled audit is done, with the score."
+        },
+        "score_dropped": {
+          "name": "Score dropped",
+          "description": "A page's score fell 5 points or more since its last audit."
+        },
+        "drafts_review": {
+          "name": "Drafts waiting for your review",
+          "description": "Drafts made for your brands that need your review before they go live."
+        },
+        "ai_usage": {
+          "name": "AI usage",
+          "description": "At 80% and 100% of the monthly AI limit."
+        }
+      },
+      "links": {
+        "approvals": {
+          "name": "Waiting for your approval",
+          "description": "An agent or a Chat run needs your OK before it changes or publishes anything. Set it with Notify me when an agent needs me.",
+          "link": "Chat settings"
+        },
+        "scheduled": {
+          "name": "Scheduled jobs",
+          "description": "Each job e-mails as set on the job.",
+          "link": "Open jobs"
+        },
+        "billing": {
+          "name": "Billing and security",
+          "description": "Invoices, payment problems and sign-in alerts. Always sent.",
+          "locked": "Always on"
+        }
+      },
+      "options": {
+        "pulse": {
+          "daily": "Daily",
+          "weekly": "Weekly",
+          "notable": "Only when notable",
+          "off": "Off"
+        },
+        "instant": {
+          "instant": "Right away",
+          "daily": "Daily summary",
+          "off": "Off"
+        },
+        "digest": {
+          "daily": "Daily summary",
+          "weekly": "Weekly summary",
+          "off": "Off"
+        },
+        "weekly": {
+          "weekly": "Every Monday",
+          "off": "Off"
+        },
+        "onoff": {
+          "on": "On",
+          "off": "Off"
+        }
+      },
+      "save": "Save changes",
+      "saved": "Your e-mail choices are saved",
+      "saveFailed": "Could not save your e-mail choices. Please try again.",
+      "loadFailed": "Could not load your e-mail choices.",
+      "turnOffAll": "Turn off all optional e-mails",
+      "turnedOff": "All optional e-mails are set to Off. Save changes to keep it."
+    },
+    "outsideEmails": {
+      "title": "Send to people outside the workspace",
+      "description": "A client or a manager without an Ansvisor seat can get a brand's summaries too. They never get approvals or account e-mails.",
+      "sends": "Daily Pulse · AI Traffic weekly digest",
+      "recipients": "Recipients",
+      "placeholder": "client@example.com, boss@example.com",
+      "hint": "Comma-separated. Teammates who haven't saved their own e-mail choices still get this brand's e-mails as before: all of them while this list is empty, else only those on it.",
+      "frequency": "Daily Pulse",
+      "frequencyNote": "This also sets the brand's Slack channel and webhooks, and teammates who haven't saved their own choices.",
+      "digest": "Also send the AI Traffic weekly digest",
+      "digestPulseOff": "The weekly digest isn't sent while this Daily Pulse is off."
+    },
     "pulseFrequency_daily": "Daily",
     "pulseFrequency_weekly": "Weekly",
     "pulseFrequency_notable": "Only when notable",
-    "pulseFrequency_notableNote": "Your first pulse, then only when something notable happens.",
     "pulseFrequency_off": "Off",
-    "pulseRecipients": "Recipients",
-    "pulseRecipientsPlaceholder": "alex@example.com, sam@example.com",
-    "pulseRecipientsHint": "Comma-separated email addresses. Leave empty to send to every organization member.",
     "pulseRecipientsInvalid": "Not a valid email address: {emails}. Fix or remove it before saving.",
-    "trafficDigest": "AI Traffic weekly digest",
-    "trafficDigestDescription": "Every Monday: last week's AI visits in one summary line, with the top three changes. It goes to each brand's Daily Pulse recipients, and is saved as soon as you tick or untick it.",
-    "trafficDigestTo": "To {emails}",
-    "trafficDigestToEveryone": "To every organization member",
-    "trafficDigestPulseOff": "Not sent while the Daily Pulse is off. Turn the pulse back on to get it again.",
     "pulseSaved": "Notification settings saved",
     "pulseSaveFailed": "Could not save notification settings. Please try again.",
     "pulseLoadFailed": "Could not load notification settings.",
