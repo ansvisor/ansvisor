@@ -308,12 +308,12 @@
           "text": "An action sent from a prompt's Improve tab reports on how many platforms its position improved. It is read again daily while the action is open, and for 30 days after it is completed."
         },
         {
-          "heading": "The Scorecard",
-          "text": "Switch History from **Actions** to **Scorecard** to see what each kind of action did at this brand: the actions closed in the range, 90 days unless you pick another, by when they were completed or dismissed. It shows how many were completed, their results so far, the **Success rate** (the share of results that improved, shown once a kind has three), the median change in each action's main metric, and how many were dismissed, with the reason given most often. It counts this brand's own actions only, and its cards count the same closed actions: **Closed Actions**, completed, no improvement and dismissed."
+          "heading": "Results by kind",
+          "text": "Switch History from **Past actions**, the actions one by one, to **Results by kind** to see what each kind of action did at this brand: the actions closed in the range, 90 days unless you pick another, by when they were completed or dismissed. It shows how many were completed, their results so far, the **Success rate** (the share of results that improved, shown once a kind has three), the median change in each action's main metric, and how many were dismissed, with the reason given most often. It counts this brand's own actions only, and its cards count the same closed actions: **Closed Actions**, completed, no improvement and dismissed."
         },
         {
-          "heading": "The Scorecard by play",
-          "text": "When an action asks for new content, the page its prompts pick is its play, such as a comparison page or a how-to guide. On the **Scorecard**, switch from **By kind** to **By play** to see what each play did at this brand, whichever kind of action it was for. Only actions opened with a play count there. A play's results also weigh on the priority of new actions opened with it, once one of them has a result."
+          "heading": "Results by kind, by play",
+          "text": "When an action asks for new content, the page its prompts pick is its play, such as a comparison page or a how-to guide. In **Results by kind**, switch from **By kind** to **By play** to see what each play did at this brand, whichever kind of action it was for. Only actions opened with a play count there. A play's results also weigh on the priority of new actions opened with it, once one of them has a result."
         },
         {
           "heading": "When a problem comes back",
@@ -709,7 +709,7 @@
         },
         {
           "heading": "The tabs",
-          "text": "The Action Center has five tabs: **Today**, **Actions**, **Signals**, **Agents** and **History**. **Agents** (formerly Agent Center) is there when Chat's agents are on for your workspace and on your menu. **KPIs** opens from **History**, next to its Actions and Scorecard views. Admins and managers open **Needs review** from **Waiting for you** on Today.\n\nBeside **Agents** is how many of your agent runs wait for you."
+          "text": "The Action Center has five tabs: **Today**, **Actions**, **Signals**, **Agents** and **History**. **Agents** (formerly Agent Center) is there when Chat's agents are on for your workspace and on your menu. **KPIs** opens from **History**, next to its Past actions and Results by kind views. Admins and managers open **Needs review** from **Waiting for you** on Today.\n\nBeside **Agents** is how many of your agent runs wait for you."
         },
         {
           "heading": "The top of the page",
