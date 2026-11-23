@@ -36,6 +36,7 @@ import { siteTypeOf } from '../../content-page-types.js';
 import { ownDomainMatcher } from '../../response-parser.js';
 import { mergedCompetitorDomains } from '../../competitor-aliases.js';
 import { readSourceRules, sourceAllowed } from '../../content-rules.js';
+import { readPaidWatch } from '../../ads/paid-watch.js';
 
 const { library: t } = resolve();
 const DAY_MS = 86_400_000;
@@ -48,6 +49,7 @@ const AI = ['ai_results'];
 const GSC = ['gsc'];
 const GA = ['ga4'];
 const AUDIT = ['site_audit'];
+const GOOGLE_ADS = ['google_ads'];
 
 /** Midnight UTC `daysAgo` days before today's: whole days, so a pass early in
  *  the morning compares full weeks rather than a few hours of today. */
@@ -1153,6 +1155,33 @@ const FAMILIES = [
         );
       }
       return found;
+    },
+  },
+  // Ads Phase 1 P4: Google spend rising on prompts AI already picks the brand
+  // for (lib/ads/paid-watch.js). `google_ads` is a source only while Ads is on.
+  {
+    name: 'ads',
+    requires: ['tracking', 'google_ads'],
+    kinds: ['paid_overlap'],
+    async run(ctx) {
+      const rows = await readPaidWatch(ctx.brandId, { now: ctx.now });
+      if (rows.length === 0) return [];
+      return [
+        group(
+          'paid_overlap',
+          'prompts',
+          rows,
+          (r) => ({
+            id: r.promptId,
+            label: r.text,
+            spend: r.spend,
+            previousSpend: r.previousSpend,
+            clicks: r.clicks,
+            terms: r.terms,
+          }),
+          GOOGLE_ADS,
+        ),
+      ];
     },
   },
 ];
