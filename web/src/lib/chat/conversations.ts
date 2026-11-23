@@ -666,6 +666,83 @@ export async function restoreChat(
   return { ok: true };
 }
 
+/** Chats one Clear or Delete selected takes at most (the list API's most). */
+export const BULK_CHATS_MAX = CHAT_LIST_MAX;
+
+export const bulkInput = z.object({
+  action: z.enum(['delete', 'restore']),
+  // guid, not uuid: ids made by hand (the demo's) aren't RFC 4122 ones.
+  ids: z.array(z.guid()).min(1).max(BULK_CHATS_MAX),
+});
+export type BulkInput = z.infer<typeof bulkInput>;
+
+/**
+ * Clear a day's chats, or Delete selected in All chats: the person's own
+ * chats among `chatIds`, in their workspace, deleted as Delete does one
+ * (running agents stopped first, deleted_at, Undo for
+ * DELETED_CHAT_UNDO_MS). A teammate's shared chat, another workspace's or
+ * one already deleted is left out without a word. Answers the ids deleted.
+ */
+export async function deleteChats(actor: ChatActor, chatIds: string[]): Promise<string[]> {
+  const unique = [...new Set(chatIds)];
+  if (unique.length === 0) return [];
+  const { data, error } = await supabaseAdmin
+    .from('chat_conversations')
+    .select('id')
+    .in('id', unique)
+    .eq('organization_id', actor.organizationId)
+    .eq('user_id', actor.userId)
+    .is('deleted_at', null);
+  if (error) throw new Error(`Could not read the chats: ${error.message}`);
+  const ids = ((data ?? []) as { id: string }[]).map((row) => row.id);
+  if (ids.length === 0) return [];
+
+  const { data: open, error: runsError } = await supabaseAdmin
+    .from('chat_runs')
+    .select('id')
+    .in('conversation_id', ids)
+    .in('status', [...OPEN_RUN_STATUSES]);
+  if (runsError) throw new Error(`Could not read the chats' runs: ${runsError.message}`);
+  for (const run of (open ?? []) as { id: string }[]) {
+    await stopChatRun(actor, run.id);
+  }
+
+  const { data: gone, error: deleteError } = await supabaseAdmin
+    .from('chat_conversations')
+    .update({ deleted_at: new Date().toISOString() })
+    .in('id', ids)
+    .eq('organization_id', actor.organizationId)
+    .eq('user_id', actor.userId)
+    .is('deleted_at', null)
+    .select('id');
+  if (deleteError) throw new Error(`Could not delete the chats: ${deleteError.message}`);
+  return ((gone ?? []) as { id: string }[]).map((row) => row.id);
+}
+
+/**
+ * Undo after Clear or Delete selected: the person's own chats among
+ * `chatIds` deleted within DELETED_CHAT_UNDO_MS come back as they were.
+ * Answers the ids restored.
+ */
+export async function restoreChats(
+  actor: ChatActor,
+  chatIds: string[],
+  now = Date.now(),
+): Promise<string[]> {
+  const unique = [...new Set(chatIds)];
+  if (unique.length === 0) return [];
+  const { data, error } = await supabaseAdmin
+    .from('chat_conversations')
+    .update({ deleted_at: null })
+    .in('id', unique)
+    .eq('organization_id', actor.organizationId)
+    .eq('user_id', actor.userId)
+    .gte('deleted_at', new Date(now - DELETED_CHAT_UNDO_MS).toISOString())
+    .select('id');
+  if (error) throw new Error(`Could not restore the chats: ${error.message}`);
+  return ((data ?? []) as { id: string }[]).map((row) => row.id);
+}
+
 /**
  * The author opened the chat's newest answer: its result is read, so the
  * chat leaves Agents at work and isn't bold any more. Another person's
