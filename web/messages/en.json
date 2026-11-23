@@ -15216,6 +15216,40 @@
       },
       "manage": "Manage",
       "connect": "Connect",
+      "adminConnects": "An Admin connects this",
+      "accountStatus": {
+        "active": "Connected",
+        "error": "Needs attention",
+        "disconnected": "Disconnected"
+      },
+      "chatgpt": {
+        "connect": "Connect",
+        "addAnother": "Add account",
+        "dialogTitle": "Connect ChatGPT Ads",
+        "dialogLine": "Paste an Ads API key from ChatGPT Ads Manager. Each key reaches one ad account, so add one key per account.",
+        "keyLabel": "Ads API key",
+        "keyNote": "Ansvisor checks the key with ChatGPT Ads, then stores it encrypted. It only reads.",
+        "cancel": "Cancel",
+        "save": "Connect",
+        "checking": "Checking…",
+        "connectedToast": "Connected {name}.",
+        "accountLine": "ChatGPT Ads account · {currency}",
+        "accountLineNoCurrency": "ChatGPT Ads account",
+        "billing": "ChatGPT Ads Manager",
+        "error": {
+          "invalid_key": "ChatGPT Ads didn't accept this key. Check it and try again.",
+          "upstream": "ChatGPT Ads didn't answer. Try again in a minute.",
+          "other": "Couldn't connect. Try again."
+        }
+      },
+      "account": {
+        "disconnect": "Disconnect",
+        "disconnectTitle": "Disconnect {name}?",
+        "disconnectLine": "Ansvisor deletes what it keeps for this account: its key, if any, and the numbers it read. Your ads keep running in {billing}.",
+        "disconnectedToast": "Disconnected {name}.",
+        "disconnectFailed": "Couldn't disconnect. Try again.",
+        "cancel": "Cancel"
+      },
       "platforms": {
         "chatgpt": {
           "name": "ChatGPT Ads",
