@@ -413,6 +413,56 @@ describe('askAgainChatId', () => {
   });
 });
 
+describe('latestPanelChatId', () => {
+  it("finds the person's own newest panel chat on that page and brand, nothing else", async () => {
+    const page = '/dashboard/content/drafts/abc';
+    const panel = { origin: 'panel', origin_page: page, brand_id: BRAND };
+    db.tables.chat_conversations = [
+      chat(1, panel),
+      chat(2, panel),
+      chat(3, {
+        ...panel,
+        last_message_at: '2026-10-30T10:00:00.000Z',
+        archived_at: '2026-10-30T11:00:00.000Z',
+      }),
+      chat(4, {
+        ...panel,
+        last_message_at: '2026-10-30T10:00:00.000Z',
+        deleted_at: '2026-10-30T11:00:00.000Z',
+      }),
+      chat(5, {
+        ...panel,
+        last_message_at: '2026-10-30T10:00:00.000Z',
+        user_id: TEAMMATE.userId,
+        shared_at: '2026-10-12T00:00:00.000Z',
+      }),
+      chat(6, {
+        ...panel,
+        last_message_at: '2026-10-30T10:00:00.000Z',
+        origin_page: '/dashboard/content/drafts/xyz',
+      }),
+      chat(7, { ...panel, last_message_at: '2026-10-30T10:00:00.000Z', origin: 'page' }),
+      chat(8, {
+        ...panel,
+        last_message_at: '2026-10-30T10:00:00.000Z',
+        brand_id: '99999999-0000-4000-8000-000000000000',
+      }),
+      chat(9, {
+        ...panel,
+        last_message_at: '2026-10-30T10:00:00.000Z',
+        organization_id: OTHER_ORG,
+      }),
+    ];
+    expect(await chats.latestPanelChatId(reader, ME, { page, brandId: BRAND })).toBe(CHAT(2));
+    expect(await chats.latestPanelChatId(reader, ME, { page: '/dashboard/mentions' })).toBeNull();
+  });
+
+  it('takes an app path only', () => {
+    expect(chats.panelChatQuery.safeParse({ page: '/dashboard/mentions' }).success).toBe(true);
+    expect(chats.panelChatQuery.safeParse({ page: 'https://x.com/dashboard' }).success).toBe(false);
+  });
+});
+
 describe('deleteChats and restoreChats', () => {
   it("deletes only the person's own chats in their workspace, stopping running agents first", async () => {
     db.tables.chat_conversations = [
