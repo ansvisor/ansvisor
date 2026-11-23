@@ -345,6 +345,9 @@ export async function listChats(
   };
 }
 
+/** Messages that asked the question a renamed chat is looked for in, newest first. */
+const ASK_AGAIN_MESSAGES_MAX = 50;
+
 export const askAgainQuery = z.object({
   /** The question as the button sends it, in the person's language. */
   message: z.string().trim().min(1).max(500),
@@ -356,27 +359,47 @@ export type AskAgainQuery = z.infer<typeof askAgainQuery>;
 /**
  * The chat a repeated question goes back to (What's new, from the profile
  * menu or Chat Home): the person's own newest chat named as that question
- * names a new chat, in their workspace, for the brand when given, not
- * archived or deleted. Null when there is none: the question starts one.
- * A chat renamed since is left alone.
+ * names a new chat, else (renamed since, by them or a later auto-title) the
+ * newest of theirs where they asked it. In their workspace, for the brand
+ * when given, not archived or deleted. Null when there is none: the
+ * question starts one.
  */
 export async function askAgainChatId(
   reader: Reader,
   actor: ChatActor,
   query: AskAgainQuery,
 ): Promise<string | null> {
-  let q = reader
-    .from('chat_conversations')
-    .select('id')
-    .eq('user_id', actor.userId)
-    .eq('organization_id', actor.organizationId)
-    .eq('title', titleOf(query.message))
-    .is('deleted_at', null)
-    .is('archived_at', null);
-  if (query.brandId) q = q.eq('brand_id', query.brandId);
-  const { data, error } = await q.order('last_message_at', { ascending: false }).limit(1);
+  const theirs = () => {
+    const q = reader
+      .from('chat_conversations')
+      .select('id')
+      .eq('user_id', actor.userId)
+      .eq('organization_id', actor.organizationId)
+      .is('deleted_at', null)
+      .is('archived_at', null);
+    return query.brandId ? q.eq('brand_id', query.brandId) : q;
+  };
+  const newest = async (q: ReturnType<typeof theirs>) => {
+    const { data, error } = await q.order('last_message_at', { ascending: false }).limit(1);
+    if (error) throw new Error(`Could not read the chat to ask again: ${error.message}`);
+    return ((data ?? []) as { id: string }[])[0]?.id ?? null;
+  };
+
+  const titled = await newest(theirs().eq('title', titleOf(query.message)));
+  if (titled) return titled;
+
+  const { data: asked, error } = await reader
+    .from('chat_messages')
+    .select('conversation_id')
+    .eq('role', 'user')
+    .eq('content_md', query.message)
+    .order('created_at', { ascending: false })
+    .limit(ASK_AGAIN_MESSAGES_MAX);
   if (error) throw new Error(`Could not read the chat to ask again: ${error.message}`);
-  return ((data ?? []) as { id: string }[])[0]?.id ?? null;
+  const ids = [
+    ...new Set(((asked ?? []) as { conversation_id: string }[]).map((m) => m.conversation_id)),
+  ];
+  return ids.length ? newest(theirs().in('id', ids)) : null;
 }
 
 export const panelChatQuery = z.object({

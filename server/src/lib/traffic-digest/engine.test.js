@@ -133,10 +133,12 @@ vi.mock('../../config/plans.js', () => ({
 }));
 
 const { sendTrafficDigestForBrand, sendTrafficDigests } = await import('./engine.js');
+const { forgetEmails } = await import('../pulse/audience.js');
 
 const MONDAY = new Date('2026-10-19T03:00:00Z');
 
 beforeEach(() => {
+  forgetEmails();
   Object.assign(state, {
     settings: null,
     existing: null,

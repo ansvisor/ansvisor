@@ -112,8 +112,10 @@ vi.mock('../slack/deliver.js', () => ({
 }));
 
 const { generatePulseForBrand, resolveRecipients } = await import('./engine.js');
+const { emailsOf, forgetEmails } = await import('./audience.js');
 
 beforeEach(() => {
+  forgetEmails();
   asked.calls = [];
   asked.readers = new Map([
     ['u1', new Set(['b1'])],
@@ -273,5 +275,25 @@ describe("people's own choices (00554)", () => {
     // The brand's own (Only when notable) first, then the weekly one.
     expect(sent.to).toEqual([['bo@acme.test'], ['ana@acme.test']]);
     expect(db.windows).toEqual([1, 7]);
+  });
+});
+
+describe('emailsOf', () => {
+  it('reads each person once, keeps their order and skips those without an e-mail', async () => {
+    expect(await emailsOf(['u3', 'u1', 'u9', 'u1'])).toEqual([
+      'Cem@Acme.test',
+      'ana@acme.test',
+      'ana@acme.test',
+    ]);
+    expect(db.lookups).toEqual(['u3', 'u1', 'u9']);
+  });
+
+  it('answers a later ask for the same people without reading them again', async () => {
+    await emailsOf(['u1', 'u2']);
+    expect(await emailsOf(['u2', 'u1'])).toEqual(['bo@acme.test', 'ana@acme.test']);
+    expect(db.lookups).toEqual(['u1', 'u2']);
+    forgetEmails();
+    await emailsOf(['u1']);
+    expect(db.lookups).toEqual(['u1', 'u2', 'u1']);
   });
 });

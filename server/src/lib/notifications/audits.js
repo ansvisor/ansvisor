@@ -149,14 +149,18 @@ export function renderAuditEmail(which, { brand, audits }, locale) {
   };
 }
 
+/** The ids of the people who chose `choice` for `kind` on the group's brand. */
+async function audienceFor(group, kind, choice) {
+  return choosing(await brandAudience(group.organizationId, group.brandId, kind), choice);
+}
+
 /**
  * Sends a brand's audits to the people who chose `choice` for `kind`: Right
  * away claims each audit and sends those newly claimed together; the
  * summary claims the day.
  */
-async function sendBrand({ kind, which, group, choice, dayKeyed }) {
-  const audience = await brandAudience(group.organizationId, group.brandId, kind);
-  const ids = choosing(audience, choice);
+async function sendBrand({ kind, which, group, choice, dayKeyed, ids: chosen }) {
+  const ids = chosen ?? (await audienceFor(group, kind, choice));
   if (ids.length === 0) return 0;
   const languages = await uiLanguagesOf(ids);
   let sent = 0;
@@ -196,7 +200,9 @@ async function sendAll(audits, choice, dayKeyed) {
   for (const group of await ofActiveWorkspaces(byBrand(audits))) {
     try {
       sent += await sendBrand({ kind: FINISHED_KIND, which: 'finished', group, choice, dayKeyed });
-      const fallen = await drops(group.audits);
+      // Nobody chose Score dropped here: the previous audits aren't read.
+      const ids = await audienceFor(group, DROPPED_KIND, choice);
+      const fallen = ids.length ? await drops(group.audits) : [];
       if (fallen.length) {
         sent += await sendBrand({
           kind: DROPPED_KIND,
@@ -204,6 +210,7 @@ async function sendAll(audits, choice, dayKeyed) {
           group: { ...group, audits: fallen },
           choice,
           dayKeyed,
+          ids,
         });
       }
     } catch (err) {

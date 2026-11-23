@@ -57,14 +57,40 @@ export async function brandChoices(organizationId, brandId, kind) {
   return { savers, people };
 }
 
-/** The sign-in e-mail of each of `ids` that has one. */
+/**
+ * Sign-in e-mails read lately, by user id (null: none). A sweep asks for the
+ * same people once per brand and frequency; they are read once per
+ * EMAIL_TTL_MS instead, LOOKUPS at a time.
+ */
+const EMAIL_TTL_MS = 10 * 60 * 1000;
+const LOOKUPS = 5;
+const emailCache = new Map();
+
+/** Forgets the e-mails read so far (tests, and a sweep that must read afresh). */
+export function forgetEmails() {
+  emailCache.clear();
+}
+
+async function emailOf(id, now) {
+  const cached = emailCache.get(id);
+  if (cached && cached.until > now) return cached.email;
+  const { data: authUser } = await supabaseAdmin.auth.admin.getUserById(id);
+  const email = authUser?.user?.email ?? null;
+  emailCache.set(id, { email, until: now + EMAIL_TTL_MS });
+  return email;
+}
+
+/** The sign-in e-mail of each of `ids` that has one, in their order. */
 export async function emailsOf(ids) {
-  const emails = [];
-  for (const id of ids) {
-    const { data: authUser } = await supabaseAdmin.auth.admin.getUserById(id);
-    if (authUser?.user?.email) emails.push(authUser.user.email);
+  const now = Date.now();
+  const unique = [...new Set(ids)];
+  const found = new Map();
+  for (let i = 0; i < unique.length; i += LOOKUPS) {
+    const batch = unique.slice(i, i + LOOKUPS);
+    const emails = await Promise.all(batch.map((id) => emailOf(id, now)));
+    batch.forEach((id, j) => found.set(id, emails[j]));
   }
-  return emails;
+  return ids.map((id) => found.get(id)).filter(Boolean);
 }
 
 export const sameAddress = (address) => String(address).trim().toLowerCase();
