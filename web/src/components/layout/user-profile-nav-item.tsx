@@ -21,7 +21,7 @@ import { cn } from '@/lib/utils';
 import { siteConfig } from '@/config/site';
 import { PLANS } from '@/config/plans';
 import { createClient } from '@/lib/supabase/client';
-import { startChatRun } from '@/lib/chat/start-chat';
+import { askInOneChat } from '@/lib/chat/start-chat';
 import { daysUntil, type SettingsDot, type SettingsDotPlace } from '@/lib/settings-dots';
 import { useAuthStore } from '@/stores/use-auth-store';
 import { useBrandStore } from '@/stores/use-brand-store';
@@ -162,14 +162,15 @@ export function UserProfileNavItem({
       .catch(() => undefined);
   };
 
-  // What's new asks Chat, as Chat Home's What's new chip does.
+  // What's new asks Chat, as Chat Home's What's new chip does, in the
+  // person's What's new chat when they have one.
   const whatsNew = async () => {
     onClick?.();
     if (isLocked) {
       openUpgrade();
       return;
     }
-    const started = await startChatRun(tHome('forYou.whatsNewMessage'), brandId ?? null);
+    const started = await askInOneChat(tHome('forYou.whatsNewMessage'), brandId ?? null);
     if (!started.ok) {
       if (started.code === 'subscription_inactive' || started.code === 'demo_brand') openUpgrade();
       else toast.error(started.error ?? tHome('startFailed'));

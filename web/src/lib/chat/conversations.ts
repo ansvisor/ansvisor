@@ -3,7 +3,7 @@ import { canAccessBrand } from '@/lib/brand-access';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import type { createClient } from '@/lib/supabase/server';
 import type { ListDotState } from '@/components/agentic/list-dot';
-import { stopChatRun, type ChatActor } from './engine';
+import { stopChatRun, titleOf, type ChatActor } from './engine';
 import { originPageSchema } from './origin';
 import { OPEN_RUN_STATUSES } from './engine-store';
 import { maskIds } from './events';
@@ -343,6 +343,40 @@ export async function listChats(
     total: (ownActive.count ?? 0) + (teamActive.count ?? 0),
     archived: ownArchived.count ?? 0,
   };
+}
+
+export const askAgainQuery = z.object({
+  /** The question as the button sends it, in the person's language. */
+  message: z.string().trim().min(1).max(500),
+  // guid, not uuid: ids made by hand (the demo brand's) aren't RFC 4122 ones.
+  brandId: z.guid().optional(),
+});
+export type AskAgainQuery = z.infer<typeof askAgainQuery>;
+
+/**
+ * The chat a repeated question goes back to (What's new, from the profile
+ * menu or Chat Home): the person's own newest chat named as that question
+ * names a new chat, in their workspace, for the brand when given, not
+ * archived or deleted. Null when there is none: the question starts one.
+ * A chat renamed since is left alone.
+ */
+export async function askAgainChatId(
+  reader: Reader,
+  actor: ChatActor,
+  query: AskAgainQuery,
+): Promise<string | null> {
+  let q = reader
+    .from('chat_conversations')
+    .select('id')
+    .eq('user_id', actor.userId)
+    .eq('organization_id', actor.organizationId)
+    .eq('title', titleOf(query.message))
+    .is('deleted_at', null)
+    .is('archived_at', null);
+  if (query.brandId) q = q.eq('brand_id', query.brandId);
+  const { data, error } = await q.order('last_message_at', { ascending: false }).limit(1);
+  if (error) throw new Error(`Could not read the chat to ask again: ${error.message}`);
+  return ((data ?? []) as { id: string }[])[0]?.id ?? null;
 }
 
 export const panelChatQuery = z.object({
