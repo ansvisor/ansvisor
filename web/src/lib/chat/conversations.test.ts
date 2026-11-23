@@ -386,6 +386,60 @@ describe('deleteChat and restoreChat', () => {
   });
 });
 
+describe('deleteChats and restoreChats', () => {
+  it("deletes only the person's own chats in their workspace, stopping running agents first", async () => {
+    db.tables.chat_conversations = [
+      chat(1),
+      chat(2, { user_id: TEAMMATE.userId, shared_at: '2026-10-12T00:00:00.000Z' }),
+      chat(3, { organization_id: OTHER_ORG }),
+      chat(4, { deleted_at: '2026-10-30T10:00:00.000Z' }),
+      chat(5),
+    ];
+    db.tables.chat_runs = [run(1, 5, { status: 'running', finished_at: null })];
+    const ids = await chats.deleteChats(ME, [CHAT(1), CHAT(2), CHAT(3), CHAT(4), CHAT(5), CHAT(1)]);
+    expect(ids.sort()).toEqual([CHAT(1), CHAT(5)]);
+    expect(stopChatRun).toHaveBeenCalledWith(ME, RUN(1));
+    expect(db.tables.chat_conversations.map((c) => c.deleted_at !== null)).toEqual([
+      true,
+      false,
+      false,
+      true,
+      true,
+    ]);
+  });
+
+  it('lets an Admin clear only their own chats, never a shared one', async () => {
+    db.tables.chat_conversations = [
+      chat(1, { user_id: TEAMMATE.userId, shared_at: '2026-10-12T00:00:00.000Z' }),
+    ];
+    expect(await chats.deleteChats(ADMIN, [CHAT(1)])).toEqual([]);
+    expect(db.tables.chat_conversations[0].deleted_at).toBeNull();
+  });
+
+  it("brings back the person's own chats within the Undo minute, nothing older or theirs", async () => {
+    const now = Date.parse('2026-10-30T12:00:00.000Z');
+    const recent = new Date(now - 5_000).toISOString();
+    db.tables.chat_conversations = [
+      chat(1, { deleted_at: recent }),
+      chat(2, { deleted_at: new Date(now - chats.DELETED_CHAT_UNDO_MS - 1).toISOString() }),
+      chat(3, { user_id: TEAMMATE.userId, deleted_at: recent }),
+    ];
+    expect(await chats.restoreChats(ME, [CHAT(1), CHAT(2), CHAT(3)], now)).toEqual([CHAT(1)]);
+    expect(db.tables.chat_conversations.map((c) => c.deleted_at === null)).toEqual([
+      true,
+      false,
+      false,
+    ]);
+  });
+
+  it('takes 1–200 ids', () => {
+    expect(chats.bulkInput.safeParse({ action: 'delete', ids: [] }).success).toBe(false);
+    expect(chats.bulkInput.safeParse({ action: 'delete', ids: [CHAT(1)] }).success).toBe(true);
+    const many = Array.from({ length: 201 }, (_, i) => CHAT(i));
+    expect(chats.bulkInput.safeParse({ action: 'restore', ids: many }).success).toBe(false);
+  });
+});
+
 describe('markChatRead', () => {
   it("marks the author's chat read, leaves a teammate's shared one as it was, refuses a private one", async () => {
     db.tables.chat_conversations = [

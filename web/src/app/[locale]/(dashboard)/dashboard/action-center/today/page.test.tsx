@@ -215,6 +215,8 @@ const standing: TodayStanding = {
   change: 0.4,
   rank: 2,
   of: 5,
+  set: 'rivals',
+  runAt: '2026-11-17T06:00:00Z',
   neighbour: { name: 'Northbound Roasters', gap: 6.2, ahead: false },
   competitors: [],
 };
@@ -430,7 +432,7 @@ describe('Action Center › Today', () => {
       '2 · AI answersUpdated today',
       '3 · Actions3 open1 on hold · 2 yours',
       '4 · Done1 this week',
-      '5 · Results53.9 +0.4',
+      '5 · Results53.9/100 +0.4',
     ]);
     expect(container.querySelector('[aria-current="step"]')?.getAttribute('data-loop-step')).toBe(
       'actions',
@@ -610,8 +612,12 @@ describe('Action Center › Today', () => {
   it('says where the brand stands', async () => {
     await draw();
     const stand = container.querySelector('[data-today-part="stand"]');
-    expect(stand?.textContent).toContain('53.9 +0.4 since yesterday');
-    expect(stand?.textContent).toContain('#2 of 5 brands. 6.2 points behind Northbound Roasters.');
+    // The Visibility score out of 100, ranked among the primary rivals, from the latest run (AC-02).
+    expect(stand?.textContent).toContain('Visibility score53.9/100 +0.4 since yesterday');
+    expect(stand?.textContent).toContain(
+      '#2 of 5 with your primary rivals. 6.2 points behind Northbound Roasters.',
+    );
+    expect(stand?.textContent).toMatch(/From the latest run, Nov 1[67]/);
   });
 
   it('hides only the part whose read failed', async () => {
@@ -667,7 +673,7 @@ describe('Action Center › Today', () => {
       };
       await draw();
       expect(summaryRow()).toEqual(['waiting', 'stand']);
-      expect(stand()).toContain('#2 of 5 brands.');
+      expect(stand()).toContain('#2 of 5 with your primary rivals.');
     });
   });
 
@@ -1265,6 +1271,7 @@ describe('Action Center › Today', () => {
           change: 3.5,
           rank: 2,
           of: 5,
+          set: 'top',
           neighbour: { name: 'Northbound Roasters', gap: 6.2, ahead: false },
           competitors: [],
         },

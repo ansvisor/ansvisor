@@ -201,3 +201,16 @@ describe('SiteTrustCard', () => {
     container.remove();
   });
 });
+
+describe('SiteTrustCard while it reads', () => {
+  it('holds a row’s place for each check, so the lists below don’t move when they come', async () => {
+    getSiteTrust.mockReset().mockReturnValue(new Promise(() => {}));
+    await render();
+    const status = container.querySelector('[role="status"][aria-busy="true"]')!;
+    expect(status.textContent).toBe('Reading your site');
+    // The rows' own box: as many rows as checks, each with the real row's padding.
+    const placeholders = status.querySelectorAll('ul[aria-hidden="true"] > li');
+    expect(placeholders).toHaveLength(5);
+    expect(placeholders[0].className).toContain('px-3 py-2.5');
+  });
+});

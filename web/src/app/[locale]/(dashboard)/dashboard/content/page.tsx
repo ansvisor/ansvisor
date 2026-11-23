@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef, type ReactNode } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
 import { useFailureToast } from '@/hooks/use-failure-toast';
 import { useCaughtErrorText, useServerErrorText } from '@/hooks/use-server-error';
@@ -16,6 +16,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { DatePicker } from '@/components/ui/date-picker';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
   Select,
@@ -79,6 +80,7 @@ import {
   getGenerationJobStatus,
   getContentUsage,
   getOpportunities,
+  getOpportunityAvailability,
   getOpportunityPrompts,
   getOpportunityTopics,
   type OpportunityPrompt,
@@ -118,6 +120,8 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { OpportunityDetail } from '@/components/content/opportunity-detail';
 import { ContentUsageCard } from '@/components/content/content-usage-card';
+import { OpportunityFlowNote } from '@/components/content/opportunity-flow-note';
+import { opportunityFlowState } from '@/lib/opportunity-flow';
 import { hasContentQuota, onDemandMax, type ContentUsage } from '@/lib/content-usage';
 import { isNoPlan } from '@/lib/billing/no-plan';
 import { suggestedBounds, suggestedDate, type SuggestedRange } from '@/lib/suggested-date';
@@ -139,6 +143,7 @@ import { readUrlChoice, writeUrlParams } from '@/lib/url-state';
 import { exportFileName } from '@/lib/white-label/export-name';
 import { actionCode } from '@/lib/action-center/action-ref';
 import { HeaderWithAiUsage } from '@/components/ai-usage/ai-usage-meter';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { FirstRunEmptyState } from '@/components/first-run/first-run-empty-state';
 import { useFirstRun } from '@/hooks/use-first-run';
 
@@ -260,6 +265,21 @@ const STATUS_COLORS: Record<string, string> = {
   dismissed: 'border-zinc-500/30 bg-zinc-500/10 text-zinc-500 dark:text-zinc-400',
   archived: 'border-zinc-500/30 bg-zinc-500/5 text-zinc-500 dark:text-zinc-400',
 };
+
+/**
+ * A header icon button, named in a tooltip on hover. The trigger is a span so
+ * a disabled button still says what it is.
+ */
+function HeaderIconButton({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <Tooltip>
+      <TooltipTrigger delay={150} closeDelay={0} render={<span className="inline-flex" />}>
+        {children}
+      </TooltipTrigger>
+      <TooltipContent side="bottom">{label}</TooltipContent>
+    </Tooltip>
+  );
+}
 
 function KpiCard({
   title,
@@ -521,6 +541,9 @@ export default function ContentPage() {
   const [contentUsage, setContentUsage] = useState<ContentUsage | null>(null);
   // Bumped after a "+ New" run, which may use quota without changing the total.
   const [usageVersion, setUsageVersion] = useState(0);
+  // Needs with and without an opportunity, for the note on why none arrive
+  // overnight; null hides it.
+  const [needs, setNeeds] = useState<{ needs: number; open: number } | null>(null);
   const [newOpen, setNewOpen] = useState(false);
   // Placeholder rows while a "+ New" request runs (CONTENT-003).
   const [pendingCount, setPendingCount] = useState(0);
@@ -849,6 +872,20 @@ export default function ContentPage() {
     };
   }, [activeBrandId, total, usageVersion, listReady]);
 
+  // Read with the usage, when the list's size may have moved. A failure only
+  // hides the note.
+  useEffect(() => {
+    let cancelled = false;
+    if (!activeBrandId || !listReady) return;
+    getOpportunityAvailability(activeBrandId).then(
+      (result) => !cancelled && setNeeds(result),
+      () => !cancelled && setNeeds(null),
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [activeBrandId, total, usageVersion, listReady]);
+
   const pollJob = useCallback(
     (jobId: string, startedAt: number) => {
       pollRef.current = true;
@@ -1034,6 +1071,7 @@ export default function ContentPage() {
         timeZone: 'UTC',
       })
     : '';
+  const flowState = opportunityFlowState({ limitReached, needs });
   // Generating opportunities costs AI: admins and managers start it, and
   // anyone else reads who can.
   const newButton = canManage ? (
@@ -1287,19 +1325,28 @@ export default function ContentPage() {
           </div>
           <div className="flex items-center gap-2">
             {newButton}
-            <Button
-              onClick={handleExportCsv}
-              disabled={exporting || loading || total === 0}
-              variant="outline"
-              className="gap-2"
-            >
-              {exporting ? <LoadingDots /> : <Download className="h-4 w-4" />}
-              {tCommon('exportCsv')}
-            </Button>
-            <Button onClick={() => setWebhookOpen(true)} variant="outline" className="gap-2">
-              <Settings2 className="h-4 w-4" />
-              {t('webhook.title')}
-            </Button>
+            {/* Icons only, named on hover and to screen readers. */}
+            <HeaderIconButton label={tCommon('exportCsv')}>
+              <Button
+                onClick={handleExportCsv}
+                disabled={exporting || loading || total === 0}
+                variant="outline"
+                size="icon"
+                aria-label={tCommon('exportCsv')}
+              >
+                {exporting ? <LoadingDots /> : <Download className="h-4 w-4" />}
+              </Button>
+            </HeaderIconButton>
+            <HeaderIconButton label={t('webhook.title')}>
+              <Button
+                onClick={() => setWebhookOpen(true)}
+                variant="outline"
+                size="icon"
+                aria-label={t('webhook.title')}
+              >
+                <Settings2 className="h-4 w-4" />
+              </Button>
+            </HeaderIconButton>
           </div>
         </div>
       </HeaderWithAiUsage>
@@ -1330,6 +1377,9 @@ export default function ContentPage() {
         </Card>
       ) : (
         <>
+          {flowState && (
+            <OpportunityFlowNote state={flowState} resetsOn={resetsOn} canManage={canManage} />
+          )}
           <div
             className={cn(
               'grid grid-cols-2 gap-4 sm:grid-cols-3',
@@ -1592,22 +1642,20 @@ export default function ContentPage() {
                   </DropdownMenu>
                   {suggestedRange === 'custom' && (
                     <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                      <Input
-                        type="date"
+                      <DatePicker
                         aria-label={t('suggestedRange.from')}
-                        value={customFrom}
+                        value={customFrom || null}
                         max={customTo || undefined}
-                        onChange={(e) => setCustomFrom(e.target.value)}
-                        className="h-8 w-[140px] text-xs"
+                        onChange={(day) => setCustomFrom(day ?? '')}
+                        className="w-[140px]"
                       />
                       –
-                      <Input
-                        type="date"
+                      <DatePicker
                         aria-label={t('suggestedRange.to')}
-                        value={customTo}
+                        value={customTo || null}
                         min={customFrom || undefined}
-                        onChange={(e) => setCustomTo(e.target.value)}
-                        className="h-8 w-[140px] text-xs"
+                        onChange={(day) => setCustomTo(day ?? '')}
+                        className="w-[140px]"
                       />
                     </span>
                   )}

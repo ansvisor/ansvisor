@@ -238,6 +238,10 @@ function keptRows(
     out.pageTotal = Math.max(count, rows.length);
   } else if (entity === 'competitors') {
     out.competitors = kept.map((e) => e.label ?? e.key);
+  } else if (entity === 'topics') {
+    // As the title counts them: every topic the action kept, not only those
+    // its open signals still name ("8 topics" in the title, "3 topics" below).
+    out.topics = kept.map((e) => e.label ?? e.key);
   }
   return out;
 }

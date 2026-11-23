@@ -10,7 +10,7 @@ import { sanitizeDraftHtml } from '@/lib/content/sanitize-draft-html';
 import { withContentDom } from '@/lib/content/server-dom';
 import { answerFileName, type AnswerExportFormat, type ExportAnswer } from './export';
 import { ANSWER_CONTENT_TYPES, exportAnswer, type AnswerFile } from './export-file';
-import { CHAT_IMAGE_FORMATS, type ChatImageFormat } from './files';
+import { CHAT_IMAGE_FORMATS, PPTX_MIME, type ChatImageFormat } from './files';
 
 /**
  * A file in Files, downloaded (CHAT-06 items 2, 35): its canonical content
@@ -21,7 +21,7 @@ import { CHAT_IMAGE_FORMATS, type ChatImageFormat } from './files';
  * and the day it was made.
  */
 
-export type ChatFileFormat = AnswerExportFormat | 'html' | ChatImageFormat;
+export type ChatFileFormat = AnswerExportFormat | 'html' | ChatImageFormat | 'pptx';
 
 const isImageFormat = (format: ChatFileFormat): format is ChatImageFormat =>
   (CHAT_IMAGE_FORMATS as readonly string[]).includes(format);
@@ -41,8 +41,8 @@ export interface StoredChatFile {
   appOrigin?: string | null;
 }
 
-/** What an image's file name reads besides its title and day: nothing. */
-const IMAGE_ANSWER: ExportAnswer = {
+/** What a bytes file's name reads besides its title and day: nothing. */
+const BYTES_ANSWER: ExportAnswer = {
   markdown: '',
   question: '',
   chatTitle: null,
@@ -65,13 +65,14 @@ export async function exportChatFile(
   format: ChatFileFormat,
 ): Promise<AnswerFile | null> {
   if (!file.formats.includes(format)) return null;
-  // An image (W4-08): its own bytes, in its own format, named after its title.
-  if (file.mimeType.startsWith('image/')) {
-    if (!file.bytes || !isImageFormat(format)) return null;
+  // An image (W4-08) or a report deck (#2298): its own bytes, in its own
+  // format, named after its title.
+  const bytesName = (format: 'pptx' | ChatImageFormat): AnswerFile | null => {
+    if (!file.bytes) return null;
     return {
       fileName: answerFileName(
         {
-          ...IMAGE_ANSWER,
+          ...BYTES_ANSWER,
           question: file.title,
           generatedAt: file.generatedAt,
           timezone: file.timezone,
@@ -81,8 +82,16 @@ export async function exportChatFile(
       contentType: file.mimeType,
       body: file.bytes,
     };
+  };
+  if (file.mimeType.startsWith('image/')) {
+    if (!isImageFormat(format)) return null;
+    return bytesName(format);
   }
-  if (isImageFormat(format)) return null;
+  if (file.mimeType === PPTX_MIME) {
+    if (format !== 'pptx') return null;
+    return bytesName('pptx');
+  }
+  if (isImageFormat(format) || format === 'pptx') return null;
   const page = file.mimeType === 'text/html';
   // The editor's HTML helpers read with a DOM: the server's is jsdom's.
   if (page && typeof window === 'undefined') await withContentDom();
