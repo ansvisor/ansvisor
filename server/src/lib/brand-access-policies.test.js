@@ -50,6 +50,8 @@ const SERVER_ONLY = [
   'ads_ad_drafts',
   'ads_decision_overrides',
   'ads_opportunity_snapshots',
+  // Ads Phase 1's ad accounts (00560): spend and keys are served by the API to the roles and plans that read them.
+  'ads_accounts',
   'brand_fact_pages',
   // Each brand's last action and signal number (00534).
   'brand_number_counters',
@@ -110,6 +112,8 @@ const NOT_BRAND_DATA = {
   organization_menu_roles: "The Account's menu access by role (00374).",
   organizations: 'The Account itself: its plan, billing and members (D1).',
   profiles: "A person's own profile.",
+  translation_suggestions:
+    "A person's own suggested better translations of the interface (00555): no brand's.",
   setting_changes:
     "The Account's settings changes (00481): which setting, its value before and after, who and when; no brand's data.",
   site_audit_auto_runs:

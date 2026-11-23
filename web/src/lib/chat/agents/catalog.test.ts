@@ -99,6 +99,7 @@ describe('the preset files', () => {
       'prompt-portfolio',
       'onboarding-help',
       'aeo-operator',
+      'agency-reporter',
       'paid-opportunity',
       'product-answer-pages',
       'seasonal-prompt-planner',
@@ -114,7 +115,7 @@ describe('the preset files', () => {
       'unmet-needs-miner',
       'market-source-finder',
     ]);
-    expect(AGENT_PRESETS.filter((preset) => preset.status === 'soon')).toHaveLength(14);
+    expect(AGENT_PRESETS.filter((preset) => preset.status === 'soon')).toHaveLength(13);
   });
 
   it('have the business-type packs: three agents for each type, in the plan’s order', () => {

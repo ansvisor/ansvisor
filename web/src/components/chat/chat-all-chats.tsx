@@ -9,6 +9,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import type { ChatListItem, ChatListResult } from '@/lib/chat/conversations';
 import { agoOf } from '@/lib/chat/home';
 import { cn } from '@/lib/utils';
+import { useChatActions } from './chat-actions';
 import { useChatList } from './chat-list-provider';
 import { ChatDot } from './chat-dot';
 import { useNow } from './chat-inbox';
@@ -85,6 +86,7 @@ export function ChatAllChats({
   const router = useRouter();
   const now = useNow();
   const { refresh: refreshMenu } = useChatList();
+  const actions = useChatActions();
   const [tab, setTab] = useState<AllChatsTab>(initialTab);
   const [filter, setFilter] = useState<AllChatsFilter>('all');
   const [query, setQuery] = useState('');
@@ -138,6 +140,15 @@ export function ChatAllChats({
     };
   }, [lists, tab]);
   const filtered = searching || filter !== 'all';
+  // Delete selected takes the person's own chats among the ones ticked.
+  const selectedOwn = useMemo(
+    () =>
+      [...lists.active, ...lists.archived, ...found.chats].filter(
+        (chat, i, all) =>
+          chat.mine && selected.has(chat.id) && all.findIndex((c) => c.id === chat.id) === i,
+      ),
+    [lists, found.chats, selected],
+  );
   const loading =
     lists.status === 'loading' || (searching && found.status === 'loading' && rows.length === 0);
 
@@ -213,6 +224,25 @@ export function ChatAllChats({
           >
             {t(tab === 'active' ? 'archiveSelected' : 'unarchiveSelected')}
           </Button>
+          {actions && (
+            <Button
+              variant="outline"
+              data-action="allChats.deleteSelected"
+              disabled={!selectedOwn.length || busy}
+              title={selectedOwn.length === 0 ? t('selectFirst') : undefined}
+              onClick={() =>
+                actions.askDeleteMany(selectedOwn, {
+                  onDone: () => {
+                    setSelected(new Set());
+                    void load();
+                  },
+                })
+              }
+              className="text-red-700 hover:text-red-700 dark:text-red-400 dark:hover:text-red-400"
+            >
+              {t('deleteSelected')}
+            </Button>
+          )}
         </div>
       </div>
 

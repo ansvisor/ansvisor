@@ -68937,6 +68937,69 @@ comment on column public.notification_preferences.delivery is
   'Brand e-mails one per brand (per_brand) or all brands in one (combined): the person''s choice, the same on each of their rows.';
 
 -- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00555_translation_suggestions.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00555: "Suggest a better translation" (LOC-009)
+-- ============================================================================
+-- In any language but English, Settings › Account › Language and the account
+-- menu's Language item offer "Suggest a better translation": a form that
+-- already knows the screen and the language, where the person gives the text
+-- as it reads now, their better version and, if they like, a note.
+--
+-- Each suggestion is a row here, in the review queue Ansvisor staff work
+-- through (the review list, STAFF_EMAILS, with the service role). Accepting
+-- one only marks the row: the string in messages/<locale>.json and the
+-- glossary are changed by hand, by running web/scripts/translate-messages.mjs
+-- again.
+--
+-- Schema only: no backfill. A person adds and reads their own rows (RLS);
+-- staff read and change every row with the service role, which skips RLS.
+
+create table if not exists public.translation_suggestions (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations (id) on delete cascade,
+  user_id uuid not null references auth.users (id) on delete cascade,
+  -- The interface language the suggestion is for, a locale code such as tr or pt-BR.
+  locale text not null check (locale ~ '^[a-z]{2,3}(-[A-Za-z0-9]{2,8})?$'),
+  -- The screen the person was on (the address without a locale prefix).
+  path text not null default '' check (char_length(path) <= 500),
+  -- The messages key of the text, when it is known (found from the current text, or null).
+  message_key text check (message_key is null or char_length(message_key) <= 300),
+  current_text text not null check (char_length(current_text) between 1 and 1000),
+  suggestion text not null check (char_length(suggestion) between 1 and 1000),
+  note text not null default '' check (char_length(note) <= 1000),
+  status text not null default 'new' check (status in ('new', 'accepted', 'rejected')),
+  reviewed_at timestamptz,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create index if not exists translation_suggestions_status_created_idx
+  on public.translation_suggestions (status, created_at desc);
+create index if not exists translation_suggestions_user_idx
+  on public.translation_suggestions (user_id, created_at desc);
+
+alter table public.translation_suggestions enable row level security;
+
+-- No insert policy: the app adds a suggestion with the service role after its
+-- checks (signed in, writable workspace, the daily limit), so no one signed in
+-- can insert around them through the API.
+
+-- A person reads their own suggestions, and no one else's.
+create policy "translation_suggestions: read own"
+  on public.translation_suggestions for select to authenticated
+  using (user_id = (select auth.uid()));
+
+-- No insert, update or delete for anyone signed in: adding is the app's and review
+-- is staff's, both through the service role.
+revoke insert, update, delete on public.translation_suggestions from anon, authenticated;
+revoke all on public.translation_suggestions from anon;
+
+comment on table public.translation_suggestions is
+  'Suggested better translations of the interface (LOC-009): a person reads their own rows by RLS; the app inserts after its checks and staff review with the service role. Accepting only marks the row; messages/<locale>.json and the glossary are changed by hand.';
+
+-- ─────────────────────────────────────────────────────────────────────────
 -- migrations/00556_notification_sends.sql
 -- ─────────────────────────────────────────────────────────────────────────
 -- ============================================================================
@@ -68981,4 +69044,169 @@ grant all on table public.notification_sends to service_role;
 
 comment on table public.notification_sends is
   'Notification e-mails sent (00556): one row per kind, person and subject, claimed before sending so each goes once. Server only.';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00559_chat_files_pptx.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00559: a file in Files may download as PowerPoint
+-- ============================================================================
+-- Chat turns a saved report into an editable .pptx deck (#2298) and files
+-- it. The formats check (00411, last set by 00477) knew no 'pptx', and the
+-- bucket's types (00411, with 00476's image/jpeg) knew no presentation type,
+-- so the deck could be neither filed nor downloaded. The same list, with
+-- 'pptx'; the bucket takes the deck's own type. Run again, both end the
+-- same; any type an admin added stays.
+
+alter table public.chat_files drop constraint if exists chat_files_formats_check;
+alter table public.chat_files add constraint chat_files_formats_check check (
+  formats <@ array[
+    'md', 'html', 'docx', 'pdf', 'csv', 'xlsx', 'pptx', 'json', 'jsonld', 'txt', 'png', 'jpg', 'webp'
+  ]::text[]
+  and public.chat_text_array_distinct(formats)
+);
+
+update storage.buckets
+set allowed_mime_types = array_append(
+  allowed_mime_types,
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation'
+)
+where id = 'chat-files'
+  and allowed_mime_types is not null
+  and not (
+    'application/vnd.openxmlformats-officedocument.presentationml.presentation'
+    = any (allowed_mime_types)
+  );
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00560_ads_accounts.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00560: Ads' read connections: ad accounts, keys and daily metrics (Phase 1, A1)
+-- ============================================================================
+-- Ads Phase 1, behind ADS_ENABLED. Schema only: no rows are written here and
+-- nothing is backfilled. The sync jobs (lib/ads, later PRs) fill the metric
+-- tables in chunks, one account and date window at a time.
+--
+-- As with 00530–00532, only the server reads and writes these tables (service
+-- role). It checks the person's role, their brand access and their plan
+-- itself. A session reads no row: spend and keys are an Admin's business, and
+-- the plan decides what the Ads area shows.
+--
+--   * ads_accounts: an ad account a brand reads, on Google Ads (through the
+--     Account's Composio sign-in, integration_accounts) or ChatGPT Ads
+--     (through the customer's own API key). One brand may read several.
+--   * ads_account_keys: a ChatGPT Ads account's API key, encrypted by the API
+--     (AES-256-GCM with CONNECTOR_CREDENTIALS_KEY, bound to the account id),
+--     as catalog_source_credentials (00282) keeps a store's sign-in.
+--   * ads_campaign_daily: each campaign's day: impressions, clicks, cost,
+--     conversions. Both platforms, in the account's currency.
+--   * ads_search_term_daily: Google's search terms per campaign and day, which
+--     the Overlap view matches to tracked prompts.
+
+create table if not exists public.ads_accounts (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  brand_id uuid not null references public.brands(id) on delete cascade,
+  platform text not null check (platform in ('google', 'chatgpt')),
+  -- Google's customer id (10 digits) or ChatGPT's ad account id.
+  external_id text not null check (char_length(external_id) between 1 and 64),
+  name text check (name is null or char_length(name) <= 300),
+  currency_code text check (currency_code is null or currency_code ~ '^[A-Z]{3}$'),
+  time_zone text check (time_zone is null or char_length(time_zone) <= 64),
+  -- Google only: the customer's manager account, when the account is reached through one.
+  login_customer_id text check (login_customer_id is null or login_customer_id ~ '^[0-9]{10}$'),
+  -- Google only: the Account's sign-in the account is read with.
+  integration_account_id uuid references public.integration_accounts(id) on delete set null,
+  status text not null default 'active' check (status in ('active', 'error', 'disconnected')),
+  last_error text check (last_error is null or char_length(last_error) <= 500),
+  -- The last finished sync, and the last day it has complete rows for.
+  last_synced_at timestamptz,
+  synced_through date,
+  connected_by uuid references public.profiles(id) on delete set null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  constraint ads_accounts_brand_platform_external_key unique (brand_id, platform, external_id),
+  constraint ads_accounts_google_fields_check check (
+    platform = 'google' or (login_customer_id is null and integration_account_id is null)
+  )
+);
+
+create index if not exists ads_accounts_organization_idx
+  on public.ads_accounts (organization_id);
+-- The sync's queue: active accounts, the longest waiting first.
+create index if not exists ads_accounts_sync_due_idx
+  on public.ads_accounts (last_synced_at nulls first)
+  where status = 'active';
+
+create table if not exists public.ads_account_keys (
+  account_id uuid primary key references public.ads_accounts(id) on delete cascade,
+  secret text not null check (char_length(secret) between 1 and 16384),
+  set_at timestamptz not null default now(),
+  set_by uuid references public.profiles(id) on delete set null
+);
+
+create table if not exists public.ads_campaign_daily (
+  account_id uuid not null references public.ads_accounts(id) on delete cascade,
+  campaign_id text not null check (char_length(campaign_id) between 1 and 64),
+  day date not null,
+  campaign_name text check (campaign_name is null or char_length(campaign_name) <= 500),
+  campaign_status text check (campaign_status is null or char_length(campaign_status) <= 40),
+  impressions bigint not null default 0 check (impressions >= 0),
+  clicks bigint not null default 0 check (clicks >= 0),
+  -- Millionths of the account's currency, as Google reports cost.
+  cost_micros bigint not null default 0 check (cost_micros >= 0),
+  conversions numeric(14, 2) not null default 0 check (conversions >= 0),
+  conversion_value numeric(18, 2) not null default 0 check (conversion_value >= 0),
+  updated_at timestamptz not null default now(),
+  primary key (account_id, campaign_id, day)
+);
+
+-- An account's date range, for the Campaigns tab and the sync's windows.
+create index if not exists ads_campaign_daily_account_day_idx
+  on public.ads_campaign_daily (account_id, day);
+
+create table if not exists public.ads_search_term_daily (
+  account_id uuid not null references public.ads_accounts(id) on delete cascade,
+  campaign_id text not null check (char_length(campaign_id) between 1 and 64),
+  search_term text not null check (char_length(search_term) between 1 and 1000),
+  day date not null,
+  impressions bigint not null default 0 check (impressions >= 0),
+  clicks bigint not null default 0 check (clicks >= 0),
+  cost_micros bigint not null default 0 check (cost_micros >= 0),
+  conversions numeric(14, 2) not null default 0 check (conversions >= 0),
+  updated_at timestamptz not null default now(),
+  primary key (account_id, campaign_id, search_term, day)
+);
+
+create index if not exists ads_search_term_daily_account_day_idx
+  on public.ads_search_term_daily (account_id, day);
+
+comment on table public.ads_accounts is
+  'Ads Phase 1 (00560): an ad account a brand reads, on Google Ads (through an integration_accounts sign-in) or ChatGPT Ads (through the customer''s own key). Server only.';
+comment on table public.ads_account_keys is
+  'Ads Phase 1 (00560): a ChatGPT Ads account''s API key, encrypted by the API (AES-256-GCM, bound to the account id). Service role only; removed with its account.';
+comment on table public.ads_campaign_daily is
+  'Ads Phase 1 (00560): a campaign''s day (impressions, clicks, cost in micros, conversions) in the account''s currency, written by the sync. Server only.';
+comment on table public.ads_search_term_daily is
+  'Ads Phase 1 (00560): Google Ads search terms per campaign and day, written by the sync for the Overlap view. Server only.';
+
+-- ─── Who reads and writes ───────────────────────────────────────────────────
+
+alter table public.ads_accounts enable row level security;
+alter table public.ads_account_keys enable row level security;
+alter table public.ads_campaign_daily enable row level security;
+alter table public.ads_search_term_daily enable row level security;
+
+revoke all on table public.ads_accounts from public, anon, authenticated;
+revoke all on table public.ads_account_keys from public, anon, authenticated;
+revoke all on table public.ads_campaign_daily from public, anon, authenticated;
+revoke all on table public.ads_search_term_daily from public, anon, authenticated;
+grant all on table public.ads_accounts to service_role;
+grant all on table public.ads_account_keys to service_role;
+grant all on table public.ads_campaign_daily to service_role;
+grant all on table public.ads_search_term_daily to service_role;
+-- No grant and no policy for a session (anon, authenticated): it reads no row.
+
+notify pgrst, 'reload schema';
 

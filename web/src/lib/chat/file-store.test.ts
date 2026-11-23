@@ -315,6 +315,21 @@ describe('readChatFile', () => {
     });
     expect(await store.readChatFile(ACTOR, 'f2', null)).toBeNull();
   });
+
+  it('reads a report deck as its bytes (#2298), not as text', async () => {
+    db.tables.chat_files = [
+      fileRow('f1', {
+        mime_type: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+        formats: ['pptx'],
+        storage_path: 'f1.pptx',
+      }),
+    ];
+    stored['f1.pptx'] = 'PK-deck';
+    expect(await store.readChatFile(ACTOR, 'f1', null)).toMatchObject({
+      content: '',
+      bytes: new TextEncoder().encode('PK-deck'),
+    });
+  });
 });
 
 describe('zipChatFiles', () => {
