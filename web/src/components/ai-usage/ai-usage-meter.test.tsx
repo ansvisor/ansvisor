@@ -524,7 +524,8 @@ describe('HeaderWithAiUsage', () => {
         </HeaderWithAiUsage>
       </ChatPanelContext.Provider>
     );
-    // The h-* classes: the same one on all three, a default button's.
+    // The h-* classes: a default button's on the page's button and Ask Chat;
+    // the narrow meter, borderless, is a little shorter and centred beside them.
     const heights = (el: Element) => el.className.split(/\s+/).filter((c) => /^h-/.test(c));
     await render('admin', header());
     const row = container.firstElementChild!;
@@ -533,7 +534,7 @@ describe('HeaderWithAiUsage', () => {
     expect(meter.getAttribute('aria-label')).toBe('AI 21.4% used this month');
     expect(ask.getAttribute('data-action')).toBe('panel.open');
     expect(heights(page)).toEqual(['h-8']);
-    expect(heights(meter)).toEqual(['h-8']);
+    expect(heights(meter)).toEqual(['h-7']);
     expect(heights(ask)).toEqual(['h-8']);
     expect(row.className).toContain('sm:items-start');
 
@@ -581,7 +582,7 @@ describe('HeaderWithAiUsage', () => {
 
     vi.mocked(readAiUsage).mockReturnValue(new Promise(() => {}));
     await render('admin', header);
-    expect(slot()!.className).toContain('sm:min-w-[8.5rem]');
+    expect(slot()!.className).toContain('sm:min-w-[5.5rem]');
     // A phone keeps the meter under the row, as without it.
     expect(slot()!.className).toContain('contents');
     expect(slot()!.querySelector('span[aria-hidden]')).not.toBeNull();
@@ -594,7 +595,7 @@ describe('HeaderWithAiUsage', () => {
     vi.mocked(readAiUsage).mockResolvedValue(null);
     await fresh();
     expect(trigger()).toBeNull();
-    expect(slot()!.className).toContain('sm:min-w-[8.5rem]');
+    expect(slot()!.className).toContain('sm:min-w-[5.5rem]');
   });
 
   it('keeps no room without reserveMeter, or self-hosted', async () => {

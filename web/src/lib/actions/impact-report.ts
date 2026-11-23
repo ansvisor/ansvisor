@@ -36,6 +36,8 @@ export interface ImpactReport {
   generatedAt: string;
   /** The newest measurement among the month's rows; null before any. */
   dataAsOf: string | null;
+  /** The brand has shipped something, in any month: false shows the page's first-ship note. */
+  everShipped: boolean;
 }
 
 export type ImpactReportResult =
@@ -86,6 +88,48 @@ interface ShipRow {
 function logFailure(what: string, error: unknown) {
   const message = error instanceof Error ? error.message : (error as { message?: string })?.message;
   console.error(`[impact-report] could not ${what}:`, message ?? error);
+}
+
+type Supabase = Awaited<ReturnType<typeof createClient>>;
+
+/** Whether the brand has any ship event: one row at most, in the organization and brand. */
+async function anyShip(supabase: Supabase, organizationId: string, brandId: string) {
+  const { data, error } = await supabase
+    .from('ship_events')
+    .select('id')
+    .eq('organization_id', organizationId)
+    .eq('brand_id', brandId)
+    .limit(1);
+  if (error) throw error;
+  return (data?.length ?? 0) > 0;
+}
+
+/**
+ * Whether Reports offers "What Ansvisor did for you" for a brand: only once
+ * it has shipped something (a CMS-confirmed Send to CMS or an agent's own
+ * go-live), with the new Chat on. False when it can't tell.
+ */
+export async function brandHasShipped(brandId: string): Promise<boolean> {
+  try {
+    const parsed = z.guid().safeParse(brandId);
+    if (!parsed.success) return false;
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) return false;
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('organization_id')
+      .eq('id', user.id)
+      .maybeSingle();
+    const org = profile?.organization_id ?? null;
+    if (!org || !chatAgenticEnabled(org)) return false;
+    return await anyShip(supabase, org, parsed.data);
+  } catch (error) {
+    logFailure('tell whether the brand shipped', error);
+    return false;
+  }
 }
 
 export async function readImpactReport(
@@ -177,6 +221,17 @@ export async function readImpactReport(
       .filter((at): at is string => !!at)
       .sort();
     if (previous.error) logFailure('count the month before', previous.error);
+    // An empty month on a brand that never shipped reads as the first-ship note, not zeros.
+    const org = profile?.organization_id ?? null;
+    const everShipped =
+      read.length > 0 ||
+      (previous.count ?? 0) > 0 ||
+      !org ||
+      (await anyShip(supabase, org, parsed.data.brandId).catch((error: unknown) => {
+        // Unknown reads as shipped: the month shows as it is.
+        logFailure('tell whether the brand shipped', error);
+        return true;
+      }));
     return {
       ok: true,
       report: {
@@ -186,6 +241,7 @@ export async function readImpactReport(
         traffic: await changedPagesTraffic(supabase, parsed.data.brandId, rows, days),
         generatedAt: new Date().toISOString(),
         dataAsOf: measured.at(-1) ?? null,
+        everShipped,
       },
     };
   } catch (error) {
@@ -201,7 +257,7 @@ export async function readImpactReport(
  * for the brand, or when it can't be read: the card asks to connect it.
  */
 async function changedPagesTraffic(
-  supabase: Awaited<ReturnType<typeof createClient>>,
+  supabase: Supabase,
   brandId: string,
   rows: readonly ImpactRow[],
   days: ImpactRange['days'],
