@@ -1,6 +1,6 @@
 'use client';
 
-import { lazy, Suspense, useCallback, useState, type KeyboardEvent } from 'react';
+import { lazy, Suspense, useCallback, useState, type KeyboardEvent, type RefObject } from 'react';
 import { useTranslations } from 'next-intl';
 import { Bot, Loader2 } from 'lucide-react';
 import { useChatAgentic } from '@/components/providers/chat-agentic-provider';
@@ -38,10 +38,39 @@ interface RunAgentProps {
 }
 
 export function RunAgentButton(props: RunAgentProps) {
+  if (!useCanRunAgent(props.action)) return null;
+  return <RunAgentMenu {...props} />;
+}
+
+/** Whether Run agent shows for this action: the new Chat on, an Admin or Manager, an open action. */
+export function useCanRunAgent(action: Pick<ActionItem, 'status'>): boolean {
   const chatOn = useChatAgentic();
   const { canManage } = useUserRole();
-  if (!chatOn || !canManage || !OPEN_ACTION_STATUSES.includes(props.action.status)) return null;
-  return <RunAgentMenu {...props} />;
+  return chatOn && canManage && OPEN_ACTION_STATUSES.includes(action.status);
+}
+
+/**
+ * The picker without a button of its own: the drawer opens it from its ⋯
+ * menu, under that menu's button (`anchor`). The caller checks
+ * useCanRunAgent and the upgrade gate before opening it.
+ */
+export function RunAgentPopover({
+  action,
+  open,
+  onOpenChange,
+  anchor,
+}: {
+  action: RunAgentProps['action'];
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  anchor: RefObject<HTMLElement | null>;
+}) {
+  const close = useCallback(() => onOpenChange(false), [onOpenChange]);
+  return (
+    <Popover open={open} onOpenChange={onOpenChange}>
+      <RunAgentPanel action={action} onClose={close} anchor={anchor} />
+    </Popover>
+  );
 }
 
 /** ↑ ↓ move between the picker's choices (Tab works too); Esc closes it. */
@@ -102,22 +131,39 @@ function RunAgentMenu({ action, title, variant, className }: RunAgentProps) {
         <Bot aria-hidden className={variant === 'drawer' ? 'h-3 w-3' : undefined} />
         {variant === 'drawer' && t('button')}
       </PopoverTrigger>
-      <PopoverContent
-        align="end"
-        className="w-[320px] max-w-[calc(100vw-32px)] p-2"
-        // The picker sits in a portal, but React bubbles its clicks to the row.
-        onClick={(event) => event.stopPropagation()}
-        onKeyDown={moveFocus}
-      >
-        <div className="px-2 pt-1 pb-2">
-          <p className="text-sm font-semibold">{t('pickerTitle', { no: actionCodeNo(action) })}</p>
-          <p className="text-xs text-muted-foreground">{t('pickerHint')}</p>
-        </div>
-        <Suspense fallback={<PickerLoading />}>
-          <RunAgentPicker action={action} onClose={close} />
-        </Suspense>
-      </PopoverContent>
+      <RunAgentPanel action={action} onClose={close} />
     </Popover>
+  );
+}
+
+/** The picker's popup: its title, hint and the agents to pick from. */
+function RunAgentPanel({
+  action,
+  onClose,
+  anchor,
+}: {
+  action: RunAgentProps['action'];
+  onClose: () => void;
+  anchor?: RefObject<HTMLElement | null>;
+}) {
+  const t = useTranslations('actionCenter.actionsPage.runAgent');
+  return (
+    <PopoverContent
+      align="end"
+      anchor={anchor}
+      className="w-[320px] max-w-[calc(100vw-32px)] p-2"
+      // The picker sits in a portal, but React bubbles its clicks to the row.
+      onClick={(event) => event.stopPropagation()}
+      onKeyDown={moveFocus}
+    >
+      <div className="px-2 pt-1 pb-2">
+        <p className="text-sm font-semibold">{t('pickerTitle', { no: actionCodeNo(action) })}</p>
+        <p className="text-xs text-muted-foreground">{t('pickerHint')}</p>
+      </div>
+      <Suspense fallback={<PickerLoading />}>
+        <RunAgentPicker action={action} onClose={onClose} />
+      </Suspense>
+    </PopoverContent>
   );
 }
 

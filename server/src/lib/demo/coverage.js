@@ -80,6 +80,8 @@ export const SKIPPED = {
     "Each Ads prompt's weekly decision (00531): never written for a demo brand, whose sample data doesn't change week to week.",
   ads_ad_drafts:
     "Ads' ad drafts (00532): written by a model call a person starts, which is refused on a demo brand, so it has none.",
+  ads_accounts:
+    "Ads Phase 1's ad accounts (00560): each reaches a real Google Ads or ChatGPT Ads account through a person's own sign-in or key, and connecting one is refused on a demo brand.",
   chat_access_requests:
     "A person's request to their Admins for a Chat change (00403): theirs, not sample data, and a demo brand's refusal offers no Ask your Admin.",
   chat_tool_cache:

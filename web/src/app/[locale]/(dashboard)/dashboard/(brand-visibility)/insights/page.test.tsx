@@ -279,6 +279,14 @@ describe('the ChatGPT Business Hub card', () => {
   });
 });
 
+/** Lets the page's own second read of a failed section run (AUTO_RETRY_MS). */
+async function afterAutoRetry() {
+  await act(async () => {
+    vi.advanceTimersByTime(2_000);
+  });
+  await act(async () => {});
+}
+
 describe('a failed read', () => {
   it('says so with Retry, not "No tracking data yet", and Retry reads again', async () => {
     const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
@@ -303,7 +311,14 @@ describe('a failed read', () => {
         failedSections: ['competitors', 'platforms'],
       }),
     );
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
     await render();
+    // Read again by itself first: loading, nothing said yet.
+    expect(container.querySelector('[data-slot="insights-section-retrying"]')).not.toBeNull();
+    expect(container.textContent).not.toContain("Some sections couldn't load");
+    await afterAutoRetry();
+    vi.useRealTimers();
+    expect(actions.getInsightsData).toHaveBeenCalledTimes(2);
     expect(container.textContent).toContain("Couldn't load the competitor comparison");
     expect(container.textContent).not.toContain('No competitors tracked yet');
     // The rest of the tab is there, and says some of it couldn't load.
@@ -313,10 +328,41 @@ describe('a failed read', () => {
 
   it('of the trend isn’t shown as "no trend data"', async () => {
     actions.getInsightsData.mockResolvedValue(insights({ failedSections: ['trend'] }));
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
     await render();
+    expect(container.textContent).not.toContain("Couldn't load the visibility trend");
+    await afterAutoRetry();
+    vi.useRealTimers();
     expect(container.textContent).toContain("Couldn't load the visibility trend");
     expect(container.textContent).not.toContain('TREND');
     expect(container.textContent).toContain('LEADERBOARD');
+  });
+
+  it('reads a failed section again by itself, and says nothing when that read works', async () => {
+    actions.getInsightsData
+      .mockResolvedValueOnce(insights({ failedSections: ['trend', 'platforms'] }))
+      .mockResolvedValueOnce(insights());
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    await render();
+    expect(container.querySelector('[data-slot="insights-section-retrying"]')).not.toBeNull();
+    expect(container.textContent).not.toContain("Couldn't load");
+    await afterAutoRetry();
+    vi.useRealTimers();
+    expect(actions.getInsightsData).toHaveBeenCalledTimes(2);
+    expect(container.querySelector('[data-slot="insights-section-retrying"]')).toBeNull();
+    expect(container.textContent).not.toContain("Couldn't load");
+    expect(container.textContent).not.toContain("Some sections couldn't load");
+    expect(container.textContent).toContain('KPI CARDS');
+  });
+
+  it('reads again by itself only once', async () => {
+    actions.getInsightsData.mockResolvedValue(insights({ failedSections: ['trend'] }));
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    await render();
+    await afterAutoRetry();
+    await afterAutoRetry();
+    vi.useRealTimers();
+    expect(actions.getInsightsData).toHaveBeenCalledTimes(2);
   });
 });
 
@@ -338,7 +384,11 @@ describe('opened again under the same layout', () => {
     expect(container.querySelector('.opacity-60')).toBeNull();
     expect(actions.getInsightsData).toHaveBeenCalledTimes(2);
 
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    actions.getInsightsData.mockResolvedValueOnce(insights({ failedSections: ['trend'] }));
     await act(async () => answer(insights({ failedSections: ['trend'] })));
+    await afterAutoRetry();
+    vi.useRealTimers();
     expect(container.textContent).toContain("Couldn't load the visibility trend");
   });
 

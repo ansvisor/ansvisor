@@ -93,11 +93,15 @@
         },
         {
           "heading": "Stale actions",
-          "text": "An action that has stayed **New** for 30 days, with no one assigning, editing, sending or updating its tasks, is marked **Stale** each night. It isn't closed or dismissed: its row keeps one status, **New**, with \"No update in 44 d\" under it, the open action shows a **Stale** label, and the **Status** filter's **Stale** lists them all.\n\nIf it still matters, click **Still relevant** in the open action, or in the row menu. The hint and label go, its 30 days start again, and History says who kept it. Any other change to the action, or moving it out of New, clears the label too. If it no longer matters, dismiss it.\n\nAn open action whose signals have all resolved shows **Signal resolved, review** instead of a signal count. It stays open: check whether the work is done, then complete or dismiss it."
+          "text": "An action that has stayed **New** for 30 days, with no one assigning, editing, sending or updating its tasks, is marked **Stale** each night. It isn't closed or dismissed: its row keeps one status, **New**, with \"No update in 44 d\" under it, the open action shows a **Stale** label, and the **Status** filter's **Stale** lists them all.\n\nIf it still matters, click **Keep** in the open action, or **Still relevant** in the row menu. The hint and label go, its 30 days start again, and History says who kept it. Any other change to the action, or moving it out of New, clears the label too. If it no longer matters, click **Dismiss**.\n\nAn open action whose signals have all resolved shows **Signal resolved, review** instead of a signal count. It stays open: check whether the work is done, then complete or dismiss it."
+        },
+        {
+          "heading": "The top of an action",
+          "text": "Click a row to open the action. Its top line shows the priority and the action's code, and **⋯** beside them holds **Run agent**, **Copy Data** and the exports. Under the title, small boxes count what it affects (prompts, pages, platforms and so on), and you set **Status**, **Assignee** and **Due date**."
         },
         {
           "heading": "Inside an action",
-          "text": "Click a row to open the action. Under its title you set **Status**, **Assignee** and **Due date**. Its tabs:\n\n- **Overview**: **Why this priority?**, with how sure the score is (low, medium or high confidence, and why, such as one kind of finding from one source), **Why this action?** with the signals behind it, the **Goal** (what done looks like, with a date) and the linked **KPIs**.\n- **Affected**: the prompts, pages, topics, competitors or platforms it is about, with each prompt's demand.\n- **Tasks**: the work, step by step.\n- **Signals**: the evidence. Click one to open it on the Signals tab.\n- **History**: every change, from status and assignee changes to tasks updated or sent.\n\nThe title's count, **Why this action?**, the **Goal**'s \"5 of 7 prompts\" and the AI searches a month all count the same prompts as the **Affected** tab, so the monthly searches are the sum of its rows."
+          "text": "An open action's tabs:\n\n- **Overview**: **Why this priority?**, with how sure the score is (low, medium or high confidence, and why, such as one kind of finding from one source), **Why this action?** with the signals behind it, the **Goal**, with **Done when** (what done looks like, with a date) and the linked **KPIs**.\n- **Affected**: the prompts, pages, topics, competitors or platforms it is about, with each prompt's demand.\n- **Tasks**: the work, step by step, with how many are done, such as **Tasks 2/5**.\n- **Signals**: the evidence. Click one to open it on the Signals tab.\n- **History**: every change, from status and assignee changes to tasks updated or sent.\n\nThe title's count, **Why this action?**, the **Goal**'s \"5 of 7 prompts\" and the AI searches a month all count the same prompts as the **Affected** tab, so the monthly searches are the sum of its rows."
         },
         {
           "heading": "A goal date that has passed",
@@ -109,7 +113,7 @@
         },
         {
           "heading": "Run an agent on an action",
-          "text": "When Chat is on, Admins and Managers see **Run agent** on each open action: an agent button next to its title in the list, and at the top of the open action.\n\nIt lists your agents that work on the action's brand, the ones used on this kind of action first. Pick one, and Chat starts a run on this action alone and opens it beside the action. **Run with Chat** does the same without an agent, in your default mode. **Create an agent for this kind of action** starts a new agent from a fitting skill.\n\nThe run drafts the work, but closing tasks stays your click. If the action is completed or dismissed, an agent's run stops; a **Run with Chat** run doesn't. The action's **History** shows when a run started and ended, and who started it."
+          "text": "When Chat is on, Admins and Managers see **Run agent** on each open action: an agent button next to its title in the list, and in the **⋯** menu at the top of the open action.\n\nIt lists your agents that work on the action's brand, the ones used on this kind of action first. Pick one, and Chat starts a run on this action alone and opens it beside the action. **Run with Chat** does the same without an agent, in your default mode. **Create an agent for this kind of action** starts a new agent from a fitting skill.\n\nThe run drafts the work, but closing tasks stays your click. If the action is completed or dismissed, an agent's run stops; a **Run with Chat** run doesn't. The action's **History** shows when a run started and ended, and who started it."
         },
         {
           "heading": "Assign work",
@@ -117,7 +121,7 @@
         },
         {
           "heading": "Export actions",
-          "text": "**Export CSV** on the Actions tab downloads the actions in the current view, as filtered, with their number, priority, status, assignee, due date, task progress and affected items.\n\nInside an action, **Copy Data** gives the whole action as Markdown to paste into a doc or ticket, and **Export** downloads it as **Export CSV** or **Export Excel**. The Excel file has one sheet each for the action, its affected items, tasks, signals and history."
+          "text": "**Export CSV** on the Actions tab downloads the actions in the current view, as filtered, with their number, priority, status, assignee, due date, task progress and affected items.\n\nInside an action, the **⋯** menu's **Copy Data** gives the whole action as Markdown to paste into a doc or ticket, and **Export CSV** or **Export Excel** downloads it. The Excel file has one sheet each for the action, its affected items, tasks, signals and history."
         },
         {
           "heading": "Send work here from other pages",
@@ -1376,16 +1380,23 @@
         "archived chats",
         "unarchive",
         "archive selected",
-        "ctrl k"
+        "ctrl k",
+        "clear chats",
+        "clear all",
+        "delete selected",
+        "delete many chats",
+        "too many chats"
       ],
       "synonyms": [
         "chat history",
         "old chats",
         "past conversations",
-        "look up a chat"
+        "look up a chat",
+        "clean up chats",
+        "remove old chats"
       ],
       "plan": "all",
-      "updated": "2026-10-30",
+      "updated": "2026-11-21",
       "sections": [
         {
           "heading": null,
@@ -1406,6 +1417,10 @@
         {
           "heading": "Archive and unarchive",
           "text": "**Archive** in a chat's **⋯** menu takes it off the chat menu; the message that appears says where it went. To archive several at once, tick your chats in **All chats** and click **Archive selected**.\n\nArchived chats are under **Archived** in **All chats**, or **Archived** at the bottom of the chat menu. Tick them and click **Unarchive selected** to put them back in your chat menu. You can still open an archived chat to read it."
+        },
+        {
+          "heading": "Clear old chats",
+          "text": "To tidy the chat menu, click **Clear** beside a day, such as **Previous 30 days**. Chat asks first and says how many chats will be deleted. To pick chats one by one, tick them in **All chats** and click **Delete selected**.\n\nOnly your own chats are deleted: chats teammates shared with you, and pinned chats, stay. Files they made stay in **Files**, and a chat that is still working is stopped first. Click **Undo** within a few seconds to bring them back; after that it can't be undone. To delete one chat, use **Delete** in its **⋯** menu, which shows when you point at the row."
         }
       ]
     },
@@ -3614,7 +3629,7 @@
         },
         {
           "heading": "Filter, sort and export",
-          "text": "- Search the opportunities, and narrow the list by topic, prompt, type, impact, **Source** and status. The sources are **System**, suggested automatically; **Manual**, made with **New**; **Prompt**, suggested from a prompt; and **Action**, sent from an Action Center task.\n- **Suggested** picks a period, all time, this month, the last 30 days or your own dates, and the order: highest score, newest or oldest.\n- Archived opportunities stay hidden unless you filter to them.\n- Most filters and the order stay in the page's address, so a link opens the same view; the topic and the search don't.\n- **Export CSV** downloads every opportunity that matches the filters and the search, not only the page you see."
+          "text": "- Search the opportunities, and narrow the list by topic, prompt, type, impact, **Source** and status. The sources are **System**, suggested automatically; **Manual**, made with **New**; **Prompt**, suggested from a prompt; and **Action**, sent from an Action Center task.\n- **Suggested** picks a period, all time, this month, the last 30 days or your own dates, and the order: highest score, newest or oldest.\n- Archived opportunities stay hidden unless you filter to them.\n- Most filters and the order stay in the page's address, so a link opens the same view; the topic and the search don't.\n- **Export CSV**, the download icon at the top right, downloads every opportunity that matches the filters and the search, not only the page you see."
         },
         {
           "heading": "Quick actions on a row",
@@ -3658,7 +3673,7 @@
         },
         {
           "heading": "Automatic suggestions",
-          "text": "After each day's tracking run, Ansvisor writes new opportunities by itself, on a plan with an active subscription:\n\n- **Up to 3 a night**, one per topic, for groups of prompts with tracked answers and no opportunity yet. That's at most 21 a week, but only as many as there are such groups: new groups come when you add prompts.\n- **When no group is left, at most 1 a night** as another angle (at most 7 a week). It goes to the group with the most estimated AI volume whose opportunity has been done for 30 days, where your brand is still mentioned or cited in fewer than 1 in 5 answers. On many nights nothing qualifies, and nothing is written.\n\nWhen none can be added, a note above the list says why: every group has an opportunity, or the month's allowance is used up."
+          "text": "After each day's tracking run, Ansvisor writes new opportunities by itself, on a plan with an active subscription:\n\n- **Up to 3 a night**, one per topic, for groups of prompts with tracked answers and no opportunity yet. That's at most 21 a week, but only as many as there are such groups: new groups come when you add prompts.\n- **When no group is left, at most 1 a night** as another angle (at most 7 a week), for the group with the most estimated AI volume whose opportunity was done 30 days ago and where your brand still shows in fewer than 1 in 5 answers. Often nothing qualifies.\n\nWhen none can be added, a note above the list says why: every group has an opportunity, or the month's allowance is used up. Then Ansvisor also refreshes your prompt suggestions, at most weekly, so new prompts can open new groups."
         },
         {
           "heading": "While the first tracking runs",
@@ -3692,11 +3707,11 @@
         "editorial plan"
       ],
       "plan": "all",
-      "updated": "2026-11-11",
+      "updated": "2026-11-21",
       "sections": [
         {
           "heading": null,
-          "text": "The **Content plan**, **Plan** under **Content** in the sidebar, ranks what to create, optimize or protect next. It covers the last 7, 30 or 90 days: pick the period at the top right."
+          "text": "The **Content plan**, **Plan** under **Content** in the sidebar, ranks what to create, optimize or protect next. It covers the last 7, 30 or 90 days: pick **7**, **30** or **90 days** at the top right."
         },
         {
           "heading": "The four cards",
@@ -4890,7 +4905,7 @@
         "prompts for a topic"
       ],
       "plan": "all",
-      "updated": "2026-11-18",
+      "updated": "2026-11-21",
       "sections": [
         {
           "heading": null,
@@ -4911,6 +4926,10 @@
         {
           "heading": "Add, dismiss or refresh suggestions",
           "text": "Use **Search prompts…** to narrow the list, **+** to add a suggestion, **×** to dismiss it and **New** to generate a fresh list. **Clear All** asks first, then dismisses every suggestion listed. Admins and managers can add and generate suggestions; analysts can also dismiss them. Those from Search Console or Analytics stay hidden for 30 days once dismissed.\n\nSuggestions expire after 48 hours. Click **New** for fresh ideas, for example after you change your content.\n\nA prompt added from suggestions gets its first results with the next daily run."
+        },
+        {
+          "heading": "New suggestions on their own",
+          "text": "When every group of prompts already has a content opportunity, Ansvisor writes a fresh list by itself after the daily run, so you have new prompts to add and new opportunities can follow. It does that at most once a week, only when no suggestion is waiting for you, and for a brand with a topic. The **Suggestions** dot in the sidebar then shows there's something new."
         },
         {
           "heading": "Edit a suggestion before adding it",
@@ -5411,11 +5430,11 @@
         "what changed after publishing"
       ],
       "plan": "all",
-      "updated": "2026-11-01",
+      "updated": "2026-11-21",
       "sections": [
         {
           "heading": null,
-          "text": "**What Ansvisor did for you** lists the changes you shipped in a month, such as a page published to your CMS, and what each one did in AI answers. Open it from **Reports** with **What Ansvisor did for you**, and go back with **Back to Reports**. It shows the brand you have open."
+          "text": "**What Ansvisor did for you** lists the changes you shipped in a month, such as a page published to your CMS, and what each one did in AI answers. Open it from **Reports** with **What Ansvisor did for you**, and go back with **Back to Reports**. It shows the brand you have open.\n\nThe button appears once the brand has shipped its first change: a page your CMS confirmed after **Send to CMS**, or an agent's first go-live. Until then the page says it fills in after that first change."
         },
         {
           "heading": "What shipped means",
@@ -6587,11 +6606,11 @@
         "audit priority"
       ],
       "plan": "all",
-      "updated": "2026-11-19",
+      "updated": "2026-11-21",
       "sections": [
         {
           "heading": null,
-          "text": "The **Site Audit** page sums up your audits: a summary line, four cards and a chart, then two tabs. **Opportunities** lists the pages worth auditing next, and **Pages** lists every page you audited."
+          "text": "The **Site Audit** page sums up your audits: a summary line, four cards and a chart, then two tabs. **Opportunities** lists the pages worth auditing next, and **Pages** lists every page you audited.\n\nThe page opens in one go: until its numbers are in, grey placeholders hold the place of the summary line, the chart and the lists, so nothing moves when they fill in."
         },
         {
           "heading": "Summary and cards",
@@ -6651,7 +6670,7 @@
         "visibility dashboard"
       ],
       "plan": "all",
-      "updated": "2026-11-19",
+      "updated": "2026-11-23",
       "sections": [
         {
           "heading": null,
@@ -6659,7 +6678,7 @@
         },
         {
           "heading": "The tabs and how to reach them",
-          "text": "The tabs sit under the page's header. In the sidebar, **Visibility** under **Analytics** opens and closes a group with the same entries, **Overview**, **Mentions**, **Citations** and, for an online shop on a plan with it, **Products**; it is open whenever one of them is showing.\n\nEach tab loads its own data when you open it, and shows a placeholder while it loads. The date range, AI platform, country and topic you picked stay set when you switch tabs; Mentions has no **All** range, so it opens on its 30 days instead. Product Visibility keeps its own filters. A tab whose data can't be read says so, with **Retry**, and the other tabs keep working."
+          "text": "The tabs sit under the page's header. In the sidebar, **Visibility** under **Analytics** opens and closes a group with the same entries, **Overview**, **Mentions**, **Citations** and, for an online shop on a plan with it, **Products**; it is open whenever one of them is showing.\n\nEach tab loads its own data when you open it, and shows a placeholder while it loads. The date range, AI platform, country and topic you picked stay set when you switch tabs; Mentions has no **All** range, so it opens on its 30 days instead. Product Visibility keeps its own filters. On **Overview**, a part that can't be read is read again by itself a moment later, and shows as loading meanwhile. A tab or part whose data still can't be read says so, with **Retry**, and the other tabs keep working."
         },
         {
           "heading": "The header",
