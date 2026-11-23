@@ -337,7 +337,7 @@ describe('AgentImpactCard: nothing live yet', () => {
     draftsNotLive,
   });
 
-  it('says what will show and when, with the method and Open in Reports', async () => {
+  it('says what will show and when, with the method and no Open in Reports', async () => {
     answer = reply(empty(0));
     await render();
     expect(text('[data-slot="agent-impact-empty"]')).toBe(
@@ -345,7 +345,8 @@ describe('AgentImpactCard: nothing live yet', () => {
     );
     expect(one('[data-slot="agent-impact-kpis"]')).toBeNull();
     expect(one('[data-slot="agent-impact-drafts"]')).toBeNull();
-    expect(one('[data-action="agent.openReports"]')).not.toBeNull();
+    // Nothing shipped: the report would be empty, so no link to it.
+    expect(one('[data-action="agent.openReports"]')).toBeNull();
   });
 
   it('counts its drafts not live yet, without saying twice that they aren’t measured', async () => {

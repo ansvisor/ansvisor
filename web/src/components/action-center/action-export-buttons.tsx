@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useRef, useState, type ReactNode } from 'react';
 import { useTranslations } from 'next-intl';
 import { useServerErrorText } from '@/hooks/use-server-error';
 import { toast } from 'sonner';
@@ -36,20 +36,7 @@ import type { ActionStory } from '@/lib/action-center/story';
 import { saveBlob } from '@/lib/download';
 import type { VolumeEstimate } from '@/lib/volume-estimate';
 
-/**
- * Copy all, Export CSV and Export Excel for one action (AC-005): what every
- * tab of the drawer shows, to take into a doc, a ticket or a spreadsheet.
- * Disabled until the drawer has loaded the action's detail. Copy Data opens the
- * whole action as Markdown: select any part to copy it, or copy it all with
- * the icon. CSV and Excel share an Export menu.
- */
-export function ActionExportButtons({
-  action,
-  detail,
-  affected = null,
-  volumes = null,
-  story = null,
-}: {
+interface ActionExportInput {
   action: ActionItem;
   detail: ActionDetail | null;
   /** The Affected tab's list and its prompts' demand, as the drawer shows them (AC-003). */
@@ -57,7 +44,81 @@ export function ActionExportButtons({
   volumes?: Map<string, VolumeEstimate> | null;
   /** Why and Goal as the drawer words them, from the action's data (AC-003). */
   story?: ActionStory | null;
-}) {
+}
+
+/**
+ * Copy all, Export CSV and Export Excel for one action (AC-005): what every
+ * tab of the drawer shows, to take into a doc, a ticket or a spreadsheet.
+ * Disabled until the drawer has loaded the action's detail. Copy Data opens the
+ * whole action as Markdown: select any part to copy it, or copy it all with
+ * the icon. CSV and Excel share an Export menu.
+ */
+export function ActionExportButtons(input: ActionExportInput) {
+  const tExport = useTranslations('actionCenter.actionsPage.export');
+  const { disabled, copyData, downloadCsv, downloadExcel, dialog } = useActionExport(input);
+  return (
+    <>
+      {/* The size of Site Audit's Export menu: they sit in the drawer's top row. */}
+      <div className="flex items-center gap-1.5">
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-7 gap-1.5 text-xs"
+          disabled={disabled}
+          onClick={copyData}
+        >
+          <Copy className="h-3 w-3" />
+          {tExport('copyAll')}
+        </Button>
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            render={
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-7 gap-1.5 text-xs"
+                disabled={disabled}
+              />
+            }
+          >
+            <Download className="h-3 w-3" />
+            {tExport('menu')}
+          </DropdownMenuTrigger>
+          {/* Wider than its trigger, so "Export Excel" stays on one line. */}
+          <DropdownMenuContent align="end" className="w-36">
+            <DropdownMenuItem onClick={downloadCsv}>
+              <FileDown className="me-2 h-4 w-4" />
+              {tExport('csv')}
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={downloadExcel}>
+              <FileSpreadsheet className="me-2 h-4 w-4" />
+              {tExport('excel')}
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+      {dialog}
+    </>
+  );
+}
+
+/**
+ * Copy Data, Export CSV and Export Excel as actions to call, and the Copy
+ * Data dialog to render: for a menu of its own (the action drawer's ⋯).
+ */
+export function useActionExport({
+  action,
+  detail,
+  affected = null,
+  volumes = null,
+  story = null,
+}: ActionExportInput): {
+  disabled: boolean;
+  copyData: () => void;
+  downloadCsv: () => void;
+  downloadExcel: () => void;
+  dialog: ReactNode;
+} {
   const tExport = useTranslations('actionCenter.actionsPage.export');
   const serverError = useServerErrorText();
   // Every label the export reads, from the same namespaces the API uses.
@@ -182,60 +243,25 @@ export function ActionExportButtons({
     setTimeout(() => setJustCopied(false), 2000);
   };
 
-  const downloadCsv = (data: ActionExport) =>
+  const csvFile = (data: ActionExport) =>
     saveBlob(
       new Blob([BYTE_ORDER_MARK, actionCsv(data)], { type: 'text/csv;charset=utf-8;' }),
       actionExportFileName(data, 'csv'),
     );
 
-  const downloadExcel = async (data: ActionExport) => {
+  const excelFile = async (data: ActionExport) => {
     // Loaded on demand: the writer is only needed when someone asks for a file.
     const { default: writeXlsxFile } = await import('write-excel-file/browser');
     await writeXlsxFile(actionWorkbook(data, tExport)).toFile(actionExportFileName(data, 'xlsx'));
   };
 
   const disabled = !detail || isBusy;
-  return (
-    <>
-      {/* The size of Site Audit's Export menu: they sit in the drawer's top row. */}
-      <div className="flex items-center gap-1.5">
-        <Button
-          variant="outline"
-          size="sm"
-          className="h-7 gap-1.5 text-xs"
-          disabled={disabled}
-          onClick={() => void run(showData)}
-        >
-          <Copy className="h-3 w-3" />
-          {tExport('copyAll')}
-        </Button>
-        <DropdownMenu>
-          <DropdownMenuTrigger
-            render={
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-7 gap-1.5 text-xs"
-                disabled={disabled}
-              />
-            }
-          >
-            <Download className="h-3 w-3" />
-            {tExport('menu')}
-          </DropdownMenuTrigger>
-          {/* Wider than its trigger, so "Export Excel" stays on one line. */}
-          <DropdownMenuContent align="end" className="w-36">
-            <DropdownMenuItem onClick={() => void run(downloadCsv)}>
-              <FileDown className="me-2 h-4 w-4" />
-              {tExport('csv')}
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => void run(downloadExcel)}>
-              <FileSpreadsheet className="me-2 h-4 w-4" />
-              {tExport('excel')}
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </div>
+  return {
+    disabled,
+    copyData: () => void run(showData),
+    downloadCsv: () => void run(csvFile),
+    downloadExcel: () => void run(excelFile),
+    dialog: (
       <Dialog open={preview !== null} onOpenChange={(open) => !open && setPreview(null)}>
         <DialogContent className="sm:max-w-2xl" initialFocus={previewRef}>
           <DialogHeader>
@@ -263,6 +289,6 @@ export function ActionExportButtons({
           </div>
         </DialogContent>
       </Dialog>
-    </>
-  );
+    ),
+  };
 }

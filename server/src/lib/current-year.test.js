@@ -47,6 +47,7 @@ describe('the generators', () => {
     for (const path of [
       './opportunity-generator.js',
       './page-prompt-suggestions.js',
+      './prompt-suggestion-refresh.js',
       '../routes/prompts.js',
     ]) {
       const code = source(path);
@@ -54,7 +55,8 @@ describe('the generators', () => {
       // No example or instruction writes the year in by itself.
       expect(code, path).not.toMatch(/\$\{\s*(?:currentYear|new Date\(\)\.getFullYear\(\))\s*\}/);
     }
-    // Onboarding's prompts, its topics' prompts and the suggestions.
-    expect(source('../routes/prompts.js').match(/yearRule\(\)/g)).toHaveLength(3);
+    // Onboarding's prompts and its topics' prompts; the suggestions' refresh
+    // lives in prompt-suggestion-refresh.js.
+    expect(source('../routes/prompts.js').match(/yearRule\(\)/g)).toHaveLength(2);
   });
 });

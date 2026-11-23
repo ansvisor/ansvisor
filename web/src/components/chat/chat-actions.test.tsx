@@ -266,4 +266,56 @@ describe('chat actions', () => {
     await act(async () => undefined);
     expect(toasts.calls.map((c) => c.text)).toContain("error: It's too late to undo.");
   });
+
+  it("clears a day's own chats after a confirm with the count, and Undo brings them back", async () => {
+    const OTHER = 'cccccccc-0000-4000-8000-000000000002';
+    const THEIRS = 'cccccccc-0000-4000-8000-000000000003';
+    list.chats = [
+      chat(),
+      chat({ id: OTHER, title: 'AC-12?' }),
+      chat({ id: THEIRS, mine: false, shared: true }),
+    ];
+    nav.pathname = `/dashboard/chat/${OTHER}`;
+    answer = (url, method) => {
+      const sent = calls[calls.length - 1].body as { action: string; ids: string[] };
+      return method === 'POST'
+        ? { status: 200, body: { ok: true, ids: sent.ids } }
+        : { status: 200, body: { ok: true } };
+    };
+    const done = vi.fn();
+    await render(null);
+    await act(async () =>
+      actions!.askDeleteMany(list.chats, { where: 'Previous 30 days', onDone: done }),
+    );
+    expect(document.body.textContent).toContain('Delete 2 chats from Previous 30 days?');
+    expect(document.body.textContent).toContain("then this can't be undone");
+    expect(item('confirm.ok')!.textContent).toBe('Delete 2 chats');
+    await act(async () => item('confirm.ok')!.click());
+    expect(calls[0]).toEqual({
+      url: '/api/chat/conversations/bulk',
+      method: 'POST',
+      body: { action: 'delete', ids: [ID, OTHER] },
+    });
+    expect(list.chats.map((c) => c.id)).toEqual([THEIRS]);
+    expect(nav.push).toHaveBeenCalledWith('/dashboard/chat');
+    expect(done).toHaveBeenCalledTimes(1);
+    const deleted = toasts.calls.find((c) => c.text === '2 chats deleted')!;
+    expect(deleted.options).toMatchObject({ duration: 10_000 });
+    await act(async () =>
+      (deleted.options as { action: { onClick: () => void } }).action.onClick(),
+    );
+    await act(async () => undefined);
+    expect(calls[1]).toEqual({
+      url: '/api/chat/conversations/bulk',
+      method: 'POST',
+      body: { action: 'restore', ids: [ID, OTHER] },
+    });
+    expect(toasts.calls.map((c) => c.text)).toContain('Undone');
+  });
+
+  it("asks nothing when none of the chats is the person's own", async () => {
+    await render(null);
+    await act(async () => actions!.askDeleteMany([chat({ mine: false, shared: true })]));
+    expect(item('confirm.ok')).toBeNull();
+  });
 });

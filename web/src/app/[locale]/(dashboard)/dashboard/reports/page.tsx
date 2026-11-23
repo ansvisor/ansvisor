@@ -8,14 +8,17 @@ import { toast } from 'sonner';
 import { useBrandStore } from '@/stores/use-brand-store';
 import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 import { useFeatureGate } from '@/hooks/use-feature-gate';
+import { useUserRole } from '@/hooks/use-user-role';
 import {
   createReport,
   getReport,
   getReports,
   deleteReport,
+  renameReport,
   type ReportListItem,
 } from '@/lib/actions/reports';
 import { getReportBranding } from '@/lib/actions/white-label';
+import { brandHasShipped } from '@/lib/actions/impact-report';
 import { saveReportPdf } from './_save-pdf';
 import { useChatPageContext } from '@/components/chat/panel/chat-panel-context';
 import { viewRows } from '@/lib/chat/page-view';
@@ -23,6 +26,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { useChatAgentic } from '@/components/providers/chat-agentic-provider';
 import { Input } from '@/components/ui/input';
+import { DatePicker } from '@/components/ui/date-picker';
 import {
   Dialog,
   DialogContent,
@@ -57,6 +61,7 @@ import {
   Link2,
   Loader2,
   MoreHorizontal,
+  Pencil,
   Plus,
   Trash2,
 } from 'lucide-react';
@@ -116,6 +121,12 @@ export default function ReportsPage() {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
   const [pendingConfirm, setPendingConfirm] = useState<string | null>(null);
+  // Renaming is an Admin's or a Manager's, as the server checks (RP-11).
+  const { canManage } = useUserRole();
+  // Rename (UX audit RP-11): the report, and the title being typed.
+  const [renaming, setRenaming] = useState<ReportListItem | null>(null);
+  const [newTitle, setNewTitle] = useState('');
+  const [savingTitle, setSavingTitle] = useState(false);
 
   const [template, setTemplate] = useState<ReportTemplateId>('executive_summary');
   const [preset, setPreset] = useState<DatePreset>('30d');
@@ -129,6 +140,23 @@ export default function ReportsPage() {
   const [sections, setSections] = useState<Set<ReportSection>>(
     () => new Set(REPORT_TEMPLATES.find((tpl) => tpl.id === 'executive_summary')!.sections),
   );
+
+  // What Ansvisor did for you shows once the brand has shipped something:
+  // before, the report is empty. Shown only on a yes, so it never flashes.
+  const [shipped, setShipped] = useState<{ brandId: string; yes: boolean } | null>(null);
+  useEffect(() => {
+    if (!chatAgentic || !activeBrandId) return;
+    let current = true;
+    brandHasShipped(activeBrandId)
+      .then((yes) => {
+        if (current) setShipped({ brandId: activeBrandId, yes });
+      })
+      .catch(() => {});
+    return () => {
+      current = false;
+    };
+  }, [chatAgentic, activeBrandId]);
+  const showImpact = chatAgentic && shipped?.brandId === activeBrandId && shipped.yes;
 
   const reportBrand = brands.find((b) => b.id === (reportBrandId ?? activeBrandId));
   // Shopping is brand-pref-gated: hidden here exactly like the sidebar hides
@@ -253,6 +281,27 @@ export default function ReportsPage() {
     }
   };
 
+  const handleRename = async () => {
+    if (!renaming || savingTitle) return;
+    const title = newTitle.replace(/\s+/g, ' ').trim();
+    if (!title || title === renaming.title) {
+      setRenaming(null);
+      return;
+    }
+    setSavingTitle(true);
+    try {
+      if (!(await renameReport(renaming.id, title))) throw new Error('not renamed');
+      setReports((prev) => prev.map((r) => (r.id === renaming.id ? { ...r, title } : r)));
+      setRenaming(null);
+      toast.success(t('rename.done'));
+    } catch (err) {
+      console.error('Report rename error:', err);
+      toast.error(t('rename.failed'));
+    } finally {
+      setSavingTitle(false);
+    }
+  };
+
   // Share and Download in the row's menu (UX audit RP-09). The link opens the
   // report for anyone in the workspace; reports have no public link.
   const handleCopyLink = async (id: string) => {
@@ -313,8 +362,8 @@ export default function ReportsPage() {
             <p className="text-muted-foreground">{t('description')}</p>
           </div>
           <div className="flex items-center gap-2">
-            {/* What Ansvisor did for you (CHAT-22 §2 item 5): kept only with the new Chat on. */}
-            {chatAgentic && (
+            {/* What Ansvisor did for you (CHAT-22 §2 item 5): with the new Chat on, once the brand has shipped. */}
+            {showImpact && (
               <Link
                 href="/dashboard/reports/impact"
                 data-action="reports.openImpact"
@@ -403,6 +452,21 @@ export default function ReportsPage() {
                               )}
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end" className="w-44">
+                              {canManage && (
+                                <DropdownMenuItem
+                                  data-action="reports.rename"
+                                  onClick={guard(
+                                    () => {
+                                      setNewTitle(report.title);
+                                      setRenaming(report);
+                                    },
+                                    { action: tActions('renameReports') },
+                                  )}
+                                >
+                                  <Pencil className="h-4 w-4" />
+                                  {t('rename.item')}
+                                </DropdownMenuItem>
+                              )}
                               <DropdownMenuItem
                                 data-action="reports.copyLink"
                                 onClick={() => void handleCopyLink(report.id)}
@@ -435,6 +499,52 @@ export default function ReportsPage() {
                   ))}
                 </TableBody>
               </Table>
+              <Dialog
+                open={renaming !== null}
+                onOpenChange={(v) => !v && !savingTitle && setRenaming(null)}
+              >
+                <DialogContent className="sm:max-w-sm">
+                  <DialogHeader>
+                    <DialogTitle>{t('rename.title')}</DialogTitle>
+                    <DialogDescription>{t('rename.description')}</DialogDescription>
+                  </DialogHeader>
+                  <form
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      void handleRename();
+                    }}
+                    className="space-y-4"
+                  >
+                    <Input
+                      autoFocus
+                      aria-label={t('rename.label')}
+                      data-action="reports.renameTitle"
+                      value={newTitle}
+                      maxLength={200}
+                      onChange={(e) => setNewTitle(e.target.value)}
+                      disabled={savingTitle}
+                    />
+                    <DialogFooter>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => setRenaming(null)}
+                        disabled={savingTitle}
+                      >
+                        {tc('cancel')}
+                      </Button>
+                      <Button
+                        type="submit"
+                        data-action="reports.saveTitle"
+                        disabled={savingTitle || !newTitle.trim()}
+                      >
+                        {savingTitle && <Loader2 className="me-2 h-4 w-4 animate-spin" />}
+                        {t('rename.save')}
+                      </Button>
+                    </DialogFooter>
+                  </form>
+                </DialogContent>
+              </Dialog>
               <Dialog
                 open={pendingConfirm !== null}
                 onOpenChange={(v) => !v && setPendingConfirm(null)}
@@ -552,20 +662,20 @@ export default function ReportsPage() {
               </div>
               {preset === 'custom' && (
                 <div className="flex items-center gap-2 pt-1">
-                  <Input
-                    type="date"
-                    value={customRange.from}
-                    onChange={(e) => setCustomRange((r) => ({ ...r, from: e.target.value }))}
+                  <DatePicker
+                    aria-label={tc('from')}
+                    value={customRange.from || null}
+                    onChange={(day) => setCustomRange((r) => ({ ...r, from: day ?? '' }))}
                     disabled={generating}
-                    className="text-sm"
+                    className="h-9 text-sm"
                   />
                   <span className="text-xs text-muted-foreground">—</span>
-                  <Input
-                    type="date"
-                    value={customRange.to}
-                    onChange={(e) => setCustomRange((r) => ({ ...r, to: e.target.value }))}
+                  <DatePicker
+                    aria-label={tc('to')}
+                    value={customRange.to || null}
+                    onChange={(day) => setCustomRange((r) => ({ ...r, to: day ?? '' }))}
                     disabled={generating}
-                    className="text-sm"
+                    className="h-9 text-sm"
                   />
                 </div>
               )}

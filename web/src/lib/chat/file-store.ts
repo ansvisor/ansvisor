@@ -12,7 +12,7 @@ import type { ChatActor } from './engine';
 import { answerFormats, answerTitle, type ExportAnswer } from './export';
 import { exportChatFile, type ChatFileFormat, type StoredChatFile } from './file-export';
 import { fileChatOutput } from './file-output';
-import { CHAT_FILES_BUCKET, ZIP_MAX_BYTES, ZIP_MAX_FILES } from './files';
+import { CHAT_FILES_BUCKET, PPTX_MIME, ZIP_MAX_BYTES, ZIP_MAX_FILES } from './files';
 import { pageTitleIssue } from './page-title';
 import { fileStamp } from './stamp';
 
@@ -258,8 +258,8 @@ async function storedFile(row: StoredRow, appOrigin: string | null): Promise<Sto
       row.data_as_of,
       row.timezone,
     ),
-    // An image is its bytes (W4-08); every other file is text.
-    ...(isImageMime(row.mime_type)
+    // An image (W4-08) or a report deck (#2298) is its bytes; every other file is text.
+    ...(isImageMime(row.mime_type) || row.mime_type === PPTX_MIME
       ? { content: '', bytes: new Uint8Array(await blob.arrayBuffer()) }
       : { content: await blob.text() }),
     appOrigin,
