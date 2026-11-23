@@ -124,7 +124,8 @@ describe('the Mentions and Citations cards', () => {
     act(() => card('Mentions: open Mentions').click());
     expect(onNavigate).toHaveBeenLastCalledWith('/dashboard/mentions');
     act(() => card('Citations: open Citations').click());
-    expect(onNavigate).toHaveBeenLastCalledWith('/dashboard/citations');
+    // The card counts the brand's own citations: Citations opens on Brand.
+    expect(onNavigate).toHaveBeenLastCalledWith('/dashboard/citations?scope=own');
     expect(onBreakdown).not.toHaveBeenCalled();
   });
 
