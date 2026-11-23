@@ -1855,6 +1855,10 @@
         "title": "Starke KI-Conversions auf {targets}",
         "description": "Diese Seiten wandeln KI-Traffic weit über dem Durchschnitt Ihrer Website in wichtige Ereignisse um."
       },
+      "paid_overlap": {
+        "title": "Steigende Google-Werbeausgaben für {targets}, wofür die KI Sie bereits auswählt",
+        "description": "Die KI wählt Sie bereits in den Antworten auf diese Kauf-Prompts aus, und Ihre Ausgaben bei Google für deren Suchbegriffe sind im Vergleich zu den 30 Tagen zuvor gestiegen."
+      },
       "bridge_link_gap": {
         "title": "{targets} mit Seiten verlinken, die konvertieren",
         "description": "KI leitet Lesende auf diese Seiten und nur wenige davon konvertieren. Seiten zum selben Thema, die konvertieren, verzeichnen wenig KI-Traffic."
@@ -3300,6 +3304,12 @@
         "description": "Diese Quellen werden zitiert, wenn Antworten Ihre Marke erwähnen, und könnten auf Ihre eigenen Seiten verweisen.",
         "goal": "Verwandeln Sie Erwähnungen Dritter in Verweise auf Ihre Ressourcen."
       },
+      "review_paid_overlap": {
+        "title": "Überprüfen Sie die Google Ads für {targets}, wofür die KI Sie bereits auswählt",
+        "titleGeneric": "Überprüfen Sie Google Ads, bei denen die KI Sie bereits auswählt",
+        "description": "Die KI wählt Sie bereits in den Antworten auf diese Kauf-Prompts aus, und Ihre Google-Ausgaben für deren Suchbegriffe steigen. Möglicherweise zahlen Sie für Klicks, die Sie ohnehin erhalten würden.",
+        "goal": "Werbeausgaben dort einsetzen, wo sie zusätzliche Klicks bringen, und die KI-Antwort beibehalten."
+      },
       "bridge_links": {
         "title": "Verlinken Sie {targets} mit Seiten, die konvertieren",
         "titleGeneric": "Verlinken Sie von KI besuchte Seiten mit Seiten, die konvertieren",
@@ -3764,6 +3774,8 @@
       "prioritize_targets_target": "{targets} nach Auswirkung priorisieren",
       "review_link_plan": "Hinzuzufügende Links prüfen",
       "review_link_plan_target": "Auf {targets} hinzuzufügende Links prüfen",
+      "review_paid_overlap": "Überprüfen Sie die Google Ads für diese Suchbegriffe",
+      "review_paid_overlap_target": "Überprüfen Sie die Google Ads für {targets}",
       "define_validation_baseline": "Ausgangsbasis für Messungen erfassen",
       "define_validation_baseline_target": "Baseline für {targets} erfassen",
       "create_content_brief": "Inhalte-Briefing erstellen",
@@ -3875,6 +3887,7 @@
       "strengthen_entity_content": "Die Seite beschreibt die Marke beim erneuten Abruf so wie in ihrem Profil",
       "add_internal_links": "Die Seiten, die darauf verlinken sollen, tun dies; erneut abgerufen",
       "review_link_plan": "Jeder Link und sein Ankertext ist genehmigt oder geändert: Sie bestätigen es",
+      "review_paid_overlap": "Die Anzeige jedes Suchbegriffs wird in Google Ads beibehalten, reduziert oder pausiert: Sie bestätigen dies",
       "improve_cta_path": "Der Call-to-Action ist live auf der Seite: Sie bestätigen es",
       "publish_content": "Die Seite ist unter ihrer Adresse veröffentlicht und antwortet beim Abruf",
       "fix_crawler_access": "robots.txt und die Seite lassen die KI-Crawler zu; erneut abgerufen",
@@ -4743,6 +4756,10 @@
     "adsOpportunities": {
       "name": "Ads-Chancen auslesen",
       "step": "Ads-Chancen ausgelesen"
+    },
+    "adsPaidOverlap": {
+      "name": "Bezahlte Überschneidungen lesen",
+      "step": "Bezahlte Überschneidungen lesen"
     },
     "adDrafts": {
       "name": "Anzeigenentwürfe speichern",
@@ -7928,6 +7945,7 @@
       "ai-revenue": "Kunden und Umsatz durch KI",
       "earn-or-pay": "Verdienen oder zahlen",
       "ad-drafts": "Anzeigenentwürfe",
+      "paid-overlap": "Bezahlte Überschneidung",
       "operator": "AEO-Operator"
     },
     "form": {
@@ -8531,7 +8549,7 @@
       },
       "paid-opportunity": {
         "name": "Bezahlte Chancen",
-        "description": "Zeigt wöchentlich, welche kaufrelevanten Prompts durch Inhalte abgedeckt oder bezahlt werden sollten, weist auf Änderungen hin (z. B. wenn Mitbewerber auf Ihren Namen bieten) und entwirft Anzeigen in Ansvisor."
+        "description": "Zeigt jede Woche, welche Kauf-Prompts durch Inhalte verdient oder bezahlt werden sollten, markiert Änderungen (z. B. wenn ein Konkurrent jetzt auf Ihren Namen bietet), zeigt Ihre Ausgaben bei Google für Bereiche, in denen die KI Sie bereits zitiert, und erstellt Anzeigenentwürfe in Ansvisor."
       },
       "ai-ads-watch": {
         "name": "KI-Werbebeobachtung",
@@ -15306,7 +15324,12 @@
       "sov": "Bezahlter SoV",
       "sovNote": "Gesponserte Anzeigen in KI-Antworten werden noch nicht erfasst",
       "cost": "Kosten pro KI-unterstützter Registrierung",
-      "costNote": "Erfordert ein verknüpftes Anzeigenkonto",
+      "costNote": "Erfordert ein verknüpftes und ausgelesenes Werbekonto unter „Verbindungen“",
+      "costOf": "{spend} Werbeausgaben ÷ {count, plural, one {# KI-unterstützte Registrierung} other {# KI-unterstützte Registrierungen}}",
+      "costSpend": "{spend} Werbeausgaben in diesem Zeitraum",
+      "costNoSignups": "Noch keine Registrierungen",
+      "costCurrencies": "Mehrere Währungen",
+      "costCurrenciesNote": "{spend} Werbeausgaben: Beträge in verschiedenen Währungen werden nicht zusammengerechnet, daher gibt es keine einheitlichen Kosten pro Registrierung",
       "signups": "{count, plural, one {# KI-unterstützte Registrierung} other {# KI-unterstützte Registrierungen}} in diesem Zeitraum",
       "signupsNotMeasured": "KI-unterstützte Registrierungen: nicht gemessen",
       "barTitle": "Organisch oder bezahlt · {count, plural, one {# Prompt} other {# Prompts}}",
@@ -15315,7 +15338,11 @@
       "earnedPaid": "Organisch + bezahlt",
       "paidOnly": "Nur bezahlt",
       "neither": "Weder noch",
-      "paidNotMeasured": "Bezahlt wird noch nicht gemessen, daher zeigt das Diagramm nur organisch und weder noch.",
+      "paidNotMeasured": "Bezahlte Aktivitäten werden erst erfasst, wenn ein Google Ads-Konto verknüpft und ausgelesen wurde. Daher zeigt das Diagramm nur unbezahlte und weder noch.",
+      "spendOverlap": "Bei Google bezahlt für Prompts, für die die KI Sie bereits zitiert: {amount}",
+      "spendMatched": "Für alle Ihre getrackten Prompts: {amount}",
+      "spendUnmatched": "Für Suchbegriffe, die mit keinem getrackten Prompt übereinstimmen: {amount}",
+      "spendNote": "Aus Ihren Google Ads-Suchbegriffen. Ausgaben für ChatGPT Ads beziehen sich auf Kampagnen: Es wird nicht angegeben, bei welcher Frage eine Anzeige eingeblendet wurde.",
       "openPrompts": "{count, plural, one {# offenen Prompt} other {# offene Prompts}} ansehen",
       "locked": "{count, plural, one {# weiterer Prompt} other {# weitere Prompts}} in Opportunities {count, plural, one {ist} other {sind}} ab dem {plan}-Plan enthalten.",
       "openSov": "Wer zahlt pro Prompt"
@@ -15392,7 +15419,7 @@
         "volume_at_least": "{volume} Google-Suchanfragen pro Monat, mindestens {threshold}",
         "volume_below": "{volume} Google-Suchanfragen pro Monat, unter {threshold}",
         "volume_not_measured": "Google-Suchanfragen werden noch nicht erfasst",
-        "paid_not_measured": "Werbungtreibende werden noch nicht erfasst",
+        "paid_not_measured": "{wePay, select, false {Ob Mitbewerber für Werbung bezahlen, wird noch nicht erfasst} other {Wer bezahlt, wird noch nicht erfasst}}",
         "no_ad_channel": "Kein Werbekanal erreicht die KI-Plattformen, auf denen dies getrackt wird"
       },
       "answers": "Was die KI heute antwortet",
@@ -15402,6 +15429,13 @@
       "cites": "Zitierungen: {domains}",
       "fanOuts": "Fan-out-Suchanfragen",
       "keywords": "Keyword-Seeds",
+      "paid": {
+        "title": "Ihre Google Ads dazu",
+        "spend": "{amount} für {clicks, plural, one {# Klick} other {# Klicks}} in diesem Zeitraum",
+        "terms": "{count, plural, one {# Suchbegriff stimmte überein} other {# Suchbegriffe stimmten überein}}, die teuersten zuerst:",
+        "none": "In diesem Zeitraum stimmten keine Google-Werbeausgaben damit überein.",
+        "note": "Suchbegriffe werden dem Prompt anhand ihrer Wörter zugeordnet. Ausgaben für ChatGPT Ads werden nicht zugeordnet: Es wird nicht angegeben, bei welcher Frage eine Anzeige eingeblendet wurde."
+      },
       "failed": "Die Antworten konnten nicht geladen werden. Bitte schließen und erneut öffnen.",
       "earn": {
         "title": "Verdienen · Antwort optimieren",
@@ -15476,14 +15510,31 @@
         "channel": "Kanal",
         "status": "Status",
         "spend": "Ausgaben",
-        "signups": "KI-unterstützte Anmeldungen",
-        "cost": "Kosten pro Anmeldung"
+        "clicks": "Klicks",
+        "cpc": "CPC",
+        "conversions": "Conversions",
+        "costPerConversion": "Kosten pro Conversion"
       },
-      "empty": "Werbekonto verknüpfen · Demnächst verfügbar",
-      "emptyNote": "Ihre Kampagnen werden hier aufgeführt, zunächst schreibgeschützt.",
+      "channels": {
+        "google": "Google Ads",
+        "chatgpt": "ChatGPT Ads"
+      },
+      "statuses": {
+        "active": "Aktiv",
+        "paused": "Pausiert",
+        "ended": "Beendet"
+      },
+      "empty": "Noch kein Werbekonto verknüpft",
+      "emptyNote": "Verbinden Sie Google Ads oder ChatGPT Ads, um Ihre Kampagnen hier schreibgeschützt zu sehen.",
+      "openConnections": "Verbindungen öffnen",
+      "failed": "Ihre Kampagnen konnten nicht geladen werden. Versuchen Sie es gleich noch einmal.",
+      "firstRead": "Ihre ersten Zahlen treffen innerhalb eines Tages nach der Verbindung ein.",
+      "noneInPeriod": "In diesem Zeitraum lief keine Kampagne.",
+      "attention": "{count, plural, one {# Werbekonto erfordert Aufmerksamkeit.} other {# Werbekonten erfordern Aufmerksamkeit.}}",
+      "currencyNote": "Jede Kampagne wird in der Währung ihres Werbekontos angezeigt. Zahlen werden einmal täglich ausgelesen.",
       "safety": {
         "title": "Sicherheit",
-        "note": "Wird von Ansvisor durchgesetzt, nicht von einem Agenten. Derzeit gelangt nichts an ein Werbekonto.",
+        "note": "Erzwungen durch Ansvisor, nicht durch einen Agenten. Derzeit liest Ansvisor Ihre Werbekonten nur aus.",
         "click": "Jedes Aktivieren, Pausieren sowie jede Budget- oder Gebotsänderung erfordert den Klick und die Bestätigung einer Person – in jedem Modus.",
         "agents": "Agenten geben niemals Geld aus: Ein Agent kann eine Änderung vorschlagen, durchführen kann sie nur eine Person.",
         "cap": "Administratoren legen ein monatliches Limit für jeden Kanal fest. Eine Änderung über das Limit hinaus wird blockiert, wobei die Änderungen der letzten 24 Stunden berücksichtigt werden.",
@@ -15491,7 +15542,6 @@
       }
     },
     "connections": {
-      "soon": "Demnächst verfügbar",
       "later": "Folgt später",
       "notify": "Benachrichtigen",
       "notified": "Wir geben Bescheid",
@@ -15505,6 +15555,79 @@
       },
       "manage": "Verwalten",
       "connect": "Verbinden",
+      "adminConnects": "Ein Admin verbindet dies",
+      "accountStatus": {
+        "active": "Verbunden",
+        "error": "Erfordert Aufmerksamkeit",
+        "disconnected": "Getrennt"
+      },
+      "sync": {
+        "syncedAt": "Zahlen ausgelesen am {when}",
+        "pending": "Erstes Auslesen innerhalb eines Tages: die letzten 90 Tage",
+        "error": {
+          "key_refused": "ChatGPT Ads hat den Schlüssel abgelehnt. Fügen Sie einen neuen ein.",
+          "key_missing": "Der Schlüssel ist nicht mehr vorhanden. Verbinden Sie das Konto erneut.",
+          "signin_gone": "Die Google Ads-Anmeldung ist nicht mehr vorhanden. Verbinden Sie Google Ads erneut.",
+          "upstream": "Die Werbeplattform hat nicht geantwortet. Ansvisor versucht es innerhalb eines Tages erneut.",
+          "failed": "Die Zahlen konnten nicht ausgelesen werden. Ansvisor versucht es innerhalb eines Tages erneut."
+        }
+      },
+      "chatgpt": {
+        "connect": "Verbinden",
+        "addAnother": "Konto hinzufügen",
+        "dialogTitle": "ChatGPT Ads verbinden",
+        "dialogLine": "Fügen Sie einen Ads-API-Schlüssel aus dem ChatGPT Ads Manager ein. Jeder Schlüssel erreicht ein Werbekonto; fügen Sie daher einen Schlüssel pro Konto hinzu.",
+        "keyLabel": "Ads-API-Schlüssel",
+        "keyNote": "Ansvisor überprüft den Schlüssel mit ChatGPT Ads und speichert ihn dann verschlüsselt. Es liest nur aus.",
+        "cancel": "Abbrechen",
+        "save": "Verbinden",
+        "checking": "Wird überprüft…",
+        "connectedToast": "{name} wurde verbunden.",
+        "accountLine": "ChatGPT Ads-Konto · {currency}",
+        "accountLineNoCurrency": "ChatGPT Ads-Konto",
+        "billing": "ChatGPT Ads Manager",
+        "error": {
+          "invalid_key": "ChatGPT Ads hat diesen Schlüssel nicht akzeptiert. Überprüfen Sie ihn und versuchen Sie es erneut.",
+          "upstream": "ChatGPT Ads hat nicht geantwortet. Versuchen Sie es in einer Minute erneut.",
+          "other": "Verbindung konnte nicht hergestellt werden. Versuchen Sie es erneut."
+        }
+      },
+      "google": {
+        "name": "Google Ads",
+        "connect": "Verbinden",
+        "addAnother": "Konto hinzufügen",
+        "billing": "Google Ads",
+        "pickTitle": "Google Ads-Konten auswählen",
+        "pickLine": "Dies sind die Konten, auf die Ihr Google-Login zugreifen kann. Ansvisor liest die von Ihnen ausgewählten Konten aus; Kampagnen oder Budgets werden niemals geändert.",
+        "noCustomers": "Dieser Google-Login hat keinen Zugriff auf ein Google Ads-Konto. Melden Sie sich mit dem Google-Konto an, das Ihre Anzeigen verwaltet.",
+        "unnamed": "Unbenanntes Konto",
+        "more": "{count, plural, one {# weiteres Konto ist nicht aufgeführt.} other {# weitere Konten sind nicht aufgeführt.}}",
+        "why": {
+          "connected": "Verbunden",
+          "manager": "Verwaltungskonto",
+          "unavailable": "Nicht verfügbar",
+          "test": "Testkonto"
+        },
+        "cancel": "Abbrechen",
+        "save": "{count, plural, =0 {Verbinden} one {# Konto verbinden} other {# Konten verbinden}}",
+        "connectedToast": "{count, plural, one {# Google Ads-Konto verbunden.} other {# Google Ads-Konten verbunden.}}",
+        "error": {
+          "not_configured": "Google Ads ist auf diesem Server noch nicht eingerichtet.",
+          "not_connected": "Melden Sie sich zuerst bei Google Ads an und versuchen Sie es dann erneut.",
+          "not_accessible": "Dieser Google-Login hat keinen Zugriff mehr auf dieses Konto. Schließen Sie das Fenster und verbinden Sie es erneut.",
+          "manager_account": "Ein Verwaltungskonto enthält keine eigenen Kampagnen. Wählen Sie die untergeordneten Konten aus.",
+          "upstream": "Google Ads hat nicht geantwortet. Versuchen Sie es in einer Minute erneut.",
+          "other": "Verbindung fehlgeschlagen. Versuchen Sie es erneut."
+        }
+      },
+      "account": {
+        "disconnect": "Trennen",
+        "disconnectTitle": "{name} trennen?",
+        "disconnectLine": "Ansvisor löscht die für dieses Konto gespeicherten Daten: den Schlüssel (falls vorhanden) und die ausgelesenen Zahlen. Ihre Anzeigen laufen in {billing} weiter.",
+        "disconnectedToast": "{name} getrennt.",
+        "disconnectFailed": "Trennen fehlgeschlagen. Versuchen Sie es erneut.",
+        "cancel": "Abbrechen"
+      },
       "platforms": {
         "chatgpt": {
           "name": "ChatGPT Ads",

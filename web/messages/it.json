@@ -1855,6 +1855,10 @@
         "title": "Forti conversioni IA su {targets}",
         "description": "Queste pagine convertono il traffico IA in eventi chiave con un tasso nettamente superiore a quello medio del sito."
       },
+      "paid_overlap": {
+        "title": "Spesa per annunci Google in aumento su {targets} per cui l'IA ti sceglie già",
+        "description": "L'IA ti sceglie già nelle risposte a questi prompt di acquisto e la spesa su Google per i relativi termini di ricerca è aumentata rispetto ai 30 giorni precedenti."
+      },
       "bridge_link_gap": {
         "title": "Collega {targets} alle pagine che convertono",
         "description": "L'IA invia lettori a queste pagine, ma pochi convertono. Le pagine sullo stesso argomento che convertono ricevono poco traffico IA."
@@ -3296,6 +3300,12 @@
         "description": "Queste fonti vengono citate quando le risposte parlano del tuo brand e potrebbero rimandare alle tue pagine.",
         "goal": "Trasforma le menzioni di terze parti in riferimenti alle tue risorse."
       },
+      "review_paid_overlap": {
+        "title": "Esamina gli annunci Google su {targets} per cui l'IA ti sceglie già",
+        "titleGeneric": "Esamina gli annunci Google dove l'IA ti sceglie già",
+        "description": "L'IA ti sceglie già nelle risposte a questi prompt di acquisto e la spesa su Google per i relativi termini di ricerca sta aumentando. Potresti pagare per clic che otterresti comunque.",
+        "goal": "Investi in annunci dove portano clic aggiuntivi e mantieni la risposta dell'IA."
+      },
       "bridge_links": {
         "title": "Collega {targets} a pagine che convertono",
         "titleGeneric": "Collega le pagine visitate dall'IA a pagine che convertono",
@@ -3760,6 +3770,8 @@
       "prioritize_targets_target": "Assegna le priorità a {targets} in base all'impatto",
       "review_link_plan": "Rivedi i link da aggiungere",
       "review_link_plan_target": "Rivedi i link da aggiungere su {targets}",
+      "review_paid_overlap": "Esamina gli annunci Google su questi termini di ricerca",
+      "review_paid_overlap_target": "Esamina gli annunci Google su {targets}",
       "define_validation_baseline": "Registra il benchmark iniziale per misurare i risultati",
       "define_validation_baseline_target": "Registra il benchmark di riferimento per {targets}",
       "create_content_brief": "Crea un brief dei contenuti",
@@ -3871,6 +3883,7 @@
       "strengthen_entity_content": "La pagina descrive il brand in linea con il suo profilo, confermato da un nuovo recupero",
       "add_internal_links": "Le pagine che dovrebbero collegarsi a essa lo fanno, recuperate nuovamente",
       "review_link_plan": "Ogni link e il rispettivo testo di ancoraggio sono approvati o modificati: conferma richiesta",
+      "review_paid_overlap": "L'annuncio per ogni termine di ricerca viene mantenuto, ridotto o messo in pausa in Google Ads: confermalo tu",
       "improve_cta_path": "La call to action è attiva sulla pagina: conferma richiesta",
       "publish_content": "La pagina è pubblicata al suo indirizzo e risponde al recupero",
       "fix_crawler_access": "Il file robots.txt e la pagina consentono l'accesso ai crawler IA, recuperati nuovamente",
@@ -4739,6 +4752,10 @@
     "adsOpportunities": {
       "name": "Leggi le opportunità di annunci",
       "step": "Opportunità di annunci lette"
+    },
+    "adsPaidOverlap": {
+      "name": "Leggi sovrapposizione a pagamento",
+      "step": "Leggi sovrapposizione a pagamento"
     },
     "adDrafts": {
       "name": "Salva bozze di annunci",
@@ -7924,6 +7941,7 @@
       "ai-revenue": "Clienti ed entrate dall'IA",
       "earn-or-pay": "Guadagna o paga",
       "ad-drafts": "Bozze di annunci",
+      "paid-overlap": "Sovrapposizione a pagamento",
       "operator": "Operatore AEO"
     },
     "form": {
@@ -8527,7 +8545,7 @@
       },
       "paid-opportunity": {
         "name": "Opportunità a pagamento",
-        "description": "Ogni settimana indica quali Prompt di acquisto presidiare con i Contenuti o a pagamento, segnala le novità, come un concorrente che fa offerte sul tuo nome, e prepara bozze di annunci in Ansvisor."
+        "description": "Ogni settimana indica quali prompt di acquisto acquisire con i Contenuti o pagare, segnala i cambiamenti (come un concorrente che fa offerte sul tuo nome), mostra quanto spendi su Google dove l'IA ti cita già e crea bozze di annunci in Ansvisor."
       },
       "ai-ads-watch": {
         "name": "Monitoraggio annunci IA",
@@ -15302,7 +15320,12 @@
       "sov": "SoV a pagamento",
       "sovNote": "Gli annunci sponsorizzati nelle risposte IA non sono ancora rilevati",
       "cost": "Costo per iscrizione assistita da IA",
-      "costNote": "Richiede un account pubblicitario collegato",
+      "costNote": "Richiede un account pubblicitario connesso e letto in Connessioni",
+      "costOf": "{spend} spesa pubblicitaria ÷ {count, plural, one {# registrazione assistita da IA} other {# registrazioni assistite da IA}}",
+      "costSpend": "{spend} spesa pubblicitaria in questo periodo",
+      "costNoSignups": "Ancora nessuna registrazione",
+      "costCurrencies": "Diverse valute",
+      "costCurrenciesNote": "{spend} spesa pubblicitaria: gli importi in valute diverse non vengono sommati, quindi non è presente un costo per registrazione unico",
       "signups": "{count, plural, one {# iscrizione assistita da IA} other {# iscrizioni assistite da IA}} in questo periodo",
       "signupsNotMeasured": "Iscrizioni assistite da IA: non misurate",
       "barTitle": "Organico o a pagamento · {count, plural, one {# prompt} other {# prompt}}",
@@ -15311,7 +15334,11 @@
       "earnedPaid": "Organico + a pagamento",
       "paidOnly": "Solo a pagamento",
       "neither": "Nessuno dei due",
-      "paidNotMeasured": "I dati a pagamento non sono ancora misurati, quindi la barra mostra solo organico e nessuno dei due.",
+      "paidNotMeasured": "La copertura a pagamento non viene misurata finché non viene connesso e letto un account Google Ads; la barra mostra quindi solo la copertura organica e nessuna delle due.",
+      "spendOverlap": "Spesa su Google per prompt per cui l'IA ti cita già: {amount}",
+      "spendMatched": "Su tutti i tuoi prompt monitorati: {amount}",
+      "spendUnmatched": "Su termini di ricerca che non corrispondono ad alcun prompt monitorato: {amount}",
+      "spendNote": "Dai tuoi termini di ricerca di Google Ads. La spesa per ChatGPT Ads si trova in Campagne: non indica per quale domanda è stato mostrato un annuncio.",
       "openPrompts": "Vedi {count, plural, one {# prompt aperto} other {# prompt aperti}}",
       "locked": "{count, plural, one {Un altro prompt} other {Altri # prompt}} in Opportunità {count, plural, one {è incluso} other {sono inclusi}} a partire dal piano {plan}.",
       "openSov": "Chi paga per prompt"
@@ -15388,7 +15415,7 @@
         "volume_at_least": "{volume} ricerche mensili su Google, almeno {threshold}",
         "volume_below": "{volume} ricerche mensili su Google, inferiore a {threshold}",
         "volume_not_measured": "Le ricerche su Google non sono ancora state misurate",
-        "paid_not_measured": "Chi paga non è ancora stato misurato",
+        "paid_not_measured": "{wePay, select, false {La spesa pubblicitaria dei concorrenti non è ancora misurata} other {Chi paga non è ancora misurato}}",
         "no_ad_channel": "Nessun canale pubblicitario raggiunge le piattaforme IA su cui è tracciato"
       },
       "answers": "Cosa risponde l'IA oggi",
@@ -15398,6 +15425,13 @@
       "cites": "Cita: {domains}",
       "fanOuts": "Query di fan-out",
       "keywords": "Seed di parole chiave",
+      "paid": {
+        "title": "I tuoi annunci Google al riguardo",
+        "spend": "{amount} per {clicks, plural, one {# clic} other {# clic}} in questo periodo",
+        "terms": "{count, plural, one {# termine di ricerca corrispondente} other {# termini di ricerca corrispondenti}}, i più costosi per primi:",
+        "none": "Nessuna spesa pubblicitaria Google corrispondente in questo periodo.",
+        "note": "I termini di ricerca vengono associati al prompt in base alle parole. La spesa per ChatGPT Ads non viene associata: non indica per quale domanda è stato mostrato un annuncio."
+      },
       "failed": "Impossibile leggere le risposte. Chiudi e riapri.",
       "earn": {
         "title": "Guadagna · correggi la risposta",
@@ -15472,14 +15506,31 @@
         "channel": "Canale",
         "status": "Stato",
         "spend": "Spesa",
-        "signups": "Iscrizioni assistite dall'IA",
-        "cost": "Costo per iscrizione"
+        "clicks": "Clic",
+        "cpc": "CPC",
+        "conversions": "Conversioni",
+        "costPerConversion": "Costo per conversione"
       },
-      "empty": "Collega un account pubblicitario · in arrivo",
-      "emptyNote": "Le tue campagne verranno mostrate qui, inizialmente in sola lettura.",
+      "channels": {
+        "google": "Google Ads",
+        "chatgpt": "ChatGPT Ads"
+      },
+      "statuses": {
+        "active": "Attiva",
+        "paused": "In pausa",
+        "ended": "Terminata"
+      },
+      "empty": "Nessun account pubblicitario ancora connesso",
+      "emptyNote": "Collega Google Ads o ChatGPT Ads per visualizzare qui le tue campagne, in sola lettura.",
+      "openConnections": "Apri connessioni",
+      "failed": "Impossibile caricare le campagne. Riprova tra poco.",
+      "firstRead": "I primi dati arriveranno entro un giorno dal collegamento.",
+      "noneInPeriod": "Nessuna campagna attiva in questo periodo.",
+      "attention": "{count, plural, one {# account pubblicitario richiede attenzione.} other {# account pubblicitari richiedono attenzione.}}",
+      "currencyNote": "Ogni campagna è mostrata nella valuta del rispettivo account pubblicitario. I dati vengono letti una volta al giorno.",
       "safety": {
         "title": "Sicurezza",
-        "note": "Applicato da Ansvisor, non da un agente. Al momento nulla viene inviato a un account pubblicitario.",
+        "note": "Applicato da Ansvisor, non da un agente. Al momento Ansvisor legge soltanto i tuoi account pubblicitari.",
         "click": "Ogni attivazione, sospensione, modifica di budget o offerta richiede il clic e la conferma di una persona, in qualsiasi modalità.",
         "agents": "Gli agenti non spendono mai: un agente può suggerire una modifica, ma solo una persona può applicarla.",
         "cap": "Gli amministratori impostano un limite mensile per ogni canale. Le modifiche oltre la soglia massima vengono bloccate, considerando le modifiche delle ultime 24 ore.",
@@ -15487,7 +15538,6 @@
       }
     },
     "connections": {
-      "soon": "In arrivo",
       "later": "In arrivo prossimamente",
       "notify": "Avvisami",
       "notified": "Ti avviseremo",
@@ -15501,6 +15551,79 @@
       },
       "manage": "Gestisci",
       "connect": "Collega",
+      "adminConnects": "Operazione riservata a un Amministratore",
+      "accountStatus": {
+        "active": "Collegato",
+        "error": "Richiede attenzione",
+        "disconnected": "Disconnesso"
+      },
+      "sync": {
+        "syncedAt": "Dati letti {when}",
+        "pending": "Prima lettura entro un giorno: gli ultimi 90 giorni",
+        "error": {
+          "key_refused": "ChatGPT Ads ha rifiutato la chiave. Incolpane una nuova.",
+          "key_missing": "La chiave non è più presente. Collega di nuovo l'account.",
+          "signin_gone": "L'accesso a Google Ads non è più valido. Collega di nuovo Google Ads.",
+          "upstream": "La piattaforma pubblicitaria non ha risposto. Ansvisor riproverà entro un giorno.",
+          "failed": "Impossibile leggere i dati. Ansvisor riproverà entro un giorno."
+        }
+      },
+      "chatgpt": {
+        "connect": "Collega",
+        "addAnother": "Aggiungi account",
+        "dialogTitle": "Collega ChatGPT Ads",
+        "dialogLine": "Incolla una chiave API per gli annunci da ChatGPT Ads Manager. Ogni chiave accede a un solo account pubblicitario, quindi aggiungi una chiave per ciascun account.",
+        "keyLabel": "Chiave API per gli annunci",
+        "keyNote": "Ansvisor verifica la chiave con ChatGPT Ads, poi la memorizza crittografata. Ha accesso in sola lettura.",
+        "cancel": "Annulla",
+        "save": "Collega",
+        "checking": "Verifica in corso…",
+        "connectedToast": "{name} collegato.",
+        "accountLine": "Account ChatGPT Ads · {currency}",
+        "accountLineNoCurrency": "Account ChatGPT Ads",
+        "billing": "ChatGPT Ads Manager",
+        "error": {
+          "invalid_key": "ChatGPT Ads non ha accettato questa chiave. Controllala e riprova.",
+          "upstream": "ChatGPT Ads non ha risposto. Riprova tra un minuto.",
+          "other": "Impossibile connettersi. Riprova."
+        }
+      },
+      "google": {
+        "name": "Google Ads",
+        "connect": "Collega",
+        "addAnother": "Aggiungi account",
+        "billing": "Google Ads",
+        "pickTitle": "Seleziona account Google Ads",
+        "pickLine": "Questi sono gli account a cui accede il tuo account Google. Ansvisor legge solo quelli selezionati; non modifica mai campagne o budget.",
+        "noCustomers": "Questo account Google non ha accesso ad alcun account Google Ads. Accedi con l'account Google che gestisce i tuoi annunci.",
+        "unnamed": "Account senza nome",
+        "more": "{count, plural, one {Un altro account non è presente nell'elenco.} other {# altri account non sono presenti nell'elenco.}}",
+        "why": {
+          "connected": "Collegato",
+          "manager": "Account amministratore",
+          "unavailable": "Non disponibile",
+          "test": "Account di prova"
+        },
+        "cancel": "Annulla",
+        "save": "{count, plural, =0 {Collega} one {Collega # account} other {Collega # account}}",
+        "connectedToast": "{count, plural, one {# account Google Ads collegato.} other {# account Google Ads collegati.}}",
+        "error": {
+          "not_configured": "Google Ads non è ancora configurato su questo server.",
+          "not_connected": "Accedi prima a Google Ads, poi riprova.",
+          "not_accessible": "Questo account Google non ha più accesso a tale account. Chiudi e ricollegati.",
+          "manager_account": "Un account amministratore non ha campagne proprie. Seleziona gli account sottostanti.",
+          "upstream": "Google Ads non ha risposto. Riprova tra un minuto.",
+          "other": "Impossibile connettersi. Riprova."
+        }
+      },
+      "account": {
+        "disconnect": "Disconnetti",
+        "disconnectTitle": "Disconnettere {name}?",
+        "disconnectLine": "Ansvisor eliminerà i dati memorizzati per questo account: la chiave, se presente, e le metriche rilevate. I tuoi annunci continueranno a essere pubblicati su {billing}.",
+        "disconnectedToast": "{name} disconnesso.",
+        "disconnectFailed": "Impossibile disconnettere. Riprova.",
+        "cancel": "Annulla"
+      },
       "platforms": {
         "chatgpt": {
           "name": "ChatGPT Ads",
