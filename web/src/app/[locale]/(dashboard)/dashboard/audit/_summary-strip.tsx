@@ -2,6 +2,7 @@
 
 import { Fragment } from 'react';
 import { useTranslations } from 'next-intl';
+import { Skeleton } from '@/components/ui/skeleton';
 import { CATEGORY_META, pct } from '@/components/audit/audit-report';
 import type { AuditOverview, AuditQuota, SiteCoverage } from '@/lib/actions/audits';
 import { nextAutoRun } from '@/lib/audit-auto-runs';
@@ -27,6 +28,7 @@ export function AuditSummaryStrip({
   quota,
   now,
   coverage = null,
+  loading = false,
 }: {
   overview: AuditOverview | null;
   quota: AuditQuota | null;
@@ -37,9 +39,28 @@ export function AuditSummaryStrip({
    * score and the Authority card count them.
    */
   coverage?: SiteCoverage | null;
+  /** The hub is still loading: a placeholder of the strip's height. */
+  loading?: boolean;
 }) {
   const t = useTranslations('audit.strip');
   const rubric = useRubricText();
+  // While the hub loads, a strip of the same height holds its place, so the
+  // page below doesn't move down when it fills in.
+  if (loading) {
+    return (
+      <div
+        aria-hidden
+        data-testid="audit-summary-strip-skeleton"
+        className="flex items-center gap-3.5 rounded-xl border bg-card px-4 py-3"
+      >
+        <div className="flex h-5 items-center">
+          <Skeleton className="h-3.5 w-28" />
+        </div>
+        <Skeleton className="h-3.5 w-24" />
+        <Skeleton className="h-3.5 w-36" />
+      </div>
+    );
+  }
   if (!overview) return null;
 
   const b = (chunks: React.ReactNode) => <b className="font-semibold">{chunks}</b>;

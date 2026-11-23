@@ -402,3 +402,23 @@ describe('ActionTable sortable headers', () => {
     expect(container.querySelector('thead [aria-sort]')).toBeNull();
   });
 });
+
+describe('ActionTable New mark', () => {
+  it('says New beside the title of an action created since the last visit, and only there', () => {
+    render({
+      actions: [action, { ...action, id: 'a2', actionNo: 8 }],
+      newIds: new Set(['a2']),
+    });
+    const rows = [...container.querySelectorAll('tbody tr')];
+    expect(rows[0].querySelector('[data-new-mark]')).toBeNull();
+    const mark = rows[1].querySelector('[data-new-mark]')!;
+    expect(mark.textContent).toBe('New');
+    expect(mark.getAttribute('title')).toBe('Created since your last visit');
+    expect(mark.className).toContain('bg-primary');
+  });
+
+  it('marks nothing without the set', () => {
+    render();
+    expect(container.querySelector('[data-new-mark]')).toBeNull();
+  });
+});

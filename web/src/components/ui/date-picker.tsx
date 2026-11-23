@@ -46,6 +46,9 @@ export function DatePicker({
   placeholder,
   className,
   'aria-label': ariaLabel,
+  'aria-invalid': ariaInvalid,
+  'aria-describedby': ariaDescribedBy,
+  'data-action': dataAction,
 }: {
   id?: string;
   value: string | null;
@@ -58,6 +61,10 @@ export function DatePicker({
   placeholder?: string;
   className?: string;
   'aria-label'?: string;
+  'aria-invalid'?: boolean;
+  'aria-describedby'?: string;
+  /** The button's data-action, for analytics and tests. */
+  'data-action'?: string;
 }) {
   const t = useTranslations('datePicker');
   const locale = useLocale();
@@ -144,7 +151,10 @@ export function DatePicker({
         disabled={disabled}
         data-slot="date-picker"
         data-value={picked ?? ''}
+        data-action={dataAction}
         aria-label={ariaLabel ? `${ariaLabel}: ${label}` : undefined}
+        aria-invalid={ariaInvalid}
+        aria-describedby={ariaDescribedBy}
         className={cn(
           'flex h-8 w-full items-center gap-2 rounded-lg border border-input bg-transparent px-2.5 text-start text-xs outline-none transition-colors hover:bg-muted/50 focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50 dark:bg-input/30',
           !picked && 'text-muted-foreground',

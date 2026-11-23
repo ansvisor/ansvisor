@@ -66,4 +66,24 @@ describe('exportChatFile', () => {
     expect(await exportChatFile(answer, 'html')).toBeNull();
     expect(await exportChatFile(page, 'csv')).toBeNull();
   });
+
+  it('downloads a report deck as its own bytes (#2298), and no other file as pptx', async () => {
+    const bytes = new Uint8Array([80, 75, 3, 4, 1, 2, 3]);
+    const deck: StoredChatFile = {
+      ...answer,
+      title: 'Presentation · Weekly Visibility Summary',
+      mimeType: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+      formats: ['pptx'],
+      content: '',
+      bytes,
+    };
+    const out = await exportChatFile(deck, 'pptx');
+    expect(out?.fileName).toBe('presentation-weekly-visibility-summary-2026-10-30.pptx');
+    expect(out?.contentType).toBe(deck.mimeType);
+    expect(out?.body).toEqual(bytes);
+    // Only as pptx, only with its bytes, and never a text file as a deck.
+    expect(await exportChatFile(deck, 'md')).toBeNull();
+    expect(await exportChatFile({ ...deck, bytes: undefined }, 'pptx')).toBeNull();
+    expect(await exportChatFile(answer, 'pptx')).toBeNull();
+  });
 });

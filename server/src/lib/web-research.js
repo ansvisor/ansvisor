@@ -110,6 +110,51 @@ async function cloroResearch(modelString, prompt, query) {
   }
 }
 
+/** Research through Context's query-relevant Highlights, only when explicitly configured. */
+async function contextResearch(modelString, prompt, query) {
+  const key = process.env.CONTEXT_DEV_API_KEY;
+  if (!key) return null;
+  try {
+    if (!query) throw new Error('empty search query');
+    const res = await fetch('https://api.context.dev/v1/web/search', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
+      body: JSON.stringify({ query, numResults: 8, highlightsOptions: { enabled: true } }),
+      signal: AbortSignal.timeout(SEARCH_TIMEOUT_MS),
+      redirect: 'error',
+    });
+    if (!res.ok) throw new Error(`Context search HTTP ${res.status}`);
+    const data = await res.json();
+    if ((data?.partial !== undefined && data.partial !== false) || !Array.isArray(data?.results)) {
+      throw new Error('Context search did not return complete results');
+    }
+    const rows = data.results
+      .flatMap((r) => {
+        if (
+          typeof r?.url !== 'string' ||
+          !URL.canParse(r.url) ||
+          typeof r.title !== 'string' ||
+          r.highlights?.code !== 'SUCCESS' ||
+          !Array.isArray(r.highlights.highlights)
+        ) {
+          return [];
+        }
+        const url = new URL(r.url);
+        if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password) return [];
+        const content = r.highlights.highlights
+          .filter((text) => typeof text === 'string' && text.trim())
+          .join('\n');
+        return content ? [[r.title, r.url, content]] : [];
+      })
+      .slice(0, 8);
+    if (!rows.length) throw new Error('Context returned no usable Highlights');
+    return await synthesize(modelString, prompt, rows, rows.length);
+  } catch {
+    logger.warn('context research failed; falling back');
+    return null;
+  }
+}
+
 /**
  * Research via Scrape.do's Google SERP plugin when `SCRAPEDO_API_KEY` is set.
  * The free tier bills 10 credits per search out of 1,000 a month, so it is
@@ -196,6 +241,7 @@ async function synthesize(modelString, prompt, rows, sources) {
 const SERP_PROVIDERS = [
   { name: 'tavily', keyEnv: 'TAVILY_API_KEY', search: tavilyResearch },
   { name: 'cloro', keyEnv: 'CLORO_API_KEY', search: cloroResearch },
+  { name: 'context', keyEnv: 'CONTEXT_DEV_API_KEY', search: contextResearch },
   { name: 'scrapedo', keyEnv: 'SCRAPEDO_API_KEY', search: scrapedoResearch },
   { name: 'firecrawl', keyEnv: 'FIRECRAWL_API_KEY', search: firecrawlResearch },
 ];
@@ -203,8 +249,8 @@ const SERP_PROVIDERS = [
 /**
  * The providers that will actually run, in order: `WEB_RESEARCH_PROVIDERS`
  * (comma-separated, default `tavily`) names them and their
- * order, so Cloro, Scrape.do and Firecrawl are opt-in
- * (`WEB_RESEARCH_PROVIDERS=tavily,cloro,scrapedo,firecrawl`): an install that
+ * order, so Cloro, Context, Scrape.do and Firecrawl are opt-in
+ * (`WEB_RESEARCH_PROVIDERS=tavily,cloro,context,scrapedo,firecrawl`): an install that
  * already holds one of those keys for tracking or Site Audit should not start
  * spending those credits on suggestion research it never signed up for.
  * Unknown names are ignored and a provider without its API key is skipped, so
@@ -224,7 +270,7 @@ export function serpProviderOrder() {
 /**
  * The research phase of the suggestion routes: one generateText call, with web
  * search attached when available — the SERP providers in
- * `WEB_RESEARCH_PROVIDERS` order (Tavily by default; Cloro, Scrape.do and
+ * `WEB_RESEARCH_PROVIDERS` order (Tavily by default; Cloro, Context, Scrape.do and
  * Firecrawl opt-in), then the provider's own tool. The search query is distilled once for the whole chain, not once per
  * provider, so a quota wall on that call cannot repeat itself down the line.
  * Returns the text plus how many sources the answer drew on, so callers can

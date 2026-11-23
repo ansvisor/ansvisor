@@ -161,8 +161,6 @@ export default function SiteAuditPage() {
   // Pages lists only the batch's pages (read from the time its first audit started).
   const [thisBatchOnly, setThisBatchOnly] = useState(false);
   const [opps, setOpps] = useState<AuditOpportunities | null>(null);
-  // The inbox loads after the rest of the hub (getAuditHubExtras).
-  const [oppsLoading, setOppsLoading] = useState(true);
   const [oppSelected, setOppSelected] = useState<Set<string>>(() => new Set());
   // Opportunities shown by why they're listed (customer priorities item 11).
   const [oppFilter, setOppFilter] = useState<OpportunityFilter>('all');
@@ -247,14 +245,15 @@ export default function SiteAuditPage() {
     listsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
 
-  // Load the hub in two requests: the audited pages, the quota, the trend
-  // and the cards first, so the page shows; then the Opportunities inbox and
-  // the latest auto-audit run, which take longer, fill in.
+  // Load the hub in two requests side by side: the audited pages, the quota,
+  // the trend and the cards; the Opportunities inbox and the latest auto-audit
+  // run. The page shows once both are in, in its final layout: filled in
+  // one after the other, the cards, the trend and the run's notice pushed
+  // the lists down twice while it opened.
   useEffect(() => {
     if (!activeBrandId) return;
     let cancelled = false;
     setLoading(true);
-    setOppsLoading(true);
     setError(null);
     // A selection, and the tab, belong to the brand they were made on.
     setSelected(new Set());
@@ -277,7 +276,10 @@ export default function SiteAuditPage() {
       });
     (async () => {
       try {
-        const hub = await getAuditHub(activeBrandId);
+        const [hub, extras] = await Promise.all([
+          getAuditHub(activeBrandId),
+          getAuditHubExtras(activeBrandId),
+        ]);
         if (cancelled) return;
         setPages(hub.pages.pages);
         setPagesTotal(hub.pages.total);
@@ -286,10 +288,6 @@ export default function SiteAuditPage() {
         setQuota(hub.quota);
         setTrend(hub.trend);
         setOverview(hub.overview);
-        setLoading(false);
-
-        const extras = await getAuditHubExtras(activeBrandId);
-        if (cancelled) return;
         setOpps(extras.opportunities);
         setLatestRun(extras.latestRun);
         // The inbox is the first tab when it has pages, unless one was picked meanwhile.
@@ -306,10 +304,7 @@ export default function SiteAuditPage() {
           toast.error(msg);
         }
       } finally {
-        if (!cancelled) {
-          setLoading(false);
-          setOppsLoading(false);
-        }
+        if (!cancelled) setLoading(false);
       }
     })();
     return () => {
@@ -782,7 +777,7 @@ export default function SiteAuditPage() {
                   })),
                   total: pagesTotal,
                 }
-              : tab === 'opportunities' && !oppsLoading
+              : tab === 'opportunities' && !loading
                 ? {
                     rows: viewRows(shownOpps, (o) => ({
                       ref: o.lastAudit?.auditId,
@@ -849,6 +844,7 @@ export default function SiteAuditPage() {
 
       {/* Summary strip, as in the v2 mockup (SA-019) */}
       <AuditSummaryStrip
+        loading={loading}
         overview={loading ? null : overview}
         quota={quota}
         now={new Date(nowMs)}
@@ -933,8 +929,47 @@ export default function SiteAuditPage() {
         />
       )}
 
+      {/* While the hub loads, the trend card's place, line for line, so the
+          cards below don't move when it fills in */}
+      {loading && (
+        <Card aria-hidden data-testid="audit-trend-skeleton">
+          <CardHeader className="flex flex-row items-start justify-between gap-3 space-y-0">
+            <div>
+              <div className="flex h-6 items-center">
+                <Skeleton className="h-4 w-32" />
+              </div>
+              <div className="mt-0.5 flex h-4 items-center">
+                <Skeleton className="h-3 w-24" />
+              </div>
+            </div>
+            <Skeleton className="h-[26px] w-40 shrink-0" />
+          </CardHeader>
+          <CardContent className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+            <div className="lg:col-span-2">
+              <div className="mb-2 flex h-9 items-center">
+                <Skeleton className="h-7 w-20" />
+              </div>
+              <Skeleton className="h-[200px] w-full" />
+            </div>
+            <div className="space-y-3">
+              <div className="flex h-4 items-center">
+                <Skeleton className="h-3 w-28" />
+              </div>
+              {CATEGORY_META.map((cat) => (
+                <div key={cat.key}>
+                  <div className="mb-1 flex h-4 items-center">
+                    <Skeleton className="h-3 w-24" />
+                  </div>
+                  <Skeleton className="h-1.5 w-full rounded-full" />
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Primary-domain score trend + category breakdown */}
-      {trend && trend.points.length > 0 && (
+      {!loading && trend && trend.points.length > 0 && (
         <Card>
           <CardHeader className="flex flex-row items-start justify-between gap-3 space-y-0">
             <div>
@@ -1070,8 +1105,7 @@ export default function SiteAuditPage() {
             </Button>
           </CardContent>
         </Card>
-      ) : !oppsLoading &&
-        pages.length === 0 &&
+      ) : pages.length === 0 &&
         (opps?.opportunities.length ?? 0) === 0 &&
         (opps?.excluded.length ?? 0) === 0 ? (
         <Card>
@@ -1082,25 +1116,13 @@ export default function SiteAuditPage() {
           </CardContent>
         </Card>
       ) : (
-        // While the inbox loads, its tab leads (it usually has pages) with a placeholder.
-        <Tabs
-          ref={listsRef}
-          value={tab ?? (oppsLoading ? 'opportunities' : 'pages')}
-          onValueChange={(v) => showList(v as ListTab)}
-        >
+        <Tabs ref={listsRef} value={tab ?? 'pages'} onValueChange={(v) => showList(v as ListTab)}>
           <TabsList variant="line" aria-label={t('lists.label')}>
-            {(opps || oppsLoading) && (
+            {opps && (
               <TabsTrigger value="opportunities">
                 {t('lists.opportunities')}
                 <PageDot dot={oppDot} />
-                {opps ? (
-                  <TabCount count={opps.opportunities.length} />
-                ) : (
-                  <Loader2
-                    className="h-3 w-3 animate-spin text-muted-foreground"
-                    aria-label={t('lists.loading')}
-                  />
-                )}
+                <TabCount count={opps.opportunities.length} />
               </TabsTrigger>
             )}
             <TabsTrigger value="pages">
@@ -1108,20 +1130,6 @@ export default function SiteAuditPage() {
               <TabCount count={pagesTotal} />
             </TabsTrigger>
           </TabsList>
-          {oppsLoading && !opps && (
-            <TabsContent value="opportunities" className="mt-3">
-              <Card aria-busy="true">
-                <CardContent className="space-y-3 py-4">
-                  {Array.from({ length: 5 }).map((_, i) => (
-                    <div key={i} className="flex items-center justify-between gap-4">
-                      <Skeleton className="h-4 w-1/2" />
-                      <Skeleton className="h-4 w-24" />
-                    </div>
-                  ))}
-                </CardContent>
-              </Card>
-            </TabsContent>
-          )}
           {opps && (
             <TabsContent value="opportunities" className="mt-3">
               <OpportunitiesTable

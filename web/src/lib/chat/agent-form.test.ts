@@ -165,6 +165,28 @@ describe('a new agent', () => {
     ).toEqual([]);
   });
 
+  it('starts Agency Client Reporter on All brands, monthly, with the instructions handed in', () => {
+    const form = formFromPreset(SETUP, readyPreset('agency-reporter')!, {
+      timeZone: 'UTC',
+      brandId: BRAND_2,
+      instructions: 'Report on last month.',
+    });
+    expect(form).toMatchObject({
+      skills: ['report'],
+      allBrands: true,
+      brandIds: [],
+      instructions: 'Report on last month.',
+    });
+    expect(form.triggers.map(triggerInputOf)).toEqual([
+      expect.objectContaining({ kind: 'schedule', enabled: true }),
+    ]);
+    // Without instructions handed in, the box starts empty.
+    expect(
+      formFromPreset(SETUP, readyPreset('weekly-report')!, { timeZone: 'UTC', brandId: BRAND_2 })
+        .instructions,
+    ).toBe('');
+  });
+
   it('starts Onboarding & Help on All brands, its When a brand is added needing them (00482)', () => {
     const form = formFromPreset(SETUP, readyPreset('onboarding-help')!, {
       timeZone: 'UTC',

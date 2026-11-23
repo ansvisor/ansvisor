@@ -4,14 +4,16 @@ route: /dashboard/prompts/topics
 keywords: [topics, topic, add topic, delete topic, rename topic, manage topics, topic suggestions, topic leaderboard, topic visibility, top competitor, catalog topics]
 synonyms: [themes, prompt groups, clusters, categories]
 plan: all
-updated: 2026-11-11
-last_checked: 2026-11-11
+updated: 2026-11-21
+last_checked: 2026-11-21
 owner: Cihan
 app_version: 0.3.0
 approved: true
 sources: [docs/guides/topics.mdx, docs/guides/prompts.mdx, docs/guides/add-your-first-brand.mdx]
 ---
 **Topics** is a tab of the **Prompts** page. It groups your tracked prompts by theme, so you can see how your brand does in AI answers at a higher level than single prompts.
+
+The **Topics** tab of a brand in **Brands** opens this tab too, with that brand picked, as its **Prompts** tab opens **Tracked Prompts**. To rename a topic, use **Manage topics** (see below).
 
 The tab uses the page's date range (24h, 7d, 30d, 90d or custom) and opens on the last 24 hours. It has no Location selector, because topics aren't split by location.
 
