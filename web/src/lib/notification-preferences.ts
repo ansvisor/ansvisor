@@ -91,7 +91,7 @@ export const NOTIFICATION_KIND_SPECS: readonly NotificationKindSpec[] = [
     labels: 'instant',
     fallback: 'off',
     brandScoped: true,
-    comingSoon: true,
+    comingSoon: false,
   },
   {
     kind: 'due_actions',
@@ -145,7 +145,7 @@ export const NOTIFICATION_KIND_SPECS: readonly NotificationKindSpec[] = [
     labels: 'digest',
     fallback: 'weekly',
     brandScoped: true,
-    comingSoon: true,
+    comingSoon: false,
   },
   {
     kind: 'ai_usage',

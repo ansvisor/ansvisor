@@ -21,6 +21,14 @@ Until you save for the first time, the page shows the e-mails you get today, so 
 
 E-mails marked **Coming soon** keep the choice you save and start once they're ready. **Billing and security** e-mails are always sent.
 
+## Critical actions and drafts in review
+
+**A new Critical action** tells you when an Action Center action reaches Critical priority: **Right away**, one e-mail per action within about ten minutes, or **Daily summary**, one e-mail a day per brand with the day's new ones. It names the action by its code, such as AC-12, and links to it. It's **Off** until you pick it.
+
+**Drafts waiting for your review** lists a brand's Content drafts in review, up to ten, with a link to **Library › In review**. It comes as a **Daily summary**, or on Mondays with **Weekly summary**, the choice everyone starts with. Nothing comes when no draft waits.
+
+Each e-mail comes once, only for brands you can open.
+
 ## Set a brand apart
 
 With more than one brand, **For** picks what your choices apply to. **All my brands** sets them for every brand you can open. Pick one brand to set it differently: the row then says it's set for that brand only, and **Use my All my brands choice** puts it back. Brand e-mails come one per brand; one e-mail for all brands is coming soon.

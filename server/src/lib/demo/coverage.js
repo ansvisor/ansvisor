@@ -32,6 +32,8 @@ export const SKIPPED = {
   webhook_configs: 'Outgoing webhooks: a demo brand never calls out.',
   notification_preferences:
     "A person's own e-mail choices (00554), made with their own clicks: nobody is mailed about a demo brand, and Settings › Notifications doesn't list it.",
+  notification_sends:
+    'Which notification e-mail went to whom (00556): written as an e-mail goes, and nobody is mailed about a demo brand.',
   prompt_table_views:
     "A person's saved Tracked Prompts columns (00363): the demo brand starts on the default ones.",
   sentiment_overrides:
