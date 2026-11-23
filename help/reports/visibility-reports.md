@@ -15,9 +15,13 @@ The **Reports** page makes point-in-time snapshots of your brand's AI visibility
 
 ## Generate a report
 
-Click **Generate Report** and pick a template. A template is a default set of sections, and you can switch any section on or off before generating. The template sets the **Date Range** right under it (last 7, 30 or 90 days, or Custom); change it there if you like. Then pick the **Brand**, check the **Sections** and give the report a title if you like. **Generate Report** stays at the bottom of the window as you scroll. Without a title, a report is named after its template, such as Weekly Visibility Summary; its period shows beside it. Generated reports appear under **Generated Reports** on the same page, newest first. To delete one, open its **⋯** menu, choose **Delete report** and confirm.
+Click **Generate Report** and pick a template. A template is a default set of sections, and you can switch any section on or off before generating. The template sets the **Date Range** right under it (last 7, 30 or 90 days, or Custom); change it there if you like. Then pick the **Brand**, check the **Sections** and give the report a title if you like. **Generate Report** stays at the bottom of the window as you scroll. Without a title, a report is named after its template, such as Weekly Visibility Summary; its period shows beside it. Generated reports appear under **Generated Reports** on the same page, newest first.
 
 When the brand already has a report of the same template and days, **Generate Report** asks first: **Open it** opens that report, **Generate anyway** makes a second one.
+
+## Rename or delete a report
+
+Admins and Managers can rename a report: open its **⋯** menu, choose **Rename**, type the new name and click **Save**. Only the name changes, never the report's numbers. To delete one, open its **⋯** menu, choose **Delete report** and confirm.
 
 ## Share or download from the list
 
@@ -61,3 +65,7 @@ In the **Competitor Leaderboard**, the **Visibility score** column shows each br
 **Download PDF** saves the report as a PDF with the same sections as the web view, the executive summary included. Its text stays selectable and sharp at any zoom, and the file is small enough to attach to an email. With white label in use, the report and its PDF carry your agency's logo, color, name and footer instead of Ansvisor's, with a "Prepared for" cover.
 
 Counts in a report and its PDF, such as mentions, citations and visits, are written with thousands separators in your interface language: **10,262** in English.
+
+## Competitor Leaderboard ranking
+
+The **Competitor Leaderboard** ranks brands by **Visibility score**, highest first. A brand named in fewer than 10 of the period's prompts isn't ranked: a score from so few answers says little. Such brands are listed after the ranked ones with a **Low sample** tag, in the report and its PDF. Reports made before the score existed are listed by their own figure.

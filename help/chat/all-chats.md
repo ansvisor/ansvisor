@@ -1,16 +1,17 @@
 ---
 title: Find a chat and see all your chats
 route: /dashboard/chat/all
-keywords: [search chats, find a chat, all chats, archived chats, unarchive, archive selected, ctrl k]
-synonyms: [chat history, old chats, past conversations, look up a chat]
+keywords: [search chats, find a chat, all chats, archived chats, unarchive, archive selected, ctrl k, clear chats, clear all, delete selected, delete many chats, too many chats]
+synonyms: [chat history, old chats, past conversations, look up a chat, clean up chats, remove old chats]
 plan: all
-updated: 2026-10-30
-last_checked: 2026-10-30
+updated: 2026-11-21
+last_checked: 2026-11-21
 owner: Cihan
 app_version: 0.3.0
 approved: true
 sources: [web/messages/en.json]
 ---
+
 Chat keeps every chat, so you can find one again by a word in its name or in anything that was said in it. **All chats** lists them all in one place, with your archived chats.
 
 ## Search chats
@@ -32,3 +33,9 @@ Click **All chats** at the bottom of the chat menu. **Active** lists every chat 
 **Archive** in a chat's **⋯** menu takes it off the chat menu; the message that appears says where it went. To archive several at once, tick your chats in **All chats** and click **Archive selected**.
 
 Archived chats are under **Archived** in **All chats**, or **Archived** at the bottom of the chat menu. Tick them and click **Unarchive selected** to put them back in your chat menu. You can still open an archived chat to read it.
+
+## Clear old chats
+
+To tidy the chat menu, click **Clear** beside a day, such as **Previous 30 days**. Chat asks first and says how many chats will be deleted. To pick chats one by one, tick them in **All chats** and click **Delete selected**.
+
+Only your own chats are deleted: chats teammates shared with you, and pinned chats, stay. Files they made stay in **Files**, and a chat that is still working is stopped first. Click **Undo** within a few seconds to bring them back; after that it can't be undone. To delete one chat, use **Delete** in its **⋯** menu, which shows when you point at the row.

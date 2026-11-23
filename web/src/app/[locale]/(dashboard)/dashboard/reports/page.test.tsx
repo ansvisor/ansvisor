@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import messages from '../../../../../../messages/en.json';
 import { UpgradeDialogContext } from '@/components/providers/upgrade-gate';
 import { ChatAgenticProvider } from '@/components/providers/chat-agentic-provider';
+import { RoleProvider, type TeamRole } from '@/components/providers/role-provider';
 
 /**
  * Reports on a read-only workspace (plan not active): the reports list and
@@ -16,11 +17,14 @@ const reports = vi.hoisted(() => ({
   getReports: vi.fn(),
   getReport: vi.fn(),
   createReport: vi.fn(),
+  renameReport: vi.fn(),
   deleteReport: vi.fn(),
 }));
 vi.mock('@/lib/actions/reports', () => reports);
 const getReportBranding = vi.hoisted(() => vi.fn());
 vi.mock('@/lib/actions/white-label', () => ({ getReportBranding }));
+const brandHasShipped = vi.hoisted(() => vi.fn());
+vi.mock('@/lib/actions/impact-report', () => ({ brandHasShipped }));
 const saveReportPdf = vi.hoisted(() => vi.fn());
 vi.mock('./_save-pdf', () => ({ saveReportPdf }));
 const brand = { id: 'b1', name: 'Acme', shoppingModeEnabled: false };
@@ -67,6 +71,7 @@ const openUpgrade = vi.fn();
 
 beforeEach(() => {
   vi.clearAllMocks();
+  brandHasShipped.mockResolvedValue(false);
   plan.crm = true;
   reports.getReports.mockResolvedValue([
     {
@@ -90,17 +95,19 @@ afterEach(() => {
   document.body.replaceChildren();
 });
 
-async function render(isLocked: boolean, chatAgentic = false) {
+async function render(isLocked: boolean, chatAgentic = false, role: TeamRole = 'manager') {
   await act(async () => {
     root.render(
       <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
-        <ChatAgenticProvider enabled={chatAgentic}>
-          <UpgradeDialogContext.Provider
-            value={{ isLocked, reason: 'ended', adminName: null, openUpgrade }}
-          >
-            <ReportsPage />
-          </UpgradeDialogContext.Provider>
-        </ChatAgenticProvider>
+        <RoleProvider role={role}>
+          <ChatAgenticProvider enabled={chatAgentic}>
+            <UpgradeDialogContext.Provider
+              value={{ isLocked, reason: 'ended', adminName: null, openUpgrade }}
+            >
+              <ReportsPage />
+            </UpgradeDialogContext.Provider>
+          </ChatAgenticProvider>
+        </RoleProvider>
       </NextIntlClientProvider>,
     );
   });
@@ -185,6 +192,53 @@ describe('Reports', () => {
     expect(reports.createReport).toHaveBeenCalledTimes(1);
   });
 
+  it('renames a report from its row menu: the name only (UX audit RP-11)', async () => {
+    reports.renameReport.mockResolvedValue(true);
+    await render(false);
+    const trigger = container.querySelector<HTMLElement>(
+      'tbody [aria-label="More actions for October review"]',
+    )!;
+    await act(async () => {
+      trigger.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+      trigger.click();
+    });
+    const item = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].find(
+      (el) => el.textContent === 'Rename',
+    )!;
+    await act(async () => item.click());
+    const field = document.querySelector<HTMLInputElement>('[data-action="reports.renameTitle"]')!;
+    expect(field.value).toBe('October review');
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(
+        field,
+        '  Board  review ',
+      );
+      field.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    await act(async () =>
+      document.querySelector<HTMLElement>('[data-action="reports.saveTitle"]')!.click(),
+    );
+    expect(reports.renameReport).toHaveBeenCalledWith('r1', 'Board review');
+    expect(container.textContent).toContain('Board review');
+    expect(dialog()).toBeNull();
+  });
+
+  it('offers Rename to Admins and Managers only, as the server allows', async () => {
+    await render(false, false, 'analyst');
+    const trigger = container.querySelector<HTMLElement>(
+      'tbody [aria-label="More actions for October review"]',
+    )!;
+    await act(async () => {
+      trigger.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+      trigger.click();
+    });
+    const items = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].map(
+      (el) => el.textContent,
+    );
+    expect(items).not.toContain('Rename');
+    expect(items).toContain('Delete report');
+  });
+
   it('opens Generate Report on an active plan', async () => {
     await render(false);
     await act(async () => generate().click());
@@ -193,12 +247,23 @@ describe('Reports', () => {
   });
 
   it('links What Ansvisor did for you only with the new Chat on (CHAT-22 §2 item 5)', async () => {
+    brandHasShipped.mockResolvedValue(true);
     await render(false);
     expect(container.querySelector('[data-action="reports.openImpact"]')).toBeNull();
+    expect(brandHasShipped).not.toHaveBeenCalled();
     await render(false, true);
+    expect(brandHasShipped).toHaveBeenCalledWith('b1');
     const link = container.querySelector('[data-action="reports.openImpact"]')!;
     expect(link.textContent).toBe('What Ansvisor did for you');
     expect(link.getAttribute('href')).toBe('/dashboard/reports/impact');
+  });
+
+  it('hides What Ansvisor did for you until the brand has shipped something', async () => {
+    brandHasShipped.mockResolvedValue(false);
+    await render(false, true);
+    expect(brandHasShipped).toHaveBeenCalledWith('b1');
+    expect(container.querySelector('[data-action="reports.openImpact"]')).toBeNull();
+    expect(generate()).toBeDefined();
   });
 
   it('offers the AI-sourced pipeline section on Growth, and shows it off with Growth below', async () => {

@@ -679,10 +679,16 @@ export async function bulkUpdatePromptTags(
 
   let updated = 0;
   for (const change of plan.changes) {
-    const { error } = await supabase
+    // The select RLS policy is wider than the update one ("prompts:
+    // admin/manager update"), so an organization member without the manager
+    // role reads the prompts here but their update matches no row — and
+    // PostgREST reports that as success with zero rows. Count the rows each
+    // write actually changed, not the requests sent.
+    const { data, error } = await supabase
       .from('prompts')
       .update({ tags: change.tags })
-      .eq('id', change.promptId);
+      .eq('id', change.promptId)
+      .select('id');
     if (error) {
       return {
         error:
@@ -691,7 +697,7 @@ export async function bulkUpdatePromptTags(
             : error.message,
       };
     }
-    updated++;
+    updated += data?.length ?? 0;
   }
 
   revalidatePath('/dashboard/brands');

@@ -38,6 +38,7 @@ import { shownMentionEvidence } from '@/lib/reports/mention-evidence';
 import { visibilityKpis } from '@/lib/reports/visibility-kpis';
 import type { ScoreRange } from '@/lib/audit/score-range';
 import { reportLook, type ReportBranding } from '@/lib/white-label/kit';
+import { LEADERBOARD_MIN_PROMPTS, leaderboardRows } from '@/lib/reports/leaderboard';
 
 // Word-splitting hyphenation looks broken in tables; wrap whole words only.
 Font.registerHyphenationCallback((word) => [word]);
@@ -461,6 +462,12 @@ export function ReportPdfDocument({
         {payload.competitors && payload.competitors.length > 0 && (
           <View style={styles.section} wrap={false}>
             <Text style={styles.sectionTitle}>Competitor Leaderboard</Text>
+            {payload.competitors.some((c) => typeof c.score === 'number') && (
+              <Text style={{ fontSize: 8, color: MUTED, marginBottom: 6 }}>
+                Ranked by Visibility score. Brands named in fewer than {LEADERBOARD_MIN_PROMPTS}{' '}
+                prompts are listed last as Low sample.
+              </Text>
+            )}
             <View style={styles.tableHeader}>
               <Text style={[styles.tableHeaderCell, { flex: 1 }]}>Brand</Text>
               <Text style={[styles.tableHeaderCell, { width: 60, textAlign: 'right' }]}>
@@ -480,7 +487,7 @@ export function ReportPdfDocument({
                 Citations
               </Text>
             </View>
-            {payload.competitors.map((c) => (
+            {leaderboardRows(payload.competitors).map(({ entry: c, lowSample }) => (
               <View key={c.name} style={styles.tableRow}>
                 <Text
                   style={[
@@ -491,6 +498,7 @@ export function ReportPdfDocument({
                 >
                   {c.name}
                   {c.isOwnBrand ? ' (you)' : ''}
+                  {lowSample ? ' · Low sample' : ''}
                 </Text>
                 <View style={{ width: 60, alignItems: 'flex-end' }}>
                   <Text style={styles.cell}>

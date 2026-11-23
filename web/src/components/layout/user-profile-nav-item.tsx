@@ -46,6 +46,7 @@ import {
 } from '@/app/[locale]/(dashboard)/dashboard/settings/_sections';
 import { MenuDot } from './menu-dot';
 import { UserMenuLanguage } from './user-menu-language';
+import { SuggestTranslationDialog } from '@/components/settings/suggest-translation';
 import { SettingsDotMark, useSettingsDotWords, useSettingsDots } from './settings-dots';
 
 const SETTINGS_HREF = '/dashboard/settings';
@@ -148,6 +149,8 @@ export function UserProfileNavItem({
 
   // The Language item reads its list when the menu first opens.
   const [menuOpened, setMenuOpened] = useState(false);
+  // "Suggest a better translation" (LOC-009): its form stays outside the menu, which closes on a click.
+  const [suggestOpen, setSuggestOpen] = useState(false);
   const onOpenChange = (open: boolean) => {
     if (open) setMenuOpened(true);
     if (!open || !chatAgentic) return;
@@ -312,7 +315,7 @@ export function UserProfileNavItem({
               )}
             </DropdownMenuItem>
           )}
-          <UserMenuLanguage open={menuOpened} />
+          <UserMenuLanguage open={menuOpened} onSuggest={() => setSuggestOpen(true)} />
           <DropdownMenuItem onClick={() => openTab(siteConfig.links.docs)}>
             <CircleHelp className="text-muted-foreground" />
             {tMenu('help')}
@@ -328,6 +331,7 @@ export function UserProfileNavItem({
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
+      <SuggestTranslationDialog open={suggestOpen} onOpenChange={setSuggestOpen} />
       {/* The gear opens Settings, as it always has. */}
       {!collapsed && (
         <Link

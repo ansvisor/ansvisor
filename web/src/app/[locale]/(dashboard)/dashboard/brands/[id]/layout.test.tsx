@@ -144,9 +144,16 @@ describe('the brand tabs', () => {
     expect(prompts.getAttribute('href')).toBe('/dashboard/prompts/tracked');
     await act(async () => prompts.click());
     expect(store.setActiveBrand).toHaveBeenCalledWith('b1');
-    // Topics and Settings stay the brand's own pages.
-    expect(tab('Topics').getAttribute('href')).toBe('/dashboard/brands/b1/topics');
+    // Settings stays the brand's own page.
     expect(tab('Settings').getAttribute('href')).toBe('/dashboard/brands/b1/settings');
+  });
+
+  it('opens Prompts › Topics with this brand picked from the Topics tab', async () => {
+    await render();
+    const topics = tab('Topics');
+    expect(topics.getAttribute('href')).toBe('/dashboard/prompts/topics');
+    await act(async () => topics.click());
+    expect(store.setActiveBrand).toHaveBeenCalledWith('b1');
   });
 
   it("links nowhere to the brand's old prompts page", async () => {
@@ -159,13 +166,15 @@ describe('the brand tabs', () => {
     }
   });
 
-  it('says the Prompts tab leaves for the Prompts page', async () => {
+  it('says the Topics and Prompts tabs leave for the Prompts page', async () => {
     await render();
-    const prompts = tab('Prompts');
-    const hint = document.getElementById(prompts.getAttribute('aria-describedby')!);
-    expect(hint?.textContent).toBe('Opens the Prompts page');
-    expect(prompts.title).toBe('Opens the Prompts page');
-    expect(prompts.querySelector('svg.lucide-arrow-up-right')).not.toBeNull();
+    for (const label of ['Topics', 'Prompts']) {
+      const link = tab(label);
+      const hint = document.getElementById(link.getAttribute('aria-describedby')!);
+      expect(hint?.textContent).toBe('Opens the Prompts page');
+      expect(link.title).toBe('Opens the Prompts page');
+      expect(link.querySelector('svg.lucide-arrow-up-right')).not.toBeNull();
+    }
     // The other tabs stay here: no hint.
     expect(tab('Settings').hasAttribute('aria-describedby')).toBe(false);
   });
@@ -183,7 +192,7 @@ describe('the brand tabs', () => {
     expect(store.setActiveBrand).toHaveBeenCalledWith('b1');
   });
 
-  it('marks the Prompts tab only on the old prompts page itself', async () => {
+  it('marks the Topics and Prompts tabs only on the brand pages themselves', async () => {
     const marked = () =>
       [...container.querySelectorAll('nav a')]
         .filter((a) => a.querySelector('.border-primary'))

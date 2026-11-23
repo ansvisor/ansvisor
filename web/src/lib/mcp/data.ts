@@ -171,6 +171,12 @@ export interface VisibilitySummaryParams {
   dateTo?: string;
   model?: string;
   region?: string;
+  /**
+   * Also give every competitor named in the period (`everyCompetitor`), not
+   * only the top 5 by mentions: Today's rank among primary rivals (AC-02).
+   * Never set from a tool's input.
+   */
+  everyCompetitor?: boolean;
 }
 
 export interface VisibilitySummary {
@@ -212,6 +218,12 @@ export interface VisibilitySummary {
     score: number | null;
   }>;
   /**
+   * Every competitor named in the period, with its score and the prompts it
+   * appeared in (null when the read doesn't give them). Only when asked
+   * (`everyCompetitor`).
+   */
+  everyCompetitor?: EveryCompetitorScore[];
+  /**
    * The whole UTC days read in place of the period asked, when it started or
    * ended inside a day and ran longer than a day (`note` says so): every day
    * it touches, from the daily rollups. An absent bound stays open.
@@ -219,6 +231,14 @@ export interface VisibilitySummary {
   roundedToDays?: DayWindow;
   /** Why the summary covers other times than the period asked, when it does. */
   note?: string;
+}
+
+/** A competitor's score in the period, for a rank over a chosen set. */
+export interface EveryCompetitorScore {
+  id: string;
+  name: string;
+  score: number | null;
+  visiblePrompts: number | null;
 }
 
 /** ai_visibility_aggregates(_daily)'s payload: the score's components, brand and competitors. */
@@ -269,6 +289,18 @@ function foldAiVisibility(data: unknown) {
 }
 
 export async function getVisibilitySummaryFor(
+  auth: McpAuthContext,
+  params: VisibilitySummaryParams,
+): Promise<VisibilitySummary | null> {
+  const summary = await readVisibilitySummary(auth, params);
+  if (!summary || params.everyCompetitor) return summary;
+  // The full list stays out of Chat's and the MCP Server's reads.
+  const rest = { ...summary };
+  delete rest.everyCompetitor;
+  return rest;
+}
+
+async function readVisibilitySummary(
   auth: McpAuthContext,
   params: VisibilitySummaryParams,
 ): Promise<VisibilitySummary | null> {
@@ -399,6 +431,8 @@ interface CompetitorAggregatesPayload {
     name: string | null;
     sum_visibility: number | string | null;
     total_mentions: number | null;
+    /** Prompts the competitor appeared in: the daily rollups' read only. */
+    visible_prompts?: number | null;
   }>;
 }
 
@@ -481,6 +515,18 @@ function visibilitySummaryOf(
             }))
             .sort((a, b) => b.mentions - a.mentions || a.name.localeCompare(b.name))
             .slice(0, 5)
+        : [],
+    everyCompetitor:
+      resultCount > 0
+        ? (agg.by_competitor ?? []).map((c) => ({
+            id: c.competitor_id,
+            name: c.name ?? '',
+            score: scoreById.get(c.competitor_id) ?? null,
+            visiblePrompts:
+              c.visible_prompts === null || c.visible_prompts === undefined
+                ? null
+                : Number(c.visible_prompts),
+          }))
         : [],
   };
 }
