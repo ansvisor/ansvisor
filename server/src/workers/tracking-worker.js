@@ -4,12 +4,7 @@
  */
 
 import { runPrompt, analyzeSentimentAI } from '../lib/ai-tracker.js';
-import {
-  isLegacyChatgptTask,
-  pollScraperResult,
-  submitPromptTask,
-  UNAVAILABLE_PLATFORMS,
-} from '../lib/cloro-scraper.js';
+import { answerProvider } from '../lib/answer-providers/index.js';
 import { chatgptFanoutDue, chatgptFanoutMode } from '../lib/chatgpt-fanout.js';
 import { parseResponse, countBrandMentions } from '../lib/response-parser.js';
 import supabaseAdmin from '../config/supabase.js';
@@ -44,12 +39,13 @@ function resolveModelPlatform(model) {
  * Prompts keep whatever platform ids they were saved with, so the stored array
  * cannot be trusted at run time: a brand may have turned Shopping off since,
  * and a platform may be down. Both are filtered here rather than at the picker,
- * because every id that survives becomes a paid Cloro submission.
+ * because every id that survives becomes a paid submission to the answer
+ * provider.
  */
 export function runnablePlatforms(platforms, { shoppingEnabled } = {}) {
   return (platforms ?? []).filter(
     (platform) =>
-      !UNAVAILABLE_PLATFORMS.includes(platform) &&
+      !answerProvider().unavailablePlatforms().includes(platform) &&
       (shoppingEnabled || platform !== 'chatgpt-shopping'),
   );
 }
@@ -206,21 +202,22 @@ export function scraperTasksFor(prompts, { platformsFor, locationsFor, chatgptFa
  * polling has no pending row.
  */
 export async function pollTrackingTask({ taskId, scraperId, legacy, meta }) {
+  const provider = answerProvider();
   try {
-    return await pollScraperResult(taskId, scraperId);
+    return await provider.pollScraperResult(taskId, scraperId);
   } catch (err) {
-    if (!(err?.taskFailed && isLegacyChatgptTask({ scraperId, legacy }))) throw err;
+    if (!(err?.taskFailed && provider.isLegacyChatgptTask({ scraperId, legacy }))) throw err;
     logger.warn(
       { err, taskId, scraperId, promptId: meta.prompt.id },
       'chatgpt fan-out task failed at cloro; submitting it again without fan-out',
     );
-    const again = await submitPromptTask({
+    const again = await provider.submitPromptTask({
       promptText: meta.prompt.text,
       promptId: meta.prompt.id,
       scraperId,
       region: meta.region,
     });
-    return pollScraperResult(again.taskId, scraperId);
+    return provider.pollScraperResult(again.taskId, scraperId);
   }
 }
 
@@ -459,7 +456,9 @@ export async function processTrackingJob({ brandId, promptId, promptIds, source,
       : null,
   });
 
-  const webhookUrl = process.env.CLORO_WEBHOOK_URL;
+  // The provider that answers this run's platform tasks (PLATFORM_PROVIDER).
+  const provider = answerProvider();
+  const webhookUrl = provider.webhookUrl();
 
   if (scraperTasks.length > 0) {
     logger.info(
@@ -468,8 +467,9 @@ export async function processTrackingJob({ brandId, promptId, promptIds, source,
         count: scraperTasks.length,
         chatgptFanout: scraperTasks.filter((t) => t.legacy).length,
         mode: webhookUrl ? 'webhook' : 'polling',
+        provider: provider.name,
       },
-      'submitting scraper tasks to cloro',
+      'submitting scraper tasks',
     );
 
     if (job) {
@@ -478,24 +478,26 @@ export async function processTrackingJob({ brandId, promptId, promptIds, source,
         total: totalTasks,
         promptText: 'Preparing platform scans...',
         model: null,
-        platform: 'cloro',
+        platform: provider.name,
       });
     }
 
     // Submit all tasks concurrently
     const submissions = await Promise.allSettled(
       scraperTasks.map((t) =>
-        submitPromptTask({
-          promptText: t.prompt.text,
-          promptId: t.prompt.id,
-          scraperId: t.scraperId,
-          region: t.region,
-          legacy: t.legacy,
-          webhookUrl,
-        }).then((res) => ({
-          ...res,
-          meta: t,
-        })),
+        provider
+          .submitPromptTask({
+            promptText: t.prompt.text,
+            promptId: t.prompt.id,
+            scraperId: t.scraperId,
+            region: t.region,
+            legacy: t.legacy,
+            webhookUrl,
+          })
+          .then((res) => ({
+            ...res,
+            meta: t,
+          })),
       ),
     );
 
@@ -719,7 +721,7 @@ export async function processTrackingJob({ brandId, promptId, promptIds, source,
                       : `Finishing up — waiting on the last ${pending} answers`
                     : `Receiving AI answers — ${pending} still in progress...`,
               model: null,
-              platform: 'cloro',
+              platform: provider.name,
             });
           }
 
@@ -858,7 +860,7 @@ export async function processTrackingJob({ brandId, promptId, promptIds, source,
               total: totalTasks,
               promptText: meta.prompt.text.slice(0, 80),
               model: scraperId,
-              platform: 'cloro',
+              platform: provider.name,
             });
           }
         }),
