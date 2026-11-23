@@ -17,6 +17,7 @@ import { loadTrackedCompetitors } from '../lib/competitor-aliases.js';
 import { hasFeature, getPlan, isCloud } from '../config/plans.js';
 import { applyPlanOverrides } from '../lib/plan-guard.js';
 import { generateContentOpportunities } from '../lib/opportunity-generator.js';
+import { autoSuggestPrompts } from '../lib/auto-prompt-suggestions.js';
 import { refreshPromptClusters } from '../lib/prompt-clusters.js';
 import { refreshSitePages } from '../lib/site-pages.js';
 import { updateTargetUrlStats } from '../lib/target-url-stats.js';
@@ -976,6 +977,18 @@ export async function processTrackingJob({ brandId, promptId, promptIds, source,
           })
           // Only the nightly cron run may add another angle (at most one a night).
           .then(() => generateContentOpportunities(brandId, { nightly: source === 'cron' }))
+          // A night with every need covered refreshes the brand's prompt
+          // suggestions, at most weekly (auto-prompt-suggestions.js).
+          .then((result) =>
+            source === 'cron'
+              ? autoSuggestPrompts(brandId, {
+                  orgId: brand.organization_id,
+                  plan,
+                  result,
+                  log: logger,
+                })
+              : null,
+          )
           .catch((err) => {
             logger.error({ err, brandId }, 'auto opportunity generation failed');
           });

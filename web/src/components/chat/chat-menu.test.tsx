@@ -546,6 +546,30 @@ describe('ChatMenuView', () => {
     expect(action('chatMenu.openChat')).toHaveLength(0);
   });
 
+  it("offers Clear on a day with the person's own chats, never on Pinned or a teammate's day", async () => {
+    const onClearGroup = vi.fn();
+    await render(
+      menu(
+        [
+          chat('p', { lastMessageAt: '2026-10-30T11:00:00', pinned: true }),
+          chat('a', { lastMessageAt: '2026-10-25T10:00:00' }),
+          chat('b', { lastMessageAt: '2026-10-24T10:00:00' }),
+          chat('s', { lastMessageAt: '2026-10-23T10:00:00', mine: false, shared: true }),
+          chat('o', { lastMessageAt: '2026-09-02T10:00:00', mine: false, shared: true }),
+        ],
+        { onClearGroup },
+      ),
+    );
+    const clear = action('chatMenu.clearGroup');
+    expect(clear).toHaveLength(1);
+    expect(clear[0].getAttribute('aria-label')).toBe('Delete your 2 chats from Previous 7 days');
+    await act(async () => clear[0].click());
+    expect(onClearGroup).toHaveBeenCalledWith(
+      [expect.objectContaining({ id: 'a' }), expect.objectContaining({ id: 'b' })],
+      'Previous 7 days',
+    );
+  });
+
   it("moves Today's chats to Yesterday once the menu, left open, passes midnight", async () => {
     vi.useFakeTimers({ toFake: ['Date'] });
     try {

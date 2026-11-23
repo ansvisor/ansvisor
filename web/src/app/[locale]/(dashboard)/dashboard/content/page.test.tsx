@@ -139,7 +139,8 @@ async function render(isLocked: boolean) {
 
 const buttonNamed = (name: string) =>
   [...document.body.querySelectorAll<HTMLButtonElement>('button')].find(
-    (b) => b.textContent?.trim() === name,
+    // An icon button is named by its aria-label.
+    (b) => (b.textContent?.trim() || b.getAttribute('aria-label')) === name,
   )!;
 const pickRow = async () => {
   const box = container.querySelector<HTMLElement>('tbody [role="checkbox"]')!;
