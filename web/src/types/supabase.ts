@@ -6843,6 +6843,57 @@ export type Database = {
           },
         ]
       }
+      notification_preferences: {
+        Row: {
+          brand_id: string | null
+          created_at: string
+          delivery: string
+          frequency: string
+          id: string
+          kind: string
+          organization_id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          brand_id?: string | null
+          created_at?: string
+          delivery?: string
+          frequency: string
+          id?: string
+          kind: string
+          organization_id: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          brand_id?: string | null
+          created_at?: string
+          delivery?: string
+          frequency?: string
+          id?: string
+          kind?: string
+          organization_id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notification_preferences_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brands"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "notification_preferences_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       organization_ai_keys: {
         Row: {
           active: boolean
@@ -7783,6 +7834,7 @@ export type Database = {
           created_at: string
           frequency: string
           recipients: string[] | null
+          traffic_digest: boolean
           updated_at: string
         }
         Insert: {
@@ -7790,6 +7842,7 @@ export type Database = {
           created_at?: string
           frequency?: string
           recipients?: string[] | null
+          traffic_digest?: boolean
           updated_at?: string
         }
         Update: {
@@ -7797,6 +7850,7 @@ export type Database = {
           created_at?: string
           frequency?: string
           recipients?: string[] | null
+          traffic_digest?: boolean
           updated_at?: string
         }
         Relationships: [
@@ -10043,6 +10097,10 @@ export type Database = {
           p_tool_key: string
         }
         Returns: string
+      }
+      save_notification_preferences: {
+        Args: { p_rows: Json }
+        Returns: undefined
       }
       seed_kpi_presets: {
         Args: { p_brand_id: string; p_kpis: Json }
