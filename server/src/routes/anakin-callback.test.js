@@ -69,6 +69,7 @@ let url;
 
 beforeAll(async () => {
   vi.stubEnv('ANAKIN_WEBHOOK_SECRET', SECRET);
+  vi.stubEnv('PLATFORM_PROVIDER', 'anakin');
   const { default: router } = await import('./anakin-callback.js');
   const app = express();
   app.use('/anakin/callback', express.raw({ type: 'application/json' }));
@@ -99,6 +100,8 @@ beforeEach(() => {
   isBrandActiveCached.mockReset().mockResolvedValue(true);
   isBrandActive.mockReset().mockResolvedValue(true);
   for (const fn of Object.values(log)) fn.mockClear();
+  vi.stubEnv('ANAKIN_WEBHOOK_SECRET', SECRET);
+  vi.stubEnv('PLATFORM_PROVIDER', 'anakin');
 });
 
 const finished = {
@@ -208,6 +211,30 @@ describe('POST /anakin/callback', () => {
     const body = event({ jobId: 'job-1', result: finished });
     expect((await deliver(body, null)).status).toBe(401);
     expect((await deliver(body, sign(body, 'whsec_other'))).status).toBe(401);
+    expect(events).toEqual([]);
+  });
+
+  it("stores and drops nothing when Anakin isn't the answer provider", async () => {
+    // A Cloro install: the pending row is a Cloro task, the delivery is
+    // unsigned, and neither a result nor a failure may touch it.
+    vi.stubEnv('PLATFORM_PROVIDER', 'cloro');
+    vi.stubEnv('ANAKIN_WEBHOOK_SECRET', '');
+    pending = { ...PENDING, task_id: 'cloro-task-1' };
+    const stored = event({ jobId: 'cloro-task-1', result: finished });
+    const failed = event({ jobId: 'cloro-task-1', status: 'failed' }, 'wire.job.failed');
+    expect((await deliver(stored, null)).status).toBe(404);
+    expect((await deliver(failed, null)).status).toBe(404);
+    // Even a signed delivery: the route isn't Cloro's to answer.
+    vi.stubEnv('ANAKIN_WEBHOOK_SECRET', SECRET);
+    expect((await deliver(stored)).status).toBe(404);
+    expect(events).toEqual([]);
+    expect(handleScraperResult).not.toHaveBeenCalled();
+  });
+
+  it('refuses every delivery while no signing secret is set', async () => {
+    vi.stubEnv('ANAKIN_WEBHOOK_SECRET', '');
+    const body = event({ jobId: 'job-1', result: finished });
+    expect((await deliver(body, null)).status).toBe(503);
     expect(events).toEqual([]);
   });
 });

@@ -110,6 +110,7 @@ beforeEach(() => {
   vi.useFakeTimers();
   vi.stubEnv('PLATFORM_PROVIDER', 'anakin');
   vi.stubEnv('ANAKIN_WEBHOOK_URL', 'https://api.example/anakin/callback');
+  vi.stubEnv('ANAKIN_WEBHOOK_SECRET', 'whsec_test');
   vi.stubEnv('CLORO_WEBHOOK_URL', 'https://api.example/cloro/callback');
   taskIds = 0;
   db.stampedRuns = [{ id: 'yesterday' }];

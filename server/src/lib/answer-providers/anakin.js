@@ -29,8 +29,10 @@ export function unavailablePlatforms() {
 
 /**
  * Where Anakin posts finished jobs (routes/anakin-callback.js, mounted at
- * /anakin/callback); unset: poll each task.
+ * /anakin/callback). Only with ANAKIN_WEBHOOK_SECRET too, since the route
+ * accepts signed deliveries only; otherwise null, and each task is polled.
  */
 export function webhookUrl(env = process.env) {
-  return env.ANAKIN_WEBHOOK_URL || null;
+  if (!env.ANAKIN_WEBHOOK_URL || !env.ANAKIN_WEBHOOK_SECRET) return null;
+  return env.ANAKIN_WEBHOOK_URL;
 }
