@@ -25,7 +25,7 @@ describe('answer providers', () => {
     expect(providerName({ PLATFORM_PROVIDER: 'ANAKIN' })).toBe('anakin');
   });
 
-  it('gives Anakin its scraper, polled until its webhook comes', async () => {
+  it('gives Anakin its scraper and its webhook from ANAKIN_WEBHOOK_URL', async () => {
     const anakinScraper = await import('../anakin-scraper.js');
     const anakin = answerProvider('anakin');
     expect(anakin.name).toBe('anakin');
@@ -33,7 +33,10 @@ describe('answer providers', () => {
     expect(anakin.pollScraperResult).toBe(anakinScraper.pollScraperResult);
     expect(anakin.parseScraperResponse).toBe(anakinScraper.parseScraperResponse);
     expect(anakin.unavailablePlatforms()).toEqual([]);
-    expect(anakin.webhookUrl()).toBeNull();
+    expect(anakin.webhookUrl({ ANAKIN_WEBHOOK_URL: 'https://api.example/anakin/callback' })).toBe(
+      'https://api.example/anakin/callback',
+    );
+    expect(anakin.webhookUrl({})).toBeNull();
   });
 
   it('falls back to Cloro on an unknown name, warning once', () => {

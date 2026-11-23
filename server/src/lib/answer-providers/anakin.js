@@ -28,9 +28,9 @@ export function unavailablePlatforms() {
 }
 
 /**
- * Anakin answers are polled for now: its webhook route comes next, so a run
- * never waits on deliveries nothing receives.
+ * Where Anakin posts finished jobs (routes/anakin-callback.js, mounted at
+ * /anakin/callback); unset: poll each task.
  */
-export function webhookUrl() {
-  return null;
+export function webhookUrl(env = process.env) {
+  return env.ANAKIN_WEBHOOK_URL || null;
 }

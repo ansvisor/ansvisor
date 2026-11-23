@@ -234,6 +234,24 @@ export function isLegacyChatgptTask() {
 }
 
 /**
+ * A job as Anakin holds it (GET /v1/wire/jobs/{id}): for a webhook delivery
+ * whose answer was too large to inline (`resultOmitted`).
+ *
+ * @param {string} taskId the job id
+ */
+export async function fetchJob(taskId) {
+  await pollTurn();
+  const res = await fetch(`${ANAKIN_API}/v1/wire/jobs/${encodeURIComponent(taskId)}`, {
+    headers: { 'X-API-Key': getApiKey() },
+  });
+  const job = await res.json().catch(() => null);
+  if (!res.ok) {
+    throw Object.assign(new Error(`Anakin job read error ${res.status}`), { status: res.status });
+  }
+  return job;
+}
+
+/**
  * Wait for a task's answer: poll its job under ANAKIN_POLL_PER_MIN, at
  * Anakin's `retry_after_ms` or every 10 s, whichever is longer.
  *
