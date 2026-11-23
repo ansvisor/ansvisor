@@ -2,6 +2,11 @@ import { describe, expect, it, vi } from 'vitest';
 
 const warn = vi.hoisted(() => vi.fn());
 vi.mock('../logger.js', () => ({ logger: { warn }, default: { warn } }));
+vi.mock('../../config/supabase.js', () => ({ default: {} }));
+const loadSupportedCountries = vi.hoisted(() =>
+  vi.fn(async () => new Map([['chatgpt', new Set(['US'])]])),
+);
+vi.mock('../cloro-countries.js', () => ({ loadSupportedCountries }));
 
 const { answerProvider, DEFAULT_PROVIDER, PROVIDER_NAMES, providerName } =
   await import('./index.js');
@@ -37,6 +42,7 @@ describe('answer providers', () => {
       'https://api.example/anakin/callback',
     );
     expect(anakin.webhookUrl({})).toBeNull();
+    expect(await anakin.supportedCountries()).toEqual(new Map());
   });
 
   it('falls back to Cloro on an unknown name, warning once', () => {
@@ -59,6 +65,15 @@ describe('answer providers', () => {
     expect(cloro.parseScraperResponse).toBe(cloroScraper.parseScraperResponse);
     expect(cloro.isLegacyChatgptTask).toBe(cloroScraper.isLegacyChatgptTask);
     expect(cloro.unavailablePlatforms()).toBe(cloroScraper.UNAVAILABLE_PLATFORMS);
+  });
+
+  it("reads Cloro's country lists for Cloro only", async () => {
+    expect(await answerProvider('cloro').supportedCountries()).toEqual(
+      new Map([['chatgpt', new Set(['US'])]]),
+    );
+    loadSupportedCountries.mockClear();
+    expect(await answerProvider('anakin').supportedCountries()).toEqual(new Map());
+    expect(loadSupportedCountries).not.toHaveBeenCalled();
   });
 
   it("takes Cloro's webhook from CLORO_WEBHOOK_URL, else polls", () => {

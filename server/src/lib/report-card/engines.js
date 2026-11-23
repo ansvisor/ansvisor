@@ -1,6 +1,6 @@
 import logger from '../logger.js';
 import { answerProvider } from '../answer-providers/index.js';
-import { loadSupportedCountries, supportsCountry } from '../cloro-countries.js';
+import { supportsCountry } from '../cloro-countries.js';
 
 /**
  * A report card's questions asked in the four engines (REPORT-CARD §1),
@@ -75,7 +75,11 @@ export async function askEngines(
     clock = Date.now,
   } = {},
 ) {
-  const countries = supported ?? (await loadSupportedCountries().catch(() => new Map()));
+  const countries =
+    supported ??
+    (await answerProvider()
+      .supportedCountries()
+      .catch(() => new Map()));
   const engines = REPORT_CARD_ENGINES.filter((engine) =>
     supportsCountry(countries, engine, country),
   );

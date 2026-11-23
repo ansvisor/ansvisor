@@ -13,6 +13,8 @@
  *   isLegacyChatgptTask(task)              whether a failed task may be
  *                            asked again without ChatGPT's fan-out
  *   unavailablePlatforms()   platforms it can't deliver now: runs skip them
+ *   supportedCountries()     Map of platform → countries it answers from
+ *                            (cloro-countries.js reads it); empty: none skipped
  *   webhookUrl()             where it posts finished tasks, or null to poll
  *
  * A run submits all its tasks at once and collects the answers as they

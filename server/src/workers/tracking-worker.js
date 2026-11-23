@@ -18,7 +18,7 @@ import { refreshSitePages } from '../lib/site-pages.js';
 import { updateTargetUrlStats } from '../lib/target-url-stats.js';
 import { persistCitationRows } from '../lib/citation-rows.js';
 import { isUnknownCity, locationsForModels, locationsForScraper } from '../lib/locations.js';
-import { loadSupportedCountries, supportedLocations } from '../lib/cloro-countries.js';
+import { supportedLocations } from '../lib/cloro-countries.js';
 import { settleTrackingRun } from '../lib/run-settlement.js';
 import {
   FIRST_RUN_LATE_POLL_MS,
@@ -372,13 +372,16 @@ export async function processTrackingJob({ brandId, promptId, promptIds, source,
     logger.warn({ brandId, codes: unknownCities }, 'skipping city codes no city list names');
   }
 
-  // The countries each engine answers from (PROMPT-015e, read daily): an
-  // engine isn't asked in a country it doesn't support, which would fail and
-  // cost a task. Nothing is skipped when no list was read.
-  const supportedCountries = await loadSupportedCountries().catch((err) => {
-    logger.error({ err, brandId }, 'engine country lists unreadable; nothing skipped');
-    return new Map();
-  });
+  // The countries each engine answers from on the run's answer provider
+  // (PROMPT-015e, Cloro's read daily): an engine isn't asked in a country it
+  // doesn't support, which would fail and cost a task. Nothing is skipped
+  // when no list was read, nor on a provider that lists none.
+  const supportedCountries = await answerProvider()
+    .supportedCountries()
+    .catch((err) => {
+      logger.error({ err, brandId }, 'engine country lists unreadable; nothing skipped');
+      return new Map();
+    });
   const scraperLocations = (prompt, scraperId) =>
     supportedLocations(locationsFor(prompt), scraperId, supportedCountries);
 
