@@ -16,6 +16,7 @@ vi.mock('./logger.js', () => ({
 }));
 
 import { serpProviderOrder, webResearch } from './web-research.js';
+import { logger } from './logger.js';
 
 // Stubbed before every test: unstubAllGlobals in afterEach would otherwise
 // hand later tests the real fetch, and they would call Tavily for real.
@@ -241,6 +242,7 @@ describe('webResearch', () => {
     vi.stubEnv('CLORO_API_KEY', 'cloro_test');
     vi.stubEnv('SCRAPEDO_API_KEY', 'sd_test');
     vi.stubEnv('FIRECRAWL_API_KEY', 'fc_test');
+    vi.stubEnv('CONTEXT_DEV_API_KEY', 'ctxt_test');
 
     expect(serpProviderOrder().map((p) => p.name)).toEqual(['tavily']);
   });
@@ -331,4 +333,123 @@ describe('webResearch', () => {
     expect(result).toEqual({ text: 'plain answer', searched: false, sources: 0 });
     expect(state.fetch).not.toHaveBeenCalled();
   });
+});
+
+describe('Context research', () => {
+  const page = {
+    title: 'A',
+    url: 'https://example.com/a',
+    highlights: { code: 'SUCCESS', highlights: ['first passage', 'second passage'] },
+  };
+
+  beforeEach(() => {
+    state.generateText.mockReset();
+    state.fetch.mockReset();
+    vi.stubEnv('CONTEXT_DEV_API_KEY', 'ctxt_test');
+    vi.stubEnv('WEB_RESEARCH_PROVIDERS', 'context');
+    state.tools = null;
+    state.generateText
+      .mockResolvedValueOnce({ text: 'a query' })
+      .mockResolvedValueOnce({ text: 'the synthesis' });
+  });
+
+  it('synthesizes successful Highlights with citations and a bounded request', async () => {
+    state.fetch.mockResolvedValueOnce({ ok: true, json: async () => ({ results: [page] }) });
+
+    expect(await webResearch('openrouter/test', 'research this')).toEqual({
+      text: 'the synthesis',
+      searched: true,
+      sources: 1,
+    });
+    const [url, init] = state.fetch.mock.calls[0];
+    expect(url).toBe('https://api.context.dev/v1/web/search');
+    expect(init.headers.Authorization).toBe('Bearer ctxt_test');
+    expect(init.redirect).toBe('error');
+    expect(init.signal).toBeInstanceOf(AbortSignal);
+    expect(JSON.parse(init.body)).toEqual({
+      query: 'a query',
+      numResults: 8,
+      highlightsOptions: { enabled: true },
+    });
+    expect(state.generateText.mock.calls[1][0].prompt).toContain(
+      '[A](https://example.com/a)\nfirst passage\nsecond passage',
+    );
+  });
+
+  it('keeps explicit order and skips an unset key', () => {
+    vi.stubEnv('TAVILY_API_KEY', 'tvly_test');
+    vi.stubEnv('WEB_RESEARCH_PROVIDERS', 'tavily, Context');
+    expect(serpProviderOrder().map((p) => p.name)).toEqual(['tavily', 'context']);
+    vi.stubEnv('CONTEXT_DEV_API_KEY', '');
+    expect(serpProviderOrder().map((p) => p.name)).toEqual(['tavily']);
+  });
+
+  it('counts only usable Highlights from valid source URLs', async () => {
+    state.fetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        results: [
+          page,
+          { ...page, highlights: { code: 'TIMEOUT', highlights: ['unverified'] } },
+          { ...page, highlights: { code: 'SUCCESS', highlights: [' ', null, 4] } },
+          ...['javascript:alert(1)', 'not a url', 'https://user:secret@example.com'].map((url) => ({
+            ...page,
+            url,
+          })),
+          null,
+        ],
+      }),
+    });
+    const result = await webResearch('openrouter/test', 'research this');
+    expect(result.sources).toBe(1);
+    expect(state.generateText.mock.calls[1][0].prompt).not.toContain('unverified');
+  });
+
+  it.each([
+    null,
+    { results: {} },
+    { results: [] },
+    { partial: true, results: [page] },
+    { results: [{ ...page, highlights: { code: 'ERROR', highlights: ['failed'] } }] },
+  ])('does not call unavailable evidence searched: %j', async (body) => {
+    state.fetch.mockResolvedValueOnce({ ok: true, json: async () => body });
+    expect(await webResearch('openrouter/test', 'research this')).toEqual({
+      text: 'the synthesis',
+      searched: false,
+      sources: 0,
+    });
+  });
+
+  it.each([401, 402, 429, 500])(
+    'falls through on HTTP %i without reading its payload',
+    async (status) => {
+      const json = vi.fn(async () => ({ error: 'ctxt_test' }));
+      state.fetch.mockResolvedValueOnce({ ok: false, status, json });
+      const result = await webResearch('openrouter/test', 'research this');
+      expect(result.searched).toBe(false);
+      expect(json).not.toHaveBeenCalled();
+      expect(JSON.stringify(logger.warn.mock.calls)).not.toContain('ctxt_test');
+    },
+  );
+
+  it.each(['network', 'timeout', 'redirect', 'bad-json'])(
+    'keeps %s diagnostics secret-free',
+    async (kind) => {
+      const error = new Error(`${kind}: ctxt_test and ctxt_\\u0074est`);
+      error.cause = { headers: { Authorization: 'Bearer ctxt_test' } };
+      if (kind === 'bad-json') {
+        state.fetch.mockResolvedValueOnce({
+          ok: true,
+          json: async () => {
+            throw error;
+          },
+        });
+      } else {
+        state.fetch.mockRejectedValueOnce(error);
+      }
+      expect((await webResearch('openrouter/test', 'research this')).searched).toBe(false);
+      expect(logger.warn).toHaveBeenCalledWith('context research failed; falling back');
+      expect(JSON.stringify(logger.warn.mock.calls)).not.toContain('ctxt_');
+    },
+  );
 });

@@ -4,14 +4,14 @@ route: /dashboard/settings/billing
 keywords: [add-ons, extra tracking, extra brands, AI top-up, more prompts, AI credits, buy credits, storage pack, extra storage, AI limit used up, get more, storage full]
 synonyms: [add more prompts, track more prompts, add a brand, more brands, get more AI usage, top up credits, more storage, buy more AI, credit pack]
 plan: starter
-updated: 2026-11-18
-last_checked: 2026-11-18
+updated: 2026-11-21
+last_checked: 2026-11-21
 owner: Cihan
 app_version: 0.3.0
 approved: true
 sources: [web/src/components/settings/plan-add-ons-card.tsx, web/src/lib/actions/plan-add-ons.ts, web/src/components/settings/add-ons-card.tsx, web/src/components/ai-usage/get-more.tsx, web/src/lib/actions/add-ons.ts]
 ---
-**Settings › Billing** sells more for your plan. On Growth, **Add more to your plan** adds extra tracking, extra brands and AI usage top-ups, picked together and paid once. **Add-ons** sells AI credit and storage packs. Everything is paid with Stripe, added only after the payment goes through, and shown on your invoice.
+**Settings › Billing** sells more for your plan. On Growth, **Add more to your plan** adds extra tracking, extra brands and AI usage top-ups, picked together and paid once. **Add-ons** shows AI credit you have left and the packs you bought. Everything is paid with Stripe, added only after the payment goes through, and shown on your invoice.
 
 ## Add more to your plan (Growth)
 
@@ -33,7 +33,7 @@ AI credit packs have been replaced by AI usage top-ups. Packs you already bought
 
 ## Storage packs
 
-Your storage holds Chat's files and the images you upload or generate in the Content Editor. A storage pack adds a fixed amount of storage every month. It joins your plan's subscription: the rest of the current period is charged at once to the card on file, and it renews with your plan until it is removed. Storage packs need a plan billed monthly.
+Your storage holds Chat's files and the images you upload or generate in the Content Editor. A storage pack adds a fixed amount of storage every month. It joins your plan's subscription: the rest of the current period is charged at once to the card on file, and it renews with your plan until it is removed. Storage packs need a plan billed monthly. They're sold in the **Get more** window, not in Billing.
 
 ## Get more from where a limit shows
 
@@ -47,8 +47,8 @@ On Enterprise, the window also has **Use your own key**: on the other plans, Cha
 
 ## Buy a pack
 
-1. Open **Settings › Billing** and find **Add-ons**.
-2. Pick a storage pack. **Most picked** marks the one most workspaces choose.
+1. Click **Get more storage**, for example on the Files page's storage meter.
+2. On **Storage**, pick a pack. **Most picked** marks the one most workspaces choose.
 3. Click **Continue to payment**, then confirm with **Add to plan**.
 
 Once the payment is confirmed, the pack is listed under **Purchases**.

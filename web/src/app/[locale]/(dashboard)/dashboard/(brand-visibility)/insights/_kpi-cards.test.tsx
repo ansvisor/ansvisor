@@ -41,7 +41,7 @@ const onNavigate = vi.fn();
 function render(
   trackedPrompts: TrackedPromptsKpi,
   over: Partial<InsightsSummary> = {},
-  props: { mentionsHref?: string } = {},
+  props: { mentionsHref?: string; trendPending?: boolean } = {},
 ) {
   act(() => {
     root.render(
@@ -137,6 +137,18 @@ describe('the Mentions and Citations cards', () => {
     onNavigate.mockClear();
     act(() => card('Net sentiment: open Mentions').click());
     expect(onNavigate).toHaveBeenLastCalledWith('/dashboard/mentions?range=7d');
+  });
+
+  it('show Visibility as loading while its trend is read again, and "No data" without it', () => {
+    render(plan(47, 50), {}, { trendPending: true });
+    const card = () =>
+      container.querySelector('[data-slot="kpi-pending"]')?.closest('[data-slot="card"]');
+    expect(card()).toBeTruthy();
+    expect(card()!.textContent).toContain('Visibility');
+    expect(card()!.textContent).not.toContain('No data');
+    render(plan(47, 50));
+    expect(container.querySelector('[data-slot="kpi-pending"]')).toBeNull();
+    expect(container.textContent).toContain('No data');
   });
 
   it('say nothing of a change they do not have', () => {

@@ -8582,6 +8582,62 @@ export type Database = {
           },
         ]
       }
+      translation_suggestions: {
+        Row: {
+          created_at: string
+          current_text: string
+          id: string
+          locale: string
+          message_key: string | null
+          note: string
+          organization_id: string
+          path: string
+          reviewed_at: string | null
+          status: string
+          suggestion: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          current_text: string
+          id?: string
+          locale: string
+          message_key?: string | null
+          note?: string
+          organization_id: string
+          path?: string
+          reviewed_at?: string | null
+          status?: string
+          suggestion: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          current_text?: string
+          id?: string
+          locale?: string
+          message_key?: string | null
+          note?: string
+          organization_id?: string
+          path?: string
+          reviewed_at?: string | null
+          status?: string
+          suggestion?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "translation_suggestions_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       tracking_runs: {
         Row: {
           brand_id: string

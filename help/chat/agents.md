@@ -4,8 +4,8 @@ route: /dashboard/agents
 keywords: [agents, aeo operator, operator, daily budget, agents a day, daily plan, approve the plan, skip the plan, agent center, chat agents, ready to use, ready-to-use agents, use this agent, your agents, new agent, create agent, edit agent, delete agent, run now, pause agent, resume agent, archive agent, agent ai use, by agent, top agent, ai use by agent, agent runs, triggers, max per run, schedule, signal trigger, needs you, stopped at its limit, run agent on an action, agent connections, required connection, agent skills, follow-on skills, library skills in an agent, buyer questions, rival brief, listing gaps, site audit fixes, business type, for your role, for your site type, agent packs, e-commerce agents, b2b agents, b2c agents, mobile app agents, ceo brief, publish on its own, go live on its own, daily limit, went live notice, can call, run another agent, called by, sub-agents, agent calls agent, send to webhook, what this agent did, agent impact, changes shipped by an agent, agent results, onboarding, onboarding & help, onboarding agent, help agent, setup guide, /setup, recommended agents, which agents should i use, fan-out gap filler, fan-out gaps, prompt portfolio manager, prompts to add, prompts to pause, content plan builder, /content-plan, seasonal prompt planner, /seasonal, ai traffic signups, ai traffic, sign-ups, /traffic, when a brand is added, brand added, new brand trigger, goal, role, filter agents, agent work, i approve first, agent starts on its own]
 synonyms: [my agents, saved agents, automations, scheduled agents, agent templates, ready-made agents, agent gallery, agent history, what does this agent cost, make an agent, change an agent, remove an agent, publish without a click, agent sends to cms, agent runs an agent, chain agents, helper agent, agents for me, agent recommendations, setup help, new member setup, what did my agent do, did my agent work, run an agent on a new brand, agent for new brands, content plan, weekly plan, what to write this week, seasonal prompts, holiday prompts, black friday, ai traffic report, ai visitors who sign up]
 plan: all
-updated: 2026-11-18
-last_checked: 2026-11-15
+updated: 2026-11-21
+last_checked: 2026-11-21
 owner: Cihan
 app_version: 0.3.0
 approved: true
@@ -62,6 +62,10 @@ Agents made for the site type of the brand you have open are marked **For your s
 ## AI Traffic → Signups
 
 **AI Traffic → Signups** runs every Monday at 09:00 on **Auto, ask before changes**. It is made for the **Growth** work area. It reports the visits AI assistants sent to your site last week, by assistant and by landing page, against the week before. With Google Analytics connected, it adds the key events, such as sign-ups, and the sessions that came from AI. Without it, sign-ups show as **Not measured**. Sign-ups by assistant or by page, and the prompt behind a visit, aren't measured, and the report says so. Sending a page to the Action Center is a card you approve. Google Analytics is optional. In Chat, the same skill is **/traffic**.
+
+## Agency Client Reporter
+
+**Agency Client Reporter** runs on the 1st of each month at 09:00 on **Auto, ask before changes**. It is made for agencies. It starts on **All brands**, so each run writes one report per brand in its scope: last month against the month before, with citations, mentions, share of voice, what changed and the next actions. Its skill is **Weekly report** (**/report**), and its instructions ask for the month instead of the week; you can change them. Narrow it to a few client brands under **Scope**. Search Console is optional.
 
 ## What each card shows
 
