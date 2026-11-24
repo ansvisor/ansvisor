@@ -47,7 +47,7 @@ export const ANAKIN_ENGINES = {
     state: true,
   },
   'google-aio': { action: 'google_ai_overview', query: 'query', location: true },
-  'google-aimode': { action: 'ai_mode', query: 'prompt' },
+  'google-aimode': { action: 'ai_mode', query: 'prompt', location: true },
   'copilot-web': { action: 'bing_copilot_search', query: 'prompt' },
   'gemini-web': { action: 'gemini_prompt', query: 'prompt' },
   'perplexity-web': { action: 'pplx_prompt', query: 'query', pool: true },

@@ -71,6 +71,24 @@ describe('buildTaskBody', () => {
     });
   });
 
+  it('gives AI Mode a state or city as its place name, and a country alone none', () => {
+    // A city task (locations.js CITY_SCRAPERS) reaches AI Mode: without
+    // `location` it was answered country-wide and stored in the city's column.
+    expect(buildTaskBody('q', 'google-aimode', 'US-TX')).toEqual({
+      action_id: 'ai_mode',
+      params: { prompt: 'q', country: 'us', location: 'Texas,United States' },
+    });
+    expect(buildTaskBody('q', 'google-aimode', 'TR~ISTANBUL').params).toEqual({
+      prompt: 'q',
+      country: 'tr',
+      location: 'Istanbul,Istanbul,Turkiye',
+    });
+    expect(buildTaskBody('q', 'google-aimode', 'US').params).toEqual({
+      prompt: 'q',
+      country: 'us',
+    });
+  });
+
   it('runs the signed-in platforms on the account pool, outside params', () => {
     for (const id of ['perplexity-web', 'grok-web', 'claude-web', 'deepseek-web', 'copilot-app']) {
       const body = buildTaskBody('q', id, 'US');
