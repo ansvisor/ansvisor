@@ -1,5 +1,5 @@
 import logger from '../logger.js';
-import { pollScraperResult, submitScraperTask } from '../cloro-scraper.js';
+import { answerProvider } from '../answer-providers/index.js';
 import { loadSupportedCountries, supportsCountry } from '../cloro-countries.js';
 
 /**
@@ -66,8 +66,8 @@ export async function askEngines(
   questions,
   country,
   {
-    submit = submitScraperTask,
-    poll = pollScraperResult,
+    submit = answerProvider().submitScraperTask,
+    poll = answerProvider().pollScraperResult,
     supported = null,
     inFlight = IN_FLIGHT,
     maxWaitMs = MAX_WAIT_MS,
