@@ -22,6 +22,18 @@ describe('answer providers', () => {
 
   it('reads the name in any case', () => {
     expect(providerName({ PLATFORM_PROVIDER: ' Cloro ' })).toBe('cloro');
+    expect(providerName({ PLATFORM_PROVIDER: 'ANAKIN' })).toBe('anakin');
+  });
+
+  it('gives Anakin its scraper, polled until its webhook comes', async () => {
+    const anakinScraper = await import('../anakin-scraper.js');
+    const anakin = answerProvider('anakin');
+    expect(anakin.name).toBe('anakin');
+    expect(anakin.submitPromptTask).toBe(anakinScraper.submitPromptTask);
+    expect(anakin.pollScraperResult).toBe(anakinScraper.pollScraperResult);
+    expect(anakin.parseScraperResponse).toBe(anakinScraper.parseScraperResponse);
+    expect(anakin.unavailablePlatforms()).toEqual([]);
+    expect(anakin.webhookUrl()).toBeNull();
   });
 
   it('falls back to Cloro on an unknown name, warning once', () => {
@@ -33,7 +45,7 @@ describe('answer providers', () => {
   });
 
   it('lists the known providers', () => {
-    expect(PROVIDER_NAMES).toEqual(['cloro']);
+    expect(PROVIDER_NAMES).toEqual(['cloro', 'anakin']);
   });
 
   it('gives Cloro its scraper unchanged', () => {

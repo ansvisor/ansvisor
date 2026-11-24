@@ -1,7 +1,7 @@
 /**
  * The answer provider: the service that asks the AI platforms (ChatGPT,
  * Google AI Overviews, Gemini…) a prompt and returns their answers. Chosen
- * with PLATFORM_PROVIDER; Cloro when unset. Every provider exports the same
+ * with PLATFORM_PROVIDER (`cloro` or `anakin`); Cloro when unset. Every provider exports the same
  * shape (see cloro.js):
  *
  *   name                     the provider's id
@@ -18,12 +18,13 @@
  * A run submits all its tasks at once and collects the answers as they
  * finish (webhook, else polling), whichever provider answers them.
  */
+import * as anakin from './anakin.js';
 import * as cloro from './cloro.js';
 import { logger } from '../logger.js';
 
 export const DEFAULT_PROVIDER = 'cloro';
 
-const PROVIDERS = { cloro };
+const PROVIDERS = { cloro, anakin };
 
 /** The known providers' ids. */
 export const PROVIDER_NAMES = Object.keys(PROVIDERS);
