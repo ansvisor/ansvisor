@@ -100,7 +100,7 @@ export const NOTIFICATION_KIND_SPECS: readonly NotificationKindSpec[] = [
     labels: 'digest',
     fallback: 'weekly',
     brandScoped: true,
-    comingSoon: true,
+    comingSoon: false,
   },
   {
     kind: 'weekly_actions',
@@ -109,7 +109,7 @@ export const NOTIFICATION_KIND_SPECS: readonly NotificationKindSpec[] = [
     labels: 'weekly',
     fallback: 'weekly',
     brandScoped: true,
-    comingSoon: true,
+    comingSoon: false,
   },
   {
     kind: 'run_finished',
@@ -118,7 +118,7 @@ export const NOTIFICATION_KIND_SPECS: readonly NotificationKindSpec[] = [
     labels: 'instant',
     fallback: 'off',
     brandScoped: true,
-    comingSoon: true,
+    comingSoon: false,
   },
   {
     kind: 'audit_finished',
@@ -127,7 +127,7 @@ export const NOTIFICATION_KIND_SPECS: readonly NotificationKindSpec[] = [
     labels: 'instant',
     fallback: 'off',
     brandScoped: true,
-    comingSoon: true,
+    comingSoon: false,
   },
   {
     kind: 'score_dropped',
@@ -136,7 +136,7 @@ export const NOTIFICATION_KIND_SPECS: readonly NotificationKindSpec[] = [
     labels: 'instant',
     fallback: 'off',
     brandScoped: true,
-    comingSoon: true,
+    comingSoon: false,
   },
   {
     kind: 'drafts_review',
@@ -154,7 +154,7 @@ export const NOTIFICATION_KIND_SPECS: readonly NotificationKindSpec[] = [
     labels: 'onoff',
     fallback: 'on',
     brandScoped: false,
-    comingSoon: true,
+    comingSoon: false,
   },
 ];
 

@@ -17,6 +17,7 @@ import { refreshPromptClusters } from '../lib/prompt-clusters.js';
 import { refreshSitePages } from '../lib/site-pages.js';
 import { updateTargetUrlStats } from '../lib/target-url-stats.js';
 import { persistCitationRows } from '../lib/citation-rows.js';
+import { persistShoppingCards, resultRow } from '../lib/cloro-result-handler.js';
 import { isUnknownCity, locationsForModels, locationsForScraper } from '../lib/locations.js';
 import { supportedLocations } from '../lib/cloro-countries.js';
 import { settleTrackingRun } from '../lib/run-settlement.js';
@@ -445,6 +446,7 @@ export async function processTrackingJob({ brandId, promptId, promptIds, source,
       createdAt: inserted.created_at,
       citations: row.citations,
     });
+    return inserted;
   }
 
   // 6. Phase 1: Collect & run all scraper (platform) tasks first. A prompt's
@@ -535,6 +537,8 @@ export async function processTrackingJob({ brandId, promptId, promptIds, source,
           scraper_id: scraperId,
           region: meta.region,
           legacy: legacy === true,
+          // Whose task it is (00562): each provider's webhook takes its own.
+          provider: provider.name,
         }));
 
         const { error: pendingErr } = await supabaseAdmin
@@ -831,24 +835,28 @@ export async function processTrackingJob({ brandId, promptId, promptIds, source,
               competitors,
             );
 
-            await insertResult({
-              prompt_id: meta.prompt.id,
-              brand_id: brandId,
+            // The same row and shopping cards as the webhook path
+            // (handleScraperResult), so a polled answer's cards reach
+            // Product Visibility too.
+            const inserted = await insertResult(
+              resultRow({
+                aiResponse,
+                scraperId: meta.scraperId,
+                promptId: meta.prompt.id,
+                brandId,
+                region: meta.region,
+                metrics,
+              }),
+            );
+            await persistShoppingCards({
+              promptResultId: inserted.id,
+              brandId,
               platform: meta.scraperId,
-              response: aiResponse.text,
-              citations: aiResponse.citations,
-              mention_count: metrics.mentionCount,
-              citation_count: metrics.citationCount,
-              sentiment: metrics.sentiment,
-              visibility_score: metrics.visibilityScore,
-              model_used: aiResponse.model,
               region: meta.region,
-              competitor_mentions: metrics.competitorMentions,
-              mention_position: metrics.mentionPosition,
-              mentioned_entity_count: metrics.mentionedEntityCount,
-              search_queries: Array.isArray(aiResponse.search_queries)
-                ? aiResponse.search_queries
-                : [],
+              rawCards: aiResponse.shopping_cards ?? [],
+              rawInlineProducts: aiResponse.inline_products ?? [],
+              brandInfo: { brandId, brandName: brandInfo.brandName, domains: brandInfo.domains },
+              competitors,
             });
 
             logger.debug({ taskId, scraperId }, 'scraper task result saved');

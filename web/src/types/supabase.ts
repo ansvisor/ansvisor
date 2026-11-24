@@ -4479,6 +4479,7 @@ export type Database = {
           brand_id: string
           legacy: boolean
           prompt_id: string
+          provider: string | null
           region: string | null
           scraper_id: string
           submitted_at: string
@@ -4488,6 +4489,7 @@ export type Database = {
           brand_id: string
           legacy?: boolean
           prompt_id: string
+          provider?: string | null
           region?: string | null
           scraper_id: string
           submitted_at?: string
@@ -4497,6 +4499,7 @@ export type Database = {
           brand_id?: string
           legacy?: boolean
           prompt_id?: string
+          provider?: string | null
           region?: string | null
           scraper_id?: string
           submitted_at?: string

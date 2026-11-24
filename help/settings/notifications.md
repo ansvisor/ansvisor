@@ -19,7 +19,7 @@ The e-mails are grouped: **Brand Visibility** (the Daily Pulse), **AI Traffic** 
 
 Until you save for the first time, the page shows the e-mails you get today, so nothing changes by itself.
 
-E-mails marked **Coming soon** keep the choice you save and start once they're ready. **Billing and security** e-mails are always sent.
+**Billing and security** e-mails are always sent.
 
 ## Critical actions and drafts in review
 
@@ -28,6 +28,26 @@ E-mails marked **Coming soon** keep the choice you save and start once they're r
 **Drafts waiting for your review** lists a brand's Content drafts in review, up to ten, with a link to **Library › In review**. It comes as a **Daily summary**, or on Mondays with **Weekly summary**, the choice everyone starts with. Nothing comes when no draft waits.
 
 Each e-mail comes once, only for brands you can open.
+
+## Due actions and the weekly summary
+
+**Overdue and due today** lists the open actions assigned to you whose due date is today or past, with how many days late each is, one e-mail per brand. It comes as a **Daily summary**, or on Mondays with **Weekly summary**, the choice everyone starts with. Nothing comes when nothing is due.
+
+**Weekly action summary** comes on Mondays, one per brand: how many actions were completed in the last seven days, how many are open, and the next three by priority. Everyone starts with it on; set it to **Off** to stop it.
+
+## Audit finished and Score dropped
+
+**Audit finished** tells you when audits finish, a bulk run's or a scheduled run's, with each page's score. **Right away** gathers the audits finished in the last few minutes in one e-mail per brand, so a bulk run isn't one e-mail per page; **Daily summary** sends the day's.
+
+**Score dropped** tells you when a page's new audit scores 5 points or more below its previous one, such as 70 → 61, **Right away** or in the day's summary. A page's first audit is never a drop.
+
+Both are **Off** until you pick them, and each audit is told once. With **Audit finished** on for a brand, its scheduled runs no longer also send the workspace's auto-audit e-mail to you: you get one.
+
+## Run finished and AI usage
+
+**Run finished** tells you when an agent's run that acted for you ends, finished, failed or stopped, with the agent's name and a link to the run's chat: **Right away**, gathering the runs that ended in the last few minutes per brand, or in a **Daily summary**. It's **Off** until you pick it.
+
+**AI usage**, for Admins, tells you when the workspace has used 80% of its monthly AI limit, then 100%, once each a month, with a link to **Billing**. It's on until you turn it off; plans without a limit never get it.
 
 ## Set a brand apart
 

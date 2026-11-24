@@ -152,9 +152,10 @@ describe('processTrackingJob on Anakin', () => {
       ['chatgpt-web', 'https://api.example/anakin/callback'],
       ['copilot-web', 'https://api.example/anakin/callback'],
     ]);
-    expect(db.pendingRows.map((row) => [row.task_id, row.scraper_id])).toEqual([
-      ['job-1', 'chatgpt-web'],
-      ['job-2', 'copilot-web'],
+    // Each row says whose task it is (00562), so only /anakin/callback takes it.
+    expect(db.pendingRows.map((row) => [row.task_id, row.scraper_id, row.provider])).toEqual([
+      ['job-1', 'chatgpt-web', 'anakin'],
+      ['job-2', 'copilot-web', 'anakin'],
     ]);
     expect(settleTrackingRun).toHaveBeenCalledTimes(1);
   });

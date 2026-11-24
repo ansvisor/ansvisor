@@ -1,5 +1,6 @@
 import supabaseAdmin from '../../config/supabase.js';
 import { brandReaders } from '../access.js';
+import { brandAudience } from '../notifications/choices.js';
 import { sendEmail } from '../email.js';
 import { DEFAULT_LOCALE, formatLocale, translator, uiLanguagesOf } from '../i18n.js';
 
@@ -89,20 +90,32 @@ export function renderAutoAuditEmail({ brands, nextRunAt }, locale = DEFAULT_LOC
 
 /**
  * The members who can see the run's brands, grouped by the brands they see:
- * one e-mail per group, listing those brands. Each group's addresses.
+ * one e-mail per group, listing those brands. Each group's addresses. A brand
+ * whose "Audit finished" e-mail a person chose (Settings › Notifications,
+ * anything but Off) is left out of theirs: that e-mail tells them of the same
+ * audits, so they never get both; with none left, they get none.
  */
 async function recipientGroups(orgId, brands) {
   const readers = await brandReaders(
     orgId,
     brands.map((brand) => brand.id),
   );
+  const chose = new Map();
+  for (const brand of brands) {
+    const audience = await brandAudience(orgId, brand.id, 'audit_finished');
+    chose.set(
+      brand.id,
+      new Set([...audience].filter(([, choice]) => choice !== 'off').map(([id]) => id)),
+    );
+  }
   const languages = await uiLanguagesOf([...readers.keys()]);
   const groups = new Map();
   for (const [id, seen] of readers) {
     const key = brands
-      .filter((brand) => seen.has(brand.id))
+      .filter((brand) => seen.has(brand.id) && !chose.get(brand.id)?.has(id))
       .map((brand) => brand.id)
       .join(',');
+    if (!key) continue;
     const { data } = await supabaseAdmin.auth.admin.getUserById(id);
     if (!data?.user?.email) continue;
     // One e-mail per brand set and language (LOC-008).

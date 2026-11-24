@@ -53,6 +53,60 @@
       "button": "{count, plural, one {Open the action} other {Open Actions}}",
       "why": "You get this because you chose to hear about new Critical actions."
     },
+    "due": {
+      "subject": "{brand}: {count, plural, one {# action} other {# actions}} assigned to you {late, plural, =0 {due today} other {due or late}}",
+      "title": "{count, plural, one {An action of yours is due} other {# actions of yours are due}}",
+      "line": "In {brand}, {count, plural, one {# action assigned to you is} other {# actions assigned to you are}} due today or late:",
+      "item": "{code} · {category} · {late, plural, =0 {due today} one {due {date}, # day late} other {due {date}, # days late}}",
+      "button": "{count, plural, one {Open the action} other {Open Actions}}",
+      "why": "You get this because you chose to hear about actions assigned to you that are due or late."
+    },
+    "weekly": {
+      "subject": "{brand}: your week in the Action Center",
+      "title": "{brand}: the week in the Action Center",
+      "line": "In the last seven days, {completed, plural, one {# action was completed} other {# actions were completed}}; {open, plural, one {# is open} other {# are open}}.",
+      "next": "Next, by priority:",
+      "item": "{code} · {category}",
+      "button": "Open Actions",
+      "why": "You get this because you chose the weekly action summary."
+    },
+    "audits": {
+      "finishedSubject": "{brand}: {count, plural, one {# audit finished} other {# audits finished}}",
+      "finishedTitle": "{count, plural, one {An audit finished} other {# audits finished}}",
+      "finishedLine": "{brand}: {count, plural, one {# page audited} other {# pages audited}}, {average} on average:",
+      "finishedItem": "{page}: {score}",
+      "finishedWhy": "You get this because you chose to hear when audits finish.",
+      "droppedSubject": "{brand}: {count, plural, one {a page's score dropped} other {# pages' scores dropped}}",
+      "droppedTitle": "{count, plural, one {A page's score dropped} other {# pages' scores dropped}}",
+      "droppedLine": "{brand}: {count, plural, one {# page} other {# pages}} scored {points} points or more below {count, plural, one {its} other {their}} last audit:",
+      "droppedItem": "{page}: {before} → {score}",
+      "droppedWhy": "You get this because you chose to hear when a page's score drops.",
+      "more": "and {count} more",
+      "button": "{count, plural, one {Open the audit} other {Open Site Audit}}"
+    },
+    "runs": {
+      "subjectOne": "{brand}: {agent} {status}",
+      "subjectMany": "{brand}: {count, plural, one {# agent run ended} other {# agent runs ended}}",
+      "title": "{count, plural, one {An agent run ended} other {# agent runs ended}}",
+      "line": "In {brand}, {count, plural, one {a run that acted for you ended} other {# runs that acted for you ended}}:",
+      "item": "{agent}: {status}",
+      "status": {
+        "done": "finished",
+        "failed": "failed",
+        "stopped": "stopped"
+      },
+      "deletedAgent": "A deleted agent",
+      "button": "{count, plural, one {Open the run} other {Open Agents}}",
+      "why": "You get this because you chose to hear when agent runs end."
+    },
+    "usage": {
+      "subject": "Your workspace has used {threshold}% of its monthly AI limit",
+      "title": "{threshold}% of the monthly AI limit used",
+      "line": "Your workspace has used 80% of this month's AI limit. It resets on {date}; until then, more AI usage or a larger plan keeps work going.",
+      "lineFull": "Your workspace has used all of this month's AI limit: AI work waits until it resets on {date}, unless you add AI usage or move to a larger plan.",
+      "button": "Open Billing",
+      "why": "You get this as an Admin of the workspace."
+    },
     "drafts": {
       "subject": "{brand}: {count, plural, one {# draft waits} other {# drafts wait}} for your review",
       "title": "{count, plural, one {# draft waits for your review} other {# drafts wait for your review}}",
