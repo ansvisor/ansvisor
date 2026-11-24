@@ -321,6 +321,43 @@ describe('parseScraperResponse', () => {
     expect(answer.search_queries).toEqual([{ query: 'best crm', source_platform: 'gemini-web' }]);
   });
 
+  it("reads Claude's answer from `text`, a level deeper than the other platforms", () => {
+    const claude = {
+      status: 'completed',
+      credits_used: 10,
+      data: {
+        status: 'ok',
+        data: {
+          text: 'Acme leads.',
+          model: 'claude-sonnet',
+          citations: [{ title: 'A', url: 'https://a.example', start_index: 0, end_index: 4 }],
+        },
+        meta: { action_id: 'ca_send_message' },
+      },
+    };
+    expect(parseScraperResponse(claude, 'claude-web')).toMatchObject({
+      text: 'Acme leads.',
+      citations: [{ url: 'https://a.example', title: 'A' }],
+      model: 'claude-sonnet',
+    });
+  });
+
+  it("reads the Copilot app's titled search results and its searches", () => {
+    const answer = parseScraperResponse(
+      job({
+        answer_text: 'Acme leads.',
+        sources: ['https://a.example'],
+        search_results: [{ url: 'https://a.example', title: 'A', snippet: 's', type: 'web' }],
+        search_queries: ['best crm'],
+      }),
+      'copilot-app',
+    );
+    expect(answer.citations).toEqual([
+      { url: 'https://a.example', title: 'A', startIndex: 0, endIndex: 50 },
+    ]);
+    expect(answer.search_queries).toEqual([{ query: 'best crm', source_platform: 'copilot-app' }]);
+  });
+
   it('treats Naver without an AI Briefing as no answer', () => {
     expect(() =>
       parseScraperResponse(job({ aib_available: false, answer_text: '' }), 'naver-web'),

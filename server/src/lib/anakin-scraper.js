@@ -81,8 +81,12 @@ export const ANAKIN_ENGINES = {
   },
 };
 
-/** The platforms Anakin can't answer now: none. */
-export const UNAVAILABLE_PLATFORMS = [];
+/**
+ * The platforms Anakin can't answer now: runs skip them. DeepSeek's catalog
+ * entry has no actions (checked 2026-11-24: `deepseek_prompt` answers 404
+ * NOT_FOUND); take it out when Anakin lists one.
+ */
+export const UNAVAILABLE_PLATFORMS = ['deepseek-web'];
 
 const DEFAULT_MAX_WAIT_MS = 30 * 60 * 1000;
 const DEFAULT_POLL_INTERVAL_MS = 10_000;
@@ -305,21 +309,30 @@ export async function pollScraperResult(taskId, scraperId, opts = {}) {
 /**
  * The answer inside a finished job. The docs show it at `data.data` (beside
  * `data.meta`) on the platform pages and at `data` on the job page; a
- * webhook delivery may carry the job or its `result`. Each is read.
+ * webhook delivery may carry the job or its `result`. Each is read: the
+ * first level holding an answer field, else the deepest `data` (Claude's
+ * answer, at `data.data`, has `text` and no other marker).
  */
+const ANSWER_FIELDS = ['answer_text', 'answer_text_markdown', 'overview_text', 'text'];
+
 export function answerPayload(job) {
   let at = job?.result ?? job;
-  for (let i = 0; i < 3 && at && typeof at === 'object'; i++) {
-    if (typeof at.answer_text === 'string' || 'overview_text' in at || 'answer_text_markdown' in at)
-      return at;
+  if (!at || typeof at !== 'object') return {};
+  for (let i = 0; i < 4; i++) {
+    if (ANSWER_FIELDS.some((field) => field in at)) return at;
+    if (!at.data || typeof at.data !== 'object') return at;
     at = at.data;
   }
-  return at && typeof at === 'object' ? at : {};
+  return at;
 }
 
-/** The first list of sources a platform returned, in the field it uses. */
+/**
+ * The first list of sources a platform returned, in the field it uses. A
+ * list of bare URLs doesn't count: Microsoft's Copilot app gives `sources`
+ * as URLs and the same pages, with titles, as `search_results`.
+ */
 function sourceList(payload) {
-  for (const field of ['citations', 'sources', 'references', 'search_sources']) {
+  for (const field of ['citations', 'sources', 'references', 'search_sources', 'search_results']) {
     const list = payload[field];
     if (Array.isArray(list) && list.some((item) => typeof item?.url === 'string')) return list;
   }
@@ -352,13 +365,18 @@ function toCitations(payload) {
 /** Where an entry joined several searches: a semicolon not ending an HTML entity. */
 const SEARCH_SEPARATOR = /(?<!&#?\w+);/u;
 
-/** The searches the platform ran (`web_search_queries`, else `web_search_query`). */
+/**
+ * The searches the platform ran: `web_search_queries`, else
+ * `web_search_query`, else `search_queries` (Microsoft's Copilot app).
+ */
 function searchQueries(payload, scraperId) {
   const listed = Array.isArray(payload.web_search_queries)
     ? payload.web_search_queries
     : typeof payload.web_search_query === 'string'
       ? [payload.web_search_query]
-      : [];
+      : Array.isArray(payload.search_queries)
+        ? payload.search_queries
+        : [];
   return listed
     .flatMap((entry) =>
       typeof entry === 'string'
@@ -400,6 +418,7 @@ export function parseScraperResponse(job, scraperId) {
     payload.overview_markdown ??
     payload.answer_text ??
     payload.overview_text ??
+    payload.text ??
     '';
   const answer = {
     text: stripEntityMarkup(typeof markdown === 'string' ? markdown : ''),
