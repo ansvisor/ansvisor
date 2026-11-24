@@ -24,7 +24,14 @@ vi.mock('../config/supabase.js', () => {
         return { data: [{ id: 's1' }] };
       case 'prompts':
         return {
-          data: [{ id: 'p1', text: 'best x', platforms: ['chatgpt-web', 'copilot-web'] }],
+          data: [
+            {
+              id: 'p1',
+              text: 'best x',
+              platforms: ['chatgpt-web', 'copilot-web'],
+              regions: ['US'],
+            },
+          ],
           error: null,
         };
       case 'tracking_runs':
@@ -87,9 +94,10 @@ vi.mock('../lib/anakin-scraper.js', () => ({
   pollScraperResult: vi.fn(),
   parseScraperResponse: vi.fn(),
 }));
-vi.mock('../lib/cloro-countries.js', () => ({
-  loadSupportedCountries: async () => new Map(),
-  supportedLocations: (locations) => locations,
+const loadSupportedCountries = vi.hoisted(() => vi.fn(async () => new Map()));
+vi.mock('../lib/cloro-countries.js', async (importOriginal) => ({
+  ...(await importOriginal()),
+  loadSupportedCountries,
 }));
 const settleTrackingRun = vi.hoisted(() => vi.fn());
 vi.mock('../lib/run-settlement.js', () => ({ settleTrackingRun }));
@@ -116,6 +124,7 @@ beforeEach(() => {
   db.stampedRuns = [{ id: 'yesterday' }];
   db.pendingRows = [];
   cloroSubmit.mockReset();
+  loadSupportedCountries.mockClear();
   anakinSubmit.mockReset().mockImplementation(async ({ scraperId }) => ({
     taskId: `job-${++taskIds}`,
     scraperId,
@@ -148,5 +157,20 @@ describe('processTrackingJob on Anakin', () => {
       ['job-2', 'copilot-web'],
     ]);
     expect(settleTrackingRun).toHaveBeenCalledTimes(1);
+  });
+
+  it("never reads Cloro's country lists, so no country is skipped for Anakin", async () => {
+    // Cloro's lists would say ChatGPT doesn't answer from the US.
+    loadSupportedCountries.mockResolvedValue(new Map([['chatgpt', new Set(['DE'])]]));
+    db.pendingPolls = [[]];
+    const run = processTrackingJob({ brandId: 'b1', source: 'manual', job: { progress() {} } });
+    for (let i = 0; i < 4; i++) await vi.advanceTimersByTimeAsync(15_000);
+    await run;
+
+    expect(loadSupportedCountries).not.toHaveBeenCalled();
+    expect(anakinSubmit.mock.calls.map(([task]) => [task.scraperId, task.region])).toEqual([
+      ['chatgpt-web', 'US'],
+      ['copilot-web', 'US'],
+    ]);
   });
 });

@@ -28,6 +28,16 @@ export function unavailablePlatforms() {
 }
 
 /**
+ * The countries each platform answers from on Anakin: none listed (Anakin
+ * publishes no list per platform yet), so no country is skipped. An empty
+ * map reads as "nothing to check against" (cloro-countries.js,
+ * supportsCountry); Cloro's lists never apply to Anakin's platforms.
+ */
+export async function supportedCountries() {
+  return new Map();
+}
+
+/**
  * Where Anakin posts finished jobs (routes/anakin-callback.js, mounted at
  * /anakin/callback). Only with ANAKIN_WEBHOOK_SECRET too, since the route
  * accepts signed deliveries only; otherwise null, and each task is polled.
