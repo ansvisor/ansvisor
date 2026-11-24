@@ -25,7 +25,7 @@ describe('answer providers', () => {
     expect(providerName({ PLATFORM_PROVIDER: 'ANAKIN' })).toBe('anakin');
   });
 
-  it('gives Anakin its scraper, polled until its webhook comes', async () => {
+  it('gives Anakin its scraper, and its webhook only with a signing secret', async () => {
     const anakinScraper = await import('../anakin-scraper.js');
     const anakin = answerProvider('anakin');
     expect(anakin.name).toBe('anakin');
@@ -33,7 +33,17 @@ describe('answer providers', () => {
     expect(anakin.pollScraperResult).toBe(anakinScraper.pollScraperResult);
     expect(anakin.parseScraperResponse).toBe(anakinScraper.parseScraperResponse);
     expect(anakin.unavailablePlatforms()).toEqual([]);
-    expect(anakin.webhookUrl()).toBeNull();
+    expect(
+      anakin.webhookUrl({
+        ANAKIN_WEBHOOK_URL: 'https://api.example/anakin/callback',
+        ANAKIN_WEBHOOK_SECRET: 'whsec_test',
+      }),
+    ).toBe('https://api.example/anakin/callback');
+    // The route takes signed deliveries only: no secret, no webhook, poll.
+    expect(
+      anakin.webhookUrl({ ANAKIN_WEBHOOK_URL: 'https://api.example/anakin/callback' }),
+    ).toBeNull();
+    expect(anakin.webhookUrl({})).toBeNull();
   });
 
   it('falls back to Cloro on an unknown name, warning once', () => {
