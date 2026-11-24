@@ -11,12 +11,12 @@
  * `result` is the finished job, inlined up to 256 KB; a larger one is read
  * from Anakin. Delivery is at least once: a repeat finds no pending row.
  *
- * Answers only while Anakin is the answer provider (PLATFORM_PROVIDER):
- * cloro_pending_tasks also holds Cloro's tasks, so on any other install the
- * route would let a caller store or drop a Cloro task around Cloro's own
- * signature check. Every delivery must be signed with ANAKIN_WEBHOOK_SECRET
- * (anakin-webhook-verify.js); without the secret nothing is accepted, and
- * runs poll instead (answer-providers/anakin.js sends no webhook URL).
+ * Takes Anakin's own tasks only: cloro_pending_tasks also holds Cloro's, and
+ * each row says whose it is (00562; null is Cloro's), so a delivery for
+ * another provider's task stores and drops nothing. Every delivery must be
+ * signed with ANAKIN_WEBHOOK_SECRET (anakin-webhook-verify.js); without the
+ * secret nothing is accepted, and runs poll instead (answer-providers/
+ * anakin.js sends no webhook URL).
  * Mounted in server.js after the raw body parser for this
  * path, which keeps the bytes as sent for the signature.
  */
@@ -28,7 +28,6 @@ import { fetchJob, parseScraperResponse } from '../lib/anakin-scraper.js';
 import { handleScraperResult } from '../lib/cloro-result-handler.js';
 import { verifyAnakinWebhook } from '../lib/anakin-webhook-verify.js';
 import { isBrandActive, isBrandActiveCached } from '../lib/active-subscriptions.js';
-import { providerName } from '../lib/answer-providers/index.js';
 
 const router = Router();
 
@@ -50,10 +49,6 @@ async function droppedForPlan(brandId, log) {
 const forget = (taskId) => supabaseAdmin.from('cloro_pending_tasks').delete().eq('task_id', taskId);
 
 router.post('/', async (req, res) => {
-  if (providerName() !== 'anakin') {
-    req.log.warn({ ip: req.ip }, 'anakin callback refused: Anakin is not the answer provider');
-    return res.status(404).json({ error: 'not found' });
-  }
   const webhookSecret = process.env.ANAKIN_WEBHOOK_SECRET;
   if (!webhookSecret) {
     req.log.warn({ ip: req.ip }, 'anakin callback refused: ANAKIN_WEBHOOK_SECRET is not set');
@@ -102,6 +97,14 @@ router.post('/', async (req, res) => {
       .maybeSingle();
     if (!pending) {
       req.log.info({ taskId }, 'anakin callback: no pending task (already processed?)');
+      return;
+    }
+
+    if (pending.provider !== 'anakin') {
+      req.log.warn(
+        { taskId, provider: pending.provider ?? 'cloro' },
+        'anakin callback: task belongs to another provider; ignored',
+      );
       return;
     }
 
