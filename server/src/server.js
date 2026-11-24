@@ -26,6 +26,7 @@ import routes from './routes/index.js';
 import trafficRoutes from './routes/traffic.js';
 import publicReportCardRoutes from './routes/public-report-card.js';
 import botIngestRoutes from './routes/bot-ingest.js';
+import anakinCallbackRoutes from './routes/anakin-callback.js';
 import cloroCallbackRoutes from './routes/cloro-callback.js';
 import internalTriggerTrackingRoutes from './routes/internal-trigger-tracking.js';
 import internalChatBudgetRoutes from './routes/internal-chat-budget.js';
@@ -129,6 +130,8 @@ const server = http.createServer(app);
 // payload exactly as sent, and express.json()'s parse/re-serialize would break it.
 // Mounted first so the global JSON parser skips this path (body already consumed).
 app.use('/cloro/callback', express.raw({ type: 'application/json', limit: '50mb' }));
+// /anakin/callback likewise: Anakin signs the raw body (anakin-webhook-verify.js).
+app.use('/anakin/callback', express.raw({ type: 'application/json', limit: '50mb' }));
 // Slack's clicks (/webhooks/slack/interactivity) are signed over the raw form body too.
 app.use('/webhooks/slack', express.raw({ type: () => true, limit: '256kb' }));
 // AI-bot requests from brands' Cloudflare / Vercel / Fastly (AT-010): authenticated by
@@ -893,9 +896,11 @@ app.post('/api/internal/recount-citations', async (req, res) => {
 // The first run after a payment, and the brand's volume analysis with it.
 app.use('/api/internal/trigger-tracking', internalTriggerTrackingRoutes);
 
-// --- Cloro webhook callback (routes/cloro-callback.js) ---
-// After the raw body parser mounted for this path at the top.
+// --- Answer providers' webhook callbacks (routes/cloro-callback.js,
+// routes/anakin-callback.js) ---
+// After the raw body parsers mounted for these paths at the top.
 app.use('/cloro/callback', cloroCallbackRoutes);
+app.use('/anakin/callback', anakinCallbackRoutes);
 
 // Public, webhook-secret-authenticated status callback for external workflows.
 // It is mounted outside /api so no dashboard JWT is required; the router has its own stricter limiter.
