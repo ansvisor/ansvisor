@@ -4,7 +4,11 @@
  */
 
 import { runPrompt, analyzeSentimentAI } from '../lib/ai-tracker.js';
-import { answerProvider } from '../lib/answer-providers/index.js';
+import {
+  providerFor,
+  supportedCountries as providerCountryLists,
+  unavailablePlatforms,
+} from '../lib/answer-providers/index.js';
 import { chatgptFanoutDue, chatgptFanoutMode } from '../lib/chatgpt-fanout.js';
 import { parseResponse, countBrandMentions } from '../lib/response-parser.js';
 import supabaseAdmin from '../config/supabase.js';
@@ -46,7 +50,7 @@ function resolveModelPlatform(model) {
 export function runnablePlatforms(platforms, { shoppingEnabled } = {}) {
   return (platforms ?? []).filter(
     (platform) =>
-      !answerProvider().unavailablePlatforms().includes(platform) &&
+      !unavailablePlatforms().includes(platform) &&
       (shoppingEnabled || platform !== 'chatgpt-shopping'),
   );
 }
@@ -203,7 +207,7 @@ export function scraperTasksFor(prompts, { platformsFor, locationsFor, chatgptFa
  * polling has no pending row.
  */
 export async function pollTrackingTask({ taskId, scraperId, legacy, meta }) {
-  const provider = answerProvider();
+  const provider = providerFor(scraperId);
   try {
     return await provider.pollScraperResult(taskId, scraperId);
   } catch (err) {
@@ -377,12 +381,10 @@ export async function processTrackingJob({ brandId, promptId, promptIds, source,
   // (PROMPT-015e, Cloro's read daily): an engine isn't asked in a country it
   // doesn't support, which would fail and cost a task. Nothing is skipped
   // when no list was read, nor on a provider that lists none.
-  const supportedCountries = await answerProvider()
-    .supportedCountries()
-    .catch((err) => {
-      logger.error({ err, brandId }, 'engine country lists unreadable; nothing skipped');
-      return new Map();
-    });
+  const supportedCountries = await providerCountryLists().catch((err) => {
+    logger.error({ err, brandId }, 'engine country lists unreadable; nothing skipped');
+    return new Map();
+  });
   const scraperLocations = (prompt, scraperId) =>
     supportedLocations(locationsFor(prompt), scraperId, supportedCountries);
 
@@ -461,9 +463,15 @@ export async function processTrackingJob({ brandId, promptId, promptIds, source,
       : null,
   });
 
-  // The provider that answers this run's platform tasks (PLATFORM_PROVIDER).
-  const provider = answerProvider();
-  const webhookUrl = provider.webhookUrl();
+  // Each task goes to its platform's provider (PLATFORM_PROVIDER, or its
+  // PLATFORM_PROVIDER_OVERRIDES entry). The run waits on webhooks only when
+  // every provider it sends to has one; otherwise it polls every task, so
+  // one drain loop or one polling pass covers the whole run.
+  const taskProviders = scraperTasks.map((t) => providerFor(t.scraperId));
+  const runProviders = [...new Set(taskProviders)];
+  const providerLabel = runProviders.map((p) => p.name).join('+') || providerFor(null).name;
+  const webhookUrls = new Map(runProviders.map((p) => [p, p.webhookUrl()]));
+  const useWebhooks = runProviders.length > 0 && runProviders.every((p) => webhookUrls.get(p));
 
   if (scraperTasks.length > 0) {
     logger.info(
@@ -471,8 +479,8 @@ export async function processTrackingJob({ brandId, promptId, promptIds, source,
         brandId,
         count: scraperTasks.length,
         chatgptFanout: scraperTasks.filter((t) => t.legacy).length,
-        mode: webhookUrl ? 'webhook' : 'polling',
-        provider: provider.name,
+        mode: useWebhooks ? 'webhook' : 'polling',
+        provider: providerLabel,
       },
       'submitting scraper tasks',
     );
@@ -483,25 +491,26 @@ export async function processTrackingJob({ brandId, promptId, promptIds, source,
         total: totalTasks,
         promptText: 'Preparing platform scans...',
         model: null,
-        platform: provider.name,
+        platform: providerLabel,
       });
     }
 
     // Submit all tasks concurrently
     const submissions = await Promise.allSettled(
-      scraperTasks.map((t) =>
-        provider
+      scraperTasks.map((t, i) =>
+        taskProviders[i]
           .submitPromptTask({
             promptText: t.prompt.text,
             promptId: t.prompt.id,
             scraperId: t.scraperId,
             region: t.region,
             legacy: t.legacy,
-            webhookUrl,
+            webhookUrl: useWebhooks ? webhookUrls.get(taskProviders[i]) : null,
           })
           .then((res) => ({
             ...res,
             meta: t,
+            provider: taskProviders[i].name,
           })),
       ),
     );
@@ -524,13 +533,13 @@ export async function processTrackingJob({ brandId, promptId, promptIds, source,
       }
     }
 
-    if (webhookUrl) {
+    if (useWebhooks) {
       // Webhook mode: persist (taskId → prompt) mapping; the /cloro/callback
       // endpoint will pick up results asynchronously when Cloro pushes them.
       if (submitted.length > 0) {
         // `legacy` (00378): the task went to ChatGPT's legacy interface, so
         // the callback sends it again without it if Cloro fails it.
-        const pendingRows = submitted.map(({ taskId, scraperId, meta, legacy }) => ({
+        const pendingRows = submitted.map(({ taskId, scraperId, meta, legacy, provider }) => ({
           task_id: taskId,
           prompt_id: meta.prompt.id,
           brand_id: brandId,
@@ -538,7 +547,7 @@ export async function processTrackingJob({ brandId, promptId, promptIds, source,
           region: meta.region,
           legacy: legacy === true,
           // Whose task it is (00562): each provider's webhook takes its own.
-          provider: provider.name,
+          provider,
         }));
 
         const { error: pendingErr } = await supabaseAdmin
@@ -728,7 +737,7 @@ export async function processTrackingJob({ brandId, promptId, promptIds, source,
                       : `Finishing up — waiting on the last ${pending} answers`
                     : `Receiving AI answers — ${pending} still in progress...`,
               model: null,
-              platform: provider.name,
+              platform: providerLabel,
             });
           }
 
@@ -871,7 +880,7 @@ export async function processTrackingJob({ brandId, promptId, promptIds, source,
               total: totalTasks,
               promptText: meta.prompt.text.slice(0, 80),
               model: scraperId,
-              platform: provider.name,
+              platform: providerLabel,
             });
           }
         }),
