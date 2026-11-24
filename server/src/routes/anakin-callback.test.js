@@ -17,6 +17,7 @@ const PENDING = {
   brand_id: 'brand-1',
   region: 'US',
   legacy: false,
+  provider: 'anakin',
 };
 let pending = PENDING;
 const events = [];
@@ -69,7 +70,6 @@ let url;
 
 beforeAll(async () => {
   vi.stubEnv('ANAKIN_WEBHOOK_SECRET', SECRET);
-  vi.stubEnv('PLATFORM_PROVIDER', 'anakin');
   const { default: router } = await import('./anakin-callback.js');
   const app = express();
   app.use('/anakin/callback', express.raw({ type: 'application/json' }));
@@ -101,7 +101,6 @@ beforeEach(() => {
   isBrandActive.mockReset().mockResolvedValue(true);
   for (const fn of Object.values(log)) fn.mockClear();
   vi.stubEnv('ANAKIN_WEBHOOK_SECRET', SECRET);
-  vi.stubEnv('PLATFORM_PROVIDER', 'anakin');
 });
 
 const finished = {
@@ -214,21 +213,32 @@ describe('POST /anakin/callback', () => {
     expect(events).toEqual([]);
   });
 
-  it("stores and drops nothing when Anakin isn't the answer provider", async () => {
-    // A Cloro install: the pending row is a Cloro task, the delivery is
-    // unsigned, and neither a result nor a failure may touch it.
-    vi.stubEnv('PLATFORM_PROVIDER', 'cloro');
-    vi.stubEnv('ANAKIN_WEBHOOK_SECRET', '');
-    pending = { ...PENDING, task_id: 'cloro-task-1' };
-    const stored = event({ jobId: 'cloro-task-1', result: finished });
-    const failed = event({ jobId: 'cloro-task-1', status: 'failed' }, 'wire.job.failed');
-    expect((await deliver(stored, null)).status).toBe(404);
-    expect((await deliver(failed, null)).status).toBe(404);
-    // Even a signed delivery: the route isn't Cloro's to answer.
-    vi.stubEnv('ANAKIN_WEBHOOK_SECRET', SECRET);
-    expect((await deliver(stored)).status).toBe(404);
-    expect(events).toEqual([]);
+  it("stores and drops nothing for Cloro's task, even signed (00562)", async () => {
+    // A row from before 00562 has no provider and is Cloro's; so is one
+    // marked cloro. Neither a result nor a failure may touch it.
+    for (const provider of [undefined, null, 'cloro']) {
+      pending = { ...PENDING, task_id: 'cloro-task-1', provider };
+      for (const body of [
+        event({ jobId: 'cloro-task-1', result: finished }),
+        event({ jobId: 'cloro-task-1', status: 'failed' }, 'wire.job.failed'),
+      ]) {
+        log.warn.mockClear();
+        expect((await deliver(body)).status).toBe(200);
+        await vi.waitFor(() => expect(log.warn).toHaveBeenCalled());
+      }
+    }
+    expect(deleted()).toEqual([]);
     expect(handleScraperResult).not.toHaveBeenCalled();
+    expect(fetchJob).not.toHaveBeenCalled();
+  });
+
+  it('refuses an unsigned delivery on an install without the secret', async () => {
+    // A Cloro-only install: no ANAKIN_WEBHOOK_SECRET, so nothing gets in.
+    vi.stubEnv('ANAKIN_WEBHOOK_SECRET', '');
+    pending = { ...PENDING, task_id: 'cloro-task-1', provider: null };
+    const body = event({ jobId: 'cloro-task-1', result: finished });
+    expect((await deliver(body, null)).status).toBe(503);
+    expect(events).toEqual([]);
   });
 
   it('refuses every delivery while no signing secret is set', async () => {

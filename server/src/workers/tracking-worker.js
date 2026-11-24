@@ -534,6 +534,8 @@ export async function processTrackingJob({ brandId, promptId, promptIds, source,
           scraper_id: scraperId,
           region: meta.region,
           legacy: legacy === true,
+          // Whose task it is (00562): each provider's webhook takes its own.
+          provider: provider.name,
         }));
 
         const { error: pendingErr } = await supabaseAdmin
