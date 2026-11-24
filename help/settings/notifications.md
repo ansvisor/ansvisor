@@ -29,6 +29,12 @@ E-mails marked **Coming soon** keep the choice you save and start once they're r
 
 Each e-mail comes once, only for brands you can open.
 
+## Due actions and the weekly summary
+
+**Overdue and due today** lists the open actions assigned to you whose due date is today or past, with how many days late each is, one e-mail per brand. It comes as a **Daily summary**, or on Mondays with **Weekly summary**, the choice everyone starts with. Nothing comes when nothing is due.
+
+**Weekly action summary** comes on Mondays, one per brand: how many actions were completed in the last seven days, how many are open, and the next three by priority. Everyone starts with it on; set it to **Off** to stop it.
+
 ## Set a brand apart
 
 With more than one brand, **For** picks what your choices apply to. **All my brands** sets them for every brand you can open. Pick one brand to set it differently: the row then says it's set for that brand only, and **Use my All my brands choice** puts it back. Brand e-mails come one per brand; one e-mail for all brands is coming soon.

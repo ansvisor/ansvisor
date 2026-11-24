@@ -53,6 +53,23 @@
       "button": "{count, plural, one {Open the action} other {Open Actions}}",
       "why": "You get this because you chose to hear about new Critical actions."
     },
+    "due": {
+      "subject": "{brand}: {count, plural, one {# action} other {# actions}} assigned to you {late, plural, =0 {due today} other {due or late}}",
+      "title": "{count, plural, one {An action of yours is due} other {# actions of yours are due}}",
+      "line": "In {brand}, {count, plural, one {# action assigned to you is} other {# actions assigned to you are}} due today or late:",
+      "item": "{code} · {category} · {late, plural, =0 {due today} one {due {date}, # day late} other {due {date}, # days late}}",
+      "button": "{count, plural, one {Open the action} other {Open Actions}}",
+      "why": "You get this because you chose to hear about actions assigned to you that are due or late."
+    },
+    "weekly": {
+      "subject": "{brand}: your week in the Action Center",
+      "title": "{brand}: the week in the Action Center",
+      "line": "In the last seven days, {completed, plural, one {# action was completed} other {# actions were completed}}; {open, plural, one {# is open} other {# are open}}.",
+      "next": "Next, by priority:",
+      "item": "{code} · {category}",
+      "button": "Open Actions",
+      "why": "You get this because you chose the weekly action summary."
+    },
     "drafts": {
       "subject": "{brand}: {count, plural, one {# draft waits} other {# drafts wait}} for your review",
       "title": "{count, plural, one {# draft waits for your review} other {# drafts wait for your review}}",
