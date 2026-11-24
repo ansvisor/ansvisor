@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const db = vi.hoisted(() => ({ recent: [], previous: new Map() }));
+const db = vi.hoisted(() => ({ recent: [], previous: new Map(), previousReads: 0 }));
 vi.mock('../../config/supabase.js', () => ({
   default: {
     from: () => {
@@ -15,10 +15,13 @@ vi.mock('../../config/supabase.js', () => ({
           if (column === 'page_key' || column === 'url') prevFor = value;
           return chain;
         },
-        limit: async () => ({
-          data: db.previous.has(prevFor) ? [db.previous.get(prevFor)] : [],
-          error: null,
-        }),
+        limit: async () => {
+          db.previousReads += 1;
+          return {
+            data: db.previous.has(prevFor) ? [db.previous.get(prevFor)] : [],
+            error: null,
+          };
+        },
         then: (resolve) => resolve({ data: db.recent, error: null }),
       };
       return chain;
@@ -71,6 +74,7 @@ beforeEach(() => {
   vi.stubEnv('RESEND_FROM_EMAIL', 'hi@ansvisor.test');
   db.recent = [];
   db.previous = new Map();
+  db.previousReads = 0;
   audience.byKind = {};
   claims.taken = new Set();
   sendEmail.mockClear();
@@ -130,5 +134,17 @@ describe('Audit finished and Score dropped (Site Audit)', () => {
     expect(mail.html).not.toContain('acme.com/faq');
     expect(mail.html).not.toContain('acme.com/new');
     expect(await sendAuditSummaries(NOW)).toBe(0);
+  });
+
+  it("doesn't read the pages' last audits when nobody chose Score dropped", async () => {
+    db.recent = [audit('s1', 'pricing', 61), audit('s2', 'faq', 58)];
+    db.previous = new Map([['pricing', { id: 'p1', total_score: 70 }]]);
+    audience.byKind = {
+      audit_finished: new Map([['ana', 'instant']]),
+      score_dropped: new Map([['ana', 'off']]),
+    };
+    expect(await sendAuditAlerts(NOW)).toBe(1);
+    expect(sendEmail.mock.calls[0][0].subject).toBe('Acme: 2 audits finished');
+    expect(db.previousReads).toBe(0);
   });
 });
