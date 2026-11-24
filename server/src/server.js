@@ -94,6 +94,11 @@ import {
 import { sendDraftsReview } from './lib/notifications/drafts-review.js';
 import { sendDueActions, sendWeeklyActions } from './lib/notifications/actions-digest.js';
 import { sendAuditAlerts, sendAuditSummaries } from './lib/notifications/audits.js';
+import {
+  sendRunAlerts,
+  sendRunSummaries,
+  sendUsageAlerts,
+} from './lib/notifications/runs-usage.js';
 import { runPageOpportunityDetection } from './lib/page-opportunities.js';
 import { runPulseCatchUp } from './lib/pulse/engine.js';
 import { runSignalCatchUp } from './lib/signals/pass.js';
@@ -511,6 +516,10 @@ async function runDailyTracking() {
       // The day's finished audits and dropped scores, for Daily summary.
       sendAuditSummaries().catch((err) => {
         logger.error({ err }, '[notifications] audit summaries crashed');
+      });
+      // The day's ended agent runs, for Daily summary.
+      sendRunSummaries().catch((err) => {
+        logger.error({ err }, '[notifications] run summaries crashed');
       });
       return sweepAutoAudits({
         readInbox: readOpportunityInbox,
@@ -982,6 +991,13 @@ server.listen(PORT, async () => {
     );
     // Finished audits and dropped scores, Right away, the same way.
     sendAuditAlerts().catch((err) => logger.error({ err }, '[notifications] audit alerts crashed'));
+    // Ended agent runs, Right away.
+    sendRunAlerts().catch((err) => logger.error({ err }, '[notifications] run alerts crashed'));
+  });
+
+  // AI usage at 80% and 100% of the month's limit, for Admins: hourly.
+  cron.schedule('5 * * * *', () => {
+    sendUsageAlerts().catch((err) => logger.error({ err }, '[notifications] usage alerts crashed'));
   });
 
   cron.schedule(REBUILD_QUEUE_SCHEDULE, () => {

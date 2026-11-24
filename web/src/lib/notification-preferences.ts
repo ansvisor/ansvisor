@@ -118,7 +118,7 @@ export const NOTIFICATION_KIND_SPECS: readonly NotificationKindSpec[] = [
     labels: 'instant',
     fallback: 'off',
     brandScoped: true,
-    comingSoon: true,
+    comingSoon: false,
   },
   {
     kind: 'audit_finished',
@@ -154,7 +154,7 @@ export const NOTIFICATION_KIND_SPECS: readonly NotificationKindSpec[] = [
     labels: 'onoff',
     fallback: 'on',
     brandScoped: false,
-    comingSoon: true,
+    comingSoon: false,
   },
 ];
 
