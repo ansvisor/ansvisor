@@ -127,6 +127,14 @@ describe('buildTaskBody', () => {
       'chatgpt-ads': 'chatgpt',
     });
     expect(buildTaskBody('q', 'chatgpt-ads', 'US').params.ads).toBe(true);
+    // Claude: the model claude.ai users get by default, never Anakin's Haiku default.
+    expect(buildTaskBody('q', 'claude-web', 'US').params).toEqual({
+      prompt: 'q',
+      country: 'us',
+      web_search: true,
+      model: 'claude-sonnet-5-5',
+      effort: 'low',
+    });
     expect(buildTaskBody('q', 'chatgpt-web', 'US').params.ads).toBeUndefined();
   });
 

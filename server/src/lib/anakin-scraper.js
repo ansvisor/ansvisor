@@ -34,10 +34,18 @@ export const ANAKIN_API = 'https://api.anakin.io';
  *   location takes a city or US state as Google's canonical name
  *   country  takes `country` (all but Wenxin)
  *
+ * `claude-web` asks the model a claude.ai user gets by default
+ * (CLAUDE_MODEL), at low effort: without `model`, Anakin's account answers
+ * with Claude Haiku, which is not what people see. Same credits either way
+ * (Anakin, 25 Nov 2026).
+ *
  * `copilot-web` is Bing AI Mode (Copilot search), as on Cloro since
  * 2026-11-06; Microsoft's Copilot app is `copilot-app`. The platforms past
  * Grok aren't tracked by any plan yet: they are here for the add-ons.
  */
+/** The model claude.ai gives its users by default; Anakin takes the full id. */
+export const CLAUDE_MODEL = 'claude-sonnet-5-5';
+
 export const ANAKIN_ENGINES = {
   'chatgpt-web': { action: 'chatgpt', query: 'prompt', params: { web_search: true }, state: true },
   'chatgpt-shopping': {
@@ -55,7 +63,7 @@ export const ANAKIN_ENGINES = {
   'claude-web': {
     action: 'ca_send_message',
     query: 'prompt',
-    params: { web_search: true },
+    params: { web_search: true, model: CLAUDE_MODEL, effort: 'low' },
     pool: true,
   },
   'deepseek-web': {
