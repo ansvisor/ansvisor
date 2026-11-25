@@ -4,14 +4,14 @@ route: /dashboard/content/plan
 keywords: [content plan, priority list, priority score, create optimize protect, losing ground]
 synonyms: [what to write next, content roadmap, content priorities, editorial plan]
 plan: all
-updated: 2026-11-11
+updated: 2026-11-21
 last_checked: 2026-11-11
 owner: Cihan
 app_version: 0.3.0
 approved: true
 sources: [docs/guides/content-editor.mdx]
 ---
-The **Content plan**, **Plan** under **Content** in the sidebar, ranks what to create, optimize or protect next. It covers the last 7, 30 or 90 days: pick the period at the top right.
+The **Content plan**, **Plan** under **Content** in the sidebar, ranks what to create, optimize or protect next. It covers the last 7, 30 or 90 days: pick **7**, **30** or **90 days** at the top right.
 
 ## The four cards
 

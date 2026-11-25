@@ -32,7 +32,7 @@ export class AdsApiError extends Error {
 /** The JSON answer to a call to /api/ads/…; anything but a 2xx throws an AdsApiError. */
 async function call<T>(
   path: string,
-  init?: { method: 'PATCH' | 'POST'; body: unknown },
+  init?: { method: 'DELETE' | 'PATCH' | 'POST'; body?: unknown },
   timeout = READ_TIMEOUT_MS,
 ): Promise<T> {
   const {
@@ -43,9 +43,9 @@ async function call<T>(
     method: init?.method ?? 'GET',
     headers: {
       Authorization: `Bearer ${session.access_token}`,
-      ...(init && { 'Content-Type': 'application/json' }),
+      ...(init?.body !== undefined && { 'Content-Type': 'application/json' }),
     },
-    body: init && JSON.stringify(init.body),
+    body: init?.body === undefined ? undefined : JSON.stringify(init.body),
     cache: 'no-store',
     signal: AbortSignal.timeout(timeout),
   });
@@ -305,7 +305,7 @@ export function saveAdsSettings(thresholds: { [K in keyof AdsThresholds]?: numbe
 }
 
 /** The ad platforms that come later (ADS-01 §3.5), each with Notify me. */
-export type AdsLaterPlatform = 'meta' | 'linkedin';
+export type AdsLaterPlatform = 'microsoft' | 'meta' | 'linkedin';
 
 /** Notify me (`conn.notify`): logged once per person and platform; again, `logged` is false. */
 export function notifyAdsPlatform(brandId: string, platform: AdsLaterPlatform) {
@@ -328,4 +328,48 @@ export async function readAdsAnalytics(brandId: string): Promise<AdsAnalytics> {
   });
   if (!res.ok) throw new AdsApiError(`Ads connections: ${res.status}`, res.status, {});
   return ((await res.json()) as { analytics: AdsAnalytics }).analytics;
+}
+
+/**
+ * A brand's connected ad account (server lib/ads/accounts.js publicAccount):
+ * never a key or a sign-in.
+ */
+export interface AdsAccount {
+  id: string;
+  platform: 'chatgpt' | 'google';
+  externalId: string;
+  name: string | null;
+  currencyCode: string | null;
+  timeZone: string | null;
+  status: 'active' | 'error' | 'disconnected';
+  lastError: string | null;
+  lastSyncedAt: string | null;
+  syncedThrough: string | null;
+  createdAt: string;
+}
+
+/** The brand's ad accounts, for anyone who reaches the brand. */
+export async function readAdsAccounts(brandId: string): Promise<AdsAccount[]> {
+  const query = new URLSearchParams({ brandId });
+  return (await call<{ accounts: AdsAccount[] }>(`accounts?${query}`)).accounts;
+}
+
+/**
+ * Connects a ChatGPT Ads account with the customer's own Ads API key
+ * (Admins): ChatGPT Ads checks it first. Refused with 422 invalid_key,
+ * 502 upstream, 403 plan_limit or 402 demo_brand. The key is sent once and
+ * never answered back.
+ */
+export async function connectChatGptAds(brandId: string, apiKey: string): Promise<AdsAccount> {
+  const body = { brandId, apiKey };
+  return (await call<{ account: AdsAccount }>('accounts/chatgpt', { method: 'POST', body }))
+    .account;
+}
+
+/** Removes an ad account with its key and metrics (Admins). */
+export function disconnectAdsAccount(brandId: string, accountId: string) {
+  const query = new URLSearchParams({ brandId });
+  return call<{ id: string }>(`accounts/${encodeURIComponent(accountId)}?${query}`, {
+    method: 'DELETE',
+  });
 }

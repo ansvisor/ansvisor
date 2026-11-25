@@ -64,7 +64,7 @@ const assignees = vi.hoisted(() => ({
 }));
 vi.mock('@/lib/action-center/assignees', () => ({ readAssignees: assignees.read }));
 
-const { readImpactReport } = await import('./impact-report');
+const { brandHasShipped, readImpactReport } = await import('./impact-report');
 
 const measurement = (more: Record<string, unknown> = {}) => ({
   targets: [{ type: 'prompt', id: 'p1', label: 'pricing' }],
@@ -250,6 +250,56 @@ describe('readImpactReport', () => {
     const logged = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     answers.ship_events = { data: null, error: { message: 'down' } };
     expect(await readImpactReport(BRAND, RANGE)).toEqual({ ok: false, failure: 'failed' });
+    logged.mockRestore();
+  });
+});
+
+/** The one-row read that tells whether the brand ever shipped. */
+const anyShipRead = (call: Call) =>
+  call.table === 'ship_events' &&
+  call.columns === 'id' &&
+  call.filters.some(([name, value]) => name === 'limit' && value === 1);
+
+describe('everShipped', () => {
+  it('is true from the month’s rows, with no extra read', async () => {
+    const result = await readImpactReport(BRAND, RANGE);
+    expect(result.ok && result.report.everShipped).toBe(true);
+    expect(calls.some(anyShipRead)).toBe(false);
+  });
+
+  it('is false for an empty month on a brand that never shipped, read as one row of the org and brand', async () => {
+    answers.ship_events = { data: [], error: null };
+    answers['ship_events.count'] = { count: 0, error: null };
+    const result = await readImpactReport(BRAND, RANGE);
+    expect(result.ok && result.report.everShipped).toBe(false);
+    const read = calls.find(anyShipRead)!;
+    expect(read.filters).toEqual(
+      expect.arrayContaining([
+        ['eq', 'organization_id', 'org-1'],
+        ['eq', 'brand_id', BRAND],
+      ]),
+    );
+  });
+});
+
+describe('brandHasShipped', () => {
+  it('says yes once the brand has a ship event, and no before', async () => {
+    answers.ship_events = { data: [{ id: 's1' }], error: null };
+    expect(await brandHasShipped(BRAND)).toBe(true);
+    answers.ship_events = { data: [], error: null };
+    expect(await brandHasShipped(BRAND)).toBe(false);
+  });
+
+  it('says no with the new Chat off, for a bad brand, or when it can’t read', async () => {
+    expect(await brandHasShipped('nope')).toBe(false);
+    vi.stubEnv('CHAT_AGENTIC', 'false');
+    calls = [];
+    expect(await brandHasShipped(BRAND)).toBe(false);
+    expect(calls.some((c) => c.table === 'ship_events')).toBe(false);
+    vi.stubEnv('CHAT_AGENTIC', 'true');
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    answers.ship_events = { data: null, error: { message: 'down' } };
+    expect(await brandHasShipped(BRAND)).toBe(false);
     logged.mockRestore();
   });
 });

@@ -31,7 +31,7 @@ import { TourControls, TourLabel, useChatTour } from '../tour/chat-tour';
 import { tourFocusOf, type TourTurn } from '@/lib/chat/tour';
 import { useTourHighlight } from '../tour/tour-highlight';
 import { useChatPanel } from './chat-panel-context';
-import { readThread } from './read-thread';
+import { readPageChatId, readThread } from './read-thread';
 
 /** What the panel shows under its header. */
 type PanelView =
@@ -175,7 +175,11 @@ export function ChatSidePanel() {
     if (view.kind === 'unavailable') setView({ kind: 'chat', key: view.key + 1, thread: null });
   }
 
+  /** Bumped when the panel gets a chat or starts over: a page's chat read before then is dropped. */
+  const pageLookup = useRef(0);
+
   const remember = useCallback((id: string) => {
+    pageLookup.current += 1;
     keep(id);
     setRow((was) => (was?.id === id ? was : newRow(id)));
   }, []);
@@ -202,6 +206,7 @@ export function ChatSidePanel() {
 
   /** The panel empty again: after New chat, or once its chat is archived or deleted. */
   const startOver = useCallback(() => {
+    pageLookup.current += 1;
     asked.current = null;
     forget();
     setHistory(null);
@@ -241,8 +246,12 @@ export function ChatSidePanel() {
   const openedHandoff = useRef(0);
   const chatHandoff = draft?.chatId ? draft : null;
 
-  // The first time it opens on this visit: its last chat, when recent, unless
-  // a chat was handed over to open (read once, not twice).
+  // The first time it opens on this visit: its last chat, when recent;
+  // otherwise this page's newest panel chat, so a question on the same page
+  // carries on where it left off, days later too. Empty only on a page with
+  // no chat yet, or after New chat. A chat handed over opens instead (read
+  // once, not twice).
+  const brandId = brand?.id ?? null;
   useEffect(() => {
     if (!open || started) return;
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -255,8 +264,18 @@ export function ChatSidePanel() {
       // Storage blocked: start empty.
     }
     const id = reopenChatId(stored, Date.now());
-    if (id) void openChat(id);
-  }, [open, started, openChat, chatHandoff]);
+    if (id) {
+      void openChat(id);
+      return;
+    }
+    const lookup = ++pageLookup.current;
+    void readPageChatId(pathname, brandId).then((pageChat) => {
+      // Asked something, picked a chat or started over meanwhile: keep that.
+      if (pageChat && lookup === pageLookup.current && asked.current === null) {
+        void openChat(pageChat);
+      }
+    });
+  }, [open, started, openChat, chatHandoff, pathname, brandId]);
 
   useEffect(() => {
     if (!chatHandoff?.chatId || chatHandoff.nonce <= openedHandoff.current) return;

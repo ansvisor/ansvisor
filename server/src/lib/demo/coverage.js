@@ -30,6 +30,10 @@ export const SKIPPED = {
   brand_filter_values_backfill:
     'Where each brand stands in the filter options backfill (00544): a demo brand made after 00544 is listed ready by the brands trigger, and one from before by the backfill script (src/scripts/backfill-filter-values.js); nothing is built for it.',
   webhook_configs: 'Outgoing webhooks: a demo brand never calls out.',
+  notification_preferences:
+    "A person's own e-mail choices (00554), made with their own clicks: nobody is mailed about a demo brand, and Settings › Notifications doesn't list it.",
+  notification_sends:
+    'Which notification e-mail went to whom (00556): written as an e-mail goes, and nobody is mailed about a demo brand.',
   prompt_table_views:
     "A person's saved Tracked Prompts columns (00363): the demo brand starts on the default ones.",
   sentiment_overrides:
@@ -80,6 +84,8 @@ export const SKIPPED = {
     "Each Ads prompt's weekly decision (00531): never written for a demo brand, whose sample data doesn't change week to week.",
   ads_ad_drafts:
     "Ads' ad drafts (00532): written by a model call a person starts, which is refused on a demo brand, so it has none.",
+  ads_accounts:
+    "Ads Phase 1's ad accounts (00560): each reaches a real Google Ads or ChatGPT Ads account through a person's own sign-in or key, and connecting one is refused on a demo brand.",
   chat_access_requests:
     "A person's request to their Admins for a Chat change (00403): theirs, not sample data, and a demo brand's refusal offers no Ask your Admin.",
   chat_tool_cache:
