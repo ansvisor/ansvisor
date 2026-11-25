@@ -33,7 +33,9 @@ export interface FakeSupabase {
    */
   maxRows?: number;
   from(table: string): Builder;
-  rpc(name: string, args?: Record<string, unknown>): RpcBuilder;
+  // Typed as a plain promise so a test can still stub it with an async
+  // function; the fake itself returns an RpcBuilder.
+  rpc(name: string, args?: Record<string, unknown>): PromiseLike<Result>;
 }
 
 /** A function's rows, ordered and sliced as PostgREST does (and cut at maxRows). */
