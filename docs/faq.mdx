@@ -9,7 +9,7 @@ description: "Common questions about Ansvisor."
   </Accordion>
 
   <Accordion title="What's the cost difference between cloud and self-hosted?">
-    Cloud has a flat monthly subscription that includes everything (AI provider quotas, infrastructure, support). Self-hosted is free in software cost but you pay your own AI provider bills (OpenAI, Gemini, Anthropic) plus DataForSEO/Cloro if you use them.
+    Cloud has a flat monthly subscription that includes everything (AI provider quotas, infrastructure, support). Self-hosted is free in software cost but you pay your own AI provider bills (OpenAI, Gemini, Anthropic) plus DataForSEO and Cloro or Anakin if you use them.
 
     Rough back-of-envelope: a brand tracking 30 prompts daily across 4 AI engines costs ~$5–15/month in API fees, depending on response length and provider mix.
   </Accordion>
@@ -30,9 +30,9 @@ description: "Common questions about Ansvisor."
   </Accordion>
 
   <Accordion title="Why don't you scrape ChatGPT/Gemini directly?">
-    For programmable AI engines (OpenAI, Anthropic, Google Gemini API), Ansvisor uses official APIs — most reliable, well-priced, and TOS-compliant. For *web* AI engines that don't have public APIs (like ChatGPT.com search results), Ansvisor uses Cloro as a managed scraping backend. Cloro handles browser fingerprinting, captcha bypass, and rate-limiting at scale.
+    For programmable AI engines (OpenAI, Anthropic, Google Gemini API), Ansvisor uses official APIs — most reliable, well-priced, and TOS-compliant. For *web* AI engines that don't have public APIs (like ChatGPT.com search results), Ansvisor uses a managed answer provider: **Cloro** (the default) or **Anakin**, picked with `PLATFORM_PROVIDER`. Either one handles browser fingerprinting, captcha bypass, and rate-limiting at scale, and Ansvisor stores their answers the same way. A run sends all its prompts to the provider at once and collects the answers as they finish (by webhook when one is set, otherwise by polling).
 
-    These are two distinct fetchers: **Cloro** scrapes the AI answer engines, while **Scrape.do** (via `SCRAPEDO_API_KEY`) fetches your *own* pages for the **Site Audit** feature (proxy + JS render). Self-hosters who want Site Audit need a Scrape.do key, or can fetch through Firecrawl instead of Scrape.do by setting `FIRECRAWL_API_KEY` and `AUDIT_FETCHER=firecrawl`.
+    These are two distinct fetchers: **Cloro** or **Anakin** asks the AI answer engines, while **Scrape.do** (via `SCRAPEDO_API_KEY`) fetches your *own* pages for the **Site Audit** feature (proxy + JS render). Self-hosters who want Site Audit need a Scrape.do key, or can fetch through Firecrawl instead of Scrape.do by setting `FIRECRAWL_API_KEY` and `AUDIT_FETCHER=firecrawl`.
   </Accordion>
 
   <Accordion title="How often does tracking run?">

@@ -14,6 +14,14 @@
     "upgrade": "アップグレード",
     "choosePlan": "プランを選択"
   },
+  "metrics": {
+    "promptsAnswered": "{count, plural, other {{period}に回答があった#件のPrompt}}",
+    "period": {
+      "lastDays": "{days, plural, other {過去#日間}}",
+      "all": "すべての追跡履歴",
+      "custom": "選択した期間"
+    }
+  },
   "locationPicker": {
     "label": "ロケーション",
     "tracked": "トラッキング中",
@@ -53,8 +61,8 @@
     "title": "単一のPromptを実行",
     "description": "テストするPromptを選択してください。選択したPromptのみが、有効なプラットフォーム全体で実行されます。",
     "empty": "有効なPromptが見つかりません。先にブランド設定でPromptを追加してください。",
-    "loadFailed": "Promptの読み込みに失敗しました",
-    "runFailed": "Promptの実行に失敗しました"
+    "loadFailed": "Promptを読み込めませんでした。もう一度お試しください。",
+    "runFailed": "Promptを実行できませんでした。もう一度お試しください。"
   },
   "responseDetail": {
     "response": "AIの回答",
@@ -73,7 +81,9 @@
     "missing_ai_key": "まず「設定 › AI Providers」でAIプロバイダーのキーを追加してください。",
     "server_error": "サーバー側で問題が発生しました。もう一度お試しください。",
     "location_limit": "プランのPromptロケーション枠が上限に達しています。各Promptは追跡するロケーションごとに1回カウントされ、一時停止中のPromptはカウントされません。いくつか削除または一時停止するか、プランをアップグレードしてください。",
-    "brand_limit": "プランのブランド枠をすべて使用しています。追加するにはプランをアップグレードしてください。"
+    "brand_limit": "プランのブランド枠をすべて使用しています。追加するにはプランをアップグレードしてください。",
+    "demo_brand": "これはデモブランドです。サンプルデータのため、変更や実行はできません。ご自身のブランドで変更を行ってください。",
+    "admin_required": "これを行うには管理者権限が必要です。ワークスペースの管理者にお問い合わせください。"
   },
   "aiUsage": {
     "meter": {
@@ -383,6 +393,7 @@
       "setProductFeed": "商品フィードの設定を変更するにはプランが必要です",
       "generateReports": "レポートを生成するにはプランが必要です",
       "deleteReports": "レポートを削除するにはプランが必要です",
+      "renameReports": "レポート名の変更にはプランへの加入が必要です",
       "markTaskDone": "タスクを完了にするにはプランが必要です",
       "attachFiles": "ファイルを添付するにはプランが必要です",
       "startChat": "チャットを開始するにはプランが必要です",
@@ -502,7 +513,8 @@
       "companyName": "会社名",
       "competitorsToTrack": "追跡する競合他社",
       "finishingSetup": "セットアップを完了中...",
-      "competitorsTitle": "競合他社"
+      "competitorsTitle": "競合他社",
+      "saveCompetitorsFailed": "競合を保存できませんでした。もう一度お試しください。"
     },
     "prompts": {
       "removeTopic": "トピックを削除",
@@ -943,10 +955,13 @@
         "title": "現在の状況",
         "change": "昨日比 {change}",
         "noChange": "昨日から変動なし",
-        "behind": "{count}ブランド中#{rank}位。{name}より{gap}ポイント下回っています。",
-        "ahead": "{count}ブランド中#1位。{name}を{gap}ポイント上回っています。",
+        "behind": "{count}ブランド中{rank}位（{set, select, rivals {主なライバルを含む} competitors {{min}件以上のPromptで指定された競合を含む} other {}}）。{name}と{gap}ポイント差。",
+        "ahead": "{count}ブランド中1位（{set, select, rivals {主なライバルを含む} competitors {{min}件以上のPromptで指定された競合を含む} other {}}）。{name}に{gap}ポイント差でリード。",
         "alone": "あなたのPromptsでスコアを獲得した競合はまだいません。",
-        "none": "まだスコアがありません。最新のAI回答のスコアが算出されると、ここに表示されます。"
+        "none": "まだスコアがありません。最新のAI回答のスコアが算出されると、ここに表示されます。",
+        "outOf": "/100",
+        "scoreLabel": "Visibilityスコア",
+        "run": "最新の実行（{date}）より"
       },
       "summary": {
         "changes": "{title}: {count, plural, =0 {大きな変動なし} other {#件の変動}}",
@@ -961,6 +976,17 @@
           "rival": "競合"
         },
         "actionAdded": "<link>アクションが追加されました</link>。",
+        "group": {
+          "competitor_leads": "{count}社のライバルが貴社を大幅に上回って言及されています",
+          "competitor_momentum": "{count}社のライバルが急伸しています",
+          "competitor_surge": "{count}社のライバルのVisibilityが急上昇しました",
+          "competitor_crossed": "{count}社のライバルが貴社のVisibilityを上回りました",
+          "competitor_overtaken": "{count}社のライバルを追い抜きました",
+          "other": "{title}および{more, plural, other {他#件の同様の変更}}"
+        },
+        "groupActions": "{count, plural, other {#件のアクション}}",
+        "showGroup": "{count}件すべて表示",
+        "hideGroup": "非表示",
         "quiet": {
           "none": "大きな変動はありません。",
           "held": "大きな変動はありません。スコアは{score}を維持しました。",
@@ -2030,11 +2056,13 @@
         "pill": "放置",
         "hint": "{days}日以上「新規」のままで、誰も対応していません",
         "quiet": "{days}日間更新なし",
-        "notice": "放置: このアクションは{days}日以上「新規」のままで、誰も対応していません。完了にはなっていません。必要な場合は保持し、不要な場合は却下してください。",
-        "keep": "現在も必要",
+        "notice": "{days}日以上誰も対応していません。",
+        "keep": "保持",
+        "keepHint": "現在も有効：未完了のまま保持し、期限切れ扱いを解除します",
+        "dismiss": "却下",
         "kept": "保持済み: 放置状態が解除されました"
       },
-      "taskProgress": "{completed}/{total}件のタスク",
+      "taskProgress": "{completed}/{total}件のタスクが完了",
       "everyone": "全員",
       "everyoneTitle": "ワークスペースの全員: まだ担当者が割り当てられていません",
       "tags": {
@@ -2086,6 +2114,16 @@
       "noResults": "これらのフィルターに一致するアクションはありません。",
       "noOpen": "未完了のアクションはありません。完了済みや却下したものは「すべてのステータス」にあります。",
       "showAllStatuses": "すべてのステータスを表示",
+      "summary": {
+        "open": "未完了{count}件",
+        "closed": "今週完了{count}件",
+        "closedHint": "過去{days}日間に完了または却下された項目。クリックして一覧表示します。",
+        "new": "前回のアクセス以降に新着{count}件"
+      },
+      "newMark": {
+        "label": "新規",
+        "hint": "前回のアクセス以降に作成されました"
+      },
       "error": {
         "title": "アクションを読み込めませんでした。",
         "retry": "再試行"
@@ -2260,20 +2298,34 @@
       "drawer": {
         "actionId": "アクションID",
         "previousCode": "以前は {code}",
+        "more": "その他のアクション",
+        "priorityLine": "優先度 <b>{score}</b> · {level}",
+        "stats": {
+          "prompts": "{count, plural, other {Prompt}}",
+          "pages": "{count, plural, other {ページ}}",
+          "platforms": "{count, plural, other {プラットフォーム}}",
+          "competitors": "{count, plural, other {競合}}",
+          "topics": "{count, plural, other {トピック}}"
+        },
         "tabs": {
           "overview": "概要",
           "affected": "影響対象",
           "tasks": "タスク",
           "signals": "シグナル",
-          "history": "履歴"
+          "history": "履歴",
+          "tasksProgress": "タスク {completed}/{total}"
         },
         "why": "このアクションが必要な理由",
         "goal": "目標",
+        "doneWhen": "完了条件",
+        "whatHappened": "発生した事象",
         "kpis": "KPI",
         "kpiBrandGoal": "{timeframe, select, weekly {ブランドの週間目標} quarterly {ブランドの四半期目標} other {ブランドの月間目標}}:{target}",
         "noKpis": "このアクションにリンクされた設定済みKPIはありません。",
         "support": "{count, plural, =0 {このアクションを裏付ける未解決のシグナルはもうありません。} other {# 件のシグナルがこのアクションを裏付けています}}",
         "supportAll": "すべてのシグナル（{count}）",
+        "supportTimes": "×{count}",
+        "supportSame": "同様の内容を示すシグナル{count}件（シグナルタブに一覧表示）",
         "affected": {
           "prompts": "{count, plural, other {# 件のPrompt}}",
           "pages": "{count, plural, other {# ページ}}",
@@ -2411,6 +2463,8 @@
         "assignee": "担当者",
         "assignTo": "チームメンバーに割り当て",
         "dueDate": "期日",
+        "noDueDate": "期限なし",
+        "addDueDate": "期限を追加",
         "goalPassed": "目標日を過ぎました",
         "setNewDate": "新しい日付を設定",
         "statusLabel": "ステータス",
@@ -3994,6 +4048,9 @@
         "inProgress": "進行中",
         "noImprovement": "改善なし",
         "dismissed": "却下済み",
+        "onHold": "保留中",
+        "closed": "完了したアクション",
+        "closedSub": "この期間にクローズ済み",
         "ofTotal": "全体の{percent}%"
       },
       "pagination": {
@@ -4241,6 +4298,13 @@
     "answerSub": "定期トラッキングからの回答",
     "loading": "読み込み中…",
     "answerFailed": "この回答を読み込めませんでした。"
+  },
+  "datePicker": {
+    "placeholder": "日付を選択",
+    "previousMonth": "前月",
+    "nextMonth": "翌月",
+    "today": "今日",
+    "clear": "クリア"
   },
   "chatTools": {
     "profile": {
@@ -4649,6 +4713,10 @@
       "name": "レポートを作成",
       "step": "レポートを作成しました"
     },
+    "reportPresentation": {
+      "name": "プレゼンテーションを作成",
+      "step": "プレゼンテーションを作成しました"
+    },
     "startAudit": {
       "name": "サイト監査を開始",
       "step": "サイト監査を開始しました"
@@ -4952,7 +5020,7 @@
     "runsTray": {
       "label": "実行履歴",
       "title": "実行履歴",
-      "button": "{count, plural, =0 {実行} other {# 件実行中}}",
+      "button": "{count, plural, =0 {実行 · 実行中なし} other {実行 · #件実行中}}",
       "needsYouTip": "{count, plural, other {# 件要対応}}",
       "summary": "{running} 件実行中 · {needsYou, plural, other {# 件要対応}}",
       "summaryRunning": "{running} 件実行中",
@@ -5312,6 +5380,13 @@
       "notFiled": "画像は生成されましたが、ファイルに保存できませんでした。",
       "providerOff": "{model}の提供元は、設定 › チャットでこのワークスペースに対して無効になっています。別の画像モデルを選択してください。",
       "providersOff": "すべての画像モデルの提供元が、設定 › チャットでこのワークスペースに対して無効になっているため、チャットで画像を生成できません。管理者は有効に切り替えることができます。"
+    },
+    "presentations": {
+      "title": "プレゼンテーション · {title}",
+      "unavailable": "ここではプレゼンテーションを利用できません。",
+      "notFound": "そのレポートが見つかりませんでした。保存済みレポートの一覧を表示してから選択してください。",
+      "storageFull": "ワークスペースのストレージ容量が上限に達しています。「ファイル」で空き容量を増やしてから、もう一度お試しください。",
+      "notFiled": "スライド資料は作成されましたが、保存できませんでした。もう一度お試しください。"
     },
     "error": {
       "noKey": "チャットを実行するためのAIキーがありません。管理者は設定 › AIプロバイダーでキーを追加できます。",
@@ -5945,6 +6020,7 @@
       "pdf": "PDF",
       "csv": "CSV",
       "xlsx": "Excel",
+      "pptx": "PowerPoint",
       "json": "JSON",
       "jsonld": "JSON-LD",
       "txt": "TXT",
@@ -6110,6 +6186,8 @@
     },
     "menu": {
       "label": "チャットメニュー",
+      "clearGroup": "クリア",
+      "clearGroupLabel": "{count, plural, other {{where}から自分のチャット#件を削除}}",
       "strip": "チャットメニューのショートカット",
       "hide": "チャットメニューを隠す",
       "show": "チャットメニューを表示",
@@ -6121,7 +6199,7 @@
       "toggleMenu": "メニューセクションを表示または非表示",
       "home": "ホーム",
       "inbox": "受信トレイ",
-      "inboxLabel": "受信トレイ · {count, plural, other {#件のアイテム}}",
+      "inboxLabel": "{needsYou, plural, other {受信トレイ · #件の要対応}}",
       "inboxLabelNeedsYou": "受信トレイ · {count, plural, other {#件のアイテム}} · {needsYou, plural, other {#件要対応}}",
       "skills": "スキル",
       "activity": "アクティビティ",
@@ -6176,6 +6254,7 @@
       "agents": "エージェント",
       "agentsShort": "エージェント",
       "agentsLabel": "エージェント · アクションセンター",
+      "datedTitle": "{when} · ",
       "agentsTip": "Chatの外で Action Center › エージェント を開きます"
     },
     "actions": {
@@ -6218,7 +6297,12 @@
       "failed": "保存できませんでした。もう一度お試しください。",
       "deleteTitle": "このチャットを削除しますか？",
       "deleteBody": "「{name}」は全員に対して削除されます。作成されたファイルは「ファイル」に残ります。実行中のエージェントは先に停止されます。",
-      "cancel": "キャンセル"
+      "cancel": "キャンセル",
+      "clearTitle": "{count, plural, other {{where}からチャット#件を削除しますか？}}",
+      "deleteManyTitle": "{count, plural, other {チャット#件を削除しますか？}}",
+      "deleteManyBody": "削除されるのはご自身のチャットのみで、チームメンバーから共有されたチャットは残ります。作成されたファイルは「ファイル」に保持され、実行中のエージェントは事前に停止されます。数秒間は取り消すことができますが、その後は元に戻せません。",
+      "deleteMany": "{count, plural, other {チャット#件を削除}}",
+      "deletedMany": "{count, plural, other {#件のチャットを削除しました}}"
     },
     "home": {
       "greeting": {
@@ -6725,6 +6809,7 @@
       "select": "チャットを選択",
       "selectFirst": "一括変更するチャットを選択",
       "archiveSelected": "選択した項目をアーカイブ",
+      "deleteSelected": "選択した項目を削除",
       "unarchiveSelected": "選択した項目のアーカイブを解除",
       "archivedMany": "{count}件をアーカイブしました · アーカイブ一覧で確認できます",
       "unarchivedMany": "{count}件のアーカイブを解除しました · チャット一覧に戻りました",
@@ -7408,6 +7493,7 @@
       "sendToWebhook": "Webhookにページ「{title}」を送信しました",
       "takeDownFromCms": "{cms} からページ「{title}」を取り下げました",
       "makeReport": "レポート「{title}」を作成しました",
+      "reportPresentation": "プレゼンテーション「{title}」を作成しました",
       "makeReportUndo": "「レポート」からレポート「{title}」を削除しました",
       "startAudit": "{pages} のサイト監査を開始しました",
       "makeImages": "{model} で画像「{title}」を作成しました",
@@ -8516,7 +8602,8 @@
       },
       "agency-reporter": {
         "name": "代理店向けクライアントレポーター",
-        "description": "代理店向けに、クライアントブランドごとの月次レポートを作成します。"
+        "description": "代理店向けに、クライアントブランドごとの月次レポートを作成します。",
+        "instructions": "1週間の代わりに、先月1日から末日までの期間について前々月と比較してレポートを作成してください。クライアントブランド向けに、社内向けの注記は含めず、平易な言葉で記述してください。"
       },
       "paid-opportunity": {
         "name": "有料機会",
@@ -10510,7 +10597,8 @@
       "doneCount": "{count, plural, other {分析が完了しました — #件の回答を保存しました。}}",
       "doneSoFar": "{count, plural, other {まもなく完了します — 現在までに#件の回答を保存しました。残りの結果を取得中です。}}",
       "failed": "ジョブが失敗しました: {reason}",
-      "unknownError": "不明なエラー"
+      "unknownError": "不明なエラー",
+      "startFailed": "トラッキングを開始できませんでした。もう一度お試しください。"
     },
     "runPrompts": "Promptを実行",
     "runPromptsNow": "Promptsを今すぐ実行",
@@ -10931,7 +11019,7 @@
       "compareHint": "選択した期間を、直前の同じ長さの期間と比較しています。",
       "allTimeHint": "全期間です。比較できる同じ長さの過去の期間はありません。",
       "lastVsPrevious": "{days, plural, other {過去#日間と前の#日間の比較}}",
-      "loadFailed": "内訳の読み込みに失敗しました",
+      "loadFailed": "内訳を読み込めませんでした。もう一度お試しください。",
       "allTime": "全期間",
       "current": "現在の{days}日間",
       "noSamePrompt": "両方の期間で回答されたPromptはありません",
@@ -10969,9 +11057,9 @@
       "noCompetitorsTitle": "トラッキング中の競合はまだありません",
       "noCompetitorsBody": "競合を追加して、AIの回答での比較を確認しましょう。",
       "headToHead": "直接比較",
-      "loadFailed": "インサイトの読み込みに失敗しました。もう一度お試しください",
+      "loadFailed": "インサイトを読み込めませんでした。もう一度お試しください。",
       "exportCapped": "メモリの問題を防ぐため、エクスポートは50,000行までに制限されています",
-      "exportFailed": "CSVのエクスポートに失敗しました",
+      "exportFailed": "CSVをエクスポートできませんでした。もう一度お試しください。",
       "noTrend": "トレンドデータはまだありません",
       "yourBrand": "自社ブランド",
       "avgCompetitor": "競合平均",
@@ -11070,6 +11158,8 @@
       "selectBrand": "ブランドを選択してコンテンツプランを表示します。",
       "period": "期間",
       "periods": "過去{days}日間",
+      "periodLast": "過去",
+      "periodDays": "{days}日間",
       "newContent": "新しいコンテンツ",
       "cards": {
         "create": {
@@ -13975,6 +14065,13 @@
     "description": "AI生成の回答での可視性を高めるための、AIを活用したコンテンツ推奨事項。",
     "opportunities": "機会",
     "autoGeneratedHint": "トラッキングデータの収集に合わせて、機会が自動的に生成されます。",
+    "flowNote": {
+      "coveredTitle": "追跡中のすべてのニーズにすでにオポチュニティが存在するため、夜間実行での新規追加はありません。",
+      "coveredHint": "さらに追加するには、新しい質問の<prompts>Promptを追加</prompts>するか、完了したオポチュニティを「完了」にするか、「+ 新規」で別の切り口を作成してください。",
+      "coveredHintReadOnly": "新しい質問の<prompts>Prompt</prompts>が追加されるか、完了したオポチュニティが「完了」になると、新しいものが届きます。",
+      "limitTitle": "今月の新しいオポチュニティを使い切りました。夜間実行による追加は{date}から再開されます。",
+      "limitTitleNoDate": "今月の新しいオポチュニティを使い切りました。夜間実行による追加はプランの更新時に再開されます。"
+    },
     "generating": "生成中…",
     "sendToWorkflow": "Workflowへ送信",
     "generateBrief": "ブリーフを作成",
@@ -14327,7 +14424,8 @@
       "setupFirst": "商機をワークフローツールに送信するにはWebhookを設定してください。",
       "urlRequired": "Webhook URLは必須です",
       "urlRequiredTest": "最初にWebhook URLを入力してください",
-      "saveError": "Webhook設定の保存に失敗しました"
+      "saveError": "Webhook設定の保存に失敗しました",
+      "testNotRun": "テストを実行できませんでした。もう一度お試しください。"
     },
     "loadError": "コンテンツオポチュニティの読み込みに失敗しました",
     "exportError": "オポチュニティのエクスポートに失敗しました",
@@ -14972,7 +15070,8 @@
         "trackNotAllowed": "Prompt を追加できるのは管理者とマネージャーのみです。",
         "failed": "これらのクエリを読み込めませんでした。",
         "noData": "Google Search Console にはこのブランドのクエリがまだありません。",
-        "empty": "この期間にクリックのあったすべての Google クエリが追跡されています。"
+        "empty": "この期間にクリックのあったすべての Google クエリが追跡されています。",
+        "trackFailed": "これらのクエリを追跡できませんでした。もう一度お試しください。"
       }
     },
     "summaryLine": {
@@ -16016,7 +16115,8 @@
       "save": "{count, plural, other {#件のPromptに追加}}",
       "removeSave": "{count, plural, other {#件のPromptから削除}}",
       "done": "{count, plural, other {#件のPromptにタグを付けました}}",
-      "removed": "{count, plural, other {#件のPromptからタグを削除しました}}"
+      "removed": "{count, plural, other {#件のPromptからタグを削除しました}}",
+      "saveFailed": "タグを保存できませんでした。もう一度お試しください。"
     },
     "bulkDelete": {
       "progress": "{total}件中{done}件のPromptを削除中…",
@@ -16714,7 +16814,18 @@
     "windowLastDays": "{days, plural, other {スコアは過去 # 日間が対象です。}}",
     "windowAllTime": "スコアは追跡された全履歴を対象としています。",
     "windowSelectedRange": "スコアは選択した日付範囲を反映しています。",
+    "card": {
+      "prompts": "{visible}/{count}件のPrompt",
+      "scoreTip": "{mentionAnswers}件の回答で言及 · {citationAnswers}件で引用 · 掲載順位係数 {position} · 言及 {mentions}回 · 引用 {citations}回"
+    },
     "selected": "選択中",
+    "rank": {
+      "short": "#{rank}",
+      "label": "可視性スコア順位: {rank}位",
+      "you": "自社",
+      "lowSample": "サンプル不足",
+      "lowSampleTip": "この期間中に10件未満のPromptで言及されているため、まだランク付けされていません。"
+    },
     "noData": "データなし",
     "emptyTitle": "競合他社がまだありません",
     "emptyDescription": "競合他社のドメインを追加して、すべてのAIプラットフォームにおける自社とのAI可視性を比較しましょう。",
@@ -16764,7 +16875,7 @@
     },
     "merge": {
       "open": "統合",
-      "openHint": "同一企業の競合を統合",
+      "openHint": "重複する競合を統合（例: 同一ブランドの2つのドメイン）",
       "title": "競合を統合",
       "description": "同一企業の競合を選択し、残す競合を指定してください。",
       "pickLabel": "同一企業",
@@ -16837,6 +16948,11 @@
       "noDataTitle": "比較データがありません",
       "noDataDescription": "この競合の比較データを生成するには、「可視性」からトラッキングチェックを実行してください。",
       "loadError": "比較データの読み込みに失敗しました。",
+      "gapCreateAction": "アクションを作成",
+      "gapAskChat": "チャットで質問",
+      "gapPanelTip": "入力欄にこのギャップが入った状態でチャットを開き、すぐに送信できます",
+      "gapCreateText": "このギャップを、埋めるためのタスクとともにアクションとしてアクションセンターに送信します: Prompt「{prompt}」（{count, plural, other {プラットフォーム}}：{platforms}）において、{competitor}のスコアは{them}、自社のスコアは{you}です。",
+      "gapAskText": "Prompt「{prompt}」（{count, plural, other {プラットフォーム}}：{platforms}）において、なぜ{competitor}のスコアが{them}で自社が{you}なのですか？まず何を変更すべきですか？",
       "promptCounts": "{engines, plural, other {#個のプラットフォーム}} · {runs, plural, other {#回の実行}}",
       "engineCounts": "{locations, plural, other {#か所のロケーション}} · {runs, plural, other {#回の実行}}",
       "runs": "{count, plural, other {#回の実行}}",
@@ -17019,9 +17135,9 @@
       "byCompetitor": "競合別",
       "howItWorks": "仕組みについて",
       "lowVisibility": "この期間のあなたの可視性は低いため、このリストは広範囲になる可能性があります。まずは基本的な可視性の向上に注力してください。",
-      "loadFailedToast": "引用データの読み込みに失敗しました",
-      "checkFailedToast": "引用データの確認に失敗しました",
-      "exportFailed": "CSVのエクスポートに失敗しました",
+      "loadFailedToast": "引用データを読み込めませんでした。もう一度お試しください。",
+      "checkFailedToast": "引用データを確認できませんでした。もう一度お試しください。",
+      "exportFailed": "CSVをエクスポートできませんでした。もう一度お試しください。",
       "typesNotExportable": "ソースタイプはグラフの内訳のため、エクスポートできません。エクスポートするには、ドメイン、URL、競合ギャップのいずれかに切り替えてください。",
       "tabGaps": "競合ギャップ"
     }
@@ -17543,6 +17659,10 @@
   "reports": {
     "impactLink": "Ansvisorが貢献した成果",
     "impact": {
+      "firstShip": {
+        "title": "このブランドではまだ何も公開されていません",
+        "body": "このレポートは、最初のCMSへの送信またはエージェントの初回本番公開後に反映されます。"
+      },
       "title": "Ansvisorが貢献した成果",
       "subtitle": "{brand} · 変更を加えていない類似Promptsと比較測定した実施済みアクション",
       "subtitleNoBrand": "変更を加えていない類似Promptsと比較測定した実施済みアクション",
@@ -17728,6 +17848,15 @@
     "deleteConfirm": "このレポートを削除しますか？",
     "deleteFailed": "レポートの削除に失敗しました",
     "rowMenuLabel": "{title}のその他の操作",
+    "rename": {
+      "item": "名前を変更",
+      "title": "レポート名の変更",
+      "description": "名前のみが変更されます。レポートの数値はそのまま維持されます。",
+      "label": "レポート名",
+      "save": "保存",
+      "done": "レポートの名前を変更しました",
+      "failed": "レポートの名前を変更できませんでした。もう一度お試しください。"
+    },
     "copyLink": "リンクをコピー",
     "linkCopied": "リンクをコピーしました。ワークスペースのメンバーがレポートを開けます。",
     "copyLinkFailed": "リンクをコピーできませんでした。レポートを開いてアドレスをコピーしてください。",
@@ -17773,6 +17902,12 @@
     "selectSections": "セクションを少なくとも1つ選択してください",
     "dialogTitle": "レポートを生成",
     "dialogDescription": "AIが作成したエグゼクティブサマリーとともに、指定期間におけるブランドのAI可視性のスナップショットを作成します。",
+    "dateRangeHint": "テンプレートによって設定されています。ここで変更できます。",
+    "duplicate": {
+      "line": "既存のレポート「{title}」と同じ期間です。開きますか？",
+      "open": "開く",
+      "anyway": "そのまま生成"
+    },
     "reportTitleLabel": "タイトル（任意）",
     "reportTitlePlaceholder": "例：第2四半期 エグゼクティブサマリー",
     "presets": {
@@ -17839,7 +17974,7 @@
     "worstPrompts": "成果下位のPrompt",
     "queryFanout": "クエリfan-out",
     "queryFanoutDescription": "追跡中のPromptに回答する際に、回答エンジンが実際に実行したサブクエリ。",
-    "fanoutCoverage": "{answers}件の回答全体で{queries}件の個別のサブクエリ",
+    "fanoutCoverage": "{answers, number} 件の回答にわたる {queries, number} 件の異なるサブクエリ",
     "loadReportFailed": "このレポートを読み込めませんでした。",
     "notFound": "レポートが見つかりません。",
     "backToReports": "レポート一覧に戻る",
@@ -17859,13 +17994,17 @@
     "shareOfVoice": "シェア・オブ・ボイス",
     "competitorLeaderboard": "競合リーダーボード",
     "topCitationSources": "上位の引用元",
-    "citationTotals": "この期間内の{domains}ドメイン・{citations}件の引用",
+    "citationTotals": "この期間で {domains, number} ドメイン · {citations, number} 件の引用",
     "noData": "この期間のデータはありません。",
     "you": "(あなた)",
     "kpiCitationsNote": "「ブランド引用数」は、AIの回答内でお客様のサイトが引用された回数をカウントします。",
+    "leaderboardRankNote": "可視性スコア順にランク付け。言及された Prompt が {min} 件未満のブランドは、「サンプル不足」として末尾に表示されます。",
+    "lowSample": "サンプル不足",
+    "lowSampleTip": "この期間に言及された Prompt が {min} 件未満です。ランク付けに必要な回答数が不足しています。",
     "citationsSectionNote": "お客様のサイトだけでなく、ブランド周辺でAIの回答が引用したすべての情報源です。",
     "mentionEvidence": "言及の根拠",
     "mentionEvidenceDescription": "この期間にお客様が最も多く言及された回答と、その言及の前後の文章です。",
+    "newestFirst": "新しい順。",
     "citationEvidence": "引用の根拠",
     "citationEvidenceDescription": "この期間にAIの回答が最も多く引用したURLと、それらを表示させた追跡対象のPromptです。"
   },
@@ -18149,10 +18288,36 @@
       "hint": "Ansvisorの画面の表示言語です（あなたのみに適用）。ブランドのコンテンツ言語は変わりません。",
       "loading": "言語を読み込んでいます…",
       "moreSoon": "今後、対応言語を追加予定です。",
-      "preview": "スタッフ版とテスト版では、まだ翻訳がない言語や、テキストが長めのテスト用言語も表示されます。テキストがない箇所は英語で表示されます。",
+      "preview": "スタッフとテストビルドでは、まだ翻訳されていない言語も表示されます。テキストがない部分には英語が表示されます。",
       "testLanguage": "{language}・テスト",
       "saved": "言語を保存しました",
-      "saveFailed": "言語を保存できませんでした。もう一度お試しください。"
+      "saveFailed": "言語を保存できませんでした。もう一度お試しください。",
+      "suggest": {
+        "link": "翻訳の改善を提案",
+        "title": "翻訳の改善を提案",
+        "description": "不自然な点と、適切な表現をお知らせください。いただいた提案はすべてチームが確認します。",
+        "language": "言語",
+        "screen": "画面",
+        "current": "現在のテキスト",
+        "currentPlaceholder": "テキストを入力または貼り付けるか、画面上で選択してください",
+        "pick": "画面上で選択",
+        "picking": "変更したいテキストをクリックしてください。Escキーでキャンセルします。",
+        "better": "改善案",
+        "note": "メモ（任意）",
+        "notePlaceholder": "改善の理由や表示場所など",
+        "cancel": "キャンセル",
+        "send": "提案を送信",
+        "sent": "ありがとうございます。提案をチームに送信しました。",
+        "errors": {
+          "locale": "提案は英語以外の言語が対象です。",
+          "currentText": "現在のテキストを入力してください。",
+          "suggestion": "改善案を入力してください。",
+          "same": "改善案が現在のテキストと同じです。",
+          "tooLong": "長すぎます。各テキストは1,000文字以内にしてください。",
+          "tooMany": "本日の提案送信数が上限に達しました。明日もう一度お試しください。",
+          "server": "提案を送信できませんでした。もう一度お試しください。"
+        }
+      }
     },
     "save": "変更を保存",
     "saved": "変更を保存しました！",
@@ -18467,6 +18632,8 @@
       "aiUsageHint": "AnsvisorのAI機能（改善の提案、コンテンツエディターのAI、アクションセンターのタスク作成）の月間利用枠です。エージェントチャットはお客様ご自身のAIキーで動作します。無料トライアルにはより少量の利用枠が含まれます。",
       "aiUsageCustomHint": "AnsvisorのAI機能（改善の提案、コンテンツエディターのAI、アクションセンターのタスク作成）の月間利用枠です。エージェントチャットはお客様ご自身のAIキーで動作します。容量はAnsvisorと相談して決定します。",
       "aiUsageHintChat": "AnsvisorのAI機能（チャットとエージェント、改善の提案、コンテンツエディターのAI、アクションセンターのタスク作成）の月間利用枠です。独自のAIキーのご利用はEnterpriseプランでのみ対応しています。無料トライアルにはより少量の利用枠が含まれます。",
+      "contentEstimate": "月あたり最大 {pages, number} ページの新規作成、または {optimizations, number} ページの最適化",
+      "contentEstimateHint": "月間のAI利用枠を使用します（チャットおよびエージェントと共有）。実際の件数は、ページ長や選択したAIモデルによって異なります。",
       "aiUsageCustomHintChat": "AnsvisorのAI機能（チャットとエージェント、改善の提案、コンテンツエディターのAI、アクションセンターのタスク作成）の月間利用枠です。Enterpriseプランでは、チャットをお客様ご自身のAIキーで実行することも可能です。容量はAnsvisorと相談して決定します。"
     },
     "contactUs": "お問い合わせ",
@@ -20132,6 +20299,26 @@
       "crm": "CRM＆収益",
       "team": "チーム＆データ"
     }
+  },
+  "translationSuggestionsAdmin": {
+    "title": "翻訳の提案",
+    "description": "Ansvisor スタッフ専用。インターフェースの翻訳改善に関する提案です。承認してもマークが付くだけです。web/messages 内の該当言語ファイルおよび用語集の文字列を更新するには、web/scripts/translate-messages.mjs を再実行してください。氏名やメールアドレスは表示されません。",
+    "empty": "新しい提案はありません。",
+    "columns": {
+      "date": "日付",
+      "language": "言語",
+      "screen": "画面",
+      "current": "現在のテキスト",
+      "suggestion": "提案",
+      "note": "メモ",
+      "actions": "確認"
+    },
+    "key": "キー: {key}",
+    "accept": "承認",
+    "reject": "却下",
+    "accepted": "承認済みに設定しました",
+    "rejected": "却下済み",
+    "failed": "保存できませんでした。すでに確認されている可能性があります。"
   },
   "reportCardAdmin": {
     "title": "無料レポートカード",
