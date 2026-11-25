@@ -140,18 +140,18 @@ describe('per-platform providers', () => {
   });
 
   it("skips a platform only when its own provider can't deliver it", () => {
-    // Cloro can't deliver Grok or Perplexity; Anakin can.
+    // Cloro can't deliver Grok or Perplexity; Anakin can. Anakin can't deliver DeepSeek yet.
     expect(unavailablePlatforms({ PLATFORM_PROVIDER: 'cloro' }).sort()).toEqual([
       'grok-web',
       'perplexity-web',
     ]);
-    expect(unavailablePlatforms(split)).toEqual([]);
+    expect(unavailablePlatforms(split)).toEqual(['deepseek-web']);
     expect(
       unavailablePlatforms({
         PLATFORM_PROVIDER: 'anakin',
         PLATFORM_PROVIDER_OVERRIDES: 'grok-web=cloro',
-      }),
-    ).toEqual(['grok-web']);
+      }).sort(),
+    ).toEqual(['deepseek-web', 'grok-web']);
   });
 
   it('checks countries only for the platforms on the provider whose list it is', async () => {
