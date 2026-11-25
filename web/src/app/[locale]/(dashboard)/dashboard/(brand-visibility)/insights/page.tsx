@@ -18,6 +18,7 @@ import {
   useBrandVisibilityShell,
 } from '@/components/brand-visibility/shell-context';
 import { OverviewSkeleton } from '@/components/brand-visibility/tab-skeleton';
+import { Skeleton } from '@/components/ui/skeleton';
 import { OVERVIEW_DEFAULT_RANGE } from '@/lib/brand-visibility';
 import { largestMove, rangeChipLabel } from '@/lib/chat/page-context';
 import {
@@ -106,6 +107,9 @@ interface InsightsFilters {
   model: string;
   topic: string;
 }
+
+/** How long the page waits before reading a failed section again by itself. */
+const AUTO_RETRY_MS = 2_000;
 
 const DEFAULT_FILTERS: InsightsFilters = {
   // The last 24 hours: what the latest run found. Longer ranges are one
@@ -416,6 +420,11 @@ export default function InsightsPage() {
   const [loadFailed, setLoadFailed] = useState(false);
   // Sections whose own read failed, standing in empty: said, not shown as "none".
   const [failedSections, setFailedSections] = useState<InsightsSection[]>([]);
+  // A section failed and the page is reading again by itself (AUTO_RETRY_MS):
+  // those sections show as loading, and say they failed only if it fails too.
+  const [retrying, setRetrying] = useState(false);
+  const retryTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => clearTimeout(retryTimer.current ?? undefined), []);
   const [filters, setFilters] = useState<InsightsFilters>(DEFAULT_FILTERS);
   const [hasAnyData, setHasAnyData] = useState<boolean | null>(null);
   const [competitorData, setCompetitorData] = useState<CompetitorComparisonData | null>(null);
@@ -499,10 +508,15 @@ export default function InsightsPage() {
   // sent (new filters, Retry) is not shown over it.
   const loadGen = useRef(0);
   const loadData = useCallback(
-    async (overrideFilters?: InsightsFilters, { silent = false } = {}) => {
+    async (overrideFilters?: InsightsFilters, { silent = false, auto = false } = {}) => {
       if (!brandId) return;
       const gen = ++loadGen.current;
       const stale = () => gen !== loadGen.current;
+      // A newer read than the automatic one: it decides what failed.
+      if (!auto) {
+        clearTimeout(retryTimer.current ?? undefined);
+        setRetrying(false);
+      }
       if (!silent) {
         setIsLoading(true);
         // Retry, or new filters: loading again, not failed.
@@ -588,6 +602,15 @@ export default function InsightsPage() {
         };
         cache.set(key, read);
         show(read, { fresh: true });
+        // A section whose read failed (most often a read that took too long)
+        // is read once more by itself, a moment later, before the page says
+        // so: a customer rarely presses Retry.
+        if (!auto && (insights.failedSections?.length ?? 0) > 0) {
+          setRetrying(true);
+          retryTimer.current = setTimeout(() => {
+            if (!stale()) void loadData(f, { silent: true, auto: true });
+          }, AUTO_RETRY_MS);
+        }
       } catch (err) {
         if (stale()) return;
         if (!quiet) {
@@ -605,7 +628,11 @@ export default function InsightsPage() {
           console.warn('[insights] silent refresh failed', err);
         }
       } finally {
-        if (!stale()) setIsLoading(false);
+        if (!stale()) {
+          setIsLoading(false);
+          // The automatic read is done: what still failed now says so.
+          if (auto) setRetrying(false);
+        }
       }
     },
     [brandId, cache, show, serverError, t],
@@ -888,11 +915,13 @@ export default function InsightsPage() {
   };
 
   // A section whose own read failed stands in empty: it says so instead.
-  const competitorsFailed = failedSections.includes('competitors');
-  const trendFailed = failedSections.includes('trend');
-  const otherSectionsFailed = failedSections.some(
-    (section) => section !== 'competitors' && section !== 'trend',
-  );
+  // While the page reads them again by itself, they show as loading.
+  const competitorsFailed = !retrying && failedSections.includes('competitors');
+  const trendFailed = !retrying && failedSections.includes('trend');
+  const competitorsPending = retrying && failedSections.includes('competitors');
+  const trendPending = retrying && failedSections.includes('trend');
+  const otherSectionsFailed =
+    !retrying && failedSections.some((section) => section !== 'competitors' && section !== 'trend');
 
   return (
     <div className="space-y-6">
@@ -949,6 +978,7 @@ export default function InsightsPage() {
                 <KpiRows
                   summary={summary!}
                   trend={rateTrend}
+                  trendPending={trendPending}
                   trackedPrompts={trackedPrompts}
                   coverage={coverage}
                   sov={sovData}
@@ -971,7 +1001,12 @@ export default function InsightsPage() {
               </div>
 
               {/* Competitor Comparison. A failed read of it is not "no competitors". */}
-              {competitorsFailed ? (
+              {competitorsPending ? (
+                <Skeleton
+                  data-slot="insights-section-retrying"
+                  className="h-72 w-full rounded-xl"
+                />
+              ) : competitorsFailed ? (
                 <ReadError
                   compact
                   title={tBrandVisibility('readError.competitors')}
@@ -979,7 +1014,12 @@ export default function InsightsPage() {
                 />
               ) : competitorData ? (
                 <div className="grid grid-cols-1 gap-4 lg:grid-cols-5">
-                  {trendFailed ? (
+                  {trendPending ? (
+                    <Skeleton
+                      data-slot="insights-section-retrying"
+                      className="h-72 w-full rounded-xl lg:col-span-3"
+                    />
+                  ) : trendFailed ? (
                     <ReadError
                       compact
                       className="lg:col-span-3"

@@ -71,6 +71,7 @@ async function resubmitWithoutLegacy(pending, log) {
       scraper_id: pending.scraper_id,
       region: pending.region,
       legacy: false,
+      provider: 'cloro',
     });
     if (error) throw error;
     log.warn(
@@ -137,6 +138,16 @@ router.post('/', async (req, res) => {
 
     if (!pending) {
       req.log.info({ taskId }, 'cloro callback: no pending task (already processed?)');
+      return;
+    }
+
+    // Another provider's task (00562; null is Cloro's): not this route's to
+    // store or drop, whatever the delivery says.
+    if (pending.provider && pending.provider !== 'cloro') {
+      req.log.warn(
+        { taskId, provider: pending.provider },
+        'cloro callback: task belongs to another provider; ignored',
+      );
       return;
     }
 
