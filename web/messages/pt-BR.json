@@ -622,6 +622,8 @@
       "slow": "Isso está demorando mais do que o normal.",
       "ready": "Pronto. Abrindo Prompts…",
       "failed": "Não foi possível preparar a demonstração. Verifique sua conexão e tente novamente.",
+      "stuck": "A demo está pronta, mas a página não abriu. Abra de novo, ou feche isto e tente mais tarde.",
+      "open": "Abrir a demo",
       "retry": "Tentar novamente",
       "close": "Fechar"
     }

@@ -622,6 +622,8 @@
       "slow": "L'operazione sta richiedendo più tempo del solito.",
       "ready": "Pronto. Apertura di Prompts in corso…",
       "failed": "Impossibile preparare la demo. Verifichi la connessione e riprovi.",
+      "stuck": "La demo è pronta, ma la sua pagina non si è aperta. Aprila di nuovo, oppure chiudi e riprova più tardi.",
+      "open": "Apri la demo",
       "retry": "Riprova",
       "close": "Chiudi"
     }

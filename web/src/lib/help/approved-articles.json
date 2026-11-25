@@ -4138,7 +4138,7 @@
         "send the snippet to my developer"
       ],
       "plan": "all",
-      "updated": "2026-11-17",
+      "updated": "2026-11-25",
       "sections": [
         {
           "heading": null,
@@ -4146,7 +4146,7 @@
         },
         {
           "heading": "On the cloud: choose how to start",
-          "text": "The first screen, **How do you want to start?**, opens on the free trial. You can pick **Monthly**, **Yearly** or **Demo** instead.\n\n- **Start 14-day free trial** opens checkout. You enter card details, nothing is charged until the trial ends, and you can cancel any time. The trial comes with an organization's first subscription only.\n- **Buy now**, or a plan without a trial, starts the plan the same day.\n\nAfter checkout, the five setup steps open, and your brand's first run starts when you finish them.\n\nNot ready to add a card? Pick **Demo**, then **Explore the sample brand**, or select **Explore a sample brand first** under the plans. The sample brand is made up, with sample data: you can open every page, but nothing runs or changes. When you pick a plan there, you set up your own brand.\n\nA self-hosted install has no such screen."
+          "text": "The first screen, **How do you want to start?**, opens on the free trial. You can pick **Monthly**, **Yearly** or **Demo** instead.\n\n- **Start 14-day free trial** opens checkout. Nothing is charged until the trial ends, and you can cancel any time. The trial comes with an organization's first subscription only.\n- **Buy now**, or a plan without a trial, starts the plan the same day.\n\nAfter checkout, the five setup steps open; your brand's first run starts when you finish.\n\nNot ready to add a card? Pick **Demo**, then **Explore the sample brand**, or select **Explore a sample brand first** under the plans. It's made up, with sample data: every page opens, but nothing runs or changes. When you pick a plan there, you set up your own brand. If it doesn't open after it's prepared, **Open the demo** loads it again.\n\nA self-hosted install has no such screen."
         },
         {
           "heading": "Step 1: Brand basics",

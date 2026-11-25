@@ -622,6 +622,8 @@
       "slow": "To trwa dłużej niż zwykle.",
       "ready": "Gotowe. Otwieranie Prompts…",
       "failed": "Nie udało się przygotować wersji demonstracyjnej. Sprawdź połączenie i spróbuj ponownie.",
+      "stuck": "Demo jest gotowe, ale jego strona się nie otworzyła. Otwórz je ponownie albo zamknij to i spróbuj później.",
+      "open": "Otwórz demo",
       "retry": "Spróbuj ponownie",
       "close": "Zamknij"
     }

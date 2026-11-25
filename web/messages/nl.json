@@ -622,6 +622,8 @@
       "slow": "Dit duurt langer dan gebruikelijk.",
       "ready": "Gereed. Prompts openen…",
       "failed": "Kan de demo niet voorbereiden. Controleer uw verbinding en probeer het opnieuw.",
+      "stuck": "De demo is klaar, maar de pagina is niet geopend. Open hem opnieuw, of sluit dit en probeer het later.",
+      "open": "Demo openen",
       "retry": "Opnieuw proberen",
       "close": "Sluiten"
     }

@@ -622,6 +622,8 @@
       "slow": "Bu işlem normalden uzun sürüyor.",
       "ready": "Hazır. Prompts açılıyor…",
       "failed": "Demo hazırlanamadı. Bağlantınızı kontrol edip tekrar deneyin.",
+      "stuck": "Demo hazır ama sayfası açılmadı. Yeniden açın ya da bunu kapatıp daha sonra deneyin.",
+      "open": "Demoyu aç",
       "retry": "Tekrar dene",
       "close": "Kapat"
     }
