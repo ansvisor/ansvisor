@@ -75,7 +75,9 @@ const ALIGN_CLASS = { start: 'sm:items-start', end: 'sm:items-end' } as const;
  * `reserveMeter` keeps the meter's room on the row from a phone's width up
  * whatever the read says, for a page whose tabs share the header: the row
  * looks the same while the read runs, once it lands, and when there is
- * nothing to meter, on every tab.
+ * nothing to meter, on every tab. The meter is the Content Editor's narrow
+ * one (a ring and "AI 6%", no border; owner's call 2026-11-21) unless
+ * `compactMeter={false}`.
  */
 export function HeaderWithAiUsage({
   children,
@@ -83,6 +85,7 @@ export function HeaderWithAiUsage({
   askChat = true,
   align = 'start',
   reserveMeter = false,
+  compactMeter = true,
   className,
 }: {
   children: ReactNode;
@@ -91,10 +94,12 @@ export function HeaderWithAiUsage({
   align?: 'start' | 'end';
   /** Keep the meter's room on the row even when it shows nothing (Ansvisor Cloud only). */
   reserveMeter?: boolean;
+  /** The Content Editor's narrow meter (AiUsageMeter's `compact`); on by default. */
+  compactMeter?: boolean;
   /** On the header row: room for a drawer's close button, for one. */
   className?: string;
 }) {
-  const meter = <AiUsageMeter className="self-end sm:self-auto" />;
+  const meter = <AiUsageMeter compact={compactMeter} className="self-end sm:self-auto" />;
   return (
     <>
       <div
@@ -103,7 +108,13 @@ export function HeaderWithAiUsage({
         <div className="min-w-0 sm:flex-1">{children}</div>
         {reserveMeter && isCloud() ? (
           // On a phone the meter goes under the row as it always does.
-          <div data-ai-meter-slot className="contents sm:flex sm:min-w-[8.5rem] sm:justify-end">
+          <div
+            data-ai-meter-slot
+            className={cn(
+              'contents sm:flex sm:justify-end',
+              compactMeter ? 'sm:min-w-[5.5rem]' : 'sm:min-w-[8.5rem]',
+            )}
+          >
             {meter}
           </div>
         ) : (

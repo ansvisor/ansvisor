@@ -252,7 +252,18 @@ export function ImpactReportView() {
         </div>
       )}
 
-      {report && counts && (
+      {report && !report.everShipped && (
+        // Nothing has shipped on the brand yet: a short note, not a page of zeros.
+        <div
+          data-slot="impact-first-ship"
+          className="rounded-lg border bg-card px-4 py-6 text-center text-sm text-muted-foreground"
+        >
+          <p className="font-medium text-foreground">{t('firstShip.title')}</p>
+          <p className="mt-1">{t('firstShip.body')}</p>
+        </div>
+      )}
+
+      {report && report.everShipped && counts && (
         <>
           <Kpis report={report} month={month} />
           {report.capped && (

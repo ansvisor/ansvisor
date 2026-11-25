@@ -140,6 +140,7 @@ const report = (more: Partial<ImpactReport> = {}): ImpactReport => ({
   traffic: { current: 120, previous: 100, pages: 2 },
   generatedAt: '2026-10-31T09:14:00.000Z',
   dataAsOf: '2026-10-31T08:00:00.000Z',
+  everShipped: true,
   ...more,
 });
 
@@ -570,6 +571,24 @@ describe('ImpactReportView', () => {
     expect(method).toContain('Baseline: 14 days before ship');
     expect(method).toContain('Control: untouched similar prompts');
     expect(method).toContain('Correlation, not causation');
+  });
+
+  it('says it fills in after the first ship on a brand that never shipped, not a page of zeros', async () => {
+    read.mockResolvedValue({
+      ok: true,
+      report: report({
+        rows: [],
+        summary: { shipped: 0, previous: 0, improved: 0, judged: 0, pending: 0 },
+        traffic: null,
+        dataAsOf: null,
+        everShipped: false,
+      }),
+    });
+    await render();
+    expect(host.querySelector('[data-slot="impact-first-ship"]')?.textContent).toBe(
+      "Nothing has shipped on this brand yetThis report fills in after your first Send to CMS or an agent's first go-live.",
+    );
+    expect(host.querySelector('table')).toBeNull();
   });
 
   it('says it couldn’t load, and tries again', async () => {

@@ -158,3 +158,25 @@ describe('AuditSummaryStrip', () => {
     expect(container.textContent).toBe('');
   });
 });
+
+describe('AuditSummaryStrip while the hub loads', () => {
+  it('holds the strip’s place, so the page below doesn’t move when it fills in', () => {
+    act(() => {
+      root.render(
+        <NextIntlClientProvider locale="en" messages={messages}>
+          <AuditSummaryStrip loading overview={null} quota={null} now={NOW} />
+        </NextIntlClientProvider>,
+      );
+    });
+    const placeholder = container.querySelector('[data-testid="audit-summary-strip-skeleton"]');
+    expect(placeholder).not.toBeNull();
+    // The strip's own box: border, padding, one 20px line.
+    expect(placeholder!.className).toContain('rounded-xl border bg-card px-4 py-3');
+    expect(placeholder!.getAttribute('aria-hidden')).toBe('true');
+  });
+
+  it('shows nothing without an overview once loaded', () => {
+    render(null, null);
+    expect(container.innerHTML).toBe('');
+  });
+});

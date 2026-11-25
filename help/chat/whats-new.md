@@ -1,11 +1,11 @@
 ---
 title: See what's new in Ansvisor
 route: /dashboard/chat
-keywords: [whats new, what's new, new features, updates, show me, new line, latest changes, every month, monthly digest, what's new for my plan]
+keywords: [whats new, one chat, what's new chat, what's new, new features, updates, show me, new line, latest changes, every month, monthly digest, what's new for my plan]
 synonyms: [release notes, changelog, product updates, what changed, recent improvements]
 plan: all
-updated: 2026-11-06
-last_checked: 2026-11-06
+updated: 2026-11-23
+last_checked: 2026-11-23
 owner: Cihan
 app_version: 0.3.0
 approved: true
@@ -18,6 +18,8 @@ sources: [web/messages/en.json, whats-new/README.md]
 When there is an update you haven't read, a line with a **New** tag shows under the shortcuts, for up to 14 days. Click **Show me** to put "What's new: how can {feature} help me?" in the box. Nothing is sent until you send it.
 
 The **What's new** shortcut asks Chat what's new. A small dot on it means you have updates you haven't read.
+
+The shortcut, and **What's new** in your profile menu, keep to one chat: asked again, the question goes on in your What's new chat for the brand open, so your chat menu doesn't fill up with copies. A renamed chat still counts, since the question was asked in it. If you archived or deleted that chat, a new one starts. Chats from before stay as they are.
 
 ## The answer
 

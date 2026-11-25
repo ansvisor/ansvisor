@@ -39,6 +39,8 @@ let slowReads: { running: number; most: number } | null = null;
 /** The prompts a bulk location change reads, and what it writes back. */
 let bulkRows: { id: string; regions: string[]; is_active: boolean; tags?: string[] }[] = [];
 let appliedLocations: unknown[] = [];
+/** Ids whose tag writes RLS turns away: the update matches no row. */
+let blockedTagWrites = new Set<string>();
 const slowRead = async <T>(read: () => T | Promise<T>): Promise<T> => {
   if (!slowReads) return read();
   const reads = slowReads;
@@ -153,13 +155,24 @@ vi.mock('@/lib/supabase/server', () => ({
       update: (payload: Record<string, unknown>) => {
         writes.push(payload);
         return {
-          eq: () => ({
-            select: () => ({
-              single: async () => ({
-                data: { id: 'p1', ...promptRow, ...payload },
+          eq: (_column: string, value: string) => ({
+            // .select().single() reads the row back; .select('id'), awaited,
+            // is how bulkUpdatePromptTags counts what RLS let through.
+            select: (columns?: string) => {
+              const single = async () => ({
+                data: { id: value, ...promptRow, ...payload },
                 error: null,
-              }),
-            }),
+              });
+              if (columns !== 'id') return { single };
+              return {
+                single,
+                then: (resolve: (v: unknown) => unknown) =>
+                  resolve({
+                    data: blockedTagWrites.has(value) ? [] : [{ id: value }],
+                    error: null,
+                  }),
+              };
+            },
           }),
         };
       },
@@ -336,6 +349,7 @@ describe('bulkUpdatePromptLocations (PROMPT-015)', () => {
 describe('bulkUpdatePromptTags (#2378)', () => {
   beforeEach(() => {
     writes = [];
+    blockedTagWrites = new Set();
     bulkRows = [
       { id: 'p1', regions: ['US'], is_active: true, tags: ['campaign-x'] },
       { id: 'p2', regions: ['US'], is_active: true, tags: ['campaign-x', 'bottom-funnel'] },
@@ -377,6 +391,25 @@ describe('bulkUpdatePromptTags (#2378)', () => {
 
     expect(result).toEqual({ error: 'Enter at least one tag.' });
     expect(writes).toEqual([]);
+  });
+
+  it('counts only the rows the write actually changed when RLS blocks one', async () => {
+    blockedTagWrites = new Set(['p2']);
+
+    const result = await bulkUpdatePromptTags(['p1', 'p2'], 'add', ['priority']);
+
+    // Both updates are attempted; the count is what the database applied.
+    expect(writes).toHaveLength(2);
+    expect(result).toEqual({ updated: 1, unchanged: 0, blocked: 0 });
+  });
+
+  it('reports zero updated when RLS turns every write away, not a silent success', async () => {
+    blockedTagWrites = new Set(['p1', 'p2']);
+
+    const result = await bulkUpdatePromptTags(['p1', 'p2'], 'remove', ['campaign-x']);
+
+    expect(writes).toHaveLength(2);
+    expect(result).toEqual({ updated: 0, unchanged: 0, blocked: 0 });
   });
 });
 

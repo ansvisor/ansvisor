@@ -2056,8 +2056,10 @@
         "pill": "Stale",
         "hint": "New for {days} days or more, with no one working on it",
         "quiet": "No update in {days} d",
-        "notice": "Stale: this action has been New for {days} days or more and no one has worked on it. It isn't closed: keep it if it still matters, or dismiss it.",
-        "keep": "Still relevant",
+        "notice": "No one has worked on this for {days} days or more.",
+        "keep": "Keep",
+        "keepHint": "Still relevant: keep it open, and it's no longer stale",
+        "dismiss": "Dismiss",
         "kept": "Kept: it's no longer stale"
       },
       "taskProgress": "{completed}/{total} tasks done",
@@ -2296,20 +2298,34 @@
       "drawer": {
         "actionId": "Action ID",
         "previousCode": "Previously {code}",
+        "more": "More actions",
+        "priorityLine": "Priority <b>{score}</b> · {level}",
+        "stats": {
+          "prompts": "{count, plural, one {prompt} other {prompts}}",
+          "pages": "{count, plural, one {page} other {pages}}",
+          "platforms": "{count, plural, one {platform} other {platforms}}",
+          "competitors": "{count, plural, one {competitor} other {competitors}}",
+          "topics": "{count, plural, one {topic} other {topics}}"
+        },
         "tabs": {
           "overview": "Overview",
           "affected": "Affected",
           "tasks": "Tasks",
           "signals": "Signals",
-          "history": "History"
+          "history": "History",
+          "tasksProgress": "Tasks {completed}/{total}"
         },
         "why": "Why this action?",
         "goal": "Goal",
+        "doneWhen": "Done when",
+        "whatHappened": "What happened",
         "kpis": "KPIs",
         "kpiBrandGoal": "{timeframe, select, weekly {Brand weekly goal} quarterly {Brand quarterly goal} other {Brand monthly goal}}: {target}",
         "noKpis": "No configured KPIs are linked to this action.",
         "support": "{count, plural, =0 {No open signal supports this action any more.} one {# signal supports this action} other {# signals support this action}}",
         "supportAll": "All signals ({count})",
+        "supportTimes": "×{count}",
+        "supportSame": "{count} signals that read the same: the Signals tab lists each",
         "affected": {
           "prompts": "{count, plural, one {# prompt} other {# prompts}}",
           "pages": "{count, plural, one {# page} other {# pages}}",
@@ -2448,6 +2464,7 @@
         "assignTo": "Assign to teammate",
         "dueDate": "Due date",
         "noDueDate": "No due date",
+        "addDueDate": "Add due date",
         "goalPassed": "Goal date passed",
         "setNewDate": "Set a new date",
         "statusLabel": "Status",
@@ -4081,10 +4098,13 @@
       },
       "positionResult": "{measurable, plural, =0 {Positions: not enough data} other {Position improved on {improved} of # platforms}}",
       "view": {
-        "actions": "Actions",
-        "scorecard": "Scorecard",
+        "actions": "Past actions",
+        "scorecard": "Results by kind",
         "kpis": "KPIs",
-        "label": "History views"
+        "label": "History views",
+        "actionsHint": "Each action that's underway or closed, one by one: what it set out to do and what was measured since.",
+        "scorecardHint": "What each kind of action achieved overall: how many were completed, their success rate and the median change.",
+        "kpisHint": "Your brand's goals and how close each one is."
       },
       "scorecard": {
         "note": "What each kind of action did at this brand, from its own actions only. Results are the readings so far; each is final a month after its action closed. Median change is in each action's main metric.",
@@ -4469,6 +4489,7 @@
       "step": "Took page down from your site"
     },
     "makeReport": { "name": "Make reports", "step": "Made report" },
+    "reportPresentation": { "name": "Make presentations", "step": "Made presentation" },
     "startAudit": { "name": "Start Site Audits", "step": "Started Site Audit" },
     "imageModels": { "name": "Read image models", "step": "Read image models" },
     "makeImages": { "name": "Create images", "step": "Created images" },
@@ -5063,6 +5084,13 @@
       "notFiled": "The images were made but couldn't be saved to Files.",
       "providerOff": "{model}'s maker is turned off for this workspace in Settings › Chat. Pick another image model.",
       "providersOff": "Every image model's maker is turned off for this workspace in Settings › Chat, so Chat can't make images here. An Admin can turn one on."
+    },
+    "presentations": {
+      "title": "Presentation · {title}",
+      "unavailable": "Presentations are not available here.",
+      "notFound": "That report was not found. List the saved reports, then pick one.",
+      "storageFull": "The workspace's storage is full. Free up space in Files, then try again.",
+      "notFiled": "The deck was made but could not be filed. Please try again."
     },
     "error": {
       "noKey": "Chat has no AI key to run on. An Admin can add one in Settings › AI Providers.",
@@ -5678,6 +5706,7 @@
       "pdf": "PDF",
       "csv": "CSV",
       "xlsx": "Excel",
+      "pptx": "PowerPoint",
       "json": "JSON",
       "jsonld": "JSON-LD",
       "txt": "TXT",
@@ -5843,6 +5872,8 @@
     },
     "menu": {
       "label": "Chat menu",
+      "clearGroup": "Clear",
+      "clearGroupLabel": "{count, plural, one {Delete your # chat from {where}} other {Delete your # chats from {where}}}",
       "strip": "Chat menu shortcuts",
       "hide": "Hide chat menu",
       "show": "Show chat menu",
@@ -5951,7 +5982,12 @@
       "failed": "Couldn't save that. Try again.",
       "deleteTitle": "Delete this chat?",
       "deleteBody": "“{name}” will be deleted for everyone. Files it made stay in Files. A running agent is stopped first.",
-      "cancel": "Cancel"
+      "cancel": "Cancel",
+      "clearTitle": "{count, plural, one {Delete # chat from {where}?} other {Delete # chats from {where}?}}",
+      "deleteManyTitle": "{count, plural, one {Delete # chat?} other {Delete # chats?}}",
+      "deleteManyBody": "Only your own chats are deleted; chats teammates shared with you stay. Files they made stay in Files, and running agents are stopped first. You can undo for a few seconds, then this can't be undone.",
+      "deleteMany": "{count, plural, one {Delete # chat} other {Delete # chats}}",
+      "deletedMany": "{count, plural, one {# chat deleted} other {# chats deleted}}"
     },
     "home": {
       "greeting": {
@@ -6455,6 +6491,7 @@
       "select": "Select chat",
       "selectFirst": "Select chats to change them together",
       "archiveSelected": "Archive selected",
+      "deleteSelected": "Delete selected",
       "unarchiveSelected": "Unarchive selected",
       "archivedMany": "{count} archived · find them under Archived",
       "unarchivedMany": "{count} unarchived · back in Chats",
@@ -7110,6 +7147,7 @@
       "sendToWebhook": "Sent the page “{title}” to your webhook",
       "takeDownFromCms": "Took the page “{title}” down from {cms}",
       "makeReport": "Made the report “{title}”",
+      "reportPresentation": "Made the presentation “{title}”",
       "makeReportUndo": "Removed the report “{title}” from Reports",
       "startAudit": "Started Site Audit on {pages}",
       "makeImages": "Created images “{title}” with {model}",
@@ -10786,6 +10824,8 @@
       "selectBrand": "Select a brand to see its content plan.",
       "period": "Period",
       "periods": "Last {days} days",
+      "periodLast": "Last",
+      "periodDays": "{days} days",
       "newContent": "New content",
       "cards": {
         "create": { "title": "Create", "hint": "New pages AI needs" },
@@ -15195,6 +15235,51 @@
       },
       "manage": "Manage",
       "connect": "Connect",
+      "adminConnects": "An Admin connects this",
+      "accountStatus": {
+        "active": "Connected",
+        "error": "Needs attention",
+        "disconnected": "Disconnected"
+      },
+      "sync": {
+        "syncedAt": "Numbers read {when}",
+        "pending": "First read within a day: the last 90 days",
+        "error": {
+          "key_refused": "ChatGPT Ads refused the key. Paste a new one.",
+          "key_missing": "The key is gone. Connect the account again.",
+          "signin_gone": "The Google Ads sign-in is gone. Connect Google Ads again.",
+          "upstream": "The ad platform didn't answer. Ansvisor tries again within a day.",
+          "failed": "Couldn't read the numbers. Ansvisor tries again within a day."
+        }
+      },
+      "chatgpt": {
+        "connect": "Connect",
+        "addAnother": "Add account",
+        "dialogTitle": "Connect ChatGPT Ads",
+        "dialogLine": "Paste an Ads API key from ChatGPT Ads Manager. Each key reaches one ad account, so add one key per account.",
+        "keyLabel": "Ads API key",
+        "keyNote": "Ansvisor checks the key with ChatGPT Ads, then stores it encrypted. It only reads.",
+        "cancel": "Cancel",
+        "save": "Connect",
+        "checking": "Checking…",
+        "connectedToast": "Connected {name}.",
+        "accountLine": "ChatGPT Ads account · {currency}",
+        "accountLineNoCurrency": "ChatGPT Ads account",
+        "billing": "ChatGPT Ads Manager",
+        "error": {
+          "invalid_key": "ChatGPT Ads didn't accept this key. Check it and try again.",
+          "upstream": "ChatGPT Ads didn't answer. Try again in a minute.",
+          "other": "Couldn't connect. Try again."
+        }
+      },
+      "account": {
+        "disconnect": "Disconnect",
+        "disconnectTitle": "Disconnect {name}?",
+        "disconnectLine": "Ansvisor deletes what it keeps for this account: its key, if any, and the numbers it read. Your ads keep running in {billing}.",
+        "disconnectedToast": "Disconnected {name}.",
+        "disconnectFailed": "Couldn't disconnect. Try again.",
+        "cancel": "Cancel"
+      },
       "platforms": {
         "chatgpt": {
           "name": "ChatGPT Ads",
@@ -15711,7 +15796,8 @@
       "save": "Add to {count, plural, one {# prompt} other {# prompts}}",
       "removeSave": "Remove from {count, plural, one {# prompt} other {# prompts}}",
       "done": "{count, plural, one {# prompt tagged} other {# prompts tagged}}",
-      "removed": "{count, plural, one {Tags removed from # prompt} other {Tags removed from # prompts}}"
+      "removed": "{count, plural, one {Tags removed from # prompt} other {Tags removed from # prompts}}",
+      "saveFailed": "Couldn't save the tags. Try again."
     },
     "bulkDelete": {
       "progress": "Deleting {done} of {total} prompts…",
@@ -17254,6 +17340,10 @@
   "reports": {
     "impactLink": "What Ansvisor did for you",
     "impact": {
+      "firstShip": {
+        "title": "Nothing has shipped on this brand yet",
+        "body": "This report fills in after your first Send to CMS or an agent's first go-live."
+      },
       "title": "What Ansvisor did for you",
       "subtitle": "{brand} · shipped actions measured against untouched similar prompts",
       "subtitleNoBrand": "Shipped actions measured against untouched similar prompts",
@@ -17838,24 +17928,139 @@
       }
     },
     "notifications": "Notifications",
-    "notificationsDescription": "Each brand can send two e-mails: the Daily Pulse after its tracking runs, and the AI Traffic weekly digest every Monday. Both go to the brand's Daily Pulse recipients.",
-    "pulseSection": "Daily Pulse",
-    "pulseSectionDescription": "A short digest per brand after each tracking run, with highlights and warnings. Choose how often it comes and who gets it.",
-    "pulseFrequencyLabel": "How often {brand}'s Daily Pulse comes",
+    "yourEmails": {
+      "title": "Your e-mails",
+      "description": "Pick which e-mails Ansvisor sends you and how often. These are yours only: everyone on the team sets their own.",
+      "carriedOver": "These are the e-mails you get today. Save to keep them as your own choices.",
+      "for": "For",
+      "scopeAll": "All my brands ({count})",
+      "deliveryHint": "Brand e-mails come one per brand, or together in one e-mail:",
+      "delivery_per_brand": "One e-mail per brand",
+      "delivery_combined": "All brands in one e-mail (coming soon)",
+      "brandOnly": "Set for {brand} only",
+      "useAll": "Use my All my brands choice",
+      "notableNote": "Your first pulse, then only when something notable happens.",
+      "comingSoon": "Coming soon",
+      "comingSoonHint": "E-mails marked Coming soon keep the choice you save and start once they're ready.",
+      "admins": "Admins",
+      "groups": {
+        "visibility": "Brand Visibility",
+        "traffic": "AI Traffic",
+        "actions": "Action Center",
+        "agents": "Agents and Chat",
+        "audit": "Site Audit",
+        "content": "Content",
+        "account": "Account"
+      },
+      "kinds": {
+        "daily_pulse": {
+          "name": "Daily Pulse",
+          "description": "How each brand showed up in AI answers: Visibility score, mentions, citations, highlights and warnings."
+        },
+        "traffic_digest": {
+          "name": "Weekly digest",
+          "description": "Last week's AI visits in one line, with the top three changes. Mondays."
+        },
+        "critical_action": {
+          "name": "New critical action",
+          "description": "A new action with Critical priority for your brands."
+        },
+        "due_actions": {
+          "name": "Overdue and due today",
+          "description": "Actions and tasks assigned to you that are due or late."
+        },
+        "weekly_actions": {
+          "name": "Weekly action summary",
+          "description": "What was done, what's open and what's next. Mondays."
+        },
+        "run_finished": {
+          "name": "Run finished",
+          "description": "An agent run you started has finished, with what it did."
+        },
+        "audit_finished": {
+          "name": "Audit finished",
+          "description": "A bulk or scheduled audit is done, with the score."
+        },
+        "score_dropped": {
+          "name": "Score dropped",
+          "description": "A page's score fell 5 points or more since its last audit."
+        },
+        "drafts_review": {
+          "name": "Drafts waiting for your review",
+          "description": "Drafts made for your brands that need your review before they go live."
+        },
+        "ai_usage": {
+          "name": "AI usage",
+          "description": "At 80% and 100% of the monthly AI limit."
+        }
+      },
+      "links": {
+        "approvals": {
+          "name": "Waiting for your approval",
+          "description": "An agent or a Chat run needs your OK before it changes or publishes anything. Set it with Notify me when an agent needs me.",
+          "link": "Chat settings"
+        },
+        "scheduled": {
+          "name": "Scheduled jobs",
+          "description": "Each job e-mails as set on the job.",
+          "link": "Open jobs"
+        },
+        "billing": {
+          "name": "Billing and security",
+          "description": "Invoices, payment problems and sign-in alerts. Always sent.",
+          "locked": "Always on"
+        }
+      },
+      "options": {
+        "pulse": {
+          "daily": "Daily",
+          "weekly": "Weekly",
+          "notable": "Only when notable",
+          "off": "Off"
+        },
+        "instant": {
+          "instant": "Right away",
+          "daily": "Daily summary",
+          "off": "Off"
+        },
+        "digest": {
+          "daily": "Daily summary",
+          "weekly": "Weekly summary",
+          "off": "Off"
+        },
+        "weekly": {
+          "weekly": "Every Monday",
+          "off": "Off"
+        },
+        "onoff": {
+          "on": "On",
+          "off": "Off"
+        }
+      },
+      "save": "Save changes",
+      "saved": "Your e-mail choices are saved",
+      "saveFailed": "Could not save your e-mail choices. Please try again.",
+      "loadFailed": "Could not load your e-mail choices.",
+      "turnOffAll": "Turn off all optional e-mails",
+      "turnedOff": "All optional e-mails are set to Off. Save changes to keep it."
+    },
+    "outsideEmails": {
+      "title": "Send to people outside the workspace",
+      "description": "A client or a manager without an Ansvisor seat can get a brand's summaries too. They never get approvals or account e-mails.",
+      "sends": "Daily Pulse · AI Traffic weekly digest",
+      "recipients": "Recipients",
+      "placeholder": "client@example.com, boss@example.com",
+      "hint": "Comma-separated. Teammates who haven't saved their own e-mail choices still get this brand's e-mails as before: all of them while this list is empty, else only those on it.",
+      "frequency": "Daily Pulse",
+      "frequencyNote": "This also sets the brand's Slack channel and webhooks, and teammates who haven't saved their own choices.",
+      "digest": "Also send the AI Traffic weekly digest",
+      "digestPulseOff": "The weekly digest isn't sent while this Daily Pulse is off."
+    },
     "pulseFrequency_daily": "Daily",
     "pulseFrequency_weekly": "Weekly",
     "pulseFrequency_notable": "Only when notable",
-    "pulseFrequency_notableNote": "Your first pulse, then only when something notable happens.",
     "pulseFrequency_off": "Off",
-    "pulseRecipients": "Recipients",
-    "pulseRecipientsPlaceholder": "alex@example.com, sam@example.com",
-    "pulseRecipientsHint": "Comma-separated email addresses. Leave empty to send to every organization member.",
     "pulseRecipientsInvalid": "Not a valid email address: {emails}. Fix or remove it before saving.",
-    "trafficDigest": "AI Traffic weekly digest",
-    "trafficDigestDescription": "Every Monday: last week's AI visits in one summary line, with the top three changes. It goes to each brand's Daily Pulse recipients, and is saved as soon as you tick or untick it.",
-    "trafficDigestTo": "To {emails}",
-    "trafficDigestToEveryone": "To every organization member",
-    "trafficDigestPulseOff": "Not sent while the Daily Pulse is off. Turn the pulse back on to get it again.",
     "pulseSaved": "Notification settings saved",
     "pulseSaveFailed": "Could not save notification settings. Please try again.",
     "pulseLoadFailed": "Could not load notification settings.",

@@ -6,6 +6,7 @@ import { Check, Clock, ExternalLink, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { LoadingDots } from '@/components/ui/loading-dots';
+import { Skeleton } from '@/components/ui/skeleton';
 import { getSiteTrust } from '@/lib/actions/audits';
 import {
   SITE_TRUST_CHECKS,
@@ -96,11 +97,29 @@ export function SiteTrustCard({ brandId }: { brandId: string }) {
         </Button>
       </CardHeader>
       <CardContent className="pt-0">
+        {/* While it reads, its rows' place, so the lists below don't move when they come. */}
         {!trust && !failed && (
-          <p className="text-sm text-muted-foreground" role="status" aria-busy="true">
-            <LoadingDots />
+          <div role="status" aria-busy="true">
             <span className="sr-only">{t('loading')}</span>
-          </p>
+            <ul aria-hidden className="divide-y rounded-xl border">
+              {SITE_TRUST_CHECKS.map((check) => (
+                <li key={check} className="flex items-start gap-2.5 px-3 py-2.5">
+                  <Skeleton className="mt-0.5 h-4 w-4 shrink-0 rounded-full" />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex h-5 items-center">
+                      <Skeleton className="h-3.5 w-32" />
+                    </div>
+                    <div className="flex h-4 items-center">
+                      <Skeleton className="h-3 w-48 max-w-full" />
+                    </div>
+                  </div>
+                </li>
+              ))}
+            </ul>
+            <div className="mt-2 flex h-4 items-center">
+              <Skeleton className="h-3 w-40" />
+            </div>
+          </div>
         )}
         {failed && !trust && (
           <p className="text-sm text-destructive" role="alert">

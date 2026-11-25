@@ -1,6 +1,6 @@
 <div align="center">
 
-[![Ansvisor: Open-Source Agentic AI Search Execution Platform](.github/assets/ansvisor-readme-banner.png)](https://www.ansvisor.com)
+[![Ansvisor: The Open-Source AI Search Execution Platform to Win in ChatGPT, Gemini and Google AI](.github/assets/ansvisor-readme-banner.png)](https://www.ansvisor.com)
 
 [![🚀 Try the Cloud — ansvisor.com](https://img.shields.io/badge/🚀_Try_the_Cloud-ansvisor.com-6366f1?style=for-the-badge&logoColor=white&logo=vercel)](https://www.ansvisor.com)
 [![📚 Docs](https://img.shields.io/badge/📚_Docs-docs.ansvisor.com-10b981?style=for-the-badge&logoColor=white&logo=readthedocs)](https://docs.ansvisor.com)
@@ -9,11 +9,11 @@
 
 </div>
 
-# Ansvisor — Open-Source Agentic AI Search Execution Platform
+# Ansvisor — The Open-Source AI Search Execution Platform to Win in ChatGPT, Gemini and Google AI
 
 **[AI Visibility Platform](https://www.ansvisor.com/)** · **[Documentation](https://docs.ansvisor.com/)**
 
-**Business + AI Search Data → Signals → Actions → Agent-Drafted Fixes → AI Visibility Outcomes**
+**Track your AI visibility → get prioritized actions → approve agent-drafted fixes → measure the results**
 
 Ansvisor is an **open-source, agentic AI Search Execution Platform**. It shows how your brand appears in AI answers, finds where you can win, and turns that into work your team can ship. Agents find opportunities, turn signals into prioritized actions and draft the fixes. You approve what goes live.
 
@@ -53,8 +53,8 @@ With Ansvisor, you can:
 
 - [**AI Search Execution Platform**](https://www.ansvisor.com/platform) — Bring AI visibility, prompts, citations, competitors, AI traffic, content, and execution workflows together in one platform.
 - [**Action Center**](https://www.ansvisor.com/features/ai-search-actions-kpis-action-center) — Turn signals across your workspace and connected data sources into prioritized actions and tasks aligned with your AI Search KPIs. **Today** shows what changed overnight, your three focus actions and what waits for your OK; **Signals** lists what changed and **History** measures what each finished action did.
-- **Chat** — Ask questions about your data and do the work step by step. Chat reads the same data as every page, shows a live status line while it works, and asks before it changes anything. Approve changes in Chat or in Slack, and use **Approve all** when several agents changed the same draft.
-- **Agents** — Save a skill, mode and connections as an agent. Pick one from the ready-to-use catalog, run it on a schedule, on a signal, or with **Run now**, and, on Growth and up, let it call other agents. Agent work waits for your approval until an Admin allows otherwise.
+- [**Chat**](https://www.ansvisor.com/features/ai-agent-chat) — Ask questions about your data and do the work step by step. Chat reads the same data as every page, shows a live status line while it works, and asks before it changes anything. Approve changes in Chat or in Slack, and use **Approve all** when several agents changed the same draft.
+- [**Agents**](https://www.ansvisor.com/features/agent-center) — Save a skill, mode and connections as an agent. Pick one from the ready-to-use catalog, run it on a schedule, on a signal, or with **Run now**, and, on Growth and up, let it call other agents. Agent work waits for your approval until an Admin allows otherwise.
 - [**Agentic Content Editor**](https://www.ansvisor.com/features/agentic-content-editor) — The Content Agent writes and fixes pages from your prompts, query fan-outs, and cited pages, checks them against your brand facts and content rules (banned phrases, allowed and blocked sources), and waits for your approval before anything changes. Brand facts can apply to one destination, operator or route.
 - [**Answer Engine Insights & AI Visibility**](https://www.ansvisor.com/features/answer-engine-insights) — Track how your brand appears, performs, and is represented across leading AI platforms.
 - [**AI Brand Mentions & Sentiment**](https://www.ansvisor.com/features/ai-brand-mentions-sentiment) — See how AI platforms describe your brand: the exact quotes, the sentiment, and where you appear in each answer, compared with your competitors.
@@ -65,7 +65,7 @@ With Ansvisor, you can:
 - **Ads** (preview) — For each buying-intent prompt, decide whether to earn the AI answer with content, pay for an ad, or both. Ad drafts are written from your approved brand facts. Nothing is sent to an ad platform.
 - [**Query Fan-Out**](https://www.ansvisor.com/features/query-fan-out) — Explore the supporting queries AI systems may generate and use before producing an answer, per prompt and across the brand.
 - [**Content Intelligence & Optimization**](https://www.ansvisor.com/features/content-intelligence-optimization) — Identify content gaps, optimization opportunities, and topics based on AI Search behavior.
-- [**AI Visibility Site Audit**](https://www.ansvisor.com/features/ai-visibility-site-audit) — Analyze technical and content signals that can affect how AI systems discover, understand, and retrieve your website.
+- [**AI Visibility Site Audit**](https://www.ansvisor.com/features/site-audit) — Analyze technical and content signals that can affect how AI systems discover, understand, and retrieve your website.
 - [**MCP Server**](https://docs.ansvisor.com/guides/mcp-server) — Connect Ansvisor's AI Search intelligence with AI assistants and agent workflows through the Model Context Protocol (MCP). Claude and ChatGPT connect by signing in; other clients use an API key.
 
 The result is a clearer path from fragmented data to shipped improvements in AI visibility.
@@ -94,7 +94,7 @@ Whether you're an enterprise, agency, e-commerce brand, SaaS company, startup, o
 
 ## Supported AI Platforms
 
-Ansvisor helps you monitor and analyze brand visibility across:
+Ansvisor monitors and analyzes your brand's visibility, at affordable tracking prices, across:
 
 - [**ChatGPT AI Visibility Tracker**](https://www.ansvisor.com/features/chatgpt-visibility-tracker)
 - [**Google AI Overviews Rank Tracker**](https://www.ansvisor.com/features/google-ai-overviews-rank-tracker)
@@ -103,6 +103,13 @@ Ansvisor helps you monitor and analyze brand visibility across:
 - [**Claude AI Visibility Tracker**](https://www.ansvisor.com/features/claude-ai-visibility-tracker)
 - [**Grok AI Visibility Tracker**](https://www.ansvisor.com/features/grok-visibility-tracker)
 - [**ChatGPT AI Shopping Tracker**](https://www.ansvisor.com/features/ai-shopping-analytics)
+- [**Microsoft Copilot AI Visibility Tracker**](https://www.ansvisor.com/features/microsoft-copilot-visibility-tracker) (Soon)
+- [**Perplexity AI Visibility Tracker**](https://www.ansvisor.com/features/perplexity-visibility-tracker) (Soon)
+- [**Bing AI Mode Visibility Tracker**](https://www.ansvisor.com/features/bing-ai-mode-visibility-tracker) (Soon)
+- [**DeepSeek AI Visibility Tracker**](https://www.ansvisor.com/features/deepseek-visibility-tracker) (Soon)
+- [**Meta AI Visibility Tracker**](https://www.ansvisor.com/features/meta-ai-visibility-tracker) (Soon)
+- [**Naver AI Visibility Tracker**](https://www.ansvisor.com/features/naver-ai-visibility-tracker) (Soon)
+- [**ERNIE AI Visibility Tracker**](https://www.ansvisor.com/features/ernie-visibility-tracker) (Soon)
 - and other AI-powered discovery experiences
 
 ---
@@ -153,7 +160,7 @@ Deploy Ansvisor on your own infrastructure and maintain control over your enviro
 |---------|---------|--------------|
 | **Supabase** | Database, Auth, API | [supabase.com](https://supabase.com/) |
 | **AI Provider** (at least one) | Brand tracking across AI engines | [OpenAI](https://platform.openai.com/) / [Google Gemini](https://ai.google.dev/) / [Anthropic](https://console.anthropic.com/) |
-| **Cloro** | Web scraping for AI platform responses | [cloro.dev](https://cloro.dev/?utm_source=ansvisor&utm_medium=byok) |
+| **Cloro** or **Anakin** (one of them) | Asks the AI platforms (ChatGPT, Google AI Overviews, Gemini…) your prompts; pick one with `PLATFORM_PROVIDER` | [cloro.dev](https://cloro.dev/?utm_source=ansvisor&utm_medium=byok) / [anakin.io](https://anakin.io/?utm_source=ansvisor&utm_medium=byok) |
 
 ### Optional Services
 
