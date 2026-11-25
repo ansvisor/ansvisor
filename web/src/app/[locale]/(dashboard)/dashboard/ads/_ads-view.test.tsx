@@ -599,7 +599,9 @@ describe('AdsView', () => {
         expect(api.connectGoogleAds).toHaveBeenCalledWith('b1', ['1111111111']);
         expect(dialog()).toBeNull();
         expect(toast.success).toHaveBeenCalledWith('Connected 1 Google Ads account.');
-        expect(card('google').textContent).toContain('Account 1111-111-1111 · USDConnected');
+        expect(card('google').textContent).toContain(
+          'Account 1111-111-1111 · USDFirst read within a day: the last 90 daysConnected',
+        );
         expect(action('conn.google.connect', card('google'))?.textContent).toBe('Add account');
         expect(action('conn.google.disconnect', card('google'))).not.toBeNull();
       });
