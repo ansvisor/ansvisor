@@ -14,6 +14,14 @@
     "upgrade": "Mettre à niveau",
     "choosePlan": "Choisir un forfait"
   },
+  "metrics": {
+    "promptsAnswered": "{count, plural, one {# prompt avec réponses dans {period}} other {# prompts avec réponses dans {period}}}",
+    "period": {
+      "lastDays": "{days, plural, one {le dernier jour} other {les # derniers jours}}",
+      "all": "tout l'historique suivi",
+      "custom": "la période sélectionnée"
+    }
+  },
   "locationPicker": {
     "label": "Zones géographiques",
     "tracked": "suivi",
@@ -53,8 +61,8 @@
     "title": "Exécuter un seul Prompt",
     "description": "Choisissez un Prompt à tester. Seul ce Prompt sera exécuté sur vos plateformes activées.",
     "empty": "Aucun Prompt actif trouvé. Ajoutez d'abord des Prompts dans les paramètres de la marque.",
-    "loadFailed": "Échec du chargement des Prompts",
-    "runFailed": "Échec de l'exécution du Prompt"
+    "loadFailed": "Impossible de charger vos prompts. Réessayez.",
+    "runFailed": "Impossible d'exécuter le prompt. Réessayez."
   },
   "responseDetail": {
     "response": "Réponse de l'IA",
@@ -73,7 +81,9 @@
     "missing_ai_key": "Ajoutez d'abord une clé de fournisseur d'IA dans Paramètres › Fournisseurs d'IA.",
     "server_error": "Une erreur est survenue de notre côté. Réessayez.",
     "location_limit": "Les emplacements de Prompts de votre forfait sont complets : chaque Prompt compte une fois par emplacement suivi, et les Prompts en pause ne comptent pas. Supprimez-en ou mettez-en en pause, ou passez à un forfait supérieur.",
-    "brand_limit": "Toutes les marques de votre forfait sont utilisées. Passez à un forfait supérieur pour en ajouter."
+    "brand_limit": "Toutes les marques de votre forfait sont utilisées. Passez à un forfait supérieur pour en ajouter.",
+    "demo_brand": "Il s'agit de la marque de démonstration : ses données sont des données d'exemple, elles ne peuvent donc pas être modifiées ni exécutées. Effectuez la modification sur votre propre marque.",
+    "admin_required": "Seul un Administrateur peut faire cela. Demandez à un Administrateur de votre espace de travail."
   },
   "aiUsage": {
     "meter": {
@@ -383,6 +393,7 @@
       "setProductFeed": "Modifier les paramètres du flux de produits nécessite un forfait",
       "generateReports": "Générer des rapports nécessite un forfait",
       "deleteReports": "Supprimer des rapports nécessite un forfait",
+      "renameReports": "Renommer des rapports nécessite un forfait",
       "markTaskDone": "Marquer une tâche comme terminée nécessite un forfait",
       "attachFiles": "Joindre des fichiers nécessite un forfait",
       "startChat": "Démarrer une discussion nécessite un forfait",
@@ -502,7 +513,8 @@
       "companyName": "Nom de l'entreprise",
       "competitorsToTrack": "Concurrents à suivre",
       "finishingSetup": "Finalisation de la configuration...",
-      "competitorsTitle": "Concurrents"
+      "competitorsTitle": "Concurrents",
+      "saveCompetitorsFailed": "Impossible d'enregistrer les concurrents. Réessayez."
     },
     "prompts": {
       "removeTopic": "Supprimer le thème",
@@ -943,10 +955,13 @@
         "title": "Où vous en êtes",
         "change": "{change} depuis hier",
         "noChange": "aucun changement depuis hier",
-        "behind": "#{rank} sur {count} marques. {gap} points de retard sur {name}.",
-        "ahead": "N°1 sur {count} marques. {gap} points d'avance sur {name}.",
+        "behind": "n° {rank} sur {count} {set, select, rivals {avec vos principaux rivaux} competitors {avec des concurrents cités dans {min}+ prompts} other {marques}}. {gap} points derrière {name}.",
+        "ahead": "n° 1 sur {count} {set, select, rivals {avec vos principaux rivaux} competitors {avec des concurrents cités dans {min}+ prompts} other {marques}}. {gap} points devant {name}.",
         "alone": "Aucun concurrent n'a encore obtenu de score sur vos prompts.",
-        "none": "Aucun score pour le moment. Il s'affichera ici dès que vos dernières réponses IA seront évaluées."
+        "none": "Aucun score pour le moment. Il s'affichera ici dès que vos dernières réponses IA seront évaluées.",
+        "outOf": "/100",
+        "scoreLabel": "Score de Visibilité",
+        "run": "Depuis la dernière exécution, {date}"
       },
       "summary": {
         "changes": "{title} : {count, plural, =0 {aucun changement majeur} one {# changement} other {# changements}}",
@@ -961,6 +976,17 @@
           "rival": "Concurrent"
         },
         "actionAdded": "<link>Une action a été ajoutée</link>.",
+        "group": {
+          "competitor_leads": "{count} rivaux sont bien plus mentionnés que vous",
+          "competitor_momentum": "{count} rivaux progressent rapidement",
+          "competitor_surge": "La visibilité de {count} rivaux a bondi",
+          "competitor_crossed": "{count} rivaux ont dépassé votre visibilité",
+          "competitor_overtaken": "Vous avez dépassé {count} rivaux",
+          "other": "{title} et {more, plural, one {# modification similaire} other {# modifications similaires}}"
+        },
+        "groupActions": "{count, plural, one {# action} other {# actions}}",
+        "showGroup": "Afficher l'ensemble des {count}",
+        "hideGroup": "Masquer",
         "quiet": {
           "none": "Aucun changement majeur.",
           "held": "Aucun changement majeur. Votre score s'est maintenu à {score}.",
@@ -2034,11 +2060,13 @@
         "pill": "Inactif",
         "hint": "À l'état Nouveau depuis {days} jours ou plus, sans que personne n'y travaille",
         "quiet": "Aucune mise à jour depuis {days} j",
-        "notice": "Inactif : cette action est à l'état Nouveau depuis {days} jours ou plus et personne n'y a travaillé. Elle n'est pas fermée : conservez-la si elle est toujours pertinente, ou ignorez-la.",
-        "keep": "Toujours pertinent",
+        "notice": "Personne n'a travaillé dessus depuis {days} jours ou plus.",
+        "keep": "Conserver",
+        "keepHint": "Toujours pertinent : gardez-le ouvert, il ne sera plus considéré comme inactif",
+        "dismiss": "Ignorer",
         "kept": "Conservé : n'est plus inactif"
       },
-      "taskProgress": "{completed}/{total} tâches",
+      "taskProgress": "{completed}/{total} tâches terminées",
       "everyone": "Tout le monde",
       "everyoneTitle": "Tous les membres de l'espace de travail : aucun responsable n'est encore assigné",
       "tags": {
@@ -2090,6 +2118,16 @@
       "noResults": "Aucune action ne correspond à ces filtres.",
       "noOpen": "Aucune action ouverte. Les actions terminées et ignorées se trouvent sous Tous les statuts.",
       "showAllStatuses": "Afficher tous les statuts",
+      "summary": {
+        "open": "{count} ouvertes",
+        "closed": "{count} fermées cette semaine",
+        "closedHint": "Terminées ou ignorées au cours des {days} derniers jours. Cliquez pour les lister.",
+        "new": "{count} nouvelles depuis votre dernière visite"
+      },
+      "newMark": {
+        "label": "Nouveau",
+        "hint": "Créé depuis votre dernière visite"
+      },
       "error": {
         "title": "Impossible de charger vos actions.",
         "retry": "Réessayer"
@@ -2264,20 +2302,34 @@
       "drawer": {
         "actionId": "ID d'action",
         "previousCode": "Auparavant {code}",
+        "more": "Plus d'actions",
+        "priorityLine": "Priorité <b>{score}</b> · {level}",
+        "stats": {
+          "prompts": "{count, plural, one {prompt} other {prompts}}",
+          "pages": "{count, plural, one {page} other {pages}}",
+          "platforms": "{count, plural, one {plateforme} other {plateformes}}",
+          "competitors": "{count, plural, one {concurrent} other {concurrents}}",
+          "topics": "{count, plural, one {sujet} other {sujets}}"
+        },
         "tabs": {
           "overview": "Aperçu",
           "affected": "Affecté",
           "tasks": "Tâches",
           "signals": "Signaux",
-          "history": "Historique"
+          "history": "Historique",
+          "tasksProgress": "Tâches {completed}/{total}"
         },
         "why": "Pourquoi cette action ?",
         "goal": "Objectif",
+        "doneWhen": "Terminé quand",
+        "whatHappened": "Ce qui s'est passé",
         "kpis": "KPI",
         "kpiBrandGoal": "{timeframe, select, weekly {Objectif hebdomadaire de la marque} quarterly {Objectif trimestriel de la marque} other {Objectif mensuel de la marque}} : {target}",
         "noKpis": "Aucun KPI configuré n'est lié à cette action.",
         "support": "{count, plural, =0 {Plus aucun signal ouvert ne soutient cette action.} one {# signal soutient cette action} other {# signaux soutiennent cette action}}",
         "supportAll": "Tous les signaux ({count})",
+        "supportTimes": "×{count}",
+        "supportSame": "{count} signaux identiques : l'onglet Signaux les liste tous",
         "affected": {
           "prompts": "{count, plural, one {# prompt} other {# prompts}}",
           "pages": "{count, plural, one {# page} other {# pages}}",
@@ -2415,6 +2467,8 @@
         "assignee": "Responsable",
         "assignTo": "Attribuer à un membre de l'équipe",
         "dueDate": "Date d'échéance",
+        "noDueDate": "Aucune date d'échéance",
+        "addDueDate": "Ajouter une date d'échéance",
         "goalPassed": "Date d'objectif dépassée",
         "setNewDate": "Définir une nouvelle date",
         "statusLabel": "Statut",
@@ -4018,6 +4072,9 @@
         "inProgress": "En cours",
         "noImprovement": "Aucune amélioration",
         "dismissed": "Ignorée",
+        "onHold": "En attente",
+        "closed": "Actions clôturées",
+        "closedSub": "clôturées sur cette période",
         "ofTotal": "{percent} % du total"
       },
       "pagination": {
@@ -4265,6 +4322,13 @@
     "answerSub": "Une réponse issue du suivi programmé",
     "loading": "Chargement…",
     "answerFailed": "Cette réponse n'a pas pu être chargée."
+  },
+  "datePicker": {
+    "placeholder": "Choisir une date",
+    "previousMonth": "Mois précédent",
+    "nextMonth": "Mois suivant",
+    "today": "Aujourd'hui",
+    "clear": "Effacer"
   },
   "chatTools": {
     "profile": {
@@ -4673,6 +4737,10 @@
       "name": "Créer des Rapports",
       "step": "Rapport créé"
     },
+    "reportPresentation": {
+      "name": "Créer des présentations",
+      "step": "Présentation créée"
+    },
     "startAudit": {
       "name": "Lancer des Audits de site",
       "step": "Audit de site lancé"
@@ -4980,7 +5048,7 @@
     "runsTray": {
       "label": "Vos exécutions",
       "title": "Vos exécutions",
-      "button": "{count, plural, =0 {Exécutions} other {# en cours}}",
+      "button": "{count, plural, =0 {Exécutions · aucune en cours} other {Exécutions · # en cours}}",
       "needsYouTip": "{count, plural, one {# requiert votre attention} other {# requièrent votre attention}}",
       "summary": "{running} en cours · {needsYou, plural, one {# requiert votre attention} other {# requièrent votre attention}}",
       "summaryRunning": "{running} en cours",
@@ -5340,6 +5408,13 @@
       "notFiled": "Les images ont été générées mais n'ont pas pu être enregistrées dans Fichiers.",
       "providerOff": "Le fournisseur de {model} est désactivé pour cet espace de travail dans Paramètres › Chat. Choisissez un autre modèle d'image.",
       "providersOff": "Le fournisseur de chaque modèle d'image est désactivé pour cet espace de travail dans Paramètres › Chat, Chat ne peut donc pas générer d'images ici. Un Administrateur peut en activer un."
+    },
+    "presentations": {
+      "title": "Présentation · {title}",
+      "unavailable": "Les présentations ne sont pas disponibles ici.",
+      "notFound": "Ce rapport est introuvable. Affichez les rapports enregistrés, puis choisissez-en un.",
+      "storageFull": "L'espace de stockage de l'espace de travail est plein. Libérez de l'espace dans Fichiers, puis réessayez.",
+      "notFiled": "La présentation a été créée mais n'a pas pu être classée. Veuillez réessayer."
     },
     "error": {
       "noKey": "Chat ne dispose d'aucune clé IA pour fonctionner. Un Administrateur peut en ajouter une dans Paramètres › Fournisseurs d'IA.",
@@ -5973,6 +6048,7 @@
       "pdf": "PDF",
       "csv": "CSV",
       "xlsx": "Excel",
+      "pptx": "PowerPoint",
       "json": "JSON",
       "jsonld": "JSON-LD",
       "txt": "TXT",
@@ -6138,6 +6214,8 @@
     },
     "menu": {
       "label": "Menu du chat",
+      "clearGroup": "Effacer",
+      "clearGroupLabel": "{count, plural, one {Supprimer votre # discussion de {where}} other {Supprimer vos # discussions de {where}}}",
       "strip": "Raccourcis du menu du chat",
       "hide": "Masquer le menu du chat",
       "show": "Afficher le menu du chat",
@@ -6149,7 +6227,7 @@
       "toggleMenu": "Afficher ou masquer la section Menu",
       "home": "Accueil",
       "inbox": "Boîte de réception",
-      "inboxLabel": "Boîte de réception · {count, plural, one {# élément} other {# éléments}}",
+      "inboxLabel": "Boîte de réception · {needsYou, plural, one {# requiert votre attention} other {# requièrent votre attention}}",
       "inboxLabelNeedsYou": "Boîte de réception · {count, plural, one {# élément} other {# éléments}} · {needsYou, plural, one {# requiert votre attention} other {# requièrent votre attention}}",
       "skills": "Compétences",
       "activity": "Activité",
@@ -6204,6 +6282,7 @@
       "agents": "Agents",
       "agentsShort": "Agents",
       "agentsLabel": "Agents · dans le Centre d'actions",
+      "datedTitle": "{when} · ",
       "agentsTip": "Ouvre Centre d'actions › Agents, en dehors du Chat"
     },
     "actions": {
@@ -6246,7 +6325,12 @@
       "failed": "Impossible d'enregistrer cela. Réessayez.",
       "deleteTitle": "Supprimer cette discussion ?",
       "deleteBody": "« {name} » sera supprimé pour tout le monde. Les fichiers créés restent dans Fichiers. Tout agent en cours d'exécution sera d'abord arrêté.",
-      "cancel": "Annuler"
+      "cancel": "Annuler",
+      "clearTitle": "{count, plural, one {Supprimer # discussion de {where} ?} other {Supprimer # discussions de {where} ?}}",
+      "deleteManyTitle": "{count, plural, one {Supprimer # discussion ?} other {Supprimer # discussions ?}}",
+      "deleteManyBody": "Seules vos propres discussions sont supprimées ; les discussions partagées par vos coéquipiers sont conservées. Les fichiers créés restent dans Fichiers et les agents en cours d'exécution sont d'abord arrêtés. Vous pouvez annuler pendant quelques secondes, après quoi cette action sera définitive.",
+      "deleteMany": "{count, plural, one {Supprimer # discussion} other {Supprimer # discussions}}",
+      "deletedMany": "{count, plural, one {# discussion supprimée} other {# discussions supprimées}}"
     },
     "home": {
       "greeting": {
@@ -6753,6 +6837,7 @@
       "select": "Sélectionner la discussion",
       "selectFirst": "Sélectionnez des discussions pour les modifier ensemble",
       "archiveSelected": "Archiver la sélection",
+      "deleteSelected": "Supprimer la sélection",
       "unarchiveSelected": "Désarchiver la sélection",
       "archivedMany": "{count} archivées · retrouvez-les dans Archivées",
       "unarchivedMany": "{count} désarchivées · de retour dans Discussions",
@@ -7436,6 +7521,7 @@
       "sendToWebhook": "Page « {title} » envoyée à votre webhook",
       "takeDownFromCms": "Page « {title} » retirée de {cms}",
       "makeReport": "Rapport « {title} » généré",
+      "reportPresentation": "A créé la présentation « {title} »",
       "makeReportUndo": "Rapport « {title} » supprimé de Rapports",
       "startAudit": "Audit du site lancé sur {pages}",
       "makeImages": "Images « {title} » créées avec {model}",
@@ -8545,7 +8631,8 @@
       },
       "agency-reporter": {
         "name": "Rapporteur client pour agences",
-        "description": "Un rapport mensuel pour chaque marque cliente, destiné aux agences."
+        "description": "Un rapport mensuel pour chaque marque cliente, destiné aux agences.",
+        "instructions": "Générez un rapport sur le mois dernier, du 1er au dernier jour, comparé au mois précédent, au lieu d'une semaine. Rédigez-le pour la marque cliente : des termes simples, sans notes internes."
       },
       "paid-opportunity": {
         "name": "Opportunité payante",
@@ -10539,7 +10626,8 @@
       "doneCount": "{count, plural, one {Analyse terminée — # réponse enregistrée.} other {Analyse terminée — # réponses enregistrées.}}",
       "doneSoFar": "{count, plural, one {Presque terminé — # réponse déjà enregistrée, les autres arrivent.} other {Presque terminé — # réponses déjà enregistrées, les autres arrivent.}}",
       "failed": "Échec de la tâche : {reason}",
-      "unknownError": "Erreur inconnue"
+      "unknownError": "Erreur inconnue",
+      "startFailed": "Impossible de démarrer le suivi. Réessayez."
     },
     "runPrompts": "Exécuter les Prompts",
     "runPromptsNow": "Exécuter les Prompts maintenant",
@@ -10960,7 +11048,7 @@
       "compareHint": "Comparaison de la période sélectionnée avec la période précédente de même durée.",
       "allTimeHint": "Depuis le début. Il n'existe aucune période antérieure de même durée à comparer.",
       "lastVsPrevious": "{days, plural, one {Dernier # jour vs # jour précédent} many {Derniers # jours vs # jours précédents} other {Derniers # jours vs # jours précédents}}",
-      "loadFailed": "Échec du chargement de la répartition",
+      "loadFailed": "Impossible de charger la ventilation. Réessayez.",
       "allTime": "Depuis le début",
       "current": "Actuel {days} j",
       "noSamePrompt": "Aucun Prompt n'a reçu de réponse sur les deux périodes",
@@ -10998,9 +11086,9 @@
       "noCompetitorsTitle": "Aucun concurrent suivi pour l'instant",
       "noCompetitorsBody": "Ajoutez des concurrents pour voir comment vous vous situez dans les réponses de l'IA.",
       "headToHead": "Comparaison face à face",
-      "loadFailed": "Échec du chargement des insights — veuillez réessayer",
+      "loadFailed": "Impossible de charger les insights. Réessayez.",
       "exportCapped": "Export limité à 50 000 lignes pour éviter les problèmes de mémoire",
-      "exportFailed": "Échec de l'export CSV",
+      "exportFailed": "Impossible d'exporter le CSV. Réessayez.",
       "noTrend": "Aucune donnée de tendance disponible pour l'instant",
       "yourBrand": "Votre marque",
       "avgCompetitor": "Concurrent moy.",
@@ -11099,6 +11187,8 @@
       "selectBrand": "Sélectionnez une marque pour voir son plan de contenu.",
       "period": "Période",
       "periods": "{days} derniers jours",
+      "periodLast": "Derniers",
+      "periodDays": "{days} jours",
       "newContent": "Nouveau contenu",
       "cards": {
         "create": {
@@ -14004,6 +14094,13 @@
     "description": "Recommandations de Contenu générées par l'IA pour améliorer votre Visibilité dans les réponses générées par l'IA.",
     "opportunities": "Opportunités",
     "autoGeneratedHint": "Les opportunités sont générées automatiquement à mesure que vos données de suivi arrivent.",
+    "flowNote": {
+      "coveredTitle": "Chaque besoin suivi dispose déjà d'une opportunité ; les exécutions nocturnes n'en ajoutent donc aucune.",
+      "coveredHint": "Pour en obtenir plus, <prompts>ajoutez des prompts</prompts> pour de nouvelles questions, marquez les opportunités terminées comme Faites ou utilisez + Nouveau pour un autre angle.",
+      "coveredHintReadOnly": "De nouvelles opportunités apparaîtront lorsque des <prompts>prompts</prompts> pour de nouvelles questions seront ajoutés ou que les opportunités terminées seront marquées comme Faites.",
+      "limitTitle": "Les nouvelles opportunités de ce mois sont épuisées. Les exécutions nocturnes en ajouteront à nouveau à partir du {date}.",
+      "limitTitleNoDate": "Les nouvelles opportunités de ce mois sont épuisées. Les exécutions nocturnes en ajouteront à nouveau lors du renouvellement de votre forfait."
+    },
     "generating": "Génération en cours…",
     "sendToWorkflow": "Envoyer vers le Workflow",
     "generateBrief": "Créer le brief",
@@ -14356,7 +14453,8 @@
       "setupFirst": "Configurez un webhook pour envoyer des opportunités à vos outils de workflow.",
       "urlRequired": "L'URL du webhook est obligatoire",
       "urlRequiredTest": "Saisissez d'abord une URL de webhook",
-      "saveError": "Échec de l'enregistrement de la configuration du webhook"
+      "saveError": "Échec de l'enregistrement de la configuration du webhook",
+      "testNotRun": "Le test ne s'est pas exécuté. Réessayez."
     },
     "loadError": "Échec du chargement des opportunités de Contenu",
     "exportError": "Échec de l'exportation des opportunités",
@@ -15001,7 +15099,8 @@
         "trackNotAllowed": "Seuls les administrateurs et les gestionnaires peuvent ajouter des prompts.",
         "failed": "Impossible de charger ces requêtes.",
         "noData": "Google Search Console n'a pas encore de requêtes pour cette marque.",
-        "empty": "Toutes les requêtes Google avec des clics sur cette période sont suivies."
+        "empty": "Toutes les requêtes Google avec des clics sur cette période sont suivies.",
+        "trackFailed": "Impossible de suivre ces requêtes. Réessayez."
       }
     },
     "summaryLine": {
@@ -16150,7 +16249,8 @@
       "save": "Ajouter à {count, plural, one {# prompt} other {# prompts}}",
       "removeSave": "Supprimer de {count, plural, one {# prompt} other {# prompts}}",
       "done": "{count, plural, one {# prompt étiqueté} other {# prompts étiquetés}}",
-      "removed": "{count, plural, one {Tags supprimés de # prompt} other {Tags supprimés de # prompts}}"
+      "removed": "{count, plural, one {Tags supprimés de # prompt} other {Tags supprimés de # prompts}}",
+      "saveFailed": "Impossible d'enregistrer les tags. Réessayez."
     },
     "bulkDelete": {
       "progress": "Suppression de {done} sur {total} prompts…",
@@ -16848,7 +16948,18 @@
     "windowLastDays": "{days, plural, one {Les scores couvrent le dernier jour.} other {Les scores couvrent les # derniers jours.}}",
     "windowAllTime": "Les scores couvrent tout l'historique suivi.",
     "windowSelectedRange": "Les scores reflètent la période sélectionnée.",
+    "card": {
+      "prompts": "{visible}/{count} prompts",
+      "scoreTip": "Mentionné dans {mentionAnswers} réponses · cité dans {citationAnswers} · facteur de position {position} · {mentions} mentions · {citations} citations"
+    },
     "selected": "Sélectionné",
+    "rank": {
+      "short": "N° {rank}",
+      "label": "Rang {rank} selon le score de Visibilité",
+      "you": "Vous",
+      "lowSample": "Échantillon faible",
+      "lowSampleTip": "Cité dans moins de 10 prompts sur cette période : pas encore classé."
+    },
     "noData": "Aucune donnée",
     "emptyTitle": "Aucun concurrent pour l'instant",
     "emptyDescription": "Ajoutez des domaines concurrents pour comparer leur visibilité IA à la vôtre sur l'ensemble des plateformes d'IA.",
@@ -16898,7 +17009,7 @@
     },
     "merge": {
       "open": "Fusionner",
-      "openHint": "Fusionner les concurrents qui représentent la même entreprise",
+      "openHint": "Fusionner les concurrents en double (ex. deux domaines d'une même marque)",
       "title": "Fusionner des concurrents",
       "description": "Sélectionnez les concurrents qui représentent la même entreprise, puis celui à conserver.",
       "pickLabel": "Même entreprise",
@@ -16971,6 +17082,11 @@
       "noDataTitle": "Aucune donnée de comparaison",
       "noDataDescription": "Lancez une vérification de suivi depuis Visibilité pour générer des données de comparaison pour ce concurrent.",
       "loadError": "Échec du chargement des données de comparaison.",
+      "gapCreateAction": "Créer une action",
+      "gapAskChat": "Demander au Chat",
+      "gapPanelTip": "Ouvre le Chat avec cet écart prérempli, prêt à être envoyé",
+      "gapCreateText": "Envoyer cet écart au Centre d'actions comme action, avec les tâches pour le combler : {competitor} obtient {them} et nous obtenons {you} sur le prompt « {prompt} » ({count, plural, one {plateforme} other {plateformes}} : {platforms}).",
+      "gapAskText": "Pourquoi {competitor} obtient-il {them} et nous {you} sur le prompt « {prompt} » ({count, plural, one {plateforme} other {plateformes}} : {platforms}) ? Que devrions-nous modifier en premier ?",
       "promptCounts": "{engines, plural, one {# plateforme} other {# plateformes}} · {runs, plural, one {# exécution} other {# exécutions}}",
       "engineCounts": "{locations, plural, one {# localisation} other {# localisations}} · {runs, plural, one {# exécution} other {# exécutions}}",
       "runs": "{count, plural, one {# exécution} other {# exécutions}}",
@@ -17153,9 +17269,9 @@
       "byCompetitor": "Par concurrent",
       "howItWorks": "Comment ça marche",
       "lowVisibility": "Votre visibilité est faible sur cette période, cette liste peut donc être large : concentrez-vous d'abord sur la visibilité de base.",
-      "loadFailedToast": "Échec du chargement des données de citations",
-      "checkFailedToast": "Échec de la vérification des données de citation",
-      "exportFailed": "Échec de l'exportation du CSV",
+      "loadFailedToast": "Impossible de charger les données de citations. Réessayez.",
+      "checkFailedToast": "Impossible de vérifier les données de citations. Réessayez.",
+      "exportFailed": "Impossible d'exporter le CSV. Réessayez.",
       "typesNotExportable": "Les types de sources sont une répartition graphique et ne peuvent pas être exportés. Passez à Domaines, URL ou Écarts concurrents pour exporter.",
       "tabGaps": "Écarts concurrents"
     }
@@ -17677,6 +17793,10 @@
   "reports": {
     "impactLink": "Ce qu'Ansvisor a fait pour vous",
     "impact": {
+      "firstShip": {
+        "title": "Rien n'a encore été publié pour cette marque",
+        "body": "Ce rapport se remplira après votre premier Envoi vers le CMS ou la première mise en ligne d'un agent."
+      },
       "title": "Ce qu'Ansvisor a fait pour vous",
       "subtitle": "{brand} · actions déployées mesurées par rapport à des Prompts similaires inchangés",
       "subtitleNoBrand": "Actions déployées mesurées par rapport à des Prompts similaires inchangés",
@@ -17862,6 +17982,15 @@
     "deleteConfirm": "Supprimer ce rapport ?",
     "deleteFailed": "Échec de la suppression du rapport",
     "rowMenuLabel": "Plus d'actions pour {title}",
+    "rename": {
+      "item": "Renommer",
+      "title": "Renommer le rapport",
+      "description": "Seul le nom change : les chiffres du rapport restent inchangés.",
+      "label": "Nom du rapport",
+      "save": "Enregistrer",
+      "done": "Rapport renommé",
+      "failed": "Impossible de renommer le rapport. Réessayez."
+    },
     "copyLink": "Copier le lien",
     "linkCopied": "Lien copié. Il ouvre le rapport pour les membres de votre espace de travail.",
     "copyLinkFailed": "Impossible de copier le lien. Ouvrez le rapport et copiez plutôt son adresse.",
@@ -17907,6 +18036,12 @@
     "selectSections": "Choisissez au moins une section",
     "dialogTitle": "Générer un rapport",
     "dialogDescription": "Capturez la Visibilité IA de votre marque sur une période, avec une synthèse rédigée par l'IA.",
+    "dateRangeHint": "Défini par le modèle ; modifiez-le ici.",
+    "duplicate": {
+      "line": "Même période qu'un rapport existant, « {title} ». L'ouvrir ?",
+      "open": "L'ouvrir",
+      "anyway": "Générer quand même"
+    },
     "reportTitleLabel": "Titre (facultatif)",
     "reportTitlePlaceholder": "ex. Synthèse du T2",
     "presets": {
@@ -17973,7 +18108,7 @@
     "worstPrompts": "Prompts les plus faibles",
     "queryFanout": "Fan-out des requêtes",
     "queryFanoutDescription": "Sous-requêtes que les moteurs de réponse ont réellement exécutées en répondant à vos Prompts suivis.",
-    "fanoutCoverage": "{queries} sous-requêtes distinctes sur {answers} réponses",
+    "fanoutCoverage": "{queries, number} sous-requêtes distinctes sur {answers, number} réponses",
     "loadReportFailed": "Impossible de charger ce rapport.",
     "notFound": "Rapport introuvable.",
     "backToReports": "Retour aux Rapports",
@@ -17993,13 +18128,17 @@
     "shareOfVoice": "Part de voix",
     "competitorLeaderboard": "Classement des concurrents",
     "topCitationSources": "Principales sources de citations",
-    "citationTotals": "{domains} domaines · {citations} citations sur cette période",
+    "citationTotals": "{domains, number} domaines · {citations, number} citations sur cette période",
     "noData": "Aucune donnée pour cette période.",
     "you": "(vous)",
     "kpiCitationsNote": "« Citations de la marque » compte les Citations de votre propre site dans les réponses de l'IA.",
+    "leaderboardRankNote": "Classé par score de Visibilité. Les marques citées dans moins de {min} prompts apparaissent en fin de liste sous « Échantillon faible ».",
+    "lowSample": "Échantillon faible",
+    "lowSampleTip": "Citée dans moins de {min} prompts sur cette période : trop peu de réponses pour établir un classement.",
     "citationsSectionNote": "Toutes les sources citées par les réponses de l'IA autour de votre marque — pas seulement votre propre site.",
     "mentionEvidence": "Preuves de Mentions",
     "mentionEvidenceDescription": "Les réponses qui vous ont le plus mentionné au cours de cette période, avec l'extrait entourant la mention.",
+    "newestFirst": "Les plus récents d'abord.",
     "citationEvidence": "Preuves de Citations",
     "citationEvidenceDescription": "Les URL les plus citées par les réponses de l'IA au cours de cette période, ainsi que les Prompts suivis qui les ont fait remonter."
   },
@@ -18283,10 +18422,36 @@
       "hint": "La langue des écrans d'Ansvisor, pour vous uniquement. La langue du contenu de vos marques ne change pas.",
       "loading": "Chargement des langues…",
       "moreSoon": "D'autres langues arrivent bientôt.",
-      "preview": "Les membres de l'équipe et les versions de test voient aussi les langues qui n'ont pas encore de traduction, ainsi qu'une langue de test avec des textes plus longs. L'anglais s'affiche lorsqu'un texte est manquant.",
+      "preview": "L'équipe interne et les versions de test ont également accès aux langues non encore traduites. L'anglais est affiché lorsque la traduction est manquante.",
       "testLanguage": "{language} · test",
       "saved": "Langue enregistrée",
-      "saveFailed": "Impossible d'enregistrer votre langue. Veuillez réessayer."
+      "saveFailed": "Impossible d'enregistrer votre langue. Veuillez réessayer.",
+      "suggest": {
+        "link": "Suggérer une meilleure traduction",
+        "title": "Suggérer une meilleure traduction",
+        "description": "Indiquez-nous ce qui semble incorrect et ce que vous proposeriez. Notre équipe examine chaque suggestion.",
+        "language": "Langue",
+        "screen": "Écran",
+        "current": "Texte actuel",
+        "currentPlaceholder": "Saisissez ou collez le texte, ou sélectionnez-le à l'écran",
+        "pick": "Sélectionner à l'écran",
+        "picking": "Cliquez sur le texte que vous souhaitez modifier. Appuyez sur Échap pour annuler.",
+        "better": "Votre proposition",
+        "note": "Remarque (facultatif)",
+        "notePlaceholder": "Pourquoi cette version est meilleure, ou où elle apparaît",
+        "cancel": "Annuler",
+        "send": "Envoyer la suggestion",
+        "sent": "Merci ! Votre suggestion a bien été transmise à notre équipe.",
+        "errors": {
+          "locale": "Les suggestions sont réservées aux langues autres que l'anglais.",
+          "currentText": "Ajoutez le texte tel qu'il apparaît actuellement.",
+          "suggestion": "Ajoutez votre proposition de traduction.",
+          "same": "Votre proposition est identique au texte actuel.",
+          "tooLong": "Ce texte est trop long. Veillez à ne pas dépasser 1 000 caractères par texte.",
+          "tooMany": "Vous avez envoyé beaucoup de suggestions aujourd'hui. Réessayez demain.",
+          "server": "Impossible d'envoyer votre suggestion. Réessayez."
+        }
+      }
     },
     "save": "Enregistrer les modifications",
     "saved": "Modifications enregistrées !",
@@ -18604,6 +18769,8 @@
       "aiUsageHint": "Un forfait mensuel pour les fonctionnalités IA d'Ansvisor : suggestions d'amélioration, l'IA de l'éditeur de Contenu et la rédaction de tâches du Centre d'actions. Le Chat d'agents fonctionne avec votre propre clé IA. L'essai gratuit comprend un forfait plus réduit.",
       "aiUsageCustomHint": "Un forfait mensuel pour les fonctionnalités IA d'Ansvisor : suggestions d'amélioration, l'IA de l'éditeur de Contenu et la rédaction de tâches du Centre d'actions. Le Chat d'agents fonctionne avec votre propre clé IA. Ansvisor définit ce montant avec vous.",
       "aiUsageHintChat": "Un forfait mensuel pour les fonctionnalités IA d'Ansvisor : Chat et agents, suggestions d'amélioration, l'IA de l'éditeur de Contenu et la rédaction de tâches du Centre d'actions. L'utilisation de votre propre clé IA est réservée à l'offre Enterprise. L'essai gratuit comprend un forfait plus réduit.",
+      "contentEstimate": "Jusqu'à {pages, number} nouvelles pages ou {optimizations, number} optimisations de page par mois",
+      "contentEstimateHint": "Utilise votre quota mensuel d'IA, partagé avec le Chat et les agents. Le volume réel varie selon la longueur des pages et le modèle d'IA sélectionné.",
       "aiUsageCustomHintChat": "Un forfait mensuel pour les fonctionnalités IA d'Ansvisor : Chat et agents, suggestions d'amélioration, l'IA de l'éditeur de Contenu et la rédaction de tâches du Centre d'actions. Sur Enterprise, le Chat peut également fonctionner avec votre propre clé IA. Ansvisor définit ce montant avec vous."
     },
     "contactUs": "Nous contacter",
@@ -20269,6 +20436,26 @@
       "crm": "CRM et revenus",
       "team": "Équipe et données"
     }
+  },
+  "translationSuggestionsAdmin": {
+    "title": "Suggestions de traduction",
+    "description": "Équipe Ansvisor uniquement. Suggestions pour améliorer les traductions de l'interface. L'acceptation ne fait que marquer la suggestion : mettez à jour la chaîne dans le fichier de la langue sous web/messages ainsi que le glossaire en réexécutant web/scripts/translate-messages.mjs. Aucun nom ni adresse e-mail n'est affiché.",
+    "empty": "Aucune nouvelle suggestion.",
+    "columns": {
+      "date": "Date",
+      "language": "Langue",
+      "screen": "Écran",
+      "current": "Texte actuel",
+      "suggestion": "Suggestion",
+      "note": "Note",
+      "actions": "Examiner"
+    },
+    "key": "Clé : {key}",
+    "accept": "Accepter",
+    "reject": "Rejeter",
+    "accepted": "Marqué comme accepté",
+    "rejected": "Rejeté",
+    "failed": "Impossible d'enregistrer. L'élément a peut-être déjà été examiné."
   },
   "reportCardAdmin": {
     "title": "Bulletins gratuits",

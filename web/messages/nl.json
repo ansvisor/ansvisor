@@ -14,6 +14,14 @@
     "upgrade": "Upgraden",
     "choosePlan": "Kies een abonnement"
   },
+  "metrics": {
+    "promptsAnswered": "{count, plural, one {# prompt met antwoorden in {period}} other {# prompts met antwoorden in {period}}}",
+    "period": {
+      "lastDays": "{days, plural, one {de afgelopen dag} other {de afgelopen # dagen}}",
+      "all": "de hele gevolgde geschiedenis",
+      "custom": "het geselecteerde bereik"
+    }
+  },
   "locationPicker": {
     "label": "Locaties",
     "tracked": "gevolgd",
@@ -53,8 +61,8 @@
     "title": "Enkele Prompt uitvoeren",
     "description": "Kies een Prompt om te testen. Alleen deze Prompt wordt uitgevoerd op uw ingeschakelde platforms.",
     "empty": "Geen actieve Prompts gevonden. Voeg eerst Prompts toe in de merkinstellingen.",
-    "loadFailed": "Prompts laden mislukt",
-    "runFailed": "Prompt uitvoeren mislukt"
+    "loadFailed": "Kan uw prompts niet laden. Probeer het opnieuw.",
+    "runFailed": "Kan de prompt niet uitvoeren. Probeer het opnieuw."
   },
   "responseDetail": {
     "response": "AI-antwoord",
@@ -73,7 +81,9 @@
     "missing_ai_key": "Voeg eerst een AI-providersleutel toe via Instellingen › AI-providers.",
     "server_error": "Er is iets misgegaan aan onze kant. Probeer het opnieuw.",
     "location_limit": "De Prompt-locaties van uw abonnement zijn vol: elke Prompt telt één keer per locatie die wordt gevolgd, en gepauzeerde Prompts tellen niet mee. Verwijder of pauzeer er een aantal, of upgrade uw abonnement.",
-    "brand_limit": "De merken van uw abonnement zijn allemaal in gebruik. Upgrade uw abonnement om er meer toe te voegen."
+    "brand_limit": "De merken van uw abonnement zijn allemaal in gebruik. Upgrade uw abonnement om er meer toe te voegen.",
+    "demo_brand": "Dit is het demomerk: de gegevens zijn voorbeeldgegevens en kunnen niet worden gewijzigd of uitgevoerd. Pas de wijziging toe op uw eigen merk.",
+    "admin_required": "Alleen een Beheerder kan dit doen. Vraag een Beheerder van uw workspace."
   },
   "aiUsage": {
     "meter": {
@@ -383,6 +393,7 @@
       "setProductFeed": "De productfeed-instelling wijzigen vereist een abonnement",
       "generateReports": "Rapporten genereren vereist een abonnement",
       "deleteReports": "Rapporten verwijderen vereist een abonnement",
+      "renameReports": "Voor het hernoemen van rapporten is een abonnement vereist",
       "markTaskDone": "Een taak als voltooid markeren vereist een abonnement",
       "attachFiles": "Bestanden bijvoegen vereist een abonnement",
       "startChat": "Een chat starten vereist een abonnement",
@@ -502,7 +513,8 @@
       "companyName": "Bedrijfsnaam",
       "competitorsToTrack": "Te volgen concurrenten",
       "finishingSetup": "Instellen voltooien...",
-      "competitorsTitle": "Concurrenten"
+      "competitorsTitle": "Concurrenten",
+      "saveCompetitorsFailed": "Kan de concurrenten niet opslaan. Probeer het opnieuw."
     },
     "prompts": {
       "removeTopic": "Onderwerp verwijderen",
@@ -943,10 +955,13 @@
         "title": "Hoe u ervoor staat",
         "change": "{change} sinds gisteren",
         "noChange": "geen wijziging sinds gisteren",
-        "behind": "#{rank} van {count} merken. {gap} punten achter op {name}.",
-        "ahead": "#1 van {count} merken. {gap} punten voor op {name}.",
+        "behind": "#{rank} van {count} {set, select, rivals {met uw belangrijkste rivalen} competitors {met concurrenten genoemd in {min}+ prompts} other {merken}}. {gap} punten achter op {name}.",
+        "ahead": "#1 van {count} {set, select, rivals {met uw belangrijkste rivalen} competitors {met concurrenten genoemd in {min}+ prompts} other {merken}}. {gap} punten voor op {name}.",
         "alone": "Er heeft nog geen concurrent gescoord op uw Prompts.",
-        "none": "Nog geen score. Deze verschijnt hier zodra uw nieuwste AI-antwoorden zijn beoordeeld."
+        "none": "Nog geen score. Deze verschijnt hier zodra uw nieuwste AI-antwoorden zijn beoordeeld.",
+        "outOf": "/100",
+        "scoreLabel": "Zichtbaarheidsscore",
+        "run": "Van de laatste run, {date}"
       },
       "summary": {
         "changes": "{title}: {count, plural, =0 {geen grote wijzigingen} one {# wijziging} other {# wijzigingen}}",
@@ -961,6 +976,17 @@
           "rival": "Concurrent"
         },
         "actionAdded": "<link>Er is een actie toegevoegd</link>.",
+        "group": {
+          "competitor_leads": "{count} rivalen worden veel vaker genoemd dan u",
+          "competitor_momentum": "{count} rivalen winnen snel terrein",
+          "competitor_surge": "Zichtbaarheid van {count} rivalen sterk gestegen",
+          "competitor_crossed": "{count} rivalen hebben uw zichtbaarheid ingehaald",
+          "competitor_overtaken": "U heeft {count} rivalen ingehaald",
+          "other": "{title} en {more, plural, one {# vergelijkbare verandering} other {# vergelijkbare veranderingen}}"
+        },
+        "groupActions": "{count, plural, one {# actie} other {# acties}}",
+        "showGroup": "Toon alle {count}",
+        "hideGroup": "Verbergen",
         "quiet": {
           "none": "Geen grote wijzigingen.",
           "held": "Geen grote wijzigingen. Uw score bleef gelijk op {score}.",
@@ -2034,11 +2060,13 @@
         "pill": "Verouderd",
         "hint": "Al {days} dagen of langer nieuw, zonder dat er iemand aan werkt",
         "quiet": "Al {days} d geen update",
-        "notice": "Verouderd: deze actie staat al {days} dagen of langer op Nieuw en niemand heeft eraan gewerkt. Deze is niet gesloten: behoud deze als het nog relevant is, of wijs deze af.",
-        "keep": "Nog steeds relevant",
+        "notice": "Niemand heeft hier {days} dagen of langer aan gewerkt.",
+        "keep": "Behouden",
+        "keepHint": "Nog steeds relevant: openhouden, zodat het niet langer verouderd is",
+        "dismiss": "Negeren",
         "kept": "Behouden: niet meer verouderd"
       },
-      "taskProgress": "{completed}/{total} taken",
+      "taskProgress": "{completed}/{total} taken voltooid",
       "everyone": "Iedereen",
       "everyoneTitle": "Iedereen in de werkruimte: er is nog niemand toegewezen",
       "tags": {
@@ -2090,6 +2118,16 @@
       "noResults": "Er zijn geen acties die overeenkomen met deze filters.",
       "noOpen": "Geen open acties. Voltooide en afgewezen acties vindt u onder Alle statussen.",
       "showAllStatuses": "Alle statussen tonen",
+      "summary": {
+        "open": "{count} open",
+        "closed": "{count} gesloten deze week",
+        "closedHint": "Voltooid of genegeerd in de afgelopen {days} dagen. Klik om ze weer te geven.",
+        "new": "{count} nieuw sinds uw laatste bezoek"
+      },
+      "newMark": {
+        "label": "Nieuw",
+        "hint": "Aangemaakt sinds uw laatste bezoek"
+      },
       "error": {
         "title": "We konden uw acties niet laden.",
         "retry": "Opnieuw proberen"
@@ -2264,20 +2302,34 @@
       "drawer": {
         "actionId": "Actie-ID",
         "previousCode": "Eerder {code}",
+        "more": "Meer acties",
+        "priorityLine": "Prioriteit <b>{score}</b> · {level}",
+        "stats": {
+          "prompts": "{count, plural, one {prompt} other {prompts}}",
+          "pages": "{count, plural, one {pagina} other {pagina's}}",
+          "platforms": "{count, plural, one {platform} other {platforms}}",
+          "competitors": "{count, plural, one {concurrent} other {concurrenten}}",
+          "topics": "{count, plural, one {onderwerp} other {onderwerpen}}"
+        },
         "tabs": {
           "overview": "Overzicht",
           "affected": "Betroffen",
           "tasks": "Taken",
           "signals": "Signalen",
-          "history": "Geschiedenis"
+          "history": "Geschiedenis",
+          "tasksProgress": "Taken {completed}/{total}"
         },
         "why": "Waarom deze actie?",
         "goal": "Doel",
+        "doneWhen": "Klaar wanneer",
+        "whatHappened": "Wat er is gebeurd",
         "kpis": "KPI's",
         "kpiBrandGoal": "{timeframe, select, weekly {Wekelijks merkdoel} quarterly {Kwartaaldoel van het merk} other {Maandelijks merkdoel}}: {target}",
         "noKpis": "Er zijn geen geconfigureerde KPI's gekoppeld aan deze actie.",
         "support": "{count, plural, =0 {Geen enkel open signaal ondersteunt deze actie meer.} one {# signaal ondersteunt deze actie} other {# signalen ondersteunen deze actie}}",
         "supportAll": "Alle signalen ({count})",
+        "supportTimes": "×{count}",
+        "supportSame": "{count} signalen met dezelfde strekking: het tabblad Signalen toont ze allemaal",
         "affected": {
           "prompts": "{count, plural, one {# Prompt} other {# Prompts}}",
           "pages": "{count, plural, one {# pagina} other {# pagina's}}",
@@ -2415,6 +2467,8 @@
         "assignee": "Toegewezen aan",
         "assignTo": "Toewijzen aan teamlid",
         "dueDate": "Vervaldatum",
+        "noDueDate": "Geen vervaldatum",
+        "addDueDate": "Vervaldatum toevoegen",
         "goalPassed": "Doeldatum verstreken",
         "setNewDate": "Nieuwe datum instellen",
         "statusLabel": "Status",
@@ -4014,6 +4068,9 @@
         "inProgress": "In behandeling",
         "noImprovement": "Geen verbetering",
         "dismissed": "Afgewezen",
+        "onHold": "In de wacht",
+        "closed": "Gesloten acties",
+        "closedSub": "gesloten in deze periode",
         "ofTotal": "{percent}% van totaal"
       },
       "pagination": {
@@ -4261,6 +4318,13 @@
     "answerSub": "Een antwoord van geplande tracking",
     "loading": "Laden…",
     "answerFailed": "Dit antwoord kon niet worden geladen."
+  },
+  "datePicker": {
+    "placeholder": "Kies een datum",
+    "previousMonth": "Vorige maand",
+    "nextMonth": "Volgende maand",
+    "today": "Vandaag",
+    "clear": "Wissen"
   },
   "chatTools": {
     "profile": {
@@ -4669,6 +4733,10 @@
       "name": "Rapporten maken",
       "step": "Rapport gemaakt"
     },
+    "reportPresentation": {
+      "name": "Presentaties maken",
+      "step": "Presentatie gemaakt"
+    },
     "startAudit": {
       "name": "Site-audits starten",
       "step": "Site-audit gestart"
@@ -4976,7 +5044,7 @@
     "runsTray": {
       "label": "Uw runs",
       "title": "Uw runs",
-      "button": "{count, plural, =0 {Runs} other {# actief}}",
+      "button": "{count, plural, =0 {Runs · geen actief} other {Runs · # actief}}",
       "needsYouTip": "{count, plural, one {# heeft uw aandacht nodig} other {# hebben uw aandacht nodig}}",
       "summary": "{running} actief · {needsYou, plural, one {# heeft uw aandacht nodig} other {# hebben uw aandacht nodig}}",
       "summaryRunning": "{running} actief",
@@ -5336,6 +5404,13 @@
       "notFiled": "De afbeeldingen zijn gemaakt, maar konden niet worden opgeslagen in Bestanden.",
       "providerOff": "De maker van {model} is uitgeschakeld voor deze werkruimte via Instellingen › Chat. Kies een ander afbeeldingsmodel.",
       "providersOff": "De maker van elk afbeeldingsmodel is uitgeschakeld voor deze werkruimte via Instellingen › Chat, waardoor Chat hier geen afbeeldingen kan maken. Een Beheerder kan er een inschakelen."
+    },
+    "presentations": {
+      "title": "Presentatie · {title}",
+      "unavailable": "Presentaties zijn hier niet beschikbaar.",
+      "notFound": "Dat rapport is niet gevonden. Bekijk de opgeslagen rapporten en kies er een.",
+      "storageFull": "De opslagruimte van de werkruimte is vol. Maak ruimte vrij in Bestanden en probeer het opnieuw.",
+      "notFiled": "De presentatie is gemaakt, maar kon niet worden opgeslagen. Probeer het opnieuw."
     },
     "error": {
       "noKey": "Chat heeft geen AI-sleutel om op te draaien. Een Beheerder kan er een toevoegen via Instellingen › AI-providers.",
@@ -5969,6 +6044,7 @@
       "pdf": "PDF",
       "csv": "CSV",
       "xlsx": "Excel",
+      "pptx": "PowerPoint",
       "json": "JSON",
       "jsonld": "JSON-LD",
       "txt": "TXT",
@@ -6134,6 +6210,8 @@
     },
     "menu": {
       "label": "Chatmenu",
+      "clearGroup": "Wissen",
+      "clearGroupLabel": "{count, plural, one {Verwijder uw # chat uit {where}} other {Verwijder uw # chats uit {where}}}",
       "strip": "Sneltoetsen chatmenu",
       "hide": "Chatmenu verbergen",
       "show": "Chatmenu tonen",
@@ -6145,7 +6223,7 @@
       "toggleMenu": "Het menu tonen of verbergen",
       "home": "Home",
       "inbox": "Inbox",
-      "inboxLabel": "Inbox · {count, plural, one {# item} other {# items}}",
+      "inboxLabel": "Inbox · {needsYou, plural, one {# vereist uw aandacht} other {# vereisen uw aandacht}}",
       "inboxLabelNeedsYou": "Inbox · {count, plural, one {# item} other {# items}} · {needsYou, plural, one {# vereist uw aandacht} other {# vereisen uw aandacht}}",
       "skills": "Skills",
       "activity": "Activiteit",
@@ -6200,6 +6278,7 @@
       "agents": "Agents",
       "agentsShort": "Agents",
       "agentsLabel": "Agents · in Actiecentrum",
+      "datedTitle": "{when} · ",
       "agentsTip": "Opent Action Center › Agents, buiten Chat"
     },
     "actions": {
@@ -6242,7 +6321,12 @@
       "failed": "Opslaan mislukt. Probeer het opnieuw.",
       "deleteTitle": "Deze chat verwijderen?",
       "deleteBody": "“{name}” wordt voor iedereen verwijderd. Bestanden die ermee zijn gemaakt, blijven in Bestanden staan. Een actieve agent wordt eerst gestopt.",
-      "cancel": "Annuleren"
+      "cancel": "Annuleren",
+      "clearTitle": "{count, plural, one {# chat uit {where} verwijderen?} other {# chats uit {where} verwijderen?}}",
+      "deleteManyTitle": "{count, plural, one {# chat verwijderen?} other {# chats verwijderen?}}",
+      "deleteManyBody": "Alleen uw eigen chats worden verwijderd; chats die teamleden met u hebben gedeeld, blijven bewaard. Bestanden die ze hebben gemaakt blijven in Bestanden staan en actieve agents worden eerst gestopt. U kunt dit enkele seconden ongedaan maken, daarna is dit definitief.",
+      "deleteMany": "{count, plural, one {# chat verwijderen} other {# chats verwijderen}}",
+      "deletedMany": "{count, plural, one {# chat verwijderd} other {# chats verwijderd}}"
     },
     "home": {
       "greeting": {
@@ -6749,6 +6833,7 @@
       "select": "Selecteer chat",
       "selectFirst": "Selecteer chats om ze samen te bewerken",
       "archiveSelected": "Selectie archiveren",
+      "deleteSelected": "Geselecteerde verwijderen",
       "unarchiveSelected": "Selectie dearchiveren",
       "archivedMany": "{count} gearchiveerd · vind ze onder Gearchiveerd",
       "unarchivedMany": "{count} gedearchiveerd · weer in Chats",
@@ -7432,6 +7517,7 @@
       "sendToWebhook": "De pagina “{title}” naar uw webhook verzonden",
       "takeDownFromCms": "De pagina “{title}” offline gehaald van {cms}",
       "makeReport": "Het rapport “{title}” gemaakt",
+      "reportPresentation": "Presentatie “{title}” gemaakt",
       "makeReportUndo": "Het rapport “{title}” verwijderd uit Rapporten",
       "startAudit": "Site Audit gestart op {pages}",
       "makeImages": "Afbeeldingen “{title}” gemaakt met {model}",
@@ -8541,7 +8627,8 @@
       },
       "agency-reporter": {
         "name": "Rapportage voor bureauklanten",
-        "description": "Een maandelijks rapport voor elk klantmerk, voor bureaus."
+        "description": "Een maandelijks rapport voor elk klantmerk, voor bureaus.",
+        "instructions": "Rapporteer over de afgelopen maand, van de 1e tot de laatste dag, vergeleken met de maand ervoor, in plaats van een week. Schrijf het voor het merk van de klant: eenvoudige bewoordingen, geen interne notities."
       },
       "paid-opportunity": {
         "name": "Betaalde kansen",
@@ -10535,7 +10622,8 @@
       "doneCount": "{count, plural, one {Analyse voltooid — # antwoord opgeslagen.} other {Analyse voltooid — # antwoorden opgeslagen.}}",
       "doneSoFar": "{count, plural, one {Bijna klaar — tot nu toe # antwoord opgeslagen, de rest volgt nog.} other {Bijna klaar — tot nu toe # antwoorden opgeslagen, de rest volgt nog.}}",
       "failed": "Taak mislukt: {reason}",
-      "unknownError": "Onbekende fout"
+      "unknownError": "Onbekende fout",
+      "startFailed": "Kan tracking niet starten. Probeer het opnieuw."
     },
     "runPrompts": "Prompts uitvoeren",
     "runPromptsNow": "Voer Prompts nu uit",
@@ -10956,7 +11044,7 @@
       "compareHint": "Vergelijking van de geselecteerde periode met de vorige periode van gelijke lengte.",
       "allTimeHint": "Alle tijd. Er is geen eerdere periode van dezelfde lengte om mee te vergelijken.",
       "lastVsPrevious": "{days, plural, one {Laatste # dag vs vorige # dag} other {Laatste # dagen vs vorige # dagen}}",
-      "loadFailed": "Overzicht laden mislukt",
+      "loadFailed": "Kan de uitsplitsing niet laden. Probeer het opnieuw.",
       "allTime": "Alle tijd",
       "current": "Huidig {days}d",
       "noSamePrompt": "Er is in beide periodes geen Prompt beantwoord",
@@ -10994,9 +11082,9 @@
       "noCompetitorsTitle": "Nog geen concurrenten gevolgd",
       "noCompetitorsBody": "Voeg concurrenten toe om te zien hoe u presteert in AI-antwoorden.",
       "headToHead": "Rechtstreekse vergelijking",
-      "loadFailed": "Inzichten laden mislukt — probeer het opnieuw",
+      "loadFailed": "Kon inzichten niet laden. Probeer het opnieuw.",
       "exportCapped": "Export beperkt tot 50.000 rijen om geheugenproblemen te voorkomen",
-      "exportFailed": "CSV exporteren mislukt",
+      "exportFailed": "Kon de CSV niet exporteren. Probeer het opnieuw.",
       "noTrend": "Nog geen trendgegevens beschikbaar",
       "yourBrand": "Uw merk",
       "avgCompetitor": "Gem. concurrent",
@@ -11095,6 +11183,8 @@
       "selectBrand": "Selecteer een merk om het contentplan te bekijken.",
       "period": "Periode",
       "periods": "Laatste {days} dagen",
+      "periodLast": "Afgelopen",
+      "periodDays": "{days} dagen",
       "newContent": "Nieuwe content",
       "cards": {
         "create": {
@@ -14000,6 +14090,13 @@
     "description": "AI-gestuurde contentaanbevelingen om uw zichtbaarheid in door AI gegenereerde antwoorden te verbeteren.",
     "opportunities": "Kansen",
     "autoGeneratedHint": "Kansen worden automatisch gegenereerd naarmate uw trackinggegevens binnenkomen.",
+    "flowNote": {
+      "coveredTitle": "Elke behoefte die u volgt heeft al een kans, dus nachtelijke runs voegen geen nieuwe toe.",
+      "coveredHint": "Om er meer te krijgen, <prompts>voegt u prompts toe</prompts> voor nieuwe vragen, markeert u voltooide kansen als Gereed of gebruikt u + Nieuw voor een andere invalshoek.",
+      "coveredHintReadOnly": "Nieuwe verschijnen wanneer <prompts>prompts</prompts> voor nieuwe vragen worden toegevoegd, of wanneer voltooide kansen als Gereed worden gemarkeerd.",
+      "limitTitle": "De nieuwe kansen van deze maand zijn op. Nachtelijke runs voegen vanaf {date} weer nieuwe toe.",
+      "limitTitleNoDate": "De nieuwe kansen van deze maand zijn op. Nachtelijke runs voegen weer nieuwe toe wanneer uw abonnement wordt verlengd."
+    },
     "generating": "Genereren…",
     "sendToWorkflow": "Versturen naar workflow",
     "generateBrief": "Brief opstellen",
@@ -14352,7 +14449,8 @@
       "setupFirst": "Stel een webhook in om kansen naar uw workflowtools te sturen.",
       "urlRequired": "Webhook-URL is verplicht",
       "urlRequiredTest": "Voer eerst een webhook-URL in",
-      "saveError": "Opslaan van webhook-configuratie mislukt"
+      "saveError": "Opslaan van webhook-configuratie mislukt",
+      "testNotRun": "De test is niet uitgevoerd. Probeer het opnieuw."
     },
     "loadError": "Laden van contentkansen mislukt",
     "exportError": "Exporteren van kansen mislukt",
@@ -14997,7 +15095,8 @@
         "trackNotAllowed": "Alleen beheerders en managers kunnen prompts toevoegen.",
         "failed": "Kon deze zoekopdrachten niet laden.",
         "noData": "Google Search Console heeft nog geen zoekopdrachten voor dit merk.",
-        "empty": "Elke Google-zoekopdracht met klikken in dit bereik wordt gevolgd."
+        "empty": "Elke Google-zoekopdracht met klikken in dit bereik wordt gevolgd.",
+        "trackFailed": "Kon deze zoekopdrachten niet volgen. Probeer het opnieuw."
       }
     },
     "summaryLine": {
@@ -16146,7 +16245,8 @@
       "save": "Toevoegen aan {count, plural, one {# prompt} other {# prompts}}",
       "removeSave": "Verwijderen van {count, plural, one {# prompt} other {# prompts}}",
       "done": "{count, plural, one {# prompt getagd} other {# prompts getagd}}",
-      "removed": "{count, plural, one {Tags verwijderd van # prompt} other {Tags verwijderd van # prompts}}"
+      "removed": "{count, plural, one {Tags verwijderd van # prompt} other {Tags verwijderd van # prompts}}",
+      "saveFailed": "Kon de tags niet opslaan. Probeer het opnieuw."
     },
     "bulkDelete": {
       "progress": "{done} van {total} prompts verwijderen…",
@@ -16844,7 +16944,18 @@
     "windowLastDays": "{days, plural, one {Scores omvatten de afgelopen dag.} other {Scores omvatten de afgelopen # dagen.}}",
     "windowAllTime": "Scores hebben betrekking op de gehele gevolgde geschiedenis.",
     "windowSelectedRange": "Scores weerspiegelen het geselecteerde datumbereik.",
+    "card": {
+      "prompts": "{visible}/{count} prompts",
+      "scoreTip": "Genoemd in {mentionAnswers} antwoorden · geciteerd in {citationAnswers} · positiefactor {position} · {mentions} vermeldingen · {citations} citaten"
+    },
     "selected": "Geselecteerd",
+    "rank": {
+      "short": "#{rank}",
+      "label": "Positie {rank} op Zichtbaarheidsscore",
+      "you": "U",
+      "lowSample": "Kleine steekproef",
+      "lowSampleTip": "Genoemd in minder dan 10 prompts in deze periode: nog niet gerangschikt."
+    },
     "noData": "Geen gegevens",
     "emptyTitle": "Nog geen concurrenten",
     "emptyDescription": "Voeg domeinen van concurrenten toe om hun AI-zichtbaarheid op alle AI-platformen te vergelijken met die van u.",
@@ -16894,7 +17005,7 @@
     },
     "merge": {
       "open": "Samenvoegen",
-      "openHint": "Voeg concurrenten samen die hetzelfde bedrijf zijn",
+      "openHint": "Dubbele concurrenten samenvoegen (bijv. twee domeinen van één merk)",
       "title": "Concurrenten samenvoegen",
       "description": "Kies de concurrenten die hetzelfde bedrijf zijn en kies vervolgens welke u wilt behouden.",
       "pickLabel": "Hetzelfde bedrijf",
@@ -16967,6 +17078,11 @@
       "noDataTitle": "Geen vergelijkingsgegevens",
       "noDataDescription": "Voer een trackingcontrole uit vanuit Zichtbaarheid om vergelijkingsgegevens voor deze concurrent te genereren.",
       "loadError": "Laden van vergelijkingsgegevens mislukt.",
+      "gapCreateAction": "Actie maken",
+      "gapAskChat": "Vraag het aan Chat",
+      "gapPanelTip": "Opent Chat met deze kloof in het invoerveld, klaar om te verzenden",
+      "gapCreateText": "Stuur deze kloof naar het Actiecentrum als een actie, met de taken om deze te dichten: {competitor} scoort {them} en wij scoren {you} op de prompt “{prompt}” ({count, plural, one {platform} other {platforms}}: {platforms}).",
+      "gapAskText": "Waarom scoort {competitor} {them} en scoren wij {you} op de prompt “{prompt}” ({count, plural, one {platform} other {platforms}}: {platforms})? Wat moeten we als eerste veranderen?",
       "promptCounts": "{engines, plural, one {# platform} other {# platforms}} · {runs, plural, one {# run} other {# runs}}",
       "engineCounts": "{locations, plural, one {# locatie} other {# locaties}} · {runs, plural, one {# run} other {# runs}}",
       "runs": "{count, plural, one {# run} other {# runs}}",
@@ -17149,9 +17265,9 @@
       "byCompetitor": "Per concurrent",
       "howItWorks": "Zo werkt het",
       "lowVisibility": "Uw zichtbaarheid is laag in deze periode, dus deze lijst kan breed zijn — richt u eerst op de basiszichtbaarheid.",
-      "loadFailedToast": "Citatiegegevens laden mislukt",
-      "checkFailedToast": "Citatiegegevens controleren mislukt",
-      "exportFailed": "CSV exporteren mislukt",
+      "loadFailedToast": "Kon citatiegegevens niet laden. Probeer het opnieuw.",
+      "checkFailedToast": "Kon niet controleren op citatiegegevens. Probeer het opnieuw.",
+      "exportFailed": "Kon de CSV niet exporteren. Probeer het opnieuw.",
       "typesNotExportable": "Brontypen is een grafiekweergave en kan niet worden geëxporteerd — schakel over naar Domeinen, URL's of Concurrentiekloven om te exporteren.",
       "tabGaps": "Concurrentiekloven"
     }
@@ -17673,6 +17789,10 @@
   "reports": {
     "impactLink": "Wat Ansvisor voor u heeft gedaan",
     "impact": {
+      "firstShip": {
+        "title": "Er is nog niets gepubliceerd voor dit merk",
+        "body": "Dit rapport wordt gevuld na uw eerste 'Verzenden naar CMS' of de eerste livegang van een agent."
+      },
       "title": "Wat Ansvisor voor u heeft gedaan",
       "subtitle": "{brand} · uitgevoerde acties gemeten ten opzichte van ongewijzigde vergelijkbare Prompts",
       "subtitleNoBrand": "Uitgevoerde acties gemeten ten opzichte van ongewijzigde vergelijkbare Prompts",
@@ -17858,6 +17978,15 @@
     "deleteConfirm": "Dit rapport verwijderen?",
     "deleteFailed": "Verwijderen van rapport mislukt",
     "rowMenuLabel": "Meer acties voor {title}",
+    "rename": {
+      "item": "Naam wijzigen",
+      "title": "Naam van rapport wijzigen",
+      "description": "Alleen de naam verandert: de cijfers van het rapport blijven zoals ze waren.",
+      "label": "Rapportnaam",
+      "save": "Opslaan",
+      "done": "Naam van rapport gewijzigd",
+      "failed": "Kon de naam van het rapport niet wijzigen. Probeer het opnieuw."
+    },
     "copyLink": "Link kopiëren",
     "linkCopied": "Link gekopieerd. Hij opent het rapport voor mensen in uw werkruimte.",
     "copyLinkFailed": "Kon de link niet kopiëren. Open het rapport en kopieer in plaats daarvan het adres.",
@@ -17903,6 +18032,12 @@
     "selectSections": "Kies ten minste één sectie",
     "dialogTitle": "Rapport genereren",
     "dialogDescription": "Leg de AI-zichtbaarheid van uw merk voor een periode vast, inclusief een door AI geschreven managementsamenvatting.",
+    "dateRangeHint": "De sjabloon stelt dit in; pas het hier aan.",
+    "duplicate": {
+      "line": "Zelfde periode als een bestaand rapport, “{title}”. Openen?",
+      "open": "Openen",
+      "anyway": "Toch genereren"
+    },
     "reportTitleLabel": "Titel (optioneel)",
     "reportTitlePlaceholder": "bijv. Directieoverzicht Q2",
     "presets": {
@@ -17969,7 +18104,7 @@
     "worstPrompts": "Zwakste Prompts",
     "queryFanout": "Zoekopdracht fan-out",
     "queryFanoutDescription": "Onderliggende zoekopdrachten die antwoordmachines daadwerkelijk hebben uitgevoerd bij het beantwoorden van uw gevolgde Prompts.",
-    "fanoutCoverage": "{queries} unieke onderliggende zoekopdrachten over {answers} antwoorden",
+    "fanoutCoverage": "{queries, number} verschillende subzoekopdrachten over {answers, number} antwoorden",
     "loadReportFailed": "Kan dit rapport niet laden.",
     "notFound": "Rapport niet gevonden.",
     "backToReports": "Terug naar Rapporten",
@@ -17989,13 +18124,17 @@
     "shareOfVoice": "Share of Voice",
     "competitorLeaderboard": "Ranglijst concurrenten",
     "topCitationSources": "Top citatiebronnen",
-    "citationTotals": "{domains} domeinen · {citations} citaties in deze periode",
+    "citationTotals": "{domains, number} domeinen · {citations, number} citaties in deze periode",
     "noData": "Geen gegevens voor deze periode.",
     "you": "(u)",
     "kpiCitationsNote": "\"Merkvermeldingen\" telt het aantal citaten van uw eigen site in AI-antwoorden.",
+    "leaderboardRankNote": "Gerangschikt op Zichtbaarheidsscore. Merken die in minder dan {min} prompts worden genoemd, staan onderaan als Kleine steekproef.",
+    "lowSample": "Kleine steekproef",
+    "lowSampleTip": "Genoemd in minder dan {min} prompts in deze periode: te weinig antwoorden om te rangschikken.",
     "citationsSectionNote": "Alle bronnen die in AI-antwoorden rond uw merk zijn geciteerd — niet alleen uw eigen site.",
     "mentionEvidence": "Bewijs van vermeldingen",
     "mentionEvidenceDescription": "De antwoorden waarin u in deze periode het vaakst werd genoemd, inclusief het tekstfragment rond de vermelding.",
+    "newestFirst": "Nieuwste eerst.",
     "citationEvidence": "Bewijs van citaten",
     "citationEvidenceDescription": "De URL's die in deze periode het vaakst zijn geciteerd in AI-antwoorden, en via welke gevolgde prompts ze naar voren kwamen."
   },
@@ -18279,10 +18418,36 @@
       "hint": "De taal van de schermen van Ansvisor, alleen voor u. De contenttaal van uw merken verandert niet.",
       "loading": "Talen laden…",
       "moreSoon": "Er komen meer talen aan.",
-      "preview": "Medewerkers en testversies zien ook de talen die nog geen vertaling hebben, en een testtaal met langere teksten. Ontbrekende tekst wordt in het Engels getoond.",
+      "preview": "Medewerkers en testversies zien ook de talen die nog geen vertaling hebben. Waar tekst ontbreekt, wordt Engels getoond.",
       "testLanguage": "{language} · test",
       "saved": "Taal opgeslagen",
-      "saveFailed": "Uw taal kon niet worden opgeslagen. Probeer het opnieuw."
+      "saveFailed": "Uw taal kon niet worden opgeslagen. Probeer het opnieuw.",
+      "suggest": {
+        "link": "Een betere vertaling voorstellen",
+        "title": "Een betere vertaling voorstellen",
+        "description": "Laat ons weten wat niet klopt en hoe u het zou formuleren. Ons team beoordeelt elke suggestie.",
+        "language": "Taal",
+        "screen": "Scherm",
+        "current": "Huidige tekst",
+        "currentPlaceholder": "Typ of plak de tekst, of selecteer deze op het scherm",
+        "pick": "Kiezen op scherm",
+        "picking": "Klik op de tekst die u wilt wijzigen. Druk op Esc om te annuleren.",
+        "better": "Uw betere versie",
+        "note": "Opmerking (optioneel)",
+        "notePlaceholder": "Waarom dit beter is, of waar het verschijnt",
+        "cancel": "Annuleren",
+        "send": "Suggestie verzenden",
+        "sent": "Bedankt. Uw suggestie is doorgestuurd naar ons team.",
+        "errors": {
+          "locale": "Suggesties zijn alleen bedoeld voor andere talen dan het Engels.",
+          "currentText": "Voer de huidige tekst in.",
+          "suggestion": "Voer uw betere versie in.",
+          "same": "Uw versie is hetzelfde als de huidige tekst.",
+          "tooLong": "Dat is te lang. Houd elke tekst onder de 1.000 tekens.",
+          "tooMany": "U heeft vandaag al veel suggesties verzonden. Probeer het morgen opnieuw.",
+          "server": "Kon uw suggestie niet verzenden. Probeer het opnieuw."
+        }
+      }
     },
     "save": "Wijzigingen opslaan",
     "saved": "Wijzigingen opgeslagen!",
@@ -18604,6 +18769,8 @@
       "aiUsageHint": "Een maandelijks tegoed voor de AI-functies van Ansvisor: Verbetersuggesties, de AI van de Content Editor en het schrijven van taken in het Action Center. Agent Chat werkt met uw eigen AI-sleutel. De gratis proefperiode heeft een lager tegoed.",
       "aiUsageCustomHint": "Een maandelijks tegoed voor de AI-functies van Ansvisor: Verbetersuggesties, de AI van de Content Editor en het schrijven van taken in het Action Center. Agent Chat werkt met uw eigen AI-sleutel. Ansvisor stelt het tegoed samen met u vast.",
       "aiUsageHintChat": "Een maandelijks tegoed voor de AI-functies van Ansvisor: Chat en agents, Verbetersuggesties, de AI van de Content Editor en het schrijven van taken in het Action Center. Uw eigen AI-sleutel is alleen beschikbaar bij Enterprise. De gratis proefperiode heeft een lager tegoed.",
+      "contentEstimate": "Tot {pages, number} nieuwe pagina's of {optimizations, number} pagina-optimalisaties per maand",
+      "contentEstimateHint": "Gebruikt uw maandelijkse AI-tegoed, gedeeld met Chat en agents. De werkelijke aantallen variëren afhankelijk van de paginalengte en het gekozen AI-model.",
       "aiUsageCustomHintChat": "Een maandelijks tegoed voor de AI-functies van Ansvisor: Chat en agents, Verbetersuggesties, de AI van de Content Editor en het schrijven van taken in het Action Center. Bij Enterprise kan Chat ook werken met uw eigen AI-sleutel. Ansvisor stelt het tegoed samen met u vast."
     },
     "contactUs": "Contact opnemen",
@@ -20269,6 +20436,26 @@
       "crm": "CRM en omzet",
       "team": "Team en gegevens"
     }
+  },
+  "translationSuggestionsAdmin": {
+    "title": "Vertaalsuggesties",
+    "description": "Alleen voor Ansvisor-medewerkers. Suggesties voor betere vertalingen van de interface. Accepteren markeert de suggestie alleen: werk de tekenreeks bij in het taalbestand in web/messages en het glossarium door web/scripts/translate-messages.mjs opnieuw uit te voeren. Er worden geen namen of e-mailadressen getoond.",
+    "empty": "Geen nieuwe suggesties.",
+    "columns": {
+      "date": "Datum",
+      "language": "Taal",
+      "screen": "Scherm",
+      "current": "Huidige tekst",
+      "suggestion": "Suggestie",
+      "note": "Notitie",
+      "actions": "Beoordelen"
+    },
+    "key": "Sleutel: {key}",
+    "accept": "Accepteren",
+    "reject": "Afwijzen",
+    "accepted": "Gemarkeerd als geaccepteerd",
+    "rejected": "Afgewezen",
+    "failed": "Opslaan is mislukt. Mogelijk is dit al beoordeeld."
   },
   "reportCardAdmin": {
     "title": "Gratis rapportkaarten",

@@ -14,6 +14,14 @@
     "upgrade": "Yükselt",
     "choosePlan": "Bir plan seçin"
   },
+  "metrics": {
+    "promptsAnswered": "{count, plural, one {{period} içinde yanıtlanan # prompt} other {{period} içinde yanıtlanan # prompt}}",
+    "period": {
+      "lastDays": "{days, plural, one {son gün} other {son # gün}}",
+      "all": "tüm izlenen geçmiş",
+      "custom": "seçilen aralık"
+    }
+  },
   "locationPicker": {
     "label": "Konumlar",
     "tracked": "takip ediliyor",
@@ -53,8 +61,8 @@
     "title": "Tek Prompt Çalıştır",
     "description": "Test edilecek bir Prompt seçin. Yalnızca bu Prompt etkin platformlarınızda çalıştırılır.",
     "empty": "Aktif Prompt bulunamadı. Önce marka ayarlarından Prompt ekleyin.",
-    "loadFailed": "Prompt'lar yüklenemedi",
-    "runFailed": "Prompt çalıştırılamadı"
+    "loadFailed": "Promptlar yüklenemedi. Tekrar deneyin.",
+    "runFailed": "Prompt çalıştırılamadı. Tekrar deneyin."
   },
   "responseDetail": {
     "response": "AI Yanıtı",
@@ -73,7 +81,9 @@
     "missing_ai_key": "Önce Ayarlar › AI Sağlayıcıları bölümünden bir AI sağlayıcı anahtarı ekleyin.",
     "server_error": "Bizim tarafımızda bir sorun oluştu. Tekrar deneyin.",
     "location_limit": "Planınızdaki Prompt konum hakkı doldu: her Prompt, takip ettiği her konum için bir kez sayılır ve duraklatılan Prompt'lar sayılmaz. Bazılarını kaldırın veya duraklatın ya da planınızı yükseltin.",
-    "brand_limit": "Planınızdaki tüm marka hakları kullanımda. Daha fazla eklemek için planınızı yükseltin."
+    "brand_limit": "Planınızdaki tüm marka hakları kullanımda. Daha fazla eklemek için planınızı yükseltin.",
+    "demo_brand": "Bu demo markasıdır: verileri örnek veridir, bu nedenle değiştirilemez veya çalıştırılamaz. Değişikliği kendi markanızda yapın.",
+    "admin_required": "Bunu yalnızca bir Admin yapabilir. Çalışma alanınızdaki bir Admin ile iletişime geçin."
   },
   "aiUsage": {
     "meter": {
@@ -383,6 +393,7 @@
       "setProductFeed": "Ürün akışı ayarını değiştirmek için bir plan gerekir",
       "generateReports": "Rapor oluşturmak için bir plan gerekir",
       "deleteReports": "Raporları silmek için bir plan gerekir",
+      "renameReports": "Raporları yeniden adlandırmak için bir plan gerekir",
       "markTaskDone": "Görevi tamamlandı olarak işaretlemek için bir plan gerekir",
       "attachFiles": "Dosya eklemek için bir plan gerekir",
       "startChat": "Sohbet başlatmak için bir plan gerekir",
@@ -502,7 +513,8 @@
       "companyName": "Şirket adı",
       "competitorsToTrack": "Takip edilecek rakipler",
       "finishingSetup": "Kurulum tamamlanıyor...",
-      "competitorsTitle": "Rakipler"
+      "competitorsTitle": "Rakipler",
+      "saveCompetitorsFailed": "Rakipler kaydedilemedi. Tekrar deneyin."
     },
     "prompts": {
       "removeTopic": "Konuyu kaldır",
@@ -943,10 +955,13 @@
         "title": "Mevcut durumunuz",
         "change": "dünden bu yana {change}",
         "noChange": "dünden bu yana değişiklik yok",
-        "behind": "{count} marka arasında #{rank}. {name} markasının {gap} puan gerisinde.",
-        "ahead": "{count} marka arasında #1. {name} markasının {gap} puan önünde.",
+        "behind": "{count} {set, select, rivals {birincil rakibiniz} competitors {{min}+ promptta adı geçen rakip} other {marka}} arasında #{rank}. sırada. {name} adlı rakibin {gap} puan gerisinde.",
+        "ahead": "{count} {set, select, rivals {birincil rakibiniz} competitors {{min}+ promptta adı geçen rakip} other {marka}} arasında #1. sırada. {name} adlı rakibin {gap} puan önünde.",
         "alone": "Henüz hiçbir rakip promptlarınızda puan almadı.",
-        "none": "Henüz puan yok. En son AI yanıtlarınız puanlandığında burada görünecektir."
+        "none": "Henüz puan yok. En son AI yanıtlarınız puanlandığında burada görünecektir.",
+        "outOf": "/100",
+        "scoreLabel": "Görünürlük puanı",
+        "run": "En son çalıştırmadan, {date}"
       },
       "summary": {
         "changes": "{title}: {count, plural, =0 {büyük bir değişiklik yok} one {# değişiklik} other {# değişiklik}}",
@@ -961,6 +976,17 @@
           "rival": "Rakip"
         },
         "actionAdded": "<link>Bir aksiyon eklendi</link>.",
+        "group": {
+          "competitor_leads": "{count} rakip sizden çok daha fazla anılıyor",
+          "competitor_momentum": "{count} rakip hızla yükseliyor",
+          "competitor_surge": "{count} rakibin görünürlüğü fırladı",
+          "competitor_crossed": "{count} rakip görünürlüğünüzü geçti",
+          "competitor_overtaken": "{count} rakibi geride bıraktınız",
+          "other": "{title} ve {more, plural, one {# benzer değişiklik} other {# benzer değişiklik}}"
+        },
+        "groupActions": "{count, plural, one {# aksiyon} other {# aksiyon}}",
+        "showGroup": "Tümünü göster ({count})",
+        "hideGroup": "Gizle",
         "quiet": {
           "none": "Büyük bir değişiklik yok.",
           "held": "Büyük bir değişiklik yok. Puanınız {score} seviyesinde kaldı.",
@@ -2034,11 +2060,13 @@
         "pill": "Eski",
         "hint": "{days} gündür veya daha uzun süredir Yeni durumda ve üzerinde kimse çalışmıyor",
         "quiet": "{days} gündür güncelleme yok",
-        "notice": "Eski: Bu aksiyon {days} gündür veya daha uzun süredir Yeni durumda ve üzerinde kimse çalışmadı. Kapatılmadı: Hâlâ gerekliyse saklayın veya yoksayın.",
-        "keep": "Hâlâ geçerli",
+        "notice": "{days} veya daha fazla gündür bunun üzerinde kimse çalışmadı.",
+        "keep": "Açık tut",
+        "keepHint": "Hâlâ geçerli: açık tutun, artık eski olarak işaretlenmez",
+        "dismiss": "Kapat",
         "kept": "Saklandı: Artık eski değil"
       },
-      "taskProgress": "{completed}/{total} görev",
+      "taskProgress": "{completed}/{total} görev tamamlandı",
       "everyone": "Herkes",
       "everyoneTitle": "Çalışma alanındaki herkes: Henüz kimse atanmadı",
       "tags": {
@@ -2090,6 +2118,16 @@
       "noResults": "Bu filtrelerle eşleşen aksiyon bulunamadı.",
       "noOpen": "Açık aksiyon yok. Tamamlananlar ve reddedilenler Tüm durumlar altında yer alır.",
       "showAllStatuses": "Tüm durumları göster",
+      "summary": {
+        "open": "{count} açık",
+        "closed": "Bu hafta {count} kapatıldı",
+        "closedHint": "Son {days} gün içinde tamamlandı veya kapatıldı. Listelemek için tıklayın.",
+        "new": "Son ziyaretinizden bu yana {count} yeni"
+      },
+      "newMark": {
+        "label": "Yeni",
+        "hint": "Son ziyaretinizden bu yana oluşturuldu"
+      },
       "error": {
         "title": "Aksiyonlarınız yüklenemedi.",
         "retry": "Tekrar dene"
@@ -2264,20 +2302,34 @@
       "drawer": {
         "actionId": "Aksiyon Kimliği",
         "previousCode": "Önceden {code}",
+        "more": "Diğer aksiyonlar",
+        "priorityLine": "Öncelik <b>{score}</b> · {level}",
+        "stats": {
+          "prompts": "{count, plural, one {prompt} other {prompt}}",
+          "pages": "{count, plural, one {sayfa} other {sayfa}}",
+          "platforms": "{count, plural, one {platform} other {platform}}",
+          "competitors": "{count, plural, one {rakip} other {rakip}}",
+          "topics": "{count, plural, one {konu} other {konu}}"
+        },
         "tabs": {
           "overview": "Genel Bakış",
           "affected": "Etkilenen",
           "tasks": "Görevler",
           "signals": "Sinyaller",
-          "history": "Geçmiş"
+          "history": "Geçmiş",
+          "tasksProgress": "Görevler {completed}/{total}"
         },
         "why": "Neden bu aksiyon?",
         "goal": "Hedef",
+        "doneWhen": "Tamamlanma kriteri",
+        "whatHappened": "Ne oldu",
         "kpis": "KPI'lar",
         "kpiBrandGoal": "{timeframe, select, weekly {Marka haftalık hedefi} quarterly {Marka üç aylık hedefi} other {Marka aylık hedefi}}: {target}",
         "noKpis": "Bu aksiyona bağlı yapılandırılmış KPI yok.",
         "support": "{count, plural, =0 {Bu aksiyonu artık destekleyen açık sinyal yok.} one {# sinyal bu aksiyonu destekliyor} other {# sinyal bu aksiyonu destekliyor}}",
         "supportAll": "Tüm sinyaller ({count})",
+        "supportTimes": "×{count}",
+        "supportSame": "Aynı anlama gelen {count} sinyal: Sinyaller sekmesinde her biri listelenir",
         "affected": {
           "prompts": "{count, plural, one {# prompt} other {# prompt}}",
           "pages": "{count, plural, one {# sayfa} other {# sayfa}}",
@@ -2415,6 +2467,8 @@
         "assignee": "Atanan Kişi",
         "assignTo": "Ekip arkadaşına ata",
         "dueDate": "Bitiş tarihi",
+        "noDueDate": "Bitiş tarihi yok",
+        "addDueDate": "Bitiş tarihi ekle",
         "goalPassed": "Hedef tarihi geçti",
         "setNewDate": "Yeni tarih belirle",
         "statusLabel": "Durum",
@@ -4006,6 +4060,9 @@
         "inProgress": "Devam Ediyor",
         "noImprovement": "İyileşme Yok",
         "dismissed": "Göz ardı edildi",
+        "onHold": "Beklemede",
+        "closed": "Kapatılan Aksiyonlar",
+        "closedSub": "bu zaman aralığında kapatıldı",
         "ofTotal": "Toplamın %{percent}'i"
       },
       "pagination": {
@@ -4253,6 +4310,13 @@
     "answerSub": "Planlanmış takipten bir yanıt",
     "loading": "Yükleniyor…",
     "answerFailed": "Bu yanıt yüklenemedi."
+  },
+  "datePicker": {
+    "placeholder": "Bir tarih seçin",
+    "previousMonth": "Önceki ay",
+    "nextMonth": "Sonraki ay",
+    "today": "Bugün",
+    "clear": "Temizle"
   },
   "chatTools": {
     "profile": {
@@ -4661,6 +4725,10 @@
       "name": "Raporlar oluştur",
       "step": "Rapor oluşturuldu"
     },
+    "reportPresentation": {
+      "name": "Sunumlar hazırla",
+      "step": "Sunum hazırlandı"
+    },
     "startAudit": {
       "name": "Site Denetimleri başlat",
       "step": "Site Denetimi başlatıldı"
@@ -4968,7 +5036,7 @@
     "runsTray": {
       "label": "Çalıştırmalarınız",
       "title": "Çalıştırmalarınız",
-      "button": "{count, plural, =0 {Çalıştırmalar} other {# çalışıyor}}",
+      "button": "{count, plural, =0 {Çalıştırmalar · çalışan yok} other {Çalıştırmalar · # çalışan}}",
       "needsYouTip": "{count, plural, other {# ilginizi bekliyor}}",
       "summary": "{running} çalışıyor · {needsYou, plural, other {# ilginizi bekliyor}}",
       "summaryRunning": "{running} çalışıyor",
@@ -5328,6 +5396,13 @@
       "notFiled": "Görseller oluşturuldu ancak Dosyalar'a kaydedilemedi.",
       "providerOff": "{model} sağlayıcısı, Ayarlar › Sohbet bölümünde bu çalışma alanı için kapatılmış. Başka bir görsel modeli seçin.",
       "providersOff": "Bu çalışma alanı için Ayarlar › Chat bölümünde tüm görsel modellerinin üreticileri kapatılmış; bu nedenle Chat burada görsel oluşturamıyor. Bir Admin birini açabilir."
+    },
+    "presentations": {
+      "title": "Sunum · {title}",
+      "unavailable": "Sunumlar burada kullanılamaz.",
+      "notFound": "Bu rapor bulunamadı. Kaydedilen raporları listeleyin, ardından birini seçin.",
+      "storageFull": "Çalışma alanının depolama alanı dolu. Dosyalar bölümünde yer açın ve tekrar deneyin.",
+      "notFiled": "Sunum hazırlandı ancak dosyalanamadı. Lütfen tekrar deneyin."
     },
     "error": {
       "noKey": "Chat'in çalışması için tanımlı bir AI anahtarı yok. Bir Admin, Ayarlar › AI Sağlayıcıları bölümünden bir anahtar ekleyebilir.",
@@ -5961,6 +6036,7 @@
       "pdf": "PDF",
       "csv": "CSV",
       "xlsx": "Excel",
+      "pptx": "PowerPoint",
       "json": "JSON",
       "jsonld": "JSON-LD",
       "txt": "TXT",
@@ -6126,6 +6202,8 @@
     },
     "menu": {
       "label": "Sohbet menüsü",
+      "clearGroup": "Temizle",
+      "clearGroupLabel": "{count, plural, one {{where} alanındaki # sohbetinizi silin} other {{where} alanındaki # sohbetinizi silin}}",
       "strip": "Sohbet menüsü kısayolları",
       "hide": "Sohbet menüsünü gizle",
       "show": "Sohbet menüsünü göster",
@@ -6137,7 +6215,7 @@
       "toggleMenu": "Menü bölümünü göster veya gizle",
       "home": "Ana Sayfa",
       "inbox": "Gelen Kutusu",
-      "inboxLabel": "Gelen Kutusu · {count, plural, one {# öge} other {# öge}}",
+      "inboxLabel": "Gelen Kutusu · {needsYou, plural, one {# işlem bekliyor} other {# işlem bekliyor}}",
       "inboxLabelNeedsYou": "Gelen Kutusu · {count, plural, one {# öge} other {# öge}} · {needsYou, plural, one {# işlem bekliyor} other {# işlem bekliyor}}",
       "skills": "Yetenekler",
       "activity": "Aktivite",
@@ -6192,6 +6270,7 @@
       "agents": "Ajanlar",
       "agentsShort": "Ajanlar",
       "agentsLabel": "Ajanlar · Aksiyon Merkezi içinde",
+      "datedTitle": "{when} · ",
       "agentsTip": "Chat dışında Aksiyon Merkezi › Ajanlar'ı açar"
     },
     "actions": {
@@ -6234,7 +6313,12 @@
       "failed": "Kaydedilemedi. Tekrar deneyin.",
       "deleteTitle": "Bu sohbet silinsin mi?",
       "deleteBody": "“{name}” herkes için silinecek. Oluşturduğu dosyalar Dosyalar'da kalır. Çalışan bir aracı varsa önce durdurulur.",
-      "cancel": "İptal"
+      "cancel": "İptal",
+      "clearTitle": "{count, plural, one {{where} alanından # sohbet silinsin mi?} other {{where} alanından # sohbet silinsin mi?}}",
+      "deleteManyTitle": "{count, plural, one {# sohbet silinsin mi?} other {# sohbet silinsin mi?}}",
+      "deleteManyBody": "Yalnızca kendi sohbetleriniz silinir; ekip arkadaşlarınızın sizinle paylaştığı sohbetler kalır. Bu sohbetlerin oluşturduğu dosyalar Dosyalar bölümünde kalır ve çalışan ajanlar önce durdurulur. Birkaç saniye içinde geri alabilirsiniz, sonrasında bu işlem geri alınamaz.",
+      "deleteMany": "{count, plural, one {# sohbeti sil} other {# sohbeti sil}}",
+      "deletedMany": "{count, plural, one {# sohbet silindi} other {# sohbet silindi}}"
     },
     "home": {
       "greeting": {
@@ -6741,6 +6825,7 @@
       "select": "Sohbet seç",
       "selectFirst": "Birlikte değiştirmek için sohbetleri seçin",
       "archiveSelected": "Seçilenleri arşivle",
+      "deleteSelected": "Seçilenleri sil",
       "unarchiveSelected": "Seçilenleri arşivden çıkar",
       "archivedMany": "{count} arşivlendi · Arşivlenenler altında bulabilirsiniz",
       "unarchivedMany": "{count} arşivden çıkarıldı · tekrar Sohbetler içinde",
@@ -7424,6 +7509,7 @@
       "sendToWebhook": "“{title}” sayfası webhook'unuza gönderildi",
       "takeDownFromCms": "“{title}” sayfası {cms} platformundan yayından kaldırıldı",
       "makeReport": "“{title}” raporu oluşturuldu",
+      "reportPresentation": "“{title}” sunumu hazırlandı",
       "makeReportUndo": "“{title}” raporu Raporlar bölümünden kaldırıldı",
       "startAudit": "{pages} üzerinde Site Denetimi başlatıldı",
       "makeImages": "{model} ile “{title}” görselleri oluşturuldu",
@@ -8533,7 +8619,8 @@
       },
       "agency-reporter": {
         "name": "Ajans Müşteri Raporlayıcı",
-        "description": "Ajanslar için her müşteri markasına özel aylık bir rapor."
+        "description": "Ajanslar için her müşteri markasına özel aylık bir rapor.",
+        "instructions": "Bir hafta yerine geçen ayı, ayın 1'inden son gününe kadar, önceki ayla karşılaştırarak raporlayın. Müşteri markasına yönelik hazırlayın: sade bir dil kullanın, dahili notlara yer vermeyin."
       },
       "paid-opportunity": {
         "name": "Ücretli Fırsat",
@@ -10527,7 +10614,8 @@
       "doneCount": "{count, plural, one {Analiz tamamlandı — # yanıt kaydedildi.} other {Analiz tamamlandı — # yanıt kaydedildi.}}",
       "doneSoFar": "{count, plural, one {Neredeyse bitti — şu ana kadar # yanıt kaydedildi, kalanlar gelmeye devam ediyor.} other {Neredeyse bitti — şu ana kadar # yanıt kaydedildi, kalanlar gelmeye devam ediyor.}}",
       "failed": "İşlem başarısız oldu: {reason}",
-      "unknownError": "Bilinmeyen hata"
+      "unknownError": "Bilinmeyen hata",
+      "startFailed": "Takip başlatılamadı. Tekrar deneyin."
     },
     "runPrompts": "Promptları Çalıştır",
     "runPromptsNow": "Promptları Şimdi Çalıştır",
@@ -10948,7 +11036,7 @@
       "compareHint": "Seçilen aralık, önceki eşit uzunluktaki aralıkla karşılaştırılıyor.",
       "allTimeHint": "Tüm zamanlar. Karşılaştırılacak aynı uzunlukta daha eski bir dönem yok.",
       "lastVsPrevious": "{days, plural, one {Son # gün ve önceki # gün} other {Son # gün ve önceki # gün}}",
-      "loadFailed": "Döküm yüklenemedi",
+      "loadFailed": "Ayrıntılı döküm yüklenemedi. Tekrar deneyin.",
       "allTime": "Tüm zamanlar",
       "current": "Mevcut {days} gün",
       "noSamePrompt": "Her iki dönemde de yanıtlanan Prompt yok",
@@ -10986,9 +11074,9 @@
       "noCompetitorsTitle": "Henüz takip edilen rakip yok",
       "noCompetitorsBody": "Yapay zekâ yanıtlarında nasıl konumlandığınızı görmek için rakip ekleyin.",
       "headToHead": "Karşılıklı Karşılaştırma",
-      "loadFailed": "İçgörüler yüklenemedi — lütfen tekrar deneyin",
+      "loadFailed": "İçgörüler yüklenemedi. Tekrar deneyin.",
       "exportCapped": "Bellek sorunlarını önlemek için dışa aktarma 50.000 satırla sınırlandı",
-      "exportFailed": "CSV dışa aktarılamadı",
+      "exportFailed": "CSV dışa aktarılamadı. Tekrar deneyin.",
       "noTrend": "Henüz trend verisi yok",
       "yourBrand": "Markanız",
       "avgCompetitor": "Ort. Rakip",
@@ -11087,6 +11175,8 @@
       "selectBrand": "İçerik planını görmek için bir marka seçin.",
       "period": "Dönem",
       "periods": "Son {days} gün",
+      "periodLast": "Son",
+      "periodDays": "{days} gün",
       "newContent": "Yeni içerik",
       "cards": {
         "create": {
@@ -13992,6 +14082,13 @@
     "description": "AI tarafından oluşturulan yanıtlarda Görünürlük durumunuzu artırmaya yönelik AI destekli İçerik önerileri.",
     "opportunities": "Fırsatlar",
     "autoGeneratedHint": "Takip verileriniz geldikçe fırsatlar otomatik olarak oluşturulur.",
+    "flowNote": {
+      "coveredTitle": "Takip ettiğiniz her ihtiyacın zaten bir fırsatı var, bu nedenle gece çalıştırmaları yenilerini eklemez.",
+      "coveredHint": "Daha fazlasını almak için yeni sorulara yönelik <prompts>prompt'lar ekleyin</prompts>, tamamlanan fırsatları Yapıldı olarak işaretleyin veya başka bir açı için + Yeni seçeneğini kullanın.",
+      "coveredHintReadOnly": "Yeni sorular için <prompts>prompt'lar</prompts> eklendiğinde veya tamamlanan fırsatlar Yapıldı olarak işaretlendiğinde yenileri gelir.",
+      "limitTitle": "Bu ayın yeni fırsatları tükendi. Gece çalıştırmaları {date} tarihinden itibaren tekrar ekleme yapacaktır.",
+      "limitTitleNoDate": "Bu ayın yeni fırsatları tükendi. Gece çalıştırmaları planınız yenilendiğinde tekrar ekleme yapacaktır."
+    },
     "generating": "Oluşturuluyor…",
     "sendToWorkflow": "İş Akışına Gönder",
     "generateBrief": "Brief oluştur",
@@ -14344,7 +14441,8 @@
       "setupFirst": "Fırsatları iş akışı araçlarınıza göndermek için bir webhook ayarlayın.",
       "urlRequired": "Webhook URL'si zorunludur",
       "urlRequiredTest": "Önce bir webhook URL'si girin",
-      "saveError": "Webhook yapılandırması kaydedilemedi"
+      "saveError": "Webhook yapılandırması kaydedilemedi",
+      "testNotRun": "Test çalıştırılamadı. Tekrar deneyin."
     },
     "loadError": "İçerik fırsatları yüklenemedi",
     "exportError": "Fırsatlar dışa aktarılamadı",
@@ -14989,7 +15087,8 @@
         "trackNotAllowed": "Yalnızca adminler ve yöneticiler prompt ekleyebilir.",
         "failed": "Bu sorgular yüklenemedi.",
         "noData": "Google Search Console'da bu marka için henüz sorgu bulunmuyor.",
-        "empty": "Bu aralıkta tıklama alan tüm Google sorguları takip ediliyor."
+        "empty": "Bu aralıkta tıklama alan tüm Google sorguları takip ediliyor.",
+        "trackFailed": "Bu sorgular takip edilemedi. Tekrar deneyin."
       }
     },
     "summaryLine": {
@@ -16138,7 +16237,8 @@
       "save": "{count, plural, one {# prompt'a} other {# prompt'a}} ekle",
       "removeSave": "{count, plural, one {# prompt'tan} other {# prompt'tan}} kaldır",
       "done": "{count, plural, one {# prompt etiketlendi} other {# prompt etiketlendi}}",
-      "removed": "{count, plural, one {# prompt'tan etiketler kaldırıldı} other {# prompt'tan etiketler kaldırıldı}}"
+      "removed": "{count, plural, one {# prompt'tan etiketler kaldırıldı} other {# prompt'tan etiketler kaldırıldı}}",
+      "saveFailed": "Etiketler kaydedilemedi. Tekrar deneyin."
     },
     "bulkDelete": {
       "progress": "{total} prompt'tan {done} tanesi siliniyor…",
@@ -16836,7 +16936,18 @@
     "windowLastDays": "{days, plural, one {Skorlar son 1 günü kapsar.} other {Skorlar son # günü kapsar.}}",
     "windowAllTime": "Skorlar tüm takip geçmişini kapsar.",
     "windowSelectedRange": "Skorlar seçilen tarih aralığını yansıtır.",
+    "card": {
+      "prompts": "{visible}/{count} prompt",
+      "scoreTip": "{mentionAnswers} yanıtta bahsedildi · {citationAnswers} yanıtta atıfta bulunuldu · konum faktörü {position} · {mentions} bahsedilme · {citations} atıf"
+    },
     "selected": "Seçildi",
+    "rank": {
+      "short": "#{rank}",
+      "label": "Görünürlük puanına göre {rank}. sırada",
+      "you": "Siz",
+      "lowSample": "Düşük örneklem",
+      "lowSampleTip": "Bu dönemde 10'dan az prompt'ta adı geçti: henüz sıralanmadı."
+    },
     "noData": "Veri yok",
     "emptyTitle": "Henüz rakip yok",
     "emptyDescription": "Tüm AI platformlarında AI görünürlüklerini sizinkiyle karşılaştırmak için rakip alan adlarını ekleyin.",
@@ -16886,7 +16997,7 @@
     },
     "merge": {
       "open": "Birleştir",
-      "openHint": "Aynı şirket olan rakipleri birleştirin",
+      "openHint": "Yinelenen rakipleri birleştirin (örn. bir markanın iki alanı)",
       "title": "Rakipleri birleştir",
       "description": "Aynı şirket olan rakipleri ve ardından tutulacak olanı seçin.",
       "pickLabel": "Aynı şirket",
@@ -16959,6 +17070,11 @@
       "noDataTitle": "Karşılaştırma verisi yok",
       "noDataDescription": "Bu rakip için karşılaştırma verisi oluşturmak üzere Görünürlük bölümünden bir takip kontrolü çalıştırın.",
       "loadError": "Karşılaştırma verileri yüklenemedi.",
+      "gapCreateAction": "Aksiyon oluştur",
+      "gapAskChat": "Chat'e sor",
+      "gapPanelTip": "Kutuda bu fark hazır olacak şekilde Chat'i açar",
+      "gapCreateText": "Bu farkı, kapatmaya yönelik görevlerle birlikte Aksiyon Merkezi'ne bir aksiyon olarak gönderin: \"{prompt}\" prompt'unda ({count, plural, one {platform} other {platformlar}}: {platforms}) {competitor} {them} puan aldı ve biz {you} puan aldık.",
+      "gapAskText": "\"{prompt}\" prompt'unda ({count, plural, one {platform} other {platformlar}}: {platforms}) {competitor} neden {them} puan aldı ve biz neden {you} puan aldık? Önce neyi değiştirmeliyiz?",
       "promptCounts": "{engines, plural, one {# platform} other {# platform}} · {runs, plural, one {# çalıştırma} other {# çalıştırma}}",
       "engineCounts": "{locations, plural, one {# konum} other {# konum}} · {runs, plural, one {# çalıştırma} other {# çalıştırma}}",
       "runs": "{count, plural, one {# çalıştırma} other {# çalıştırma}}",
@@ -17141,9 +17257,9 @@
       "byCompetitor": "Rakibe göre",
       "howItWorks": "Bu nasıl çalışır?",
       "lowVisibility": "Bu aralıkta Görünürlüğünüz düşük, bu nedenle bu liste geniş olabilir — önce temel Görünürlüğe odaklanın.",
-      "loadFailedToast": "Atıf verileri yüklenemedi",
-      "checkFailedToast": "Atıf verileri kontrol edilemedi",
-      "exportFailed": "CSV dışa aktarılamadı",
+      "loadFailedToast": "Atıf verileri yüklenemedi. Tekrar deneyin.",
+      "checkFailedToast": "Atıf verileri kontrol edilemedi. Tekrar deneyin.",
+      "exportFailed": "CSV dışa aktarılamadı. Tekrar deneyin.",
       "typesNotExportable": "Kaynak Türleri bir grafik dökümüdür ve dışa aktarılamaz — dışa aktarmak için Alan Adları, URL'ler veya Rakip Boşlukları sekmesine geçin.",
       "tabGaps": "Rakip Boşlukları"
     }
@@ -17665,6 +17781,10 @@
   "reports": {
     "impactLink": "Ansvisor sizin için neler yaptı",
     "impact": {
+      "firstShip": {
+        "title": "Bu markada henüz hiçbir şey yayınlanmadı",
+        "body": "Bu rapor, ilk CMS'e Gönder işleminden veya bir ajanın ilk yayına alınmasından sonra dolar."
+      },
       "title": "Ansvisor sizin için neler yaptı",
       "subtitle": "{brand} · yayınlanan aksiyonlar, dokunulmamış benzer Prompt'lara göre ölçüldü",
       "subtitleNoBrand": "Yayınlanan aksiyonlar, dokunulmamış benzer Prompt'lara göre ölçüldü",
@@ -17850,6 +17970,15 @@
     "deleteConfirm": "Bu rapor silinsin mi?",
     "deleteFailed": "Rapor silinemedi",
     "rowMenuLabel": "{title} için diğer işlemler",
+    "rename": {
+      "item": "Yeniden adlandır",
+      "title": "Raporu yeniden adlandır",
+      "description": "Yalnızca ad değişir: raporun sayıları olduğu gibi kalır.",
+      "label": "Rapor adı",
+      "save": "Kaydet",
+      "done": "Rapor yeniden adlandırıldı",
+      "failed": "Rapor yeniden adlandırılamadı. Tekrar deneyin."
+    },
     "copyLink": "Bağlantıyı kopyala",
     "linkCopied": "Bağlantı kopyalandı. Çalışma alanınızdaki kişiler için raporu açar.",
     "copyLinkFailed": "Bağlantı kopyalanamadı. Bunun yerine raporu açıp adresini kopyalayın.",
@@ -17895,6 +18024,12 @@
     "selectSections": "En az bir bölüm seçin",
     "dialogTitle": "Rapor Oluştur",
     "dialogDescription": "Markanızın belirli bir dönemdeki AI görünürlüğünü, yapay zekâ tarafından yazılmış bir yönetici özetiyle kaydedin.",
+    "dateRangeHint": "Bunu şablon belirler; buradan değiştirebilirsiniz.",
+    "duplicate": {
+      "line": "Mevcut bir rapor olan \"{title}\" ile aynı dönem. Açılsın mı?",
+      "open": "Aç",
+      "anyway": "Yine de oluştur"
+    },
     "reportTitleLabel": "Başlık (isteğe bağlı)",
     "reportTitlePlaceholder": "ör. 2. Çeyrek Yönetici Özeti",
     "presets": {
@@ -17961,7 +18096,7 @@
     "worstPrompts": "En Zayıf Prompts",
     "queryFanout": "Sorgu Fan-out",
     "queryFanoutDescription": "Yanıt motorlarının takip edilen prompt'larınızı yanıtlarken gerçekte çalıştırdığı alt sorgular.",
-    "fanoutCoverage": "{answers} yanıt genelinde {queries} farklı alt sorgu",
+    "fanoutCoverage": "{answers, number} yanıt genelinde {queries, number} farklı alt sorgu",
     "loadReportFailed": "Bu rapor yüklenemedi.",
     "notFound": "Rapor bulunamadı.",
     "backToReports": "Raporlar Sayfasına Dön",
@@ -17981,13 +18116,17 @@
     "shareOfVoice": "Share of Voice",
     "competitorLeaderboard": "Rakip Sıralaması",
     "topCitationSources": "En Çok Atıf Alan Kaynaklar",
-    "citationTotals": "Bu dönemde {domains} alan adı · {citations} atıf",
+    "citationTotals": "Bu dönemde {domains, number} alan adı · {citations, number} atıf",
     "noData": "Bu dönem için veri yok.",
     "you": "(siz)",
     "kpiCitationsNote": "\"Marka Atıfları\", AI yanıtlarında kendi sitenize yapılan atıfları sayar.",
+    "leaderboardRankNote": "Görünürlük puanına göre sıralanmıştır. {min} adetten daha az Prompt içinde geçen markalar Düşük örneklem olarak en sonda listelenir.",
+    "lowSample": "Düşük örneklem",
+    "lowSampleTip": "Bu dönemde {min} adetten daha az Prompt içinde geçti: sıralamak için çok az yanıt var.",
     "citationsSectionNote": "AI yanıtlarının markanızla ilgili atıfta bulunduğu tüm kaynaklar — yalnızca kendi siteniz değil.",
     "mentionEvidence": "Bahsedilme Kanıtı",
     "mentionEvidenceDescription": "Bu dönemde sizden en çok bahseden yanıtlar ve bahsedilmenin etrafındaki pasaj.",
+    "newestFirst": "En yeni ilk sırada.",
     "citationEvidence": "Atıf Kanıtı",
     "citationEvidenceDescription": "Bu dönemde AI yanıtlarının en çok atıfta bulunduğu URL'ler ve bunları ortaya çıkaran takip edilen Prompt'lar."
   },
@@ -18271,10 +18410,36 @@
       "hint": "Ansvisor ekranlarının dili, yalnızca sizin için geçerlidir. Markalarınızın içerik dili değişmez.",
       "loading": "Diller yükleniyor…",
       "moreSoon": "Daha fazla dil yolda.",
-      "preview": "Ekip üyeleri ve test sürümleri, henüz çevirisi olmayan dilleri ve daha uzun metinli bir test dilini de görür. Metin eksikse İngilizce gösterilir.",
+      "preview": "Personel ve test sürümleri henüz çevirisi olmayan dilleri de görebilir. Metnin eksik olduğu yerlerde İngilizce gösterilir.",
       "testLanguage": "{language} · test",
       "saved": "Dil kaydedildi",
-      "saveFailed": "Diliniz kaydedilemedi. Lütfen tekrar deneyin."
+      "saveFailed": "Diliniz kaydedilemedi. Lütfen tekrar deneyin.",
+      "suggest": {
+        "link": "Daha iyi bir çeviri öner",
+        "title": "Daha iyi bir çeviri öner",
+        "description": "Hatalı görünen yeri ve nasıl ifade edeceğinizi bize bildirin. Ekibimiz her öneriyi inceler.",
+        "language": "Dil",
+        "screen": "Ekran",
+        "current": "Şu anki metin",
+        "currentPlaceholder": "Metni yazın, yapıştırın veya ekrandan seçin",
+        "pick": "Ekrandan seç",
+        "picking": "Değiştirmek istediğiniz metne tıklayın. İptal etmek için Esc tuşuna basın.",
+        "better": "Daha iyi olan öneriniz",
+        "note": "Not (isteğe bağlı)",
+        "notePlaceholder": "Bunun neden daha iyi olduğu veya nerede göründüğü",
+        "cancel": "İptal",
+        "send": "Öneriyi gönder",
+        "sent": "Teşekkür ederiz. Öneriniz ekibimize iletildi.",
+        "errors": {
+          "locale": "Öneriler yalnızca İngilizce dışındaki diller içindir.",
+          "currentText": "Şu an görünen metni ekleyin.",
+          "suggestion": "Daha iyi olan önerinizi ekleyin.",
+          "same": "Öneriniz mevcut metinle aynı.",
+          "tooLong": "Bu çok uzun. Lütfen her metni 1.000 karakterin altında tutun.",
+          "tooMany": "Bugün çok fazla öneri gönderdiniz. Lütfen yarın tekrar deneyin.",
+          "server": "Öneriniz gönderilemedi. Tekrar deneyin."
+        }
+      }
     },
     "save": "Değişiklikleri kaydet",
     "saved": "Değişiklikler kaydedildi!",
@@ -18593,6 +18758,8 @@
       "aiUsageHint": "Ansvisor'ın AI özellikleri için aylık kota: İyileştirme önerileri, İçerik Editörü'nün AI'ı ve Aksiyon Merkezi'nin görev yazımı. Ajan Sohbeti kendi AI anahtarınızla çalışır. Ücretsiz deneme daha küçük bir kota ile gelir.",
       "aiUsageCustomHint": "Ansvisor'ın AI özellikleri için aylık kota: İyileştirme önerileri, İçerik Editörü'nün AI'ı ve Aksiyon Merkezi'nin görev yazımı. Ajan Sohbeti kendi AI anahtarınızla çalışır. Ansvisor miktarı sizinle birlikte belirler.",
       "aiUsageHintChat": "Ansvisor'ın AI özellikleri için aylık kota: Sohbet ve ajanlar, İyileştirme önerileri, İçerik Editörü'nün AI'ı ve Aksiyon Merkezi'nin görev yazımı. Kendi AI anahtarınız yalnızca Enterprise ile gelir. Ücretsiz deneme daha küçük bir kota ile gelir.",
+      "contentEstimate": "Ayda en fazla {pages, number} yeni sayfa veya {optimizations, number} sayfa optimizasyonu",
+      "contentEstimateHint": "Sohbet ve aracılarla paylaşılan aylık AI kullanım hakkınızı kullanır. Gerçek sayılar sayfa uzunluğuna ve seçtiğiniz AI modeline göre değişir.",
       "aiUsageCustomHintChat": "Ansvisor'ın AI özellikleri için aylık kota: Sohbet ve ajanlar, İyileştirme önerileri, İçerik Editörü'nün AI'ı ve Aksiyon Merkezi'nin görev yazımı. Enterprise'da Sohbet kendi AI anahtarınızla da çalışabilir. Ansvisor miktarı sizinle birlikte belirler."
     },
     "contactUs": "Bize Ulaşın",
@@ -20258,6 +20425,26 @@
       "crm": "CRM ve gelir",
       "team": "Ekip ve veri"
     }
+  },
+  "translationSuggestionsAdmin": {
+    "title": "Çeviri önerileri",
+    "description": "Yalnızca Ansvisor personeli içindir. Arayüz için daha iyi çeviri önerileri. Kabul etmek yalnızca durumu işaretler: dizeyi web/messages altındaki dil dosyasında ve sözlükte güncellemek için web/scripts/translate-messages.mjs dosyasını tekrar çalıştırın. İsim veya e-posta gösterilmez.",
+    "empty": "Yeni öneri yok.",
+    "columns": {
+      "date": "Tarih",
+      "language": "Dil",
+      "screen": "Ekran",
+      "current": "Mevcut metin",
+      "suggestion": "Öneri",
+      "note": "Not",
+      "actions": "İncele"
+    },
+    "key": "Anahtar: {key}",
+    "accept": "Kabul Et",
+    "reject": "Reddet",
+    "accepted": "Kabul edildi olarak işaretlendi",
+    "rejected": "Reddedildi",
+    "failed": "Kaydedilemedi. Zaten incelenmiş olabilir."
   },
   "reportCardAdmin": {
     "title": "Ücretsiz karneler",

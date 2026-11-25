@@ -14,6 +14,14 @@
     "upgrade": "업그레이드",
     "choosePlan": "요금제 선택"
   },
+  "metrics": {
+    "promptsAnswered": "{count, plural, other {{period} 동안 답변이 생성된 Prompt #개}}",
+    "period": {
+      "lastDays": "{days, plural, other {최근 #일}}",
+      "all": "추적된 전체 기록",
+      "custom": "선택한 기간"
+    }
+  },
   "locationPicker": {
     "label": "위치",
     "tracked": "추적 중",
@@ -53,8 +61,8 @@
     "title": "단일 Prompt 실행",
     "description": "테스트할 Prompt를 선택하세요. 해당 Prompt만 활성화된 플랫폼에서 실행됩니다.",
     "empty": "활성 Prompt가 없습니다. 먼저 브랜드 설정에서 Prompt를 추가하세요.",
-    "loadFailed": "Prompt를 불러오지 못했습니다",
-    "runFailed": "Prompt를 실행하지 못했습니다"
+    "loadFailed": "Prompt를 불러오지 못했습니다. 다시 시도해 주세요.",
+    "runFailed": "Prompt를 실행하지 못했습니다. 다시 시도해 주세요."
   },
   "responseDetail": {
     "response": "AI 응답",
@@ -73,7 +81,9 @@
     "missing_ai_key": "먼저 설정 › AI Providers에서 AI 제공업체 키를 추가해 주세요.",
     "server_error": "저희 쪽에서 문제가 발생했습니다. 다시 시도해 주세요.",
     "location_limit": "요금제의 Prompt 위치가 가득 찼습니다. 각 Prompt는 추적하는 위치마다 한 번씩 계산되며, 일시중지된 Prompt는 계산되지 않습니다. 일부를 삭제하거나 일시중지하거나 요금제를 업그레이드해 주세요.",
-    "brand_limit": "요금제의 브랜드 한도를 모두 사용했습니다. 더 추가하려면 요금제를 업그레이드해 주세요."
+    "brand_limit": "요금제의 브랜드 한도를 모두 사용했습니다. 더 추가하려면 요금제를 업그레이드해 주세요.",
+    "demo_brand": "샘플 데이터가 포함된 데모 브랜드이므로 변경하거나 실행할 수 없습니다. 직접 등록한 브랜드에서 변경해 주세요.",
+    "admin_required": "관리자만 수행할 수 있습니다. 워크스페이스 관리자에게 문의하세요."
   },
   "aiUsage": {
     "meter": {
@@ -383,6 +393,7 @@
       "setProductFeed": "제품 피드 설정을 변경하려면 플랜이 필요합니다",
       "generateReports": "보고서를 생성하려면 플랜이 필요합니다",
       "deleteReports": "보고서를 삭제하려면 플랜이 필요합니다",
+      "renameReports": "보고서 이름을 바꾸려면 유료 플랜이 필요합니다",
       "markTaskDone": "작업을 완료로 표시하려면 플랜이 필요합니다",
       "attachFiles": "파일을 첨부하려면 플랜이 필요합니다",
       "startChat": "채팅을 시작하려면 플랜이 필요합니다",
@@ -502,7 +513,8 @@
       "companyName": "회사 이름",
       "competitorsToTrack": "추적할 경쟁사",
       "finishingSetup": "설정을 마무리하는 중...",
-      "competitorsTitle": "경쟁사"
+      "competitorsTitle": "경쟁사",
+      "saveCompetitorsFailed": "경쟁사를 저장하지 못했습니다. 다시 시도해 주세요."
     },
     "prompts": {
       "removeTopic": "주제 삭제",
@@ -943,10 +955,13 @@
         "title": "현재 상태",
         "change": "어제 대비 {change}",
         "noChange": "어제 대비 변화 없음",
-        "behind": "{count}개 브랜드 중 #{rank}위. {name}보다 {gap}점 뒤처짐.",
-        "ahead": "{count}개 브랜드 중 #1위. {name}보다 {gap}점 앞섬.",
+        "behind": "{set, select, rivals {주요 경쟁사} competitors {{min}개 이상의 Prompt에 언급된 경쟁사} other {브랜드}} {count}개 중 #{rank}위. {name}보다 {gap}점 뒤처짐.",
+        "ahead": "{set, select, rivals {주요 경쟁사} competitors {{min}개 이상의 Prompt에 언급된 경쟁사} other {브랜드}} {count}개 중 #1위. {name}보다 {gap}점 앞섬.",
         "alone": "아직 프롬프트에서 점수를 얻은 경쟁업체가 없습니다.",
-        "none": "아직 점수가 없습니다. 최신 AI 답변이 채점되면 여기에 표시됩니다."
+        "none": "아직 점수가 없습니다. 최신 AI 답변이 채점되면 여기에 표시됩니다.",
+        "outOf": "/100",
+        "scoreLabel": "가시성 점수",
+        "run": "최근 실행 기준, {date}"
       },
       "summary": {
         "changes": "{title}: {count, plural, other {변화 #건}}",
@@ -961,6 +976,17 @@
           "rival": "경쟁업체"
         },
         "actionAdded": "<link>조치 항목이 추가되었습니다</link>.",
+        "group": {
+          "competitor_leads": "경쟁사 {count}곳의 언급량이 훨씬 더 많습니다",
+          "competitor_momentum": "경쟁사 {count}곳이 빠르게 치고 올라오고 있습니다",
+          "competitor_surge": "경쟁사 {count}곳의 가시성이 급증했습니다",
+          "competitor_crossed": "경쟁사 {count}곳이 가시성에서 앞서갔습니다",
+          "competitor_overtaken": "경쟁사 {count}곳을 추월했습니다",
+          "other": "{title} 및 {more, plural, other {유사한 변경 사항 #개}}"
+        },
+        "groupActions": "{count, plural, other {작업 #개}}",
+        "showGroup": "전체 {count}개 표시",
+        "hideGroup": "숨기기",
         "quiet": {
           "none": "큰 변화가 없습니다.",
           "held": "큰 변화가 없습니다. 내 점수는 {score}점으로 유지되었습니다.",
@@ -2034,11 +2060,13 @@
         "pill": "방치됨",
         "hint": "{days}일 이상 담당자 없이 신규 상태로 유지됨",
         "quiet": "{days}일간 업데이트 없음",
-        "notice": "방치됨: 이 액션은 {days}일 이상 신규 상태로 유지되었으며 아무도 작업하지 않았습니다. 아직 종료되지 않았습니다. 여전히 유효하다면 유지하고, 그렇지 않다면 해제하세요.",
-        "keep": "여전히 유효함",
+        "notice": "{days}일 이상 아무도 이 작업을 진행하지 않았습니다.",
+        "keep": "유지",
+        "keepHint": "여전히 관련성이 있음: 열린 상태를 유지하며 더 이상 방치되지 않습니다",
+        "dismiss": "무시",
         "kept": "유지됨: 더 이상 방치 상태가 아닙니다"
       },
-      "taskProgress": "작업 {completed}/{total}개",
+      "taskProgress": "작업 {completed}/{total}개 완료됨",
       "everyone": "모든 멤버",
       "everyoneTitle": "워크스페이스의 모든 멤버: 아직 담당자가 지정되지 않았습니다",
       "tags": {
@@ -2090,6 +2118,16 @@
       "noResults": "이 필터와 일치하는 액션이 없습니다.",
       "noOpen": "열린 액션이 없습니다. 완료되거나 무시된 액션은 모든 상태에서 볼 수 있습니다.",
       "showAllStatuses": "모든 상태 보기",
+      "summary": {
+        "open": "진행 중 {count}개",
+        "closed": "이번 주 완료 {count}개",
+        "closedHint": "최근 {days}일 동안 완료되거나 무시된 항목입니다. 클릭하여 목록을 확인하세요.",
+        "new": "마지막 방문 이후 신규 {count}개"
+      },
+      "newMark": {
+        "label": "신규",
+        "hint": "마지막 방문 이후 생성됨"
+      },
       "error": {
         "title": "액션을 불러오지 못했습니다.",
         "retry": "다시 시도"
@@ -2264,20 +2302,34 @@
       "drawer": {
         "actionId": "액션 ID",
         "previousCode": "이전 코드: {code}",
+        "more": "추가 작업",
+        "priorityLine": "우선순위 <b>{score}</b> · {level}",
+        "stats": {
+          "prompts": "{count, plural, other {Prompt}}",
+          "pages": "{count, plural, other {페이지}}",
+          "platforms": "{count, plural, other {플랫폼}}",
+          "competitors": "{count, plural, other {경쟁사 #개}}",
+          "topics": "{count, plural, other {주제 #개}}"
+        },
         "tabs": {
           "overview": "개요",
           "affected": "영향을 받는 항목",
           "tasks": "작업",
           "signals": "시그널",
-          "history": "히스토리"
+          "history": "히스토리",
+          "tasksProgress": "작업 {completed}/{total}"
         },
         "why": "이 액션이 필요한 이유",
         "goal": "목표",
+        "doneWhen": "완료 조건",
+        "whatHappened": "발생 내역",
         "kpis": "KPI",
         "kpiBrandGoal": "{timeframe, select, weekly {브랜드 주간 목표} quarterly {브랜드 분기 목표} other {브랜드 월간 목표}}: {target}",
         "noKpis": "이 액션에 연결된 설정된 KPI가 없습니다.",
         "support": "{count, plural, =0 {이 액션을 뒷받침하는 미해결 시그널이 더 이상 없습니다.} other {#개의 시그널이 이 액션을 뒷받침합니다}}",
         "supportAll": "모든 시그널 ({count})",
+        "supportTimes": "×{count}",
+        "supportSame": "내용이 동일한 신호 {count}개: '신호' 탭에 모두 표시됩니다",
         "affected": {
           "prompts": "{count, plural, other {Prompt #개}}",
           "pages": "{count, plural, other {#개 페이지}}",
@@ -2415,6 +2467,8 @@
         "assignee": "담당자",
         "assignTo": "팀원에게 할당",
         "dueDate": "마감일",
+        "noDueDate": "마감일 없음",
+        "addDueDate": "마감일 추가",
         "goalPassed": "목표 날짜가 지났습니다",
         "setNewDate": "새 날짜 설정",
         "statusLabel": "상태",
@@ -3989,6 +4043,9 @@
         "inProgress": "진행 중",
         "noImprovement": "개선 없음",
         "dismissed": "무시됨",
+        "onHold": "보류 중",
+        "closed": "종료된 작업",
+        "closedSub": "이 기간 내 종료됨",
         "ofTotal": "전체의 {percent}%"
       },
       "pagination": {
@@ -4236,6 +4293,13 @@
     "answerSub": "예약된 추적을 통해 수집된 답변",
     "loading": "로드 중…",
     "answerFailed": "이 답변을 불러올 수 없습니다."
+  },
+  "datePicker": {
+    "placeholder": "날짜 선택",
+    "previousMonth": "이전 달",
+    "nextMonth": "다음 달",
+    "today": "오늘",
+    "clear": "지우기"
   },
   "chatTools": {
     "profile": {
@@ -4644,6 +4708,10 @@
       "name": "보고서 생성",
       "step": "보고서 생성 완료"
     },
+    "reportPresentation": {
+      "name": "프레젠테이션 만들기",
+      "step": "프레젠테이션 생성 완료"
+    },
     "startAudit": {
       "name": "사이트 감사 시작",
       "step": "사이트 감사 시작됨"
@@ -4951,7 +5019,7 @@
     "runsTray": {
       "label": "내 실행 목록",
       "title": "내 실행 목록",
-      "button": "{count, plural, =0 {실행} other {#개 실행 중}}",
+      "button": "{count, plural, =0 {실행 · 실행 중 없음} other {실행 · #개 실행 중}}",
       "needsYouTip": "{count, plural, other {#개 확인 필요}}",
       "summary": "{running}개 실행 중 · {needsYou, plural, other {#개 확인 필요}}",
       "summaryRunning": "{running}개 실행 중",
@@ -5311,6 +5379,13 @@
       "notFiled": "이미지가 생성되었지만 파일에 저장하지 못했습니다.",
       "providerOff": "설정 › 채팅에서 {model}의 제공업체가 이 워크스페이스에 대해 꺼져 있습니다. 다른 이미지 모델을 선택해 주세요.",
       "providersOff": "설정 › 채팅에서 모든 이미지 모델 제공업체가 이 워크스페이스에 대해 꺼져 있어 채팅에서 이미지를 생성할 수 없습니다. 관리자가 다시 켤 수 있습니다."
+    },
+    "presentations": {
+      "title": "프레젠테이션 · {title}",
+      "unavailable": "여기에서는 프레젠테이션을 사용할 수 없습니다.",
+      "notFound": "해당 보고서를 찾을 수 없습니다. 저장된 보고서 목록을 확인한 후 다시 선택하세요.",
+      "storageFull": "워크스페이스의 저장 공간이 가득 찼습니다. '파일'에서 공간을 확보한 후 다시 시도하세요.",
+      "notFiled": "슬라이드가 생성되었지만 저장하지 못했습니다. 다시 시도해 주세요."
     },
     "error": {
       "noKey": "채팅을 실행할 AI 키가 없습니다. 관리자가 설정 › AI 제공업체에서 추가할 수 있습니다.",
@@ -5944,6 +6019,7 @@
       "pdf": "PDF",
       "csv": "CSV",
       "xlsx": "Excel",
+      "pptx": "PowerPoint",
       "json": "JSON",
       "jsonld": "JSON-LD",
       "txt": "TXT",
@@ -6109,6 +6185,8 @@
     },
     "menu": {
       "label": "채팅 메뉴",
+      "clearGroup": "지우기",
+      "clearGroupLabel": "{count, plural, other {{where}에서 내 채팅 #개 삭제}}",
       "strip": "채팅 메뉴 단축키",
       "hide": "채팅 메뉴 숨기기",
       "show": "채팅 메뉴 표시",
@@ -6120,7 +6198,7 @@
       "toggleMenu": "메뉴 섹션 표시 또는 숨기기",
       "home": "홈",
       "inbox": "받은편지함",
-      "inboxLabel": "받은편지함 · {count, plural, other {#개 항목}}",
+      "inboxLabel": "수신함 · {needsYou, plural, other {확인 필요 #개}}",
       "inboxLabelNeedsYou": "받은편지함 · {count, plural, other {#개 항목}} · {needsYou, plural, other {#개 확인 필요}}",
       "skills": "스킬",
       "activity": "활동",
@@ -6175,6 +6253,7 @@
       "agents": "에이전트",
       "agentsShort": "에이전트",
       "agentsLabel": "에이전트 · 작업 센터 내",
+      "datedTitle": "{when} · ",
       "agentsTip": "Chat 밖의 Action Center › 에이전트를 엽니다"
     },
     "actions": {
@@ -6217,7 +6296,12 @@
       "failed": "저장하지 못했습니다. 다시 시도해 주세요.",
       "deleteTitle": "이 채팅을 삭제하시겠습니까?",
       "deleteBody": "모든 사용자에게서 “{name}”이(가) 삭제됩니다. 생성된 파일은 파일에 그대로 유지됩니다. 실행 중인 에이전트는 먼저 중지됩니다.",
-      "cancel": "취소"
+      "cancel": "취소",
+      "clearTitle": "{count, plural, other {{where}에서 채팅 #개를 삭제하시겠습니까?}}",
+      "deleteManyTitle": "{count, plural, other {채팅 #개를 삭제하시겠습니까?}}",
+      "deleteManyBody": "내가 작성한 채팅만 삭제되며, 팀원이 공유한 채팅은 유지됩니다. 생성된 파일은 '파일'에 그대로 남고, 실행 중인 에이전트는 먼저 중지됩니다. 몇 초 동안 실행을 취소할 수 있으며, 이후에는 취소할 수 없습니다.",
+      "deleteMany": "{count, plural, other {채팅 #개 삭제}}",
+      "deletedMany": "{count, plural, other {채팅 #개 삭제됨}}"
     },
     "home": {
       "greeting": {
@@ -6724,6 +6808,7 @@
       "select": "채팅 선택",
       "selectFirst": "채팅을 선택하여 함께 변경하세요",
       "archiveSelected": "선택 항목 보관",
+      "deleteSelected": "선택 항목 삭제",
       "unarchiveSelected": "선택 항목 보관 취소",
       "archivedMany": "{count}개 보관됨 · 보관함에서 확인",
       "unarchivedMany": "{count}개 보관 취소됨 · 채팅 목록으로 복원",
@@ -7407,6 +7492,7 @@
       "sendToWebhook": "웹훅으로 “{title}” 페이지를 전송했습니다",
       "takeDownFromCms": "{cms}에서 “{title}” 페이지를 내렸습니다",
       "makeReport": "“{title}” 보고서를 생성했습니다",
+      "reportPresentation": "프레젠테이션 “{title}” 생성 완료",
       "makeReportUndo": "보고서에서 “{title}” 보고서를 삭제했습니다",
       "startAudit": "{pages}에 대한 사이트 감사를 시작했습니다",
       "makeImages": "{model}(으)로 “{title}” 이미지를 생성했습니다",
@@ -8516,7 +8602,8 @@
       },
       "agency-reporter": {
         "name": "에이전시 클라이언트 리포터",
-        "description": "에이전시를 위한 각 클라이언트 브랜드별 월간 보고서입니다."
+        "description": "에이전시를 위한 각 클라이언트 브랜드별 월간 보고서입니다.",
+        "instructions": "주 단위 대신 지난달 1일부터 말일까지의 데이터를 지지난달과 비교하여 보고하세요. 고객 브랜드에 맞춰 내부 메모 없이 명확하고 쉬운 표현으로 작성하세요."
       },
       "paid-opportunity": {
         "name": "유료 기회 분석",
@@ -10510,7 +10597,8 @@
       "doneCount": "{count, plural, other {분석 완료 — 답변 #개가 저장되었습니다.}}",
       "doneSoFar": "{count, plural, other {거의 완료됨 — 지금까지 #개의 답변이 저장되었으며 나머지는 계속 수집 중입니다.}}",
       "failed": "작업 실패: {reason}",
-      "unknownError": "알 수 없는 오류"
+      "unknownError": "알 수 없는 오류",
+      "startFailed": "추적을 시작할 수 없습니다. 다시 시도하세요."
     },
     "runPrompts": "Prompt 실행",
     "runPromptsNow": "지금 Prompts 실행",
@@ -10931,7 +11019,7 @@
       "compareHint": "선택한 기간을 직전의 같은 길이의 기간과 비교합니다.",
       "allTimeHint": "전체 기간입니다. 비교할 수 있는 같은 길이의 이전 기간이 없습니다.",
       "lastVsPrevious": "{days, plural, other {최근 #일 vs 이전 #일}}",
-      "loadFailed": "세부 내역을 불러오지 못했습니다",
+      "loadFailed": "상세 내역을 불러올 수 없습니다. 다시 시도하세요.",
       "allTime": "전체 기간",
       "current": "현재 {days}일",
       "noSamePrompt": "두 기간 모두에서 응답된 Prompt가 없습니다",
@@ -10969,9 +11057,9 @@
       "noCompetitorsTitle": "아직 트래킹 중인 경쟁사가 없습니다",
       "noCompetitorsBody": "경쟁사를 추가하여 AI 답변에서 어떻게 비교되는지 확인하세요.",
       "headToHead": "일대일 비교",
-      "loadFailed": "인사이트를 불러오지 못했습니다. 다시 시도해 주세요",
+      "loadFailed": "인사이트를 불러올 수 없습니다. 다시 시도해 주세요.",
       "exportCapped": "메모리 문제를 방지하기 위해 내보내기가 50,000행으로 제한되었습니다",
-      "exportFailed": "CSV를 내보내지 못했습니다",
+      "exportFailed": "CSV를 내보낼 수 없습니다. 다시 시도해 주세요.",
       "noTrend": "아직 추세 데이터가 없습니다",
       "yourBrand": "내 브랜드",
       "avgCompetitor": "평균 경쟁사",
@@ -11070,6 +11158,8 @@
       "selectBrand": "콘텐츠 플랜을 보려면 브랜드를 선택하세요.",
       "period": "기간",
       "periods": "지난 {days}일",
+      "periodLast": "최근",
+      "periodDays": "{days}일",
       "newContent": "새 콘텐츠",
       "cards": {
         "create": {
@@ -13975,6 +14065,13 @@
     "description": "AI 생성 답변에서 가시성을 높여주는 AI 기반 콘텐츠 추천입니다.",
     "opportunities": "기회",
     "autoGeneratedHint": "추적 데이터가 수집되면 기회가 자동으로 생성됩니다.",
+    "flowNote": {
+      "coveredTitle": "추적 중인 모든 니즈에 이미 기회가 배정되어 있어 야간 실행 시 새로운 기회가 추가되지 않습니다.",
+      "coveredHint": "더 많은 기회를 확인하려면 새로운 질문을 위한 <prompts>Prompts를 추가</prompts>하거나, 완료된 기회를 '완료'로 표시하거나, '+ 새로 만들기'를 사용해 다른 각도에서 접근해 보세요.",
+      "coveredHintReadOnly": "새로운 질문을 위한 <prompts>Prompts</prompts>가 추가되거나 완료된 기회가 '완료'로 표시되면 새 기회가 추가됩니다.",
+      "limitTitle": "이번 달의 새로운 기회가 모두 소진되었습니다. {date}부터 야간 실행 시 다시 추가됩니다.",
+      "limitTitleNoDate": "이번 달의 새로운 기회가 모두 소진되었습니다. 플랜이 갱신되면 야간 실행 시 다시 추가됩니다."
+    },
     "generating": "생성 중…",
     "sendToWorkflow": "Workflow로 보내기",
     "generateBrief": "브리프 만들기",
@@ -14327,7 +14424,8 @@
       "setupFirst": "기회를 워크플로 도구로 전송하려면 웹훅을 설정하세요.",
       "urlRequired": "웹훅 URL을 입력해야 합니다.",
       "urlRequiredTest": "먼저 웹훅 URL을 입력하세요",
-      "saveError": "웹훅 설정을 저장하지 못했습니다"
+      "saveError": "웹훅 설정을 저장하지 못했습니다",
+      "testNotRun": "테스트가 실행되지 않았습니다. 다시 시도해 주세요."
     },
     "loadError": "콘텐츠 기회를 불러오지 못했습니다",
     "exportError": "기회를 내보내지 못했습니다",
@@ -14972,7 +15070,8 @@
         "trackNotAllowed": "관리자 및 매니저만 Prompt를 추가할 수 있습니다.",
         "failed": "이러한 검색어를 불러올 수 없습니다.",
         "noData": "Google Search Console에 이 브랜드의 검색어가 아직 없습니다.",
-        "empty": "이 기간에 클릭이 발생한 모든 Google 검색어가 추적되고 있습니다."
+        "empty": "이 기간에 클릭이 발생한 모든 Google 검색어가 추적되고 있습니다.",
+        "trackFailed": "이 쿼리들을 추적할 수 없습니다. 다시 시도해 주세요."
       }
     },
     "summaryLine": {
@@ -16121,7 +16220,8 @@
       "save": "{count, plural, other {#개의 Prompt에 추가}}",
       "removeSave": "{count, plural, other {#개의 Prompt에서 삭제}}",
       "done": "{count, plural, other {#개의 Prompt에 태그 추가됨}}",
-      "removed": "{count, plural, other {#개의 Prompt에서 태그 삭제됨}}"
+      "removed": "{count, plural, other {#개의 Prompt에서 태그 삭제됨}}",
+      "saveFailed": "태그를 저장할 수 없습니다. 다시 시도해 주세요."
     },
     "bulkDelete": {
       "progress": "Prompt {total}개 중 {done}개 삭제 중…",
@@ -16819,7 +16919,18 @@
     "windowLastDays": "{days, plural, other {점수는 최근 #일을 기준으로 합니다.}}",
     "windowAllTime": "점수는 추적된 전체 기간을 기준으로 합니다.",
     "windowSelectedRange": "점수는 선택한 기간을 반영합니다.",
+    "card": {
+      "prompts": "{visible}/{count}개 Prompts",
+      "scoreTip": "답변 {mentionAnswers}개에서 언급됨 · {citationAnswers}개에서 인용됨 · 순위 가중치 {position} · 언급 {mentions}회 · 인용 {citations}회"
+    },
     "selected": "선택됨",
+    "rank": {
+      "short": "#{rank}",
+      "label": "가시성 점수 기준 {rank}위",
+      "you": "귀사",
+      "lowSample": "표본 부족",
+      "lowSampleTip": "이 기간에 10개 미만의 Prompts에서 언급되어 아직 순위가 매겨지지 않았습니다."
+    },
     "noData": "데이터 없음",
     "emptyTitle": "아직 등록된 경쟁업체가 없습니다",
     "emptyDescription": "경쟁업체 도메인을 추가하여 모든 AI 플랫폼에서 귀하의 AI 가시성과 비교해 보세요.",
@@ -16869,7 +16980,7 @@
     },
     "merge": {
       "open": "병합",
-      "openHint": "동일한 회사인 경쟁사 병합",
+      "openHint": "중복 경쟁사 병합(예: 한 브랜드의 두 도메인)",
       "title": "경쟁사 병합",
       "description": "동일한 회사인 경쟁사를 선택한 다음, 유지할 경쟁사를 선택하세요.",
       "pickLabel": "동일한 회사",
@@ -16942,6 +17053,11 @@
       "noDataTitle": "비교 데이터 없음",
       "noDataDescription": "이 경쟁사에 대한 비교 데이터를 생성하려면 가시성에서 추적 확인을 실행하세요.",
       "loadError": "비교 데이터를 불러오지 못했습니다.",
+      "gapCreateAction": "작업 생성",
+      "gapAskChat": "Chat에 문의",
+      "gapPanelTip": "입력란에 이 격차 정보가 입력된 채로 Chat을 열어 바로 전송할 수 있습니다",
+      "gapCreateText": "이 격차를 해결하기 위한 하위 작업과 함께 액션 센터에 작업으로 전송합니다. \"{prompt}\" Prompt에서 {competitor} 점수는 {them}점이고 귀사 점수는 {you}점입니다({count, plural, other {플랫폼}}: {platforms}).",
+      "gapAskText": "\"{prompt}\" Prompt에서 왜 {competitor} 점수는 {them}점이고 귀사 점수는 {you}점인가요({count, plural, other {플랫폼}}: {platforms})? 무엇을 먼저 변경해야 할까요?",
       "promptCounts": "{engines, plural, other {플랫폼 #개}} · {runs, plural, other {실행 #회}}",
       "engineCounts": "{locations, plural, other {위치 #곳}} · {runs, plural, other {실행 #회}}",
       "runs": "{count, plural, other {실행 #회}}",
@@ -17124,9 +17240,9 @@
       "byCompetitor": "경쟁사별",
       "howItWorks": "작동 방식",
       "lowVisibility": "이 기간에는 가시성이 낮아 목록이 넓을 수 있습니다. 먼저 기본 가시성에 집중하세요.",
-      "loadFailedToast": "인용 데이터를 불러오지 못했습니다",
-      "checkFailedToast": "인용 데이터를 확인하지 못했습니다",
-      "exportFailed": "CSV를 내보내지 못했습니다",
+      "loadFailedToast": "인용 데이터를 불러올 수 없습니다. 다시 시도해 주세요.",
+      "checkFailedToast": "인용 데이터를 확인할 수 없습니다. 다시 시도해 주세요.",
+      "exportFailed": "CSV를 내보낼 수 없습니다. 다시 시도해 주세요.",
       "typesNotExportable": "소스 유형은 차트 분석 항목이라 내보낼 수 없습니다. 내보내려면 도메인, URL 또는 경쟁사 격차로 전환하세요.",
       "tabGaps": "경쟁사 격차"
     }
@@ -17648,6 +17764,10 @@
   "reports": {
     "impactLink": "Ansvisor의 기여 내역",
     "impact": {
+      "firstShip": {
+        "title": "이 브랜드에 아직 게시된 콘텐츠가 없습니다",
+        "body": "CMS로 처음 전송하거나 에이전트가 처음 라이브 배포된 후에 이 보고서가 채워집니다."
+      },
       "title": "Ansvisor의 기여 내역",
       "subtitle": "{brand} · 수정되지 않은 유사한 Prompt와 비교 측정한 적용 조치",
       "subtitleNoBrand": "수정되지 않은 유사한 Prompt와 비교 측정한 적용 조치",
@@ -17833,6 +17953,15 @@
     "deleteConfirm": "이 보고서를 삭제하시겠습니까?",
     "deleteFailed": "보고서를 삭제하지 못했습니다",
     "rowMenuLabel": "{title}에 대한 추가 작업",
+    "rename": {
+      "item": "이름 바꾸기",
+      "title": "보고서 이름 바꾸기",
+      "description": "이름만 변경되며, 보고서의 수치는 그대로 유지됩니다.",
+      "label": "보고서 이름",
+      "save": "저장",
+      "done": "보고서 이름을 바꿨습니다",
+      "failed": "보고서 이름을 바꿀 수 없습니다. 다시 시도해 주세요."
+    },
     "copyLink": "링크 복사",
     "linkCopied": "링크를 복사했습니다. 워크스페이스 사용자가 이 링크로 보고서를 열 수 있습니다.",
     "copyLinkFailed": "링크를 복사하지 못했습니다. 보고서를 열고 주소를 직접 복사하세요.",
@@ -17878,6 +18007,12 @@
     "selectSections": "하나 이상의 섹션을 선택하세요",
     "dialogTitle": "보고서 생성",
     "dialogDescription": "AI가 작성한 요약 보고서와 함께 특정 기간의 브랜드 AI 가시성을 확인하세요.",
+    "dateRangeHint": "템플릿에 설정된 기간입니다. 여기서 변경하세요.",
+    "duplicate": {
+      "line": "기존 보고서인 \"{title}\"과(와) 동일한 기간입니다. 여시겠습니까?",
+      "open": "열기",
+      "anyway": "그래도 생성"
+    },
     "reportTitleLabel": "제목(선택 사항)",
     "reportTitlePlaceholder": "예: 2분기 경영진 요약 보고서",
     "presets": {
@@ -17944,7 +18079,7 @@
     "worstPrompts": "최저 성과 Prompts",
     "queryFanout": "검색어 fan-out",
     "queryFanoutDescription": "추적 중인 Prompts에 답변하는 동안 답변 엔진이 실제로 실행한 하위 쿼리입니다.",
-    "fanoutCoverage": "{answers}개 답변에서 고유 하위 쿼리 {queries}개",
+    "fanoutCoverage": "답변 {answers, number}개 전체에서 고유 하위 쿼리 {queries, number}개",
     "loadReportFailed": "이 보고서를 불러올 수 없습니다.",
     "notFound": "보고서를 찾을 수 없습니다.",
     "backToReports": "보고서 목록으로 돌아가기",
@@ -17964,13 +18099,17 @@
     "shareOfVoice": "점유율(Share of Voice)",
     "competitorLeaderboard": "경쟁사 리더보드",
     "topCitationSources": "주요 인용 소스",
-    "citationTotals": "해당 기간 내 도메인 {domains}개 · 인용 {citations}회",
+    "citationTotals": "이 기간 동안 도메인 {domains, number}개 · 인용 {citations, number}회",
     "noData": "해당 기간의 데이터가 없습니다.",
     "you": "(나)",
     "kpiCitationsNote": "\"브랜드 인용\"은 AI 답변에서 귀하의 사이트가 인용된 횟수를 집계합니다.",
+    "leaderboardRankNote": "가시성 점수 기준 순위입니다. {min}개 미만의 Prompt에서 언급된 브랜드는 표본 부족으로 맨 마지막에 표시됩니다.",
+    "lowSample": "표본 부족",
+    "lowSampleTip": "이 기간 동안 {min}개 미만의 Prompt에서 언급됨: 순위를 매기기에는 답변 수가 너무 적습니다.",
     "citationsSectionNote": "귀하의 사이트뿐만 아니라 AI 답변에서 브랜드와 관련하여 인용한 모든 출처입니다.",
     "mentionEvidence": "언급 증거",
     "mentionEvidenceDescription": "해당 기간 동안 귀하를 가장 많이 언급한 답변과 언급 전후 문맥입니다.",
+    "newestFirst": "최신순.",
     "citationEvidence": "인용 증거",
     "citationEvidenceDescription": "해당 기간 동안 AI 답변에서 가장 많이 인용한 URL 및 이를 노출한 추적 Prompts입니다."
   },
@@ -18254,10 +18393,36 @@
       "hint": "Ansvisor 화면에 사용되는 언어이며, 나에게만 적용됩니다. 브랜드 콘텐츠 언어는 변경되지 않습니다.",
       "loading": "언어를 불러오는 중…",
       "moreSoon": "더 많은 언어가 곧 추가될 예정입니다.",
-      "preview": "직원 및 테스트 빌드에서는 아직 번역되지 않은 언어와 더 긴 텍스트의 테스트 언어도 표시됩니다. 텍스트가 없는 부분은 영어로 표시됩니다.",
+      "preview": "직원 및 테스트 빌드에서는 아직 번역되지 않은 언어도 볼 수 있습니다. 텍스트가 없는 부분은 영문으로 표시됩니다.",
       "testLanguage": "{language} · 테스트",
       "saved": "언어가 저장되었습니다",
-      "saveFailed": "언어를 저장하지 못했습니다. 다시 시도해 주세요."
+      "saveFailed": "언어를 저장하지 못했습니다. 다시 시도해 주세요.",
+      "suggest": {
+        "link": "더 나은 번역 제안하기",
+        "title": "더 나은 번역 제안하기",
+        "description": "어색한 표현과 어떻게 수정하면 좋을지 알려주세요. 팀에서 모든 제안을 검토합니다.",
+        "language": "언어",
+        "screen": "화면",
+        "current": "현재 텍스트",
+        "currentPlaceholder": "텍스트를 입력하거나 붙여넣기, 또는 화면에서 선택하세요",
+        "pick": "화면에서 선택",
+        "picking": "변경하려는 텍스트를 클릭하세요. 취소하려면 Esc 키를 누르세요.",
+        "better": "제안하는 번역",
+        "note": "메모(선택 사항)",
+        "notePlaceholder": "이 표현이 더 나은 이유 또는 표시되는 위치",
+        "cancel": "취소",
+        "send": "제안 보내기",
+        "sent": "감사합니다. 제안이 팀에 전달되었습니다.",
+        "errors": {
+          "locale": "제안은 영어가 아닌 언어에 대해서만 가능합니다.",
+          "currentText": "현재 텍스트를 추가해 주세요.",
+          "suggestion": "제안하는 번역을 추가해 주세요.",
+          "same": "제안한 내용이 현재 텍스트와 동일합니다.",
+          "tooLong": "텍스트가 너무 깁니다. 각 텍스트를 1,000자 이내로 입력해 주세요.",
+          "tooMany": "오늘 너무 많은 제안을 보내셨습니다. 내일 다시 시도해 주세요.",
+          "server": "제안을 보내지 못했습니다. 다시 시도해 주세요."
+        }
+      }
     },
     "save": "변경사항 저장",
     "saved": "변경사항이 저장되었습니다!",
@@ -18569,6 +18734,8 @@
       "aiUsageHint": "Ansvisor의 AI 기능(개선 제안, 콘텐츠 에디터 AI, 액션 센터 작업 작성)에 대한 월간 허용량입니다. 에이전트 채팅은 자체 AI 키로 실행됩니다. 무료 체험판에는 더 적은 허용량이 제공됩니다.",
       "aiUsageCustomHint": "Ansvisor의 AI 기능(개선 제안, 콘텐츠 에디터 AI, 액션 센터 작업 작성)에 대한 월간 허용량입니다. 에이전트 채팅은 자체 AI 키로 실행됩니다. Ansvisor가 귀하와 함께 사용량을 설정합니다.",
       "aiUsageHintChat": "Ansvisor의 AI 기능(채팅 및 에이전트, 개선 제안, 콘텐츠 에디터 AI, 액션 센터 작업 작성)에 대한 월간 허용량입니다. 자체 AI 키는 Enterprise에서만 제공됩니다. 무료 체험판에는 더 적은 허용량이 제공됩니다.",
+      "contentEstimate": "월 최대 새 페이지 {pages, number}개 또는 페이지 최적화 {optimizations, number}회",
+      "contentEstimateHint": "Chat 및 에이전트와 공유되는 월간 AI 제공량을 사용합니다. 실제 수치는 페이지 길이와 선택한 AI 모델에 따라 달라집니다.",
       "aiUsageCustomHintChat": "Ansvisor의 AI 기능(채팅 및 에이전트, 개선 제안, 콘텐츠 에디터 AI, 액션 센터 작업 작성)에 대한 월간 허용량입니다. Enterprise에서는 채팅을 자체 AI 키로 실행할 수도 있습니다. Ansvisor가 귀하와 함께 사용량을 설정합니다."
     },
     "contactUs": "문의하기",
@@ -20234,6 +20401,26 @@
       "crm": "CRM 및 수익",
       "team": "팀 및 데이터"
     }
+  },
+  "translationSuggestionsAdmin": {
+    "title": "번역 제안",
+    "description": "Ansvisor 직원 전용입니다. 인터페이스 번역 개선 제안 목록입니다. 수락 시 표시만 변경되므로, web/scripts/translate-messages.mjs를 다시 실행하여 web/messages 내 해당 언어 파일과 용어집의 문자열을 업데이트해야 합니다. 이름이나 이메일은 표시되지 않습니다.",
+    "empty": "새 제안이 없습니다.",
+    "columns": {
+      "date": "날짜",
+      "language": "언어",
+      "screen": "화면",
+      "current": "현재 텍스트",
+      "suggestion": "제안",
+      "note": "메모",
+      "actions": "검토"
+    },
+    "key": "키: {key}",
+    "accept": "수락",
+    "reject": "거절",
+    "accepted": "수락됨으로 표시됨",
+    "rejected": "거절됨",
+    "failed": "저장하지 못했습니다. 이미 검토되었을 수 있습니다."
   },
   "reportCardAdmin": {
     "title": "무료 성적표",

@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 /**
  * Daily Pulse's and the AI Traffic digest's recipients (brand access, spec
@@ -9,7 +9,16 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
  */
 
 const emails = { u1: 'ana@acme.test', u2: 'bo@acme.test', u3: 'Cem@Acme.test' };
-const db = vi.hoisted(() => ({ lookups: [], tables: [], inserts: [], updates: [] }));
+const db = vi.hoisted(() => ({
+  lookups: [],
+  tables: [],
+  inserts: [],
+  updates: [],
+  // pulse_settings' row, and people's own choices (notification_preferences, 00554).
+  settings: null,
+  prefs: [],
+  windows: [],
+}));
 vi.mock('../../config/supabase.js', () => ({
   default: {
     from: (table) => {
@@ -30,8 +39,16 @@ vi.mock('../../config/supabase.js', () => ({
             : table === 'organizations'
               ? { data: { subscription_status: 'active' }, error: null }
               : { data: { id: 'pulse-1' }, error: null },
-        maybeSingle: async () => ({ data: null, error: null }),
-        then: (resolve) => resolve({ data: [], count: 0, error: null }),
+        maybeSingle: async () => ({
+          data: table === 'pulse_settings' ? db.settings : null,
+          error: null,
+        }),
+        then: (resolve) =>
+          resolve({
+            data: table === 'notification_preferences' ? db.prefs : [],
+            count: 0,
+            error: null,
+          }),
       };
       return chain;
     },
@@ -66,9 +83,13 @@ vi.mock('../../config/plans.js', () => ({
 }));
 const logger = vi.hoisted(() => ({ info: vi.fn(), warn: vi.fn(), error: vi.fn() }));
 vi.mock('../logger.js', () => ({ logger, default: logger }));
-vi.mock('../webhook-dispatch.js', () => ({ dispatchBrandWebhook: async () => ({ sent: 1 }) }));
+const hooks = vi.hoisted(() => ({ calls: 0 }));
+vi.mock('../webhook-dispatch.js', () => ({
+  dispatchBrandWebhook: async () => (hooks.calls++, { sent: 1 }),
+}));
 vi.mock('./metrics.js', () => ({
-  computePulseMetrics: async () => ({
+  computePulseMetrics: async (_brandId, { windowDays }) => ({
+    windowDays: db.windows.push(windowDays) && windowDays,
     kpis: { totalResults: 12 },
     highlights: [],
     warnings: [],
@@ -91,8 +112,10 @@ vi.mock('../slack/deliver.js', () => ({
 }));
 
 const { generatePulseForBrand, resolveRecipients } = await import('./engine.js');
+const { emailsOf, forgetEmails } = await import('./audience.js');
 
 beforeEach(() => {
+  forgetEmails();
   asked.calls = [];
   asked.readers = new Map([
     ['u1', new Set(['b1'])],
@@ -104,6 +127,10 @@ beforeEach(() => {
   db.tables = [];
   db.inserts = [];
   db.updates = [];
+  db.settings = null;
+  db.prefs = [];
+  db.windows = [];
+  hooks.calls = 0;
   sent.to = [];
   slack.calls = [];
   slack.answer = { status: 'skipped', reason: 'not_connected' };
@@ -171,5 +198,102 @@ describe('generatePulseForBrand', () => {
     slack.answer = { status: 'sent', ts: '1.2' };
     expect(await generatePulseForBrand('b1')).toMatchObject({ generated: true, slackSent: true });
     expect(db.updates).toContainEqual(['sent_pulses', { slack_sent: true }]);
+  });
+});
+
+describe("people's own choices (00554)", () => {
+  const MONDAY = new Date('2026-11-16T09:00:00Z');
+  const TUESDAY = new Date('2026-11-17T09:00:00Z');
+  const pref = (user_id, frequency, brand_id = null) => ({ user_id, brand_id, frequency });
+
+  afterEach(() => vi.useRealTimers());
+
+  it('mails exactly the people it did before while nobody has saved', async () => {
+    db.settings = { frequency: 'daily', recipients: ['ana@acme.test', 'client@partner.test'] };
+    expect(await generatePulseForBrand('b1')).toMatchObject({ generated: true, emailSent: true });
+    expect(sent.to).toEqual([['ana@acme.test', 'client@partner.test']]);
+    // Nobody's e-mail is looked up for it, as before.
+    expect(db.lookups).toEqual([]);
+    expect(db.tables).toContain('notification_preferences');
+  });
+
+  it("leaves out a teammate who turned it off, and keeps the brand's list for the rest", async () => {
+    db.prefs = [pref('u1', 'off')];
+    expect(await generatePulseForBrand('b1')).toMatchObject({ generated: true, emailSent: true });
+    expect(sent.to).toEqual([['bo@acme.test']]);
+
+    // On a set list too: their address no longer speaks for them.
+    sent.to = [];
+    db.settings = { frequency: 'notable', recipients: ['ana@acme.test', 'client@partner.test'] };
+    await generatePulseForBrand('b1');
+    expect(sent.to).toEqual([['client@partner.test']]);
+  });
+
+  it("sends it to a teammate who picked it while the brand's own is off, without webhook or Slack", async () => {
+    db.settings = { frequency: 'off', recipients: null };
+    db.prefs = [pref('u2', 'daily')];
+    expect(await generatePulseForBrand('b1')).toMatchObject({
+      generated: true,
+      emailSent: true,
+      webhooksSent: 0,
+      slackSent: false,
+    });
+    expect(sent.to).toEqual([['bo@acme.test']]);
+    expect(hooks.calls).toBe(0);
+    expect(slack.calls).toEqual([]);
+    expect(db.inserts[0][1]).toMatchObject({ frequency: 'daily' });
+  });
+
+  it('sends nothing, and reads no recipients, while the brand and everyone are off', async () => {
+    db.settings = { frequency: 'off', recipients: null };
+    db.prefs = [pref('u1', 'off'), pref('u2', 'off')];
+    expect(await generatePulseForBrand('b1')).toEqual({ skipped: 'off' });
+    expect(db.inserts).toEqual([]);
+    expect(sent.to).toEqual([]);
+  });
+
+  it("takes a brand's own row over All my brands", async () => {
+    db.prefs = [pref('u1', 'off'), pref('u1', 'daily', 'b1'), pref('u2', 'daily', 'other')];
+    await generatePulseForBrand('b1');
+    // Bo saved, but only for another brand: the brand's list no longer speaks
+    // for him, and he chose nothing here.
+    expect(sent.to).toEqual([['ana@acme.test']]);
+  });
+
+  it('mails a weekly pick on Mondays only, with the last 7 days', async () => {
+    db.prefs = [pref('u1', 'weekly')];
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(TUESDAY);
+    await generatePulseForBrand('b1');
+    expect(sent.to).toEqual([['bo@acme.test']]);
+    expect(db.windows).toEqual([1]);
+
+    sent.to = [];
+    db.windows = [];
+    vi.setSystemTime(MONDAY);
+    await generatePulseForBrand('b1');
+    // The brand's own (Only when notable) first, then the weekly one.
+    expect(sent.to).toEqual([['bo@acme.test'], ['ana@acme.test']]);
+    expect(db.windows).toEqual([1, 7]);
+  });
+});
+
+describe('emailsOf', () => {
+  it('reads each person once, keeps their order and skips those without an e-mail', async () => {
+    expect(await emailsOf(['u3', 'u1', 'u9', 'u1'])).toEqual([
+      'Cem@Acme.test',
+      'ana@acme.test',
+      'ana@acme.test',
+    ]);
+    expect(db.lookups).toEqual(['u3', 'u1', 'u9']);
+  });
+
+  it('answers a later ask for the same people without reading them again', async () => {
+    await emailsOf(['u1', 'u2']);
+    expect(await emailsOf(['u2', 'u1'])).toEqual(['bo@acme.test', 'ana@acme.test']);
+    expect(db.lookups).toEqual(['u1', 'u2']);
+    forgetEmails();
+    await emailsOf(['u1']);
+    expect(db.lookups).toEqual(['u1', 'u2', 'u1']);
   });
 });

@@ -18,7 +18,7 @@ import type { AgentForYou } from '@/lib/chat/agents-for-you';
 import type { FocusArea } from '@/lib/chat/focus';
 import type { ChatStartAudience } from '@/lib/chat/start-audience';
 import { TOUR_PAGES } from '@/lib/chat/tour';
-import { startChatRun } from '@/lib/chat/start-chat';
+import { findAskAgainChat, startChatRun } from '@/lib/chat/start-chat';
 import {
   focusGreeting,
   focusNews,
@@ -714,6 +714,20 @@ export function ChatHome({
     if (isLocked) {
       openUpgrade();
       return;
+    }
+    // What's new has one chat: asked again, it goes on in the person's
+    // What's new chat rather than adding one each time.
+    if (message === t('forYou.whatsNewMessage')) {
+      setStarting(true);
+      const chatId = await findAskAgainChat(message, brandId ?? null);
+      if (chatId) {
+        const started = await startChatRun(message, brandId ?? null, { conversationId: chatId });
+        if (started.ok) {
+          router.push(`/dashboard/chat/${started.chatId}`);
+          return;
+        }
+      }
+      setStarting(false);
     }
     // Home's chat below takes it at once: the page gives way and the question shows with the
     // run's first step while it starts (owner, 2026-11-09).

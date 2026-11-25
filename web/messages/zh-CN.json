@@ -14,6 +14,14 @@
     "upgrade": "升级",
     "choosePlan": "选择方案"
   },
+  "metrics": {
+    "promptsAnswered": "{count, plural, other {在{period}内有回答的 # 个 Prompt}}",
+    "period": {
+      "lastDays": "{days, plural, other {最近 # 天}}",
+      "all": "所有跟踪历史",
+      "custom": "所选范围"
+    }
+  },
   "locationPicker": {
     "label": "地点",
     "tracked": "已追踪",
@@ -53,8 +61,8 @@
     "title": "运行单个 Prompt",
     "description": "选择要测试的 Prompt。仅该 Prompt 会在您已启用的平台上运行。",
     "empty": "未找到可用的 Prompt。请先在品牌设置中添加 Prompt。",
-    "loadFailed": "加载 Prompt 失败",
-    "runFailed": "运行 Prompt 失败"
+    "loadFailed": "无法加载您的 Prompts。请重试。",
+    "runFailed": "无法运行该 Prompt。请重试。"
   },
   "responseDetail": {
     "response": "AI 回复",
@@ -73,7 +81,9 @@
     "missing_ai_key": "请先在“设置 › AI 提供商”中添加 AI 提供商密钥。",
     "server_error": "我们这边出了点问题,请重试。",
     "location_limit": "您套餐的 Prompt 位置额度已满:每个 Prompt 在其跟踪的每个位置各计一次,已暂停的 Prompt 不计入。请删除或暂停部分 Prompt,或升级套餐。",
-    "brand_limit": "您套餐的品牌额度已全部用完。请升级套餐以添加更多。"
+    "brand_limit": "您套餐的品牌额度已全部用完。请升级套餐以添加更多。",
+    "demo_brand": "这是演示品牌：其数据为示例数据，因此无法更改或运行。请在您自己的品牌上进行更改。",
+    "admin_required": "只有管理员才能执行此操作。请联系您工作区的管理员。"
   },
   "aiUsage": {
     "meter": {
@@ -383,6 +393,7 @@
       "setProductFeed": "更改产品 Feed 设置需要相应方案",
       "generateReports": "生成报告需要相应方案",
       "deleteReports": "删除报告需要相应方案",
+      "renameReports": "重命名报告需要付费计划",
       "markTaskDone": "将任务标记为完成需要相应方案",
       "attachFiles": "添加附件需要相应方案",
       "startChat": "发起对话需要相应方案",
@@ -502,7 +513,8 @@
       "companyName": "公司名称",
       "competitorsToTrack": "要跟踪的竞争对手",
       "finishingSetup": "正在完成设置...",
-      "competitorsTitle": "竞争对手"
+      "competitorsTitle": "竞争对手",
+      "saveCompetitorsFailed": "无法保存竞争对手。请重试。"
     },
     "prompts": {
       "removeTopic": "移除主题",
@@ -943,10 +955,13 @@
         "title": "当前现状",
         "change": "较昨日 {change}",
         "noChange": "较昨日无变化",
-        "behind": "在 {count} 个品牌中位列第 #{rank}，落后 {name} {gap} 分。",
-        "ahead": "在 {count} 个品牌中位列第 #1，领先 {name} {gap} 分。",
+        "behind": "在 {count} 个{set, select, rivals {主要竞争对手} competitors {在 {min}+ 个 Prompt 中提及的竞争对手} other {品牌}}中排名第 #{rank}。落后 {name} {gap} 分。",
+        "ahead": "在 {count} 个{set, select, rivals {主要竞争对手} competitors {在 {min}+ 个 Prompt 中提及的竞争对手} other {品牌}}中排名第 #1。领先 {name} {gap} 分。",
         "alone": "尚无竞品在您的 Prompts 上获得评分。",
-        "none": "暂无评分。最新 AI 回答完成评分后将在此显示。"
+        "none": "暂无评分。最新 AI 回答完成评分后将在此显示。",
+        "outOf": "/100",
+        "scoreLabel": "可见度得分",
+        "run": "来自最新运行，{date}"
       },
       "summary": {
         "changes": "{title}：{count, plural, =0 {无重大变化} other {# 项变化}}",
@@ -961,6 +976,17 @@
           "rival": "竞品"
         },
         "actionAdded": "<link>已添加一项操作</link>。",
+        "group": {
+          "competitor_leads": "{count} 个竞争对手的提及频次远高于您",
+          "competitor_momentum": "{count} 个竞争对手正在迅速增长",
+          "competitor_surge": "{count} 个竞争对手的可见度大幅飙升",
+          "competitor_crossed": "{count} 个竞争对手的可见度超过了您",
+          "competitor_overtaken": "您超越了 {count} 个竞争对手",
+          "other": "{title} 以及其他 {more, plural, other {# 项类似变化}}"
+        },
+        "groupActions": "{count, plural, other {# 项行动}}",
+        "showGroup": "显示全部 {count} 项",
+        "hideGroup": "隐藏",
         "quiet": {
           "none": "无重大变化。",
           "held": "无重大变化。您的得分稳定在 {score} 分。",
@@ -2034,11 +2060,13 @@
         "pill": "已搁置",
         "hint": "处于“新建”状态已达 {days} 天或更久，且无人处理",
         "quiet": "{days} 天无更新",
-        "notice": "已搁置：此行动处于“新建”状态已达 {days} 天或更久，且无人处理。该行动尚未关闭：如果仍然相关请保留，或者将其忽略。",
-        "keep": "仍然相关",
+        "notice": "已有 {days} 天或更长时间无人处理此项。",
+        "keep": "保留",
+        "keepHint": "仍然相关：保持开启状态，并不再标记为陈旧",
+        "dismiss": "忽略",
         "kept": "已保留：不再处于搁置状态"
       },
-      "taskProgress": "{completed}/{total} 个任务",
+      "taskProgress": "已完成 {completed}/{total} 项任务",
       "everyone": "所有人",
       "everyoneTitle": "工作区中的所有人：尚未分配给任何人",
       "tags": {
@@ -2090,6 +2118,16 @@
       "noResults": "没有符合这些筛选条件的行动。",
       "noOpen": "没有未处理的行动。已完成和已忽略的行动在“所有状态”下。",
       "showAllStatuses": "显示所有状态",
+      "summary": {
+        "open": "{count} 项待处理",
+        "closed": "本周已关闭 {count} 项",
+        "closedHint": "在最近 {days} 天内已完成或已忽略。点击查看列表。",
+        "new": "自您上次访问以来新增 {count} 项"
+      },
+      "newMark": {
+        "label": "新",
+        "hint": "自您上次访问后创建"
+      },
       "error": {
         "title": "无法加载您的行动。",
         "retry": "重试"
@@ -2264,20 +2302,34 @@
       "drawer": {
         "actionId": "操作 ID",
         "previousCode": "原为 {code}",
+        "more": "更多操作",
+        "priorityLine": "优先级 <b>{score}</b> · {level}",
+        "stats": {
+          "prompts": "{count, plural, other {个 Prompt}}",
+          "pages": "{count, plural, other {个页面}}",
+          "platforms": "{count, plural, other {个平台}}",
+          "competitors": "{count, plural, other {个竞争对手}}",
+          "topics": "{count, plural, other {个主题}}"
+        },
         "tabs": {
           "overview": "概览",
           "affected": "受影响项",
           "tasks": "任务",
           "signals": "信号",
-          "history": "历史记录"
+          "history": "历史记录",
+          "tasksProgress": "任务 {completed}/{total}"
         },
         "why": "为什么建议此操作？",
         "goal": "目标",
+        "doneWhen": "完成标准",
+        "whatHappened": "发生了什么",
         "kpis": "KPI",
         "kpiBrandGoal": "{timeframe, select, weekly {品牌每周目标} quarterly {品牌季度目标} other {品牌每月目标}}:{target}",
         "noKpis": "未关联任何已配置的 KPI 至此操作。",
         "support": "{count, plural, =0 {不再有未解决信号支持此操作。} other {# 条信号支持此操作}}",
         "supportAll": "全部信号 ({count})",
+        "supportTimes": "×{count}",
+        "supportSame": "{count} 个表达相同的信号：“信号”标签页列出了每一项",
         "affected": {
           "prompts": "{count, plural, other {# 个 Prompt}}",
           "pages": "{count, plural, other {# 个页面}}",
@@ -2415,6 +2467,8 @@
         "assignee": "负责人",
         "assignTo": "指派给团队成员",
         "dueDate": "截止日期",
+        "noDueDate": "无截止日期",
+        "addDueDate": "添加截止日期",
         "goalPassed": "目标日期已过",
         "setNewDate": "设置新日期",
         "statusLabel": "状态",
@@ -3965,6 +4019,9 @@
         "inProgress": "进行中",
         "noImprovement": "无提升",
         "dismissed": "已忽略",
+        "onHold": "已暂停",
+        "closed": "已关闭的操作",
+        "closedSub": "在此时间窗口内关闭",
         "ofTotal": "占总数的 {percent}%"
       },
       "pagination": {
@@ -4212,6 +4269,13 @@
     "answerSub": "来自计划追踪的回答",
     "loading": "加载中…",
     "answerFailed": "无法加载此回答。"
+  },
+  "datePicker": {
+    "placeholder": "选择日期",
+    "previousMonth": "上个月",
+    "nextMonth": "下个月",
+    "today": "今天",
+    "clear": "清除"
   },
   "chatTools": {
     "profile": {
@@ -4620,6 +4684,10 @@
       "name": "生成报告",
       "step": "已生成报告"
     },
+    "reportPresentation": {
+      "name": "制作演示文稿",
+      "step": "已制作演示文稿"
+    },
     "startAudit": {
       "name": "启动网站审计",
       "step": "已启动网站审计"
@@ -4927,7 +4995,7 @@
     "runsTray": {
       "label": "您的运行",
       "title": "您的运行",
-      "button": "{count, plural, =0 {运行} other {# 个正在运行}}",
+      "button": "{count, plural, =0 {运行记录 · 无运行中} other {运行记录 · # 个运行中}}",
       "needsYouTip": "{count, plural, other {# 个需要您确认}}",
       "summary": "{running} 个正在运行 · {needsYou, plural, other {# 个需要您确认}}",
       "summaryRunning": "{running} 个正在运行",
@@ -5287,6 +5355,13 @@
       "notFiled": "图片已生成，但无法保存到“文件”。",
       "providerOff": "此工作区已在“设置 › Chat”中停用 {model} 的提供商。请选择其他图像模型。",
       "providersOff": "此工作区已在“设置 › Chat”中停用所有图像模型提供商，因此 Chat 无法在此生成图片。管理员可以启用其中一个。"
+    },
+    "presentations": {
+      "title": "演示文稿 · {title}",
+      "unavailable": "此处不支持演示文稿。",
+      "notFound": "未找到该报告。请列出已保存的报告，然后选择一个。",
+      "storageFull": "工作区存储空间已满。请在“文件”中释放空间后重试。",
+      "notFiled": "演示文稿已生成，但无法归档。请重试。"
     },
     "error": {
       "noKey": "Chat 没有可运行的 AI Key。管理员可以在“设置 › AI 提供商”中添加一个。",
@@ -5920,6 +5995,7 @@
       "pdf": "PDF",
       "csv": "CSV",
       "xlsx": "Excel",
+      "pptx": "PowerPoint",
       "json": "JSON",
       "jsonld": "JSON-LD",
       "txt": "TXT",
@@ -6085,6 +6161,8 @@
     },
     "menu": {
       "label": "Chat 菜单",
+      "clearGroup": "清空",
+      "clearGroupLabel": "{count, plural, other {从{where}删除您的 # 个对话}}",
       "strip": "Chat 菜单快捷键",
       "hide": "隐藏 Chat 菜单",
       "show": "显示 Chat 菜单",
@@ -6096,7 +6174,7 @@
       "toggleMenu": "显示或隐藏“菜单”部分",
       "home": "主页",
       "inbox": "收件箱",
-      "inboxLabel": "收件箱 · {count, plural, other {# 项}}",
+      "inboxLabel": "收件箱 · {needsYou, plural, other {# 项待您处理}}",
       "inboxLabelNeedsYou": "收件箱 · {count, plural, other {# 项}} · {needsYou, plural, other {# 项需要您处理}}",
       "skills": "技能",
       "activity": "活动",
@@ -6151,6 +6229,7 @@
       "agents": "Agent",
       "agentsShort": "Agent",
       "agentsLabel": "Agent · 位于操作中心",
+      "datedTitle": "{when} · ",
       "agentsTip": "打开行动中心 › 智能体,将离开 Chat"
     },
     "actions": {
@@ -6193,7 +6272,12 @@
       "failed": "无法保存。请重试。",
       "deleteTitle": "删除此聊天？",
       "deleteBody": "“{name}”将对所有人删除。其创建的文件会保留在“文件”中。运行中的 Agent 将先被停止。",
-      "cancel": "取消"
+      "cancel": "取消",
+      "clearTitle": "{count, plural, other {要从{where}删除 # 个对话吗？}}",
+      "deleteManyTitle": "{count, plural, other {要删除 # 个对话吗？}}",
+      "deleteManyBody": "系统仅会删除您自己的对话；团队成员与您共享的对话仍会保留。它们生成的文件将保留在“文件”中，且运行中的智能体会先被停止。您可以在几秒钟内撤销，超时后将无法撤销。",
+      "deleteMany": "{count, plural, other {删除 # 个对话}}",
+      "deletedMany": "{count, plural, other {已删除 # 个对话}}"
     },
     "home": {
       "greeting": {
@@ -6700,6 +6784,7 @@
       "select": "选择聊天",
       "selectFirst": "选择聊天以进行批量操作",
       "archiveSelected": "归档所选项目",
+      "deleteSelected": "删除所选项目",
       "unarchiveSelected": "取消归档所选项目",
       "archivedMany": "已归档 {count} 个项目 · 可在“已归档”中查找",
       "unarchivedMany": "已取消归档 {count} 个项目 · 已恢复至“聊天”",
@@ -7383,6 +7468,7 @@
       "sendToWebhook": "已将页面“{title}”发送至您的 Webhook",
       "takeDownFromCms": "已从 {cms} 下架页面“{title}”",
       "makeReport": "已生成报告“{title}”",
+      "reportPresentation": "制作了演示文稿“{title}”",
       "makeReportUndo": "已从“报告”中移除报告“{title}”",
       "startAudit": "已对 {pages} 启动网站审计",
       "makeImages": "已使用 {model} 创建图片“{title}”",
@@ -8492,7 +8578,8 @@
       },
       "agency-reporter": {
         "name": "代理商客户报告器",
-        "description": "专为代理商打造，针对每个客户品牌生成月度报告。"
+        "description": "专为代理商打造，针对每个客户品牌生成月度报告。",
+        "instructions": "针对上个月（从 1 号到最后一天）与前一个月的对比进行报告，代替周报。面向客户品牌撰写：用词通俗易懂，不含内部备注。"
       },
       "paid-opportunity": {
         "name": "付费机会",
@@ -10486,7 +10573,8 @@
       "doneCount": "{count, plural, other {分析完成 — 已保存 # 条回答。}}",
       "doneSoFar": "{count, plural, other {即将完成 — 目前已保存 # 条回答，其余结果正在生成。}}",
       "failed": "任务失败：{reason}",
-      "unknownError": "未知错误"
+      "unknownError": "未知错误",
+      "startFailed": "无法开始追踪。请重试。"
     },
     "runPrompts": "运行 Prompts",
     "runPromptsNow": "立即运行 Prompts",
@@ -10907,7 +10995,7 @@
       "compareHint": "将所选时间窗口与前一个等长时间窗口进行比较。",
       "allTimeHint": "全部时间。没有可用于对比的相同时长的更早周期。",
       "lastVsPrevious": "{days, plural, other {最近 # 天 vs 前 # 天}}",
-      "loadFailed": "加载明细失败",
+      "loadFailed": "无法加载细分数据。请重试。",
       "allTime": "全部时间",
       "current": "当前 {days} 天",
       "noSamePrompt": "没有 Prompt 在两个周期内均有回答",
@@ -10945,9 +11033,9 @@
       "noCompetitorsTitle": "暂无已追踪的竞争对手",
       "noCompetitorsBody": "添加竞争对手，查看您在 AI 回答中的对比情况。",
       "headToHead": "正面对比",
-      "loadFailed": "加载洞察失败，请重试",
+      "loadFailed": "无法加载洞察。请重试。",
       "exportCapped": "为避免内存问题，导出已限制为 50,000 行",
-      "exportFailed": "导出 CSV 失败",
+      "exportFailed": "无法导出 CSV。请重试。",
       "noTrend": "暂无趋势数据",
       "yourBrand": "您的品牌",
       "avgCompetitor": "竞争对手平均",
@@ -11046,6 +11134,8 @@
       "selectBrand": "选择一个品牌以查看其内容计划。",
       "period": "周期",
       "periods": "最近 {days} 天",
+      "periodLast": "最近",
+      "periodDays": "{days} 天",
       "newContent": "新内容",
       "cards": {
         "create": {
@@ -13951,6 +14041,13 @@
     "description": "AI 驱动的内容建议，助您提升在 AI 生成答案中的可见度。",
     "opportunities": "机会",
     "autoGeneratedHint": "随着跟踪数据的不断积累，系统将自动生成内容机会。",
+    "flowNote": {
+      "coveredTitle": "您跟踪的每个需求均已有对应机会，因此夜间运行不会新增机会。",
+      "coveredHint": "如需获取更多机会，请针对新问题<prompts>添加 Prompt</prompts>、将已完成的机会标记为“已完成”，或使用“+ 新建”从其他角度切入。",
+      "coveredHintReadOnly": "当添加了针对新问题的 <prompts>Prompt</prompts>，或已完成的机会被标记为“已完成”时，将生成新机会。",
+      "limitTitle": "本月的新机会已用尽。夜间运行将在 {date} 恢复添加新机会。",
+      "limitTitleNoDate": "本月的新机会已用尽。夜间运行将在您的方案续费后恢复添加新机会。"
+    },
     "generating": "正在生成…",
     "sendToWorkflow": "发送到工作流",
     "generateBrief": "生成简报",
@@ -14303,7 +14400,8 @@
       "setupFirst": "设置 Webhook，将机会发送到您的工作流工具。",
       "urlRequired": "Webhook URL 为必填项",
       "urlRequiredTest": "请先输入 Webhook URL",
-      "saveError": "保存 Webhook 配置失败"
+      "saveError": "保存 Webhook 配置失败",
+      "testNotRun": "测试未运行。请重试。"
     },
     "loadError": "加载内容机会失败",
     "exportError": "导出机会失败",
@@ -14948,7 +15046,8 @@
         "trackNotAllowed": "仅管理员和经理可以添加 Prompt。",
         "failed": "无法加载这些查询。",
         "noData": "Google Search Console 中暂无该品牌的查询。",
-        "empty": "在此时间范围内带来点击的每个 Google 查询均已跟踪。"
+        "empty": "在此时间范围内带来点击的每个 Google 查询均已跟踪。",
+        "trackFailed": "无法跟踪这些查询。请重试。"
       }
     },
     "summaryLine": {
@@ -16097,7 +16196,8 @@
       "save": "添加到 {count, plural, other {# 个 Prompt}}",
       "removeSave": "从 {count, plural, other {# 个 Prompt}} 中移除",
       "done": "{count, plural, other {已为 # 个 Prompt 添加标签}}",
-      "removed": "{count, plural, other {已从 # 个 Prompt 移除标签}}"
+      "removed": "{count, plural, other {已从 # 个 Prompt 移除标签}}",
+      "saveFailed": "无法保存标签。请重试。"
     },
     "bulkDelete": {
       "progress": "正在删除 {done} / {total} 个 Prompt…",
@@ -16795,7 +16895,18 @@
     "windowLastDays": "{days, plural, other {分数涵盖最近 # 天。}}",
     "windowAllTime": "评分涵盖所有追踪历史。",
     "windowSelectedRange": "评分反映所选日期范围。",
+    "card": {
+      "prompts": "{visible}/{count} 个 Prompt",
+      "scoreTip": "在 {mentionAnswers} 个回答中被提及 · 在 {citationAnswers} 个回答中被引用 · 排名位置因素 {position} · {mentions} 次提及 · {citations} 次引用"
+    },
     "selected": "已选择",
+    "rank": {
+      "short": "#{rank}",
+      "label": "按可见度得分排名第 {rank} 位",
+      "you": "您",
+      "lowSample": "样本量低",
+      "lowSampleTip": "在此期间提及的 Prompt 少于 10 个：暂未排名。"
+    },
     "noData": "无数据",
     "emptyTitle": "暂无竞争对手",
     "emptyDescription": "添加竞争对手域名，以在所有 AI 平台上将他们的 AI 可见度与您的进行对比。",
@@ -16845,7 +16956,7 @@
     },
     "merge": {
       "open": "合并",
-      "openHint": "合并属于同一家公司的竞争对手",
+      "openHint": "合并重复的竞争对手（例如同一品牌的两个域名）",
       "title": "合并竞争对手",
       "description": "选择属于同一家公司的竞争对手，然后选择要保留的一个。",
       "pickLabel": "同一家公司",
@@ -16918,6 +17029,11 @@
       "noDataTitle": "暂无对比数据",
       "noDataDescription": "从“可见度”运行一次跟踪检查，以生成该竞争对手的对比数据。",
       "loadError": "加载对比数据失败。",
+      "gapCreateAction": "创建行动",
+      "gapAskChat": "咨询 Chat",
+      "gapPanelTip": "打开 Chat 并填入此差距内容，可直接发送",
+      "gapCreateText": "将此差距作为行动发送至行动中心，并附上缩小差距的任务：在 Prompt“{prompt}”上，{competitor} 得分为 {them}，我们的得分为 {you}（{count, plural, other {平台}}：{platforms}）。",
+      "gapAskText": "为什么在 Prompt“{prompt}”上，{competitor} 得分为 {them}，而我们的得分为 {you}（{count, plural, other {平台}}：{platforms}）？我们应该首先优化什么？",
       "promptCounts": "{engines, plural, other {# 个平台}} · {runs, plural, other {# 次运行}}",
       "engineCounts": "{locations, plural, other {# 个地区}} · {runs, plural, other {# 次运行}}",
       "runs": "{count, plural, other {# 次运行}}",
@@ -17100,9 +17216,9 @@
       "byCompetitor": "按竞争对手",
       "howItWorks": "工作原理",
       "lowVisibility": "在此时间范围内您的可见度较低,因此此列表可能较宽泛,请先关注基础可见度。",
-      "loadFailedToast": "加载引用数据失败",
-      "checkFailedToast": "检查引用数据失败",
-      "exportFailed": "导出 CSV 失败",
+      "loadFailedToast": "无法加载引用数据。请重试。",
+      "checkFailedToast": "无法检查引用数据。请重试。",
+      "exportFailed": "无法导出 CSV。请重试。",
       "typesNotExportable": "来源类型是图表分解视图，无法导出——请切换到域名、URL 或竞品差距后再导出。",
       "tabGaps": "竞品差距"
     }
@@ -17624,6 +17740,10 @@
   "reports": {
     "impactLink": "Ansvisor 为您带来的成效",
     "impact": {
+      "firstShip": {
+        "title": "此品牌尚未发布任何内容",
+        "body": "在您首次“发送到 CMS”或智能体首次上线后，此报告将自动填充数据。"
+      },
       "title": "Ansvisor 为您带来的成效",
       "subtitle": "{brand} · 已发布的优化操作与未优化的类似 Prompt 对比",
       "subtitleNoBrand": "已发布的优化操作与未优化的类似 Prompt 对比",
@@ -17809,6 +17929,15 @@
     "deleteConfirm": "删除此报告？",
     "deleteFailed": "删除报告失败",
     "rowMenuLabel": "{title} 的更多操作",
+    "rename": {
+      "item": "重命名",
+      "title": "重命名报告",
+      "description": "仅修改名称：报告中的数据保持不变。",
+      "label": "报告名称",
+      "save": "保存",
+      "done": "报告已重命名",
+      "failed": "无法重命名报告。请重试。"
+    },
     "copyLink": "复制链接",
     "linkCopied": "链接已复制。工作区内的成员可通过它打开该报告。",
     "copyLinkFailed": "无法复制链接。请打开报告并复制其地址。",
@@ -17854,6 +17983,12 @@
     "selectSections": "至少选择一个板块",
     "dialogTitle": "生成报告",
     "dialogDescription": "生成指定时间段内品牌的 AI 可见度快照，并附带由 AI 撰写的执行摘要。",
+    "dateRangeHint": "由模板设定；可在此修改。",
+    "duplicate": {
+      "line": "与现有报告“{title}”的时间段相同。是否打开该报告？",
+      "open": "打开",
+      "anyway": "仍然生成"
+    },
     "reportTitleLabel": "标题（可选）",
     "reportTitlePlaceholder": "例如：第二季度执行摘要",
     "presets": {
@@ -17920,7 +18055,7 @@
     "worstPrompts": "表现最差的 Prompts",
     "queryFanout": "查询 fan-out",
     "queryFanoutDescription": "问答引擎在回答您跟踪的 Prompts 时实际运行的子查询。",
-    "fanoutCoverage": "{answers} 个回答中共涉及 {queries} 个不同子查询",
+    "fanoutCoverage": "跨 {answers, number} 个回答的 {queries, number} 个不同子查询",
     "loadReportFailed": "无法加载此报告。",
     "notFound": "未找到报告。",
     "backToReports": "返回报告列表",
@@ -17940,13 +18075,17 @@
     "shareOfVoice": "声量份额",
     "competitorLeaderboard": "竞争对手排行榜",
     "topCitationSources": "主要引用来源",
-    "citationTotals": "在此期间共有 {domains} 个域名 · {citations} 次引用",
+    "citationTotals": "此期间共有 {domains, number} 个域名 · {citations, number} 次引用",
     "noData": "此期间无数据。",
     "you": "(您)",
     "kpiCitationsNote": "“品牌引用次数”统计 AI 回答中对您自身网站的引用次数。",
+    "leaderboardRankNote": "按可见度得分排名。在少于 {min} 个 Prompt 中提及的品牌将作为“样本量低”列在最后。",
+    "lowSample": "样本量低",
+    "lowSampleTip": "在此期间提及的 Prompt 少于 {min} 个：回答过少，无法排名。",
     "citationsSectionNote": "AI 回答中引用的所有与您品牌相关的来源 — 不仅仅是您自己的网站。",
     "mentionEvidence": "提及佐证",
     "mentionEvidenceDescription": "在此期间最常提及您的回答，附带提及处上下文段落。",
+    "newestFirst": "最新优先。",
     "citationEvidence": "引用佐证",
     "citationEvidenceDescription": "在此期间 AI 回答最常引用的 URL，以及浮现这些引用的受跟踪 Prompts。"
   },
@@ -18230,10 +18369,36 @@
       "hint": "Ansvisor 界面的显示语言，仅对您本人生效。您品牌的内容语言不会改变。",
       "loading": "正在加载语言…",
       "moreSoon": "更多语言即将推出。",
-      "preview": "内部人员和测试版本还会看到尚未翻译的语言，以及一种文本更长的测试语言。缺少文本的地方将显示英文。",
+      "preview": "员工和测试版本也可以看到尚无翻译的语言。缺失文本处将显示为英文。",
       "testLanguage": "{language} · 测试",
       "saved": "语言已保存",
-      "saveFailed": "无法保存您的语言，请重试。"
+      "saveFailed": "无法保存您的语言，请重试。",
+      "suggest": {
+        "link": "建议更好的翻译",
+        "title": "建议更好的翻译",
+        "description": "请告诉我们哪些表述不够准确以及您的建议。我们的团队会审核每条建议。",
+        "language": "语言",
+        "screen": "界面",
+        "current": "当前文本",
+        "currentPlaceholder": "输入或粘贴文本，或在屏幕上选取",
+        "pick": "在屏幕上选取",
+        "picking": "点击您要更改的文本。按 Esc 取消。",
+        "better": "您的改进建议",
+        "note": "备注（可选）",
+        "notePlaceholder": "为什么这样更好，或该文本出现在哪里",
+        "cancel": "取消",
+        "send": "发送建议",
+        "sent": "感谢您！我们的团队已收到您的建议。",
+        "errors": {
+          "locale": "建议仅适用于非英语语言。",
+          "currentText": "请添加当前显示的文本。",
+          "suggestion": "请添加您的改进版本。",
+          "same": "您的版本与当前文本完全相同。",
+          "tooLong": "内容过长。请确保每段文本在 1,000 个字符以内。",
+          "tooMany": "您今天提交的建议过多。请明天重试。",
+          "server": "无法发送您的建议。请重试。"
+        }
+      }
     },
     "save": "保存更改",
     "saved": "更改已保存！",
@@ -18545,6 +18710,8 @@
       "aiUsageHint": "用于 Ansvisor AI 功能的每月额度：“优化”建议、内容编辑器 AI 以及行动中心任务编写。Agent Chat 使用您自己的 AI 密钥。免费试用包含较少的额度。",
       "aiUsageCustomHint": "用于 Ansvisor AI 功能的每月额度：“优化”建议、内容编辑器 AI 以及行动中心任务编写。Agent Chat 使用您自己的 AI 密钥。Ansvisor 会与您共同商定额度。",
       "aiUsageHintChat": "用于 Ansvisor AI 功能的每月额度：聊天与智能体、“优化”建议、内容编辑器 AI 以及行动中心任务编写。仅企业版支持使用您自己的 AI 密钥。免费试用包含较少的额度。",
+      "contentEstimate": "每月最多 {pages, number} 个新页面或 {optimizations, number} 次页面优化",
+      "contentEstimateHint": "使用您的每月 AI 配额，与 Chat 和 Agent 共享。实际数量因页面长度和所选的 AI 模型而异。",
       "aiUsageCustomHintChat": "用于 Ansvisor AI 功能的每月额度：聊天与智能体、“优化”建议、内容编辑器 AI 以及行动中心任务编写。在企业版中，聊天也可使用您自己的 AI 密钥运行。Ansvisor 会与您共同商定额度。"
     },
     "contactUs": "联系我们",
@@ -20210,6 +20377,26 @@
       "crm": "CRM 与营收",
       "team": "团队与数据"
     }
+  },
+  "translationSuggestionsAdmin": {
+    "title": "翻译建议",
+    "description": "仅限 Ansvisor 员工。针对界面翻译改进的建议。采纳仅作标记：请通过再次运行 web/scripts/translate-messages.mjs 来更新 web/messages 中对应语言的文件以及词汇表。不显示姓名或电子邮箱。",
+    "empty": "暂无新建议。",
+    "columns": {
+      "date": "日期",
+      "language": "语言",
+      "screen": "界面",
+      "current": "当前文本",
+      "suggestion": "建议",
+      "note": "备注",
+      "actions": "审核"
+    },
+    "key": "键：{key}",
+    "accept": "采纳",
+    "reject": "拒绝",
+    "accepted": "已标记为采纳",
+    "rejected": "已拒绝",
+    "failed": "无法保存。可能已被审核。"
   },
   "reportCardAdmin": {
     "title": "免费评分报告",
