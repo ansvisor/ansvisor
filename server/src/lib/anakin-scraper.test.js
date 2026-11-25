@@ -71,6 +71,24 @@ describe('buildTaskBody', () => {
     });
   });
 
+  it('gives AI Mode a state or city as its place name, and a country alone none', () => {
+    // A city task (locations.js CITY_SCRAPERS) reaches AI Mode: without
+    // `location` it was answered country-wide and stored in the city's column.
+    expect(buildTaskBody('q', 'google-aimode', 'US-TX')).toEqual({
+      action_id: 'ai_mode',
+      params: { prompt: 'q', country: 'us', location: 'Texas,United States' },
+    });
+    expect(buildTaskBody('q', 'google-aimode', 'TR~ISTANBUL').params).toEqual({
+      prompt: 'q',
+      country: 'tr',
+      location: 'Istanbul,Istanbul,Turkiye',
+    });
+    expect(buildTaskBody('q', 'google-aimode', 'US').params).toEqual({
+      prompt: 'q',
+      country: 'us',
+    });
+  });
+
   it('runs the signed-in platforms on the account pool, outside params', () => {
     for (const id of ['perplexity-web', 'grok-web', 'claude-web', 'deepseek-web', 'copilot-app']) {
       const body = buildTaskBody('q', id, 'US');
@@ -301,6 +319,43 @@ describe('parseScraperResponse', () => {
       { url: 'https://r.example', title: 'R', startIndex: 0, endIndex: 50 },
     ]);
     expect(answer.search_queries).toEqual([{ query: 'best crm', source_platform: 'gemini-web' }]);
+  });
+
+  it("reads Claude's answer from `text`, a level deeper than the other platforms", () => {
+    const claude = {
+      status: 'completed',
+      credits_used: 10,
+      data: {
+        status: 'ok',
+        data: {
+          text: 'Acme leads.',
+          model: 'claude-sonnet',
+          citations: [{ title: 'A', url: 'https://a.example', start_index: 0, end_index: 4 }],
+        },
+        meta: { action_id: 'ca_send_message' },
+      },
+    };
+    expect(parseScraperResponse(claude, 'claude-web')).toMatchObject({
+      text: 'Acme leads.',
+      citations: [{ url: 'https://a.example', title: 'A' }],
+      model: 'claude-sonnet',
+    });
+  });
+
+  it("reads the Copilot app's titled search results and its searches", () => {
+    const answer = parseScraperResponse(
+      job({
+        answer_text: 'Acme leads.',
+        sources: ['https://a.example'],
+        search_results: [{ url: 'https://a.example', title: 'A', snippet: 's', type: 'web' }],
+        search_queries: ['best crm'],
+      }),
+      'copilot-app',
+    );
+    expect(answer.citations).toEqual([
+      { url: 'https://a.example', title: 'A', startIndex: 0, endIndex: 50 },
+    ]);
+    expect(answer.search_queries).toEqual([{ query: 'best crm', source_platform: 'copilot-app' }]);
   });
 
   it('treats Naver without an AI Briefing as no answer', () => {

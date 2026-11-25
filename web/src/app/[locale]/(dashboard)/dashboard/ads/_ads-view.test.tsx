@@ -608,7 +608,7 @@ describe('AdsView', () => {
         api.readAdsAccounts.mockResolvedValueOnce([account]);
         await render();
         expect(card('chatgpt').textContent).toContain(
-          'Acme ChatGPTChatGPT Ads account · USDConnected',
+          'Acme ChatGPTChatGPT Ads account · USDFirst read within a day: the last 90 daysConnected',
         );
         await act(async () => action('conn.chatgpt.disconnect', card('chatgpt'))!.click());
         expect(dialog()?.textContent).toContain('Disconnect Acme ChatGPT?');
@@ -621,6 +621,23 @@ describe('AdsView', () => {
         expect(api.disconnectAdsAccount).toHaveBeenCalledWith('b1', 'a1');
         expect(card('chatgpt').textContent).toContain('Not connected');
         expect(toast.success).toHaveBeenCalledWith('Disconnected Acme ChatGPT.');
+      });
+
+      it('shows each account’s daily read: still to come, when it last read, or why it failed', async () => {
+        api.readAdsAccounts.mockResolvedValueOnce([
+          account,
+          { ...account, id: 'a2', name: 'Read', lastSyncedAt: '2026-11-22T05:20:00Z' },
+          { ...account, id: 'a3', name: 'Refused', status: 'error', lastError: 'key_refused' },
+          { ...account, id: 'a4', name: 'Odd', status: 'error', lastError: 'something new' },
+        ]);
+        await render();
+        const lines = [...card('chatgpt').querySelectorAll('[data-slot="ads-sync"]')].map(
+          (el) => el.textContent,
+        );
+        expect(lines[0]).toBe('First read within a day: the last 90 days');
+        expect(lines[1]).toMatch(/^Numbers read Nov 22, 2026/);
+        expect(lines[2]).toBe('ChatGPT Ads refused the key. Paste a new one.');
+        expect(lines[3]).toBe("Couldn't read the numbers. Ansvisor tries again within a day.");
       });
 
       it('shows other roles what is connected, with nothing to change', async () => {

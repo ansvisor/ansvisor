@@ -53,7 +53,7 @@ describe('answer providers', () => {
     expect(anakin.submitPromptTask).toBe(anakinScraper.submitPromptTask);
     expect(anakin.pollScraperResult).toBe(anakinScraper.pollScraperResult);
     expect(anakin.parseScraperResponse).toBe(anakinScraper.parseScraperResponse);
-    expect(anakin.unavailablePlatforms()).toEqual([]);
+    expect(anakin.unavailablePlatforms()).toEqual(['deepseek-web']);
     expect(
       anakin.webhookUrl({
         ANAKIN_WEBHOOK_URL: 'https://api.example/anakin/callback',

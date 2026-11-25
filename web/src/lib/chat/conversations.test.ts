@@ -411,6 +411,32 @@ describe('askAgainChatId', () => {
     expect(await chats.askAgainChatId(reader, ME, { message, brandId: BRAND })).toBe(CHAT(2));
     expect(await chats.askAgainChatId(reader, ME, { message: 'Something else' })).toBeNull();
   });
+
+  it('finds a renamed chat by the question asked in it, only among their own', async () => {
+    const late = '2026-10-30T10:00:00.000Z';
+    db.tables.chat_conversations = [
+      chat(1, { title: 'My updates', brand_id: BRAND }),
+      chat(2, { title: 'Weekly news', brand_id: BRAND, last_message_at: late }),
+      chat(3, {
+        title: 'Theirs',
+        user_id: TEAMMATE.userId,
+        shared_at: late,
+        last_message_at: late,
+      }),
+      chat(4, { title: 'Gone', deleted_at: late, last_message_at: late }),
+    ];
+    const asked = (n: number, conversation: number, role = 'user') => ({
+      id: `m${n}`,
+      conversation_id: CHAT(conversation),
+      role,
+      content_md: message,
+      created_at: late,
+    });
+    db.tables.chat_messages = [asked(1, 1), asked(2, 3), asked(3, 4), asked(4, 2, 'assistant')];
+    expect(await chats.askAgainChatId(reader, ME, { message, brandId: BRAND })).toBe(CHAT(1));
+    db.tables.chat_messages.push(asked(5, 2));
+    expect(await chats.askAgainChatId(reader, ME, { message, brandId: BRAND })).toBe(CHAT(2));
+  });
 });
 
 describe('latestPanelChatId', () => {
