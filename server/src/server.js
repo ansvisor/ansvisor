@@ -26,6 +26,7 @@ import routes from './routes/index.js';
 import trafficRoutes from './routes/traffic.js';
 import publicReportCardRoutes from './routes/public-report-card.js';
 import botIngestRoutes from './routes/bot-ingest.js';
+import anakinCallbackRoutes from './routes/anakin-callback.js';
 import cloroCallbackRoutes from './routes/cloro-callback.js';
 import internalTriggerTrackingRoutes from './routes/internal-trigger-tracking.js';
 import internalChatBudgetRoutes from './routes/internal-chat-budget.js';
@@ -86,6 +87,18 @@ import { scheduleDemandCollect, sweepPromptDemand } from './lib/prompt-demand.js
 import { runGaSync } from './lib/ga-sync.js';
 import { runHubspotPipelineSync } from './lib/hubspot/pipeline-sync.js';
 import { sendTrafficDigests } from './lib/traffic-digest/engine.js';
+import {
+  sendCriticalActionAlerts,
+  sendCriticalActionSummaries,
+} from './lib/notifications/critical-action.js';
+import { sendDraftsReview } from './lib/notifications/drafts-review.js';
+import { sendDueActions, sendWeeklyActions } from './lib/notifications/actions-digest.js';
+import { sendAuditAlerts, sendAuditSummaries } from './lib/notifications/audits.js';
+import {
+  sendRunAlerts,
+  sendRunSummaries,
+  sendUsageAlerts,
+} from './lib/notifications/runs-usage.js';
 import { runPageOpportunityDetection } from './lib/page-opportunities.js';
 import { runPulseCatchUp } from './lib/pulse/engine.js';
 import { runSignalCatchUp } from './lib/signals/pass.js';
@@ -119,6 +132,8 @@ const server = http.createServer(app);
 // payload exactly as sent, and express.json()'s parse/re-serialize would break it.
 // Mounted first so the global JSON parser skips this path (body already consumed).
 app.use('/cloro/callback', express.raw({ type: 'application/json', limit: '50mb' }));
+// /anakin/callback likewise: Anakin signs the raw body (anakin-webhook-verify.js).
+app.use('/anakin/callback', express.raw({ type: 'application/json', limit: '50mb' }));
 // Slack's clicks (/webhooks/slack/interactivity) are signed over the raw form body too.
 app.use('/webhooks/slack', express.raw({ type: () => true, limit: '256kb' }));
 // AI-bot requests from brands' Cloudflare / Vercel / Fastly (AT-010): authenticated by
@@ -483,6 +498,30 @@ async function runDailyTracking() {
       // last Sunday's Analytics numbers are in. Cloud only, like the pulse.
       sendTrafficDigests().catch((err) => {
         logger.error({ err }, '[traffic-digest] weekly sweep crashed');
+      });
+      // The notification e-mails people chose (Settings › Notifications):
+      // the day's Critical actions, and drafts waiting for review (daily, or
+      // Mondays for Weekly). Each goes once (notification_sends, 00556).
+      sendCriticalActionSummaries().catch((err) => {
+        logger.error({ err }, '[notifications] critical summaries crashed');
+      });
+      sendDraftsReview().catch((err) => {
+        logger.error({ err }, '[notifications] drafts review crashed');
+      });
+      // Actions due or late for their assignee, and Mondays' action summary.
+      sendDueActions().catch((err) => {
+        logger.error({ err }, '[notifications] due actions crashed');
+      });
+      sendWeeklyActions().catch((err) => {
+        logger.error({ err }, '[notifications] weekly actions crashed');
+      });
+      // The day's finished audits and dropped scores, for Daily summary.
+      sendAuditSummaries().catch((err) => {
+        logger.error({ err }, '[notifications] audit summaries crashed');
+      });
+      // The day's ended agent runs, for Daily summary.
+      sendRunSummaries().catch((err) => {
+        logger.error({ err }, '[notifications] run summaries crashed');
       });
       return sweepAutoAudits({
         readInbox: readOpportunityInbox,
@@ -859,9 +898,11 @@ app.post('/api/internal/recount-citations', async (req, res) => {
 // The first run after a payment, and the brand's volume analysis with it.
 app.use('/api/internal/trigger-tracking', internalTriggerTrackingRoutes);
 
-// --- Cloro webhook callback (routes/cloro-callback.js) ---
-// After the raw body parser mounted for this path at the top.
+// --- Answer providers' webhook callbacks (routes/cloro-callback.js,
+// routes/anakin-callback.js) ---
+// After the raw body parsers mounted for these paths at the top.
 app.use('/cloro/callback', cloroCallbackRoutes);
+app.use('/anakin/callback', anakinCallbackRoutes);
 
 // Public, webhook-secret-authenticated status callback for external workflows.
 // It is mounted outside /api so no dashboard JWT is required; the router has its own stricter limiter.
@@ -944,6 +985,23 @@ server.listen(PORT, async () => {
   // (00118), and the Insights days of deleted prompts (00192), within
   // minutes, not at the nightly sweep. An empty queue costs one select, and
   // each function refuses to overlap with a run of its own still in progress.
+  // A new Critical action, Right away (Settings › Notifications): every ten
+  // minutes, each to the people who chose it, once (notification_sends).
+  cron.schedule('*/10 * * * *', () => {
+    sendCriticalActionAlerts().catch((err) =>
+      logger.error({ err }, '[notifications] critical alerts crashed'),
+    );
+    // Finished audits and dropped scores, Right away, the same way.
+    sendAuditAlerts().catch((err) => logger.error({ err }, '[notifications] audit alerts crashed'));
+    // Ended agent runs, Right away.
+    sendRunAlerts().catch((err) => logger.error({ err }, '[notifications] run alerts crashed'));
+  });
+
+  // AI usage at 80% and 100% of the month's limit, for Admins: hourly.
+  cron.schedule('5 * * * *', () => {
+    sendUsageAlerts().catch((err) => logger.error({ err }, '[notifications] usage alerts crashed'));
+  });
+
   cron.schedule(REBUILD_QUEUE_SCHEDULE, () => {
     rebuildQueuedCitationRollups().catch((err) =>
       logger.error({ err }, '[citations-rollups] scheduled rebuild crashed'),
