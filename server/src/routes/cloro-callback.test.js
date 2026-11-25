@@ -217,11 +217,34 @@ describe('POST /cloro/callback for a failed task', () => {
           scraper_id: 'chatgpt-web',
           region: 'US-CA',
           legacy: false,
+          provider: 'cloro',
         },
       ],
       ['delete', 'cloro_pending_tasks', 'task-1'],
     ]);
     expect(handleScraperResult).not.toHaveBeenCalled();
+  });
+
+  it("stores and drops nothing for Anakin's task (00562)", async () => {
+    pending = { ...PENDING, provider: 'anakin' };
+    for (const status of ['COMPLETED', 'FAILED']) {
+      events.length = 0;
+      expect((await deliver(status)).status).toBe(200);
+      await vi.waitFor(() => expect(log.warn).toHaveBeenCalled());
+      expect(events.filter(([kind]) => kind !== 'read')).toEqual([]);
+    }
+    expect(handleScraperResult).not.toHaveBeenCalled();
+    expect(submitPromptTask).not.toHaveBeenCalled();
+  });
+
+  it('takes a row from before 00562 (no provider) and a Cloro row as its own', async () => {
+    for (const row of [PENDING, { ...PENDING, provider: 'cloro' }]) {
+      pending = row;
+      events.length = 0;
+      await deliver('FAILED');
+      await settled();
+      expect(deleted()).toEqual([['delete', 'cloro_pending_tasks', 'task-1']]);
+    }
   });
 
   it('only drops any other failed task', async () => {

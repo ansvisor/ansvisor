@@ -76,3 +76,68 @@ export async function fetchAdAccount(key, options) {
     timeZone: typeof body.timezone === 'string' ? body.timezone.slice(0, 64) : null,
   };
 }
+
+const PAGE_LIMIT = 2000;
+const MAX_PAGES = 50;
+
+/** Follows a list's cursor (first_id/last_id/has_more) to its end; every item. */
+async function readAllPages(key, path, params, options) {
+  const items = [];
+  let after = null;
+  for (let page = 0; page < MAX_PAGES; page += 1) {
+    const query = new URLSearchParams(params);
+    if (after) query.set('after', after);
+    const body = await chatGptAdsGet(key, `${path}?${query}`, options);
+    if (!Array.isArray(body?.data)) throw new ChatGptAdsUnavailableError(200);
+    items.push(...body.data);
+    if (!body.has_more || !body.last_id || body.last_id === after) return items;
+    after = String(body.last_id);
+  }
+  throw new ChatGptAdsUnavailableError(200);
+}
+
+/** The account's campaigns' statuses (active, paused, archived), by campaign id. */
+export async function fetchCampaignStatuses(key, options) {
+  const campaigns = await readAllPages(key, '/campaigns', [['limit', '500']], options);
+  const statuses = new Map();
+  for (const campaign of campaigns) {
+    if (campaign?.id) statuses.set(String(campaign.id), campaign.status ?? null);
+  }
+  return statuses;
+}
+
+/** Spend in the account's currency (a decimal, e.g. 18.42) as micros. */
+export function spendMicros(spend) {
+  const n = Number(spend);
+  return Number.isFinite(n) && n > 0 ? Math.round(n * 1_000_000) : 0;
+}
+
+/**
+ * Each campaign's days in a window (since/until YYYY-MM-DD, inclusive):
+ * `GET /ad_account/insights` at the campaign level, daily. ChatGPT Ads
+ * reports spend as a decimal in the account's currency; its conversions come
+ * from another endpoint, not read in Phase 1, so they stay 0.
+ */
+export async function fetchCampaignDays(key, { since, until }, options) {
+  const params = [
+    ['time_ranges[]', JSON.stringify({ type: 'date_range', since, until })],
+    ['time_granularity', 'daily'],
+    ['aggregation_level', 'campaign'],
+    ['fields[]', 'campaign.id'],
+    ['fields[]', 'campaign.name'],
+    ['fields[]', 'campaign.impressions'],
+    ['fields[]', 'campaign.clicks'],
+    ['fields[]', 'campaign.spend'],
+    ['fields[]', 'metadata.readable_time'],
+    ['limit', String(PAGE_LIMIT)],
+  ];
+  const rows = await readAllPages(key, '/ad_account/insights', params, options);
+  return rows.map((row) => ({
+    campaignId: row?.campaign_id ?? null,
+    campaignName: row?.campaign_name ?? null,
+    day: typeof row?.readable_time === 'string' ? row.readable_time.slice(0, 10) : null,
+    impressions: row?.impressions,
+    clicks: row?.clicks,
+    costMicros: spendMicros(row?.spend),
+  }));
+}

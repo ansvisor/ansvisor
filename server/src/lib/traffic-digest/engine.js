@@ -4,6 +4,13 @@ import { readAllRpcRows } from '../rpc-pages.js';
 import { isCloud, isSubscriptionActive } from '../../config/plans.js';
 import { addressesByLanguage } from '../i18n.js';
 import { appUrl, resolveRecipients } from '../pulse/engine.js';
+import {
+  brandChoices,
+  chose,
+  emailsOf,
+  uniqueAddresses,
+  withoutSavers,
+} from '../pulse/audience.js';
 import { untrackedGoogleQueries } from '../untracked-queries.js';
 import {
   brokenCandidates,
@@ -22,7 +29,9 @@ import { renderTrafficDigestEmail, sendTrafficDigestEmail } from './email.js';
  * The AI Traffic weekly digest (AT-013, spec §3.8): every Monday, for the
  * week before, "the summary line and the top three changes" to the Daily
  * Pulse's recipients (00036), unless Settings › Notifications turned it off
- * for the brand (00187) or the brand's pulse is off.
+ * for the brand (00187) or the brand's pulse is off. Since 00554 each person
+ * picks it for themselves ("Your e-mails"); the brand's setting stays for
+ * its outside recipients and the teammates who haven't saved their own.
  *
  * A brand with no AI visits in either week gets nothing. A week is claimed in
  * ai_traffic_digests before anything is sent, so two sweeps can't mail it
@@ -245,10 +254,14 @@ export async function sendTrafficDigestForBrand(
     .select('recipients, traffic_digest, frequency')
     .eq('brand_id', brandId)
     .maybeSingle();
-  // On by default, but not where the brand's pulse is off. No settings row: on.
-  if (settings?.traffic_digest === false || settings?.frequency === 'off') {
-    return { skipped: 'off' };
-  }
+  // The brand's own audience: on by default, but not where the brand's pulse
+  // is off. No settings row: on.
+  const brandOn = settings?.traffic_digest !== false && settings?.frequency !== 'off';
+  // People who saved their own choices (00554): those who picked it, wherever
+  // the brand's setting stands.
+  const choices = await brandChoices(brand.organization_id, brandId, 'traffic_digest');
+  const chosen = chose(choices.people, 'weekly');
+  if (!brandOn && chosen.length === 0) return { skipped: 'off' };
 
   const week = digestWeek(now);
   const { data: existing } = await supabaseAdmin
@@ -288,7 +301,14 @@ export async function sendTrafficDigestForBrand(
   // Those whose language's send went.
   let reached = 0;
   try {
-    recipients = await resolveRecipients(brand.organization_id, settings, brandId);
+    recipients = await digestRecipients({
+      organizationId: brand.organization_id,
+      brandId,
+      settings,
+      brandOn,
+      choices,
+      chosen,
+    });
     if (recipients.length) {
       const settingsUrl = `${appUrl()}/dashboard/settings?tab=notifications`;
       // Each in their own language (LOC-008): one send per language.
@@ -353,6 +373,28 @@ export async function sendTrafficDigestForBrand(
     '[traffic-digest] sent',
   );
   return { sent: true, emailSent, recipients: recipients.length };
+}
+
+/**
+ * Who gets the digest: the brand's own audience while it is on
+ * (resolveRecipients, less the people who saved their own choices), and the
+ * people who picked it.
+ */
+export async function digestRecipients({
+  organizationId,
+  brandId,
+  settings,
+  brandOn,
+  choices,
+  chosen,
+}) {
+  const addresses = [];
+  if (brandOn) {
+    const list = await resolveRecipients(organizationId, settings, brandId);
+    addresses.push(...(await withoutSavers(list, choices.savers)));
+  }
+  addresses.push(...(await emailsOf(chosen)));
+  return uniqueAddresses(addresses);
 }
 
 /** Take back a claim, so a later sweep sends the week. */

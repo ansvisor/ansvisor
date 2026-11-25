@@ -119,6 +119,12 @@ vi.mock('../pulse/engine.js', () => ({
   appUrl: () => 'https://app.example.com',
   resolveRecipients: async (_org, settings) => settings?.recipients ?? ['team@acme.example'],
 }));
+// People's own choices (00554): none saved unless a test says so.
+const choices = vi.hoisted(() => ({ value: { savers: new Set(), people: new Map() }, asked: [] }));
+vi.mock('../pulse/audience.js', async (original) => ({
+  ...(await original()),
+  brandChoices: async (...args) => (choices.asked.push(args), choices.value),
+}));
 vi.mock('../untracked-queries.js', () => ({ untrackedGoogleQueries: async () => ({ count: 0 }) }));
 let cloud = true;
 vi.mock('../../config/plans.js', () => ({
@@ -127,10 +133,12 @@ vi.mock('../../config/plans.js', () => ({
 }));
 
 const { sendTrafficDigestForBrand, sendTrafficDigests } = await import('./engine.js');
+const { forgetEmails } = await import('../pulse/audience.js');
 
 const MONDAY = new Date('2026-10-19T03:00:00Z');
 
 beforeEach(() => {
+  forgetEmails();
   Object.assign(state, {
     settings: null,
     existing: null,
@@ -155,6 +163,8 @@ beforeEach(() => {
       ai_traffic_broken_links: () => ({ count: 0, rows: [] }),
     },
   });
+  choices.value = { savers: new Set(), people: new Map() };
+  choices.asked = [];
   deliverEmail.mockReset().mockResolvedValue('sent');
   logger.warn.mockReset();
   logger.error.mockReset();
@@ -406,6 +416,37 @@ describe('sendTrafficDigestForBrand', () => {
     });
     expect(deliverEmail).not.toHaveBeenCalled();
     expect(state.inserted).toEqual([]);
+  });
+
+  it("asks for people's own choices about the brand's digest", async () => {
+    await sendTrafficDigestForBrand('b1', { now: MONDAY });
+    expect(choices.asked).toEqual([['o1', 'b1', 'traffic_digest']]);
+  });
+
+  it('leaves out a teammate who turned it off, and keeps the rest of the list', async () => {
+    state.settings = { recipients: ['ana@acme.example', 'client@else.example'] };
+    state.emails = { u1: 'Ana@Acme.example' };
+    choices.value = { savers: new Set(['u1']), people: new Map([['u1', 'off']]) };
+    expect(await sendTrafficDigestForBrand('b1', { now: MONDAY })).toMatchObject({
+      emailSent: true,
+      recipients: 1,
+    });
+    expect(deliverEmail.mock.calls.map(([mail]) => mail.to)).toEqual([['client@else.example']]);
+  });
+
+  it("sends it to a teammate who picked it, even while the brand's own is off", async () => {
+    state.settings = { recipients: null, traffic_digest: false };
+    state.emails = { u2: 'bo@acme.example' };
+    choices.value = { savers: new Set(['u2']), people: new Map([['u2', 'weekly']]) };
+    expect(await sendTrafficDigestForBrand('b1', { now: MONDAY })).toMatchObject({
+      emailSent: true,
+      recipients: 1,
+    });
+    expect(deliverEmail.mock.calls.map(([mail]) => mail.to)).toEqual([['bo@acme.example']]);
+
+    // Nobody picked it and the brand's is off: nothing at all.
+    choices.value = { savers: new Set(['u2']), people: new Map([['u2', 'off']]) };
+    expect(await sendTrafficDigestForBrand('b1', { now: MONDAY })).toEqual({ skipped: 'off' });
   });
 
   it('loses a race for the week quietly', async () => {
