@@ -16,7 +16,7 @@ import supabaseAdmin from '../../config/supabase.js';
 import { logger } from '../logger.js';
 import { sendEmail } from '../email.js';
 import { chatgptFanoutMode } from '../chatgpt-fanout.js';
-import { answerProvider } from '../answer-providers/index.js';
+import { unavailablePlatforms } from '../answer-providers/index.js';
 
 /** The page reads' statement timeout, and the share of it that warns. */
 export const READ_BUDGET_S = 8;
@@ -274,7 +274,7 @@ async function checkFanout(now, mode = chatgptFanoutMode()) {
  * was then.
  */
 function fanoutExpectation(p) {
-  if (answerProvider().unavailablePlatforms().includes(p.platform)) return 'never';
+  if (unavailablePlatforms().includes(p.platform)) return 'never';
   if (p.platform === CHATGPT && p.chatgptFanout) {
     return { all: 'day', sample: 'week', off: 'never' }[p.chatgptFanout] ?? null;
   }

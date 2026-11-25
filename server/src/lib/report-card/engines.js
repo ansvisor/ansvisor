@@ -1,5 +1,5 @@
 import logger from '../logger.js';
-import { answerProvider } from '../answer-providers/index.js';
+import { providerFor, supportedCountries } from '../answer-providers/index.js';
 import { supportsCountry } from '../cloro-countries.js';
 
 /**
@@ -66,8 +66,10 @@ export async function askEngines(
   questions,
   country,
   {
-    submit = answerProvider().submitScraperTask,
-    poll = answerProvider().pollScraperResult,
+    // Each engine on its own provider (PLATFORM_PROVIDER_OVERRIDES).
+    submit = (text, engine, region, opts) =>
+      providerFor(engine).submitScraperTask(text, engine, region, opts),
+    poll = (taskId, engine, opts) => providerFor(engine).pollScraperResult(taskId, engine, opts),
     supported = null,
     inFlight = IN_FLIGHT,
     maxWaitMs = MAX_WAIT_MS,
@@ -75,11 +77,7 @@ export async function askEngines(
     clock = Date.now,
   } = {},
 ) {
-  const countries =
-    supported ??
-    (await answerProvider()
-      .supportedCountries()
-      .catch(() => new Map()));
+  const countries = supported ?? (await supportedCountries().catch(() => new Map()));
   const engines = REPORT_CARD_ENGINES.filter((engine) =>
     supportsCountry(countries, engine, country),
   );
