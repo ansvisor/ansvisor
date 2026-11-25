@@ -4097,7 +4097,10 @@
         "actions": "작업",
         "scorecard": "스코어카드",
         "kpis": "KPI",
-        "label": "내역 보기"
+        "label": "내역 보기",
+        "actionsHint": "진행 중이거나 종료된 각 액션을 하나씩 보여 드립니다. 액션의 목표와 이후 측정된 결과를 확인하세요.",
+        "scorecardHint": "액션 유형별 전체 성과입니다. 완료된 수, 성공률, 변화량 중앙값을 확인하세요.",
+        "kpisHint": "브랜드의 목표와 각 목표의 달성 정도입니다."
       },
       "scorecard": {
         "note": "이 브랜드에서 수행된 자체 작업만을 바탕으로 각 작업 유형이 거둔 성과입니다. 결과는 현재까지의 수치이며, 작업이 종료되고 1개월 후에 최종 확정됩니다. 중앙값 변화는 각 작업의 주요 지표를 기준으로 합니다.",
@@ -6182,7 +6185,6 @@
       "home": "홈",
       "inbox": "받은편지함",
       "inboxLabel": "수신함 · {needsYou, plural, other {확인 필요 #개}}",
-      "inboxLabelNeedsYou": "받은편지함 · {count, plural, other {#개 항목}} · {needsYou, plural, other {#개 확인 필요}}",
       "skills": "스킬",
       "activity": "활동",
       "capabilities": "채팅 기능 안내",
@@ -6632,10 +6634,7 @@
       "landsWithSuggestions": "에이전트 결과와 일일 제안이 여기에 표시됩니다.",
       "nothingNeedsYou": "확인이 필요한 항목이 없습니다.",
       "summary": {
-        "needsYou": "{count, plural, other {#건 확인 필요}}",
-        "running": "{count}개 실행 중",
-        "doneToday": "오늘 {count}개 완료",
-        "suggestions": "이번 주 제안 {count, plural, other {#개}}"
+        "needsYou": "{count, plural, other {#건 확인 필요}}"
       },
       "empty": "확인이 필요한 항목이 없습니다. 에이전트 결과가 여기에 표시됩니다.",
       "tabs": {
@@ -15575,6 +15574,51 @@
       },
       "manage": "관리",
       "connect": "연결",
+      "adminConnects": "관리자가 연결합니다",
+      "accountStatus": {
+        "active": "연결됨",
+        "error": "확인 필요",
+        "disconnected": "연결 해제됨"
+      },
+      "sync": {
+        "syncedAt": "수치 읽은 시점: {when}",
+        "pending": "하루 안에 첫 수집: 최근 90일",
+        "error": {
+          "key_refused": "ChatGPT Ads에서 키를 거부했습니다. 새 키를 붙여넣어 주세요.",
+          "key_missing": "키가 없습니다. 계정을 다시 연결해 주세요.",
+          "signin_gone": "Google Ads 로그인 정보가 없습니다. Google Ads를 다시 연결해 주세요.",
+          "upstream": "광고 플랫폼이 응답하지 않았습니다. Ansvisor가 하루 안에 다시 시도합니다.",
+          "failed": "수치를 읽지 못했습니다. Ansvisor가 하루 안에 다시 시도합니다."
+        }
+      },
+      "chatgpt": {
+        "connect": "연결",
+        "addAnother": "계정 추가",
+        "dialogTitle": "ChatGPT Ads 연결",
+        "dialogLine": "ChatGPT Ads Manager에서 발급한 Ads API 키를 붙여넣어 주세요. 키 하나로 광고 계정 하나에 접근하므로 계정마다 키를 하나씩 추가하세요.",
+        "keyLabel": "Ads API 키",
+        "keyNote": "Ansvisor는 ChatGPT Ads로 키를 확인한 뒤 암호화하여 저장합니다. 읽기만 합니다.",
+        "cancel": "취소",
+        "save": "연결",
+        "checking": "확인 중…",
+        "connectedToast": "{name}을(를) 연결했습니다.",
+        "accountLine": "ChatGPT Ads 계정 · {currency}",
+        "accountLineNoCurrency": "ChatGPT Ads 계정",
+        "billing": "ChatGPT Ads Manager",
+        "error": {
+          "invalid_key": "ChatGPT Ads에서 이 키를 승인하지 않았습니다. 키를 확인한 후 다시 시도해 주세요.",
+          "upstream": "ChatGPT Ads가 응답하지 않았습니다. 잠시 후 다시 시도해 주세요.",
+          "other": "연결하지 못했습니다. 다시 시도해 주세요."
+        }
+      },
+      "account": {
+        "disconnect": "연결 해제",
+        "disconnectTitle": "{name} 연결을 해제하시겠습니까?",
+        "disconnectLine": "Ansvisor가 이 계정과 관련해 보관 중인 키(있는 경우)와 읽어 온 수치를 삭제합니다. 광고는 {billing}에서 계속 게재됩니다.",
+        "disconnectedToast": "{name} 연결을 해제했습니다.",
+        "disconnectFailed": "연결을 해제하지 못했습니다. 다시 시도해 주세요.",
+        "cancel": "취소"
+      },
       "platforms": {
         "chatgpt": {
           "name": "ChatGPT Ads",
@@ -18229,24 +18273,139 @@
       }
     },
     "notifications": "알림",
-    "notificationsDescription": "각 브랜드는 두 가지 이메일을 보낼 수 있습니다. 추적 실행 후 발송되는 Daily Pulse와 매주 월요일 발송되는 AI Traffic 주간 요약입니다. 두 이메일 모두 해당 브랜드의 Daily Pulse 수신자에게 전달됩니다.",
-    "pulseSection": "Daily Pulse",
-    "pulseSectionDescription": "추적 실행 후 브랜드별로 하이라이트와 경고를 담은 짧은 요약을 보냅니다. 발송 빈도와 수신자를 선택하세요.",
-    "pulseFrequencyLabel": "{brand}의 Daily Pulse 발송 빈도",
+    "yourEmails": {
+      "title": "내 이메일",
+      "description": "Ansvisor가 보내는 이메일의 종류와 빈도를 선택하세요. 본인에게만 적용되며, 팀원마다 각자 설정합니다.",
+      "carriedOver": "현재 받고 계신 이메일입니다. 저장하면 내 설정으로 유지됩니다.",
+      "for": "대상",
+      "scopeAll": "내 모든 브랜드 ({count})",
+      "deliveryHint": "브랜드 이메일은 브랜드별로 각각 받거나 하나의 이메일로 함께 받을 수 있습니다:",
+      "delivery_per_brand": "브랜드별로 이메일 1통",
+      "delivery_combined": "모든 브랜드를 이메일 1통으로 (출시 예정)",
+      "brandOnly": "{brand}에만 설정",
+      "useAll": "'내 모든 브랜드' 설정 사용",
+      "notableNote": "첫 번째 펄스를 보내드린 후에는 주목할 만한 일이 있을 때만 보내드립니다.",
+      "comingSoon": "출시 예정",
+      "comingSoonHint": "'출시 예정'으로 표시된 이메일은 저장하신 설정을 유지하며, 준비되면 발송이 시작됩니다.",
+      "admins": "관리자",
+      "groups": {
+        "visibility": "브랜드 가시성",
+        "traffic": "AI 트래픽",
+        "actions": "액션 센터",
+        "agents": "에이전트 및 채팅",
+        "audit": "사이트 감사",
+        "content": "콘텐츠",
+        "account": "계정"
+      },
+      "kinds": {
+        "daily_pulse": {
+          "name": "일간 펄스",
+          "description": "각 브랜드가 AI 답변에 어떻게 노출되었는지 알려드립니다: 가시성 점수, 언급, 인용, 주요 소식과 경고."
+        },
+        "traffic_digest": {
+          "name": "주간 요약",
+          "description": "지난주 AI 방문을 한 줄로 요약하고 상위 3개 변화를 알려드립니다. 매주 월요일."
+        },
+        "critical_action": {
+          "name": "새 긴급 액션",
+          "description": "내 브랜드에 긴급 우선순위의 새 액션이 생겼습니다."
+        },
+        "due_actions": {
+          "name": "기한 초과 및 오늘 마감",
+          "description": "내게 할당된 액션과 작업 중 마감일이 되었거나 지연된 항목입니다."
+        },
+        "weekly_actions": {
+          "name": "주간 액션 요약",
+          "description": "완료된 일, 진행 중인 일, 다음 할 일을 알려드립니다. 매주 월요일."
+        },
+        "run_finished": {
+          "name": "실행 완료",
+          "description": "내가 시작한 에이전트 실행이 완료되었으며, 수행한 작업을 알려드립니다."
+        },
+        "audit_finished": {
+          "name": "감사 완료",
+          "description": "일괄 또는 예약된 감사가 완료되었으며, 점수를 알려드립니다."
+        },
+        "score_dropped": {
+          "name": "점수 하락",
+          "description": "페이지 점수가 마지막 감사 이후 5점 이상 떨어졌습니다."
+        },
+        "drafts_review": {
+          "name": "검토 대기 중인 초안",
+          "description": "내 브랜드용으로 작성된 초안 중 게시 전에 검토가 필요한 항목입니다."
+        },
+        "ai_usage": {
+          "name": "AI 사용량",
+          "description": "월간 AI 한도의 80%와 100%에 도달했을 때 알려드립니다."
+        }
+      },
+      "links": {
+        "approvals": {
+          "name": "승인 대기 중",
+          "description": "에이전트 또는 채팅 실행이 무언가를 변경하거나 게시하기 전에 사용자의 승인이 필요합니다. '에이전트가 필요할 때 알림'에서 설정하세요.",
+          "link": "채팅 설정"
+        },
+        "scheduled": {
+          "name": "예약된 작업",
+          "description": "각 작업은 작업에 설정된 대로 이메일을 보냅니다.",
+          "link": "작업 열기"
+        },
+        "billing": {
+          "name": "결제 및 보안",
+          "description": "청구서, 결제 문제, 로그인 알림입니다. 항상 발송됩니다.",
+          "locked": "항상 켜짐"
+        }
+      },
+      "options": {
+        "pulse": {
+          "daily": "매일",
+          "weekly": "매주",
+          "notable": "주목할 만한 경우에만",
+          "off": "끔"
+        },
+        "instant": {
+          "instant": "즉시",
+          "daily": "일일 요약",
+          "off": "끔"
+        },
+        "digest": {
+          "daily": "일일 요약",
+          "weekly": "주간 요약",
+          "off": "끔"
+        },
+        "weekly": {
+          "weekly": "매주 월요일",
+          "off": "끔"
+        },
+        "onoff": {
+          "on": "켜짐",
+          "off": "끔"
+        }
+      },
+      "save": "변경 사항 저장",
+      "saved": "이메일 설정이 저장되었습니다",
+      "saveFailed": "이메일 설정을 저장하지 못했습니다. 다시 시도해 주세요.",
+      "loadFailed": "이메일 설정을 불러오지 못했습니다.",
+      "turnOffAll": "선택 이메일 모두 끄기",
+      "turnedOff": "선택 이메일이 모두 끔으로 설정되었습니다. 유지하려면 변경 사항을 저장하세요."
+    },
+    "outsideEmails": {
+      "title": "워크스페이스 외부 사용자에게 보내기",
+      "description": "Ansvisor 시트가 없는 클라이언트나 매니저도 브랜드 요약을 받을 수 있습니다. 승인 이메일이나 계정 이메일은 받지 않습니다.",
+      "sends": "Daily Pulse · AI Traffic 주간 요약",
+      "recipients": "수신자",
+      "placeholder": "client@example.com, boss@example.com",
+      "hint": "쉼표로 구분합니다. 자신의 이메일 설정을 저장하지 않은 팀원은 이전처럼 이 브랜드의 이메일을 계속 받습니다. 이 목록이 비어 있으면 모든 팀원이, 아니면 목록에 있는 팀원만 받습니다.",
+      "frequency": "Daily Pulse",
+      "frequencyNote": "브랜드의 Slack 채널과 웹훅, 그리고 자신의 설정을 저장하지 않은 팀원에게도 적용됩니다.",
+      "digest": "AI Traffic 주간 요약도 보내기",
+      "digestPulseOff": "이 Daily Pulse가 꺼져 있으면 주간 요약은 발송되지 않습니다."
+    },
     "pulseFrequency_daily": "매일",
     "pulseFrequency_weekly": "매주",
     "pulseFrequency_notable": "주요 변동 시에만",
-    "pulseFrequency_notableNote": "첫 Pulse 수신 후, 주목할 만한 변동이 발생할 때만 발송됩니다.",
     "pulseFrequency_off": "끄기",
-    "pulseRecipients": "수신자",
-    "pulseRecipientsPlaceholder": "alex@example.com, sam@example.com",
-    "pulseRecipientsHint": "쉼표로 구분된 이메일 주소입니다. 모든 조직 멤버에게 보내려면 비워 두세요.",
     "pulseRecipientsInvalid": "유효한 이메일 주소가 아닙니다: {emails}. 수정하거나 삭제한 후 저장하세요.",
-    "trafficDigest": "AI Traffic 주간 다이제스트",
-    "trafficDigestDescription": "매주 월요일, 지난주 AI 방문을 한 줄로 요약하고 가장 큰 변화 세 가지를 알려드립니다. 각 브랜드의 Daily Pulse 수신자에게 전달되며, 체크하거나 해제하면 바로 저장됩니다.",
-    "trafficDigestTo": "수신: {emails}",
-    "trafficDigestToEveryone": "모든 조직 멤버에게",
-    "trafficDigestPulseOff": "Daily Pulse가 꺼져 있는 동안에는 발송되지 않습니다. 다시 받으려면 Pulse를 켜세요.",
     "pulseSaved": "알림 설정을 저장했습니다",
     "pulseSaveFailed": "알림 설정을 저장할 수 없습니다. 다시 시도해 주세요.",
     "pulseLoadFailed": "알림 설정을 불러올 수 없습니다.",
@@ -18271,7 +18430,6 @@
       "loading": "언어를 불러오는 중…",
       "moreSoon": "더 많은 언어가 곧 추가될 예정입니다.",
       "preview": "직원 및 테스트 빌드에서는 아직 번역되지 않은 언어도 볼 수 있습니다. 텍스트가 없는 부분은 영문으로 표시됩니다.",
-      "testLanguage": "{language} · 테스트",
       "saved": "언어가 저장되었습니다",
       "saveFailed": "언어를 저장하지 못했습니다. 다시 시도해 주세요.",
       "suggest": {

@@ -4122,7 +4122,10 @@
         "actions": "Acties",
         "scorecard": "Scorecard",
         "kpis": "KPI's",
-        "label": "Geschiedenisweergaven"
+        "label": "Geschiedenisweergaven",
+        "actionsHint": "Elke actie die loopt of is afgesloten, stuk voor stuk: wat ze beoogde en wat sindsdien is gemeten.",
+        "scorecardHint": "Wat elk type actie in totaal heeft opgeleverd: hoeveel er zijn afgerond, het slagingspercentage en de mediane verandering.",
+        "kpisHint": "De doelen van uw merk en hoe dicht u bij elk doel bent."
       },
       "scorecard": {
         "note": "Wat elk type actie bij dit merk heeft opgeleverd, uitsluitend op basis van de eigen acties. Resultaten zijn de metingen tot nu toe; elk resultaat is definitief een maand nadat de actie is gesloten. Mediaanverandering betreft de hoofdstatistiek van elke actie.",
@@ -6207,7 +6210,6 @@
       "home": "Home",
       "inbox": "Inbox",
       "inboxLabel": "Inbox · {needsYou, plural, one {# vereist uw aandacht} other {# vereisen uw aandacht}}",
-      "inboxLabelNeedsYou": "Inbox · {count, plural, one {# item} other {# items}} · {needsYou, plural, one {# vereist uw aandacht} other {# vereisen uw aandacht}}",
       "skills": "Skills",
       "activity": "Activiteit",
       "capabilities": "Wat Chat kan doen",
@@ -6657,10 +6659,7 @@
       "landsWithSuggestions": "Resultaten van uw agents en dagelijkse suggesties komen hier binnen.",
       "nothingNeedsYou": "Niets vereist uw aandacht.",
       "summary": {
-        "needsYou": "{count, plural, one {# vereist uw aandacht} other {# vereisen uw aandacht}}",
-        "running": "{count} actief",
-        "doneToday": "{count} vandaag voltooid",
-        "suggestions": "{count, plural, one {# suggestie} other {# suggesties}} deze week"
+        "needsYou": "{count, plural, one {# vereist uw aandacht} other {# vereisen uw aandacht}}"
       },
       "empty": "Niets vereist uw aandacht. Resultaten van uw agents komen hier binnen.",
       "tabs": {
@@ -15600,6 +15599,51 @@
       },
       "manage": "Beheren",
       "connect": "Koppelen",
+      "adminConnects": "Een Beheerder koppelt dit",
+      "accountStatus": {
+        "active": "Gekoppeld",
+        "error": "Vereist aandacht",
+        "disconnected": "Ontkoppeld"
+      },
+      "sync": {
+        "syncedAt": "Cijfers opgehaald {when}",
+        "pending": "Eerste uitlezing binnen een dag: de laatste 90 dagen",
+        "error": {
+          "key_refused": "ChatGPT Ads heeft de sleutel geweigerd. Plak een nieuwe sleutel.",
+          "key_missing": "De sleutel is verdwenen. Koppel het account opnieuw.",
+          "signin_gone": "De Google Ads-aanmelding is verdwenen. Koppel Google Ads opnieuw.",
+          "upstream": "Het advertentieplatform reageerde niet. Ansvisor probeert het binnen een dag opnieuw.",
+          "failed": "De cijfers konden niet worden opgehaald. Ansvisor probeert het binnen een dag opnieuw."
+        }
+      },
+      "chatgpt": {
+        "connect": "Koppelen",
+        "addAnother": "Account toevoegen",
+        "dialogTitle": "ChatGPT Ads koppelen",
+        "dialogLine": "Plak een Ads API-sleutel uit ChatGPT Ads Manager. Elke sleutel geeft toegang tot één advertentieaccount, dus voeg per account één sleutel toe.",
+        "keyLabel": "Ads API-sleutel",
+        "keyNote": "Ansvisor controleert de sleutel bij ChatGPT Ads en slaat hem daarna versleuteld op. Alleen lezen.",
+        "cancel": "Annuleren",
+        "save": "Koppelen",
+        "checking": "Controleren…",
+        "connectedToast": "{name} gekoppeld.",
+        "accountLine": "ChatGPT Ads-account · {currency}",
+        "accountLineNoCurrency": "ChatGPT Ads-account",
+        "billing": "ChatGPT Ads Manager",
+        "error": {
+          "invalid_key": "ChatGPT Ads heeft deze sleutel niet geaccepteerd. Controleer de sleutel en probeer het opnieuw.",
+          "upstream": "ChatGPT Ads reageerde niet. Probeer het over een minuut opnieuw.",
+          "other": "Koppelen mislukt. Probeer het opnieuw."
+        }
+      },
+      "account": {
+        "disconnect": "Ontkoppelen",
+        "disconnectTitle": "{name} ontkoppelen?",
+        "disconnectLine": "Ansvisor verwijdert wat het voor dit account bewaart: de sleutel, indien aanwezig, en de uitgelezen cijfers. Uw advertenties blijven lopen in {billing}.",
+        "disconnectedToast": "{name} ontkoppeld.",
+        "disconnectFailed": "Ontkoppelen mislukt. Probeer het opnieuw.",
+        "cancel": "Annuleren"
+      },
       "platforms": {
         "chatgpt": {
           "name": "ChatGPT Ads",
@@ -18254,24 +18298,139 @@
       }
     },
     "notifications": "Meldingen",
-    "notificationsDescription": "Elk merk kan twee e-mails versturen: de Daily Pulse na de trackingruns en het wekelijkse AI Traffic-overzicht elke maandag. Beide gaan naar de Daily Pulse-ontvangers van het merk.",
-    "pulseSection": "Daily Pulse",
-    "pulseSectionDescription": "Een kort overzicht per merk na elke trackingrun, met hoogtepunten en waarschuwingen. Kies hoe vaak u het ontvangt en wie het krijgt.",
-    "pulseFrequencyLabel": "Hoe vaak de Daily Pulse van {brand} komt",
+    "yourEmails": {
+      "title": "Uw e-mails",
+      "description": "Kies welke e-mails Ansvisor u stuurt en hoe vaak. Dit geldt alleen voor u: iedereen in het team stelt zijn eigen voorkeuren in.",
+      "carriedOver": "Dit zijn de e-mails die u nu ontvangt. Sla op om ze als uw eigen keuzes te bewaren.",
+      "for": "Voor",
+      "scopeAll": "Al mijn brands ({count})",
+      "deliveryHint": "Brand-e-mails komen per brand binnen, of samen in één e-mail:",
+      "delivery_per_brand": "Eén e-mail per brand",
+      "delivery_combined": "Alle brands in één e-mail (binnenkort beschikbaar)",
+      "brandOnly": "Alleen instellen voor {brand}",
+      "useAll": "Mijn keuze voor Al mijn brands gebruiken",
+      "notableNote": "Je eerste pulse, daarna alleen wanneer er iets opmerkelijks gebeurt.",
+      "comingSoon": "Binnenkort beschikbaar",
+      "comingSoonHint": "E-mails met de markering Binnenkort beschikbaar behouden de keuze die u opslaat en starten zodra ze klaar zijn.",
+      "admins": "Beheerders",
+      "groups": {
+        "visibility": "Brandzichtbaarheid",
+        "traffic": "AI-verkeer",
+        "actions": "Actiecentrum",
+        "agents": "Agents en chat",
+        "audit": "Site-audit",
+        "content": "Content",
+        "account": "Account"
+      },
+      "kinds": {
+        "daily_pulse": {
+          "name": "Dagelijkse Pulse",
+          "description": "Hoe elk brand verscheen in AI-antwoorden: Visibility score, vermeldingen, citaties, highlights en waarschuwingen."
+        },
+        "traffic_digest": {
+          "name": "Wekelijks overzicht",
+          "description": "De AI-bezoeken van vorige week in één regel, met de top drie wijzigingen. Op maandag."
+        },
+        "critical_action": {
+          "name": "Nieuwe kritieke actie",
+          "description": "Een nieuwe actie met prioriteit Kritiek voor uw brands."
+        },
+        "due_actions": {
+          "name": "Verlopen en vandaag te doen",
+          "description": "Aan u toegewezen acties en taken die vandaag aan de beurt of te laat zijn."
+        },
+        "weekly_actions": {
+          "name": "Wekelijks actieoverzicht",
+          "description": "Wat is gedaan, wat openstaat en wat er nog komt. Op maandag."
+        },
+        "run_finished": {
+          "name": "Run voltooid",
+          "description": "Een agent-run die u hebt gestart is voltooid, met wat er is gedaan."
+        },
+        "audit_finished": {
+          "name": "Audit voltooid",
+          "description": "Een bulk- of geplande audit is klaar, met de score."
+        },
+        "score_dropped": {
+          "name": "Score gedaald",
+          "description": "De score van een pagina is sinds de laatste audit met 5 punten of meer gedaald."
+        },
+        "drafts_review": {
+          "name": "Concepten die op uw beoordeling wachten",
+          "description": "Concepten voor uw brands die u moet beoordelen voordat ze live gaan."
+        },
+        "ai_usage": {
+          "name": "AI-gebruik",
+          "description": "Bij 80% en 100% van de maandelijkse AI-limiet."
+        }
+      },
+      "links": {
+        "approvals": {
+          "name": "Wacht op uw goedkeuring",
+          "description": "Een agent of een chat-run heeft uw akkoord nodig voordat er iets wordt gewijzigd of gepubliceerd. Stel dit in met Breng me op de hoogte wanneer een agent me nodig heeft.",
+          "link": "Chatinstellingen"
+        },
+        "scheduled": {
+          "name": "Geplande taken",
+          "description": "Elke taak stuurt e-mails zoals ingesteld bij de taak.",
+          "link": "Taken openen"
+        },
+        "billing": {
+          "name": "Facturatie en beveiliging",
+          "description": "Facturen, betalingsproblemen en inlogmeldingen. Worden altijd verzonden.",
+          "locked": "Altijd aan"
+        }
+      },
+      "options": {
+        "pulse": {
+          "daily": "Dagelijks",
+          "weekly": "Wekelijks",
+          "notable": "Alleen bij opvallende wijzigingen",
+          "off": "Uit"
+        },
+        "instant": {
+          "instant": "Direct",
+          "daily": "Dagelijkse samenvatting",
+          "off": "Uit"
+        },
+        "digest": {
+          "daily": "Dagelijkse samenvatting",
+          "weekly": "Wekelijkse samenvatting",
+          "off": "Uit"
+        },
+        "weekly": {
+          "weekly": "Elke maandag",
+          "off": "Uit"
+        },
+        "onoff": {
+          "on": "Aan",
+          "off": "Uit"
+        }
+      },
+      "save": "Wijzigingen opslaan",
+      "saved": "Uw e-mailvoorkeuren zijn opgeslagen",
+      "saveFailed": "Uw e-mailvoorkeuren konden niet worden opgeslagen. Probeer het opnieuw.",
+      "loadFailed": "Uw e-mailvoorkeuren konden niet worden geladen.",
+      "turnOffAll": "Alle optionele e-mails uitschakelen",
+      "turnedOff": "Alle optionele e-mails staan op Uit. Sla de wijzigingen op om dit te behouden."
+    },
+    "outsideEmails": {
+      "title": "Verzenden naar mensen buiten de workspace",
+      "description": "Een klant of een manager zonder Ansvisor-seat kan ook de samenvattingen van een merk ontvangen. Zij ontvangen nooit goedkeuringen of accountmails.",
+      "sends": "Daily Pulse · wekelijkse AI Traffic-samenvatting",
+      "recipients": "Ontvangers",
+      "placeholder": "klant@example.com, baas@example.com",
+      "hint": "Gescheiden door komma's. Teamleden die hun eigen e-mailvoorkeuren niet hebben opgeslagen, ontvangen de e-mails van dit merk nog steeds zoals voorheen: allemaal zolang deze lijst leeg is, anders alleen degenen die erop staan.",
+      "frequency": "Daily Pulse",
+      "frequencyNote": "Dit bepaalt ook het Slack-kanaal en de webhooks van het merk, en teamleden die hun eigen keuzes niet hebben opgeslagen.",
+      "digest": "Verstuur ook de wekelijkse AI Traffic-samenvatting",
+      "digestPulseOff": "De wekelijkse samenvatting wordt niet verzonden zolang deze Daily Pulse uit staat."
+    },
     "pulseFrequency_daily": "Dagelijks",
     "pulseFrequency_weekly": "Wekelijks",
     "pulseFrequency_notable": "Alleen bij bijzonderheden",
-    "pulseFrequency_notableNote": "Uw eerste pulse, daarna alleen wanneer er iets opvallends gebeurt.",
     "pulseFrequency_off": "Uit",
-    "pulseRecipients": "Ontvangers",
-    "pulseRecipientsPlaceholder": "alex@example.com, sam@example.com",
-    "pulseRecipientsHint": "Kommagescheiden e-mailadressen. Laat leeg om naar elk Lid van de organisatie te sturen.",
     "pulseRecipientsInvalid": "Geen geldig e-mailadres: {emails}. Corrigeer of verwijder dit voor het opslaan.",
-    "trafficDigest": "Wekelijks AI Traffic-overzicht",
-    "trafficDigestDescription": "Elke maandag: de AI-bezoeken van vorige week in één samenvattende regel, met de drie belangrijkste wijzigingen. Het gaat naar de Daily Pulse-ontvangers van elk merk en wordt opgeslagen zodra u het aan- of uitvinkt.",
-    "trafficDigestTo": "Aan {emails}",
-    "trafficDigestToEveryone": "Aan elk lid van de organisatie",
-    "trafficDigestPulseOff": "Wordt niet verzonden zolang de Daily Pulse uitgeschakeld is. Schakel de pulse weer in om deze te ontvangen.",
     "pulseSaved": "Meldingsinstellingen opgeslagen",
     "pulseSaveFailed": "Kon meldingsinstellingen niet opslaan. Probeer het opnieuw.",
     "pulseLoadFailed": "Kon meldingsinstellingen niet laden.",
@@ -18296,7 +18455,6 @@
       "loading": "Talen laden…",
       "moreSoon": "Er komen meer talen aan.",
       "preview": "Medewerkers en testversies zien ook de talen die nog geen vertaling hebben. Waar tekst ontbreekt, wordt Engels getoond.",
-      "testLanguage": "{language} · test",
       "saved": "Taal opgeslagen",
       "saveFailed": "Uw taal kon niet worden opgeslagen. Probeer het opnieuw.",
       "suggest": {
