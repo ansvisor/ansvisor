@@ -4842,7 +4842,7 @@
         "stop tracking a location"
       ],
       "plan": "all",
-      "updated": "2026-11-11",
+      "updated": "2026-11-25",
       "sections": [
         {
           "heading": null,
@@ -4866,7 +4866,7 @@
         },
         {
           "heading": "Which engines answer from a state or city",
-          "text": "**US states** are asked by every engine from the state itself. Google's engines asked a state country-wide until October 2026, so their answers from before then stay in the country's column.\n\n**Cities** are asked only by the engines that can answer from a city: Google AI Mode, Google AI Overview and the API models (OpenAI, Claude). ChatGPT, Gemini and Grok answer per country, so they skip a city and their answers stay in the country's column; track the country too to see them. A city column says **AI Mode · AIO · APIs**. A city counts as one location on your plan, like a country."
+          "text": "**US states** are asked by every engine from the state itself; Gemini may answer from the whole US instead. Google's engines asked a state country-wide until October 2026, so their answers from before then stay in the country's column.\n\n**Cities** are asked only by the engines that can answer from a city: Google AI Mode, Google AI Overview and the API models (OpenAI, Claude). ChatGPT, Gemini and Grok answer per country, so they skip a city and their answers stay in the country's column; track the country too to see them. A city column says **AI Mode · AIO · APIs**. A city counts as one location on your plan, like a country."
         },
         {
           "heading": "What a new location shows",

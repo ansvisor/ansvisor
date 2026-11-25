@@ -88,6 +88,22 @@ export const ANAKIN_ENGINES = {
  */
 export const UNAVAILABLE_PLATFORMS = ['deepseek-web'];
 
+/**
+ * The countries Anakin's Gemini answers from (Anakin, 25 Nov 2026). A
+ * country outside the list isn't refused: Gemini answers from the US, and
+ * says so only in `country` / `detected_location`. Runs skip those
+ * countries for Gemini on Anakin, as they skip Cloro's unlisted ones.
+ * Gemini takes a country only, no US state.
+ */
+export const GEMINI_COUNTRIES = Object.freeze(
+  (
+    'ad ae ar at au be bg br ca ch cl co cz de dk eg es fi fr gb gr hk hu id ie il in it jp ' +
+    'ke kr ma md mx my ng nl no nz pe ph pk pl pt qa ro sa se sg th tr tw ua us vn za'
+  )
+    .split(' ')
+    .map((code) => code.toUpperCase()),
+);
+
 const DEFAULT_MAX_WAIT_MS = 30 * 60 * 1000;
 const DEFAULT_POLL_INTERVAL_MS = 10_000;
 const MINUTE_MS = 60_000;
