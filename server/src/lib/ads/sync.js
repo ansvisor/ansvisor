@@ -183,10 +183,23 @@ export function searchTermDayRow(accountId, row, updatedAt) {
 /** Upserts search-term days in batches; the number written. */
 export async function writeSearchTermDays(accountId, rows, { db = supabaseAdmin } = {}) {
   const updatedAt = new Date().toISOString();
+  // Google returns a search term once per ad group, so one campaign day can
+  // hold the same term twice: add them up rather than keep the last one,
+  // which undercounts spend and makes the upsert touch one row twice.
   const byKey = new Map();
   for (const row of rows) {
     const clean = searchTermDayRow(accountId, row, updatedAt);
-    if (clean) byKey.set(`${clean.campaign_id}|${clean.search_term}|${clean.day}`, clean);
+    if (!clean) continue;
+    const key = `${clean.campaign_id}|${clean.search_term}|${clean.day}`;
+    const seen = byKey.get(key);
+    if (!seen) {
+      byKey.set(key, clean);
+      continue;
+    }
+    seen.impressions += clean.impressions;
+    seen.clicks += clean.clicks;
+    seen.cost_micros += clean.cost_micros;
+    seen.conversions = Math.round((seen.conversions + clean.conversions) * 100) / 100;
   }
   const all = [...byKey.values()];
   for (let i = 0; i < all.length; i += WRITE_BATCH) {
