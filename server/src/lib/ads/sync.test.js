@@ -235,4 +235,43 @@ describe('writeSearchTermDays', () => {
     expect(rows[0]).toMatchObject({ search_term: 'best crm', clicks: 2 });
     expect(options).toEqual({ onConflict: 'account_id,campaign_id,search_term,day' });
   });
+
+  it('adds up one term from two ad groups of the same campaign day', async () => {
+    const db = fakeDb();
+    const written = await writeSearchTermDays(
+      'acc',
+      [
+        {
+          campaignId: 'c1',
+          searchTerm: 'best crm',
+          day: '2026-11-20',
+          impressions: 10,
+          clicks: 2,
+          costMicros: 1_500_000,
+          conversions: 0.5,
+        },
+        {
+          campaignId: 'c1',
+          searchTerm: 'best crm',
+          day: '2026-11-20',
+          impressions: 5,
+          clicks: 1,
+          costMicros: 700_000,
+          conversions: 1.25,
+        },
+        { campaignId: 'c2', searchTerm: 'best crm', day: '2026-11-20', clicks: 4 },
+      ],
+      { db },
+    );
+    expect(written).toBe(2);
+    const [, rows] = db.calls[0].ops.find(([op]) => op === 'upsert');
+    expect(rows).toHaveLength(2);
+    expect(rows.find((r) => r.campaign_id === 'c1')).toMatchObject({
+      impressions: 15,
+      clicks: 3,
+      cost_micros: 2_200_000,
+      conversions: 1.75,
+    });
+    expect(rows.find((r) => r.campaign_id === 'c2')).toMatchObject({ clicks: 4 });
+  });
 });
