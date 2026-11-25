@@ -196,8 +196,13 @@ const TOUR_MESSAGES = [
   line('user', 'Next: Topics and prompts', 'prompts'),
   line('assistant', 'This is Prompts.'),
 ];
+/** The page's newest panel chat, as /api/chat/conversations/panel answers it. */
+let pageChat: string | null = null;
 const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
   calls.push(init?.method ? `${init.method} ${url}` : url);
+  if (url.startsWith('/api/chat/conversations/panel?')) {
+    return Response.json({ ok: true, id: pageChat });
+  }
   if (init?.method === 'PATCH') {
     const patch = JSON.parse(String(init.body)) as Record<string, unknown>;
     return Response.json({ ok: true, chat: { ...chatRow(CHAT, 'Citations drop'), ...patch } });
@@ -283,6 +288,7 @@ beforeEach(() => {
   route.push.mockClear();
   pageContext = null;
   chatMessages = null;
+  pageChat = null;
   calls = [];
   fetchMock.mockClear();
   prefs.saveChatPanelSize.mockClear();
@@ -422,6 +428,22 @@ describe('the panel’s chat', () => {
     expect(panel()!.textContent).toContain('Why did citations drop?');
   });
 
+  it("carries on the page's own latest panel chat after 30 minutes", async () => {
+    localStorage.setItem(
+      PANEL_LAST_CHAT_KEY,
+      JSON.stringify({ id: 'older', at: Date.now() - 2 * 24 * 60 * 60_000 }),
+    );
+    pageChat = CHAT;
+    await render();
+    await click(ask());
+    expect(calls).toEqual([
+      '/api/chat/conversations/panel?page=%2Fdashboard%2Fmentions&brandId=brand-1',
+      `/api/chat/conversations/${CHAT}`,
+    ]);
+    expect(panel()!.textContent).toContain('Why did citations drop?');
+    expect(JSON.parse(localStorage.getItem(PANEL_LAST_CHAT_KEY)!).id).toBe(CHAT);
+  });
+
   it('opens by itself on the tour’s chat, on the turn about the page, marked (00486)', async () => {
     chatMessages = TOUR_MESSAGES;
     route.pathname = '/dashboard/insights';
@@ -489,7 +511,10 @@ describe('the panel’s chat', () => {
     );
     await render();
     await click(ask());
-    expect(calls).toEqual([]);
+    // Only the page's own chat is looked for; the page has none yet.
+    expect(calls).toEqual([
+      '/api/chat/conversations/panel?page=%2Fdashboard%2Fmentions&brandId=brand-1',
+    ]);
     await click(container.querySelector('[data-testid="send"]'));
     expect(JSON.parse(localStorage.getItem(PANEL_LAST_CHAT_KEY)!).id).toBe('chat-new');
   });
@@ -620,7 +645,8 @@ describe('the page’s context (W1-08)', () => {
     expect(container.querySelector('[data-testid="draft"]')!.textContent).toBe(
       'Turn this page into actions',
     );
-    expect(calls).toEqual([]);
+    // Nothing sent: only the look for the page's own chat, which has none.
+    expect(calls.filter((url) => !url.startsWith('/api/chat/conversations/panel?'))).toEqual([]);
   });
 
   it('opens the panel from Ask about this with the object attached', async () => {
