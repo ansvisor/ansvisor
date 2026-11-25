@@ -25,3 +25,24 @@ export async function readThread(
     row: body.chat,
   };
 }
+
+/**
+ * The chat the panel continues on a page: the person's newest panel chat
+ * started on `page`, for the brand when given; null when there is none or
+ * it can't be read (the panel then starts empty).
+ */
+export async function readPageChatId(
+  page: string,
+  brandId: string | null | undefined,
+): Promise<string | null> {
+  const params = new URLSearchParams({ page });
+  if (brandId) params.set('brandId', brandId);
+  const res = await fetch(`/api/chat/conversations/panel?${params}`, { cache: 'no-store' }).catch(
+    () => null,
+  );
+  const body = (await res?.json().catch(() => null)) as
+    | { ok: true; id: string | null }
+    | { ok: false }
+    | null;
+  return res?.ok && body?.ok ? body.id : null;
+}

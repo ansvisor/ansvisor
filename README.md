@@ -160,7 +160,7 @@ Deploy Ansvisor on your own infrastructure and maintain control over your enviro
 |---------|---------|--------------|
 | **Supabase** | Database, Auth, API | [supabase.com](https://supabase.com/) |
 | **AI Provider** (at least one) | Brand tracking across AI engines | [OpenAI](https://platform.openai.com/) / [Google Gemini](https://ai.google.dev/) / [Anthropic](https://console.anthropic.com/) |
-| **Cloro** | Web scraping for AI platform responses | [cloro.dev](https://cloro.dev/?utm_source=ansvisor&utm_medium=byok) |
+| **Cloro** or **Anakin** (one of them) | Asks the AI platforms (ChatGPT, Google AI Overviews, Gemini…) your prompts; pick one with `PLATFORM_PROVIDER` | [cloro.dev](https://cloro.dev/?utm_source=ansvisor&utm_medium=byok) / [anakin.io](https://anakin.io/?utm_source=ansvisor&utm_medium=byok) |
 
 ### Optional Services
 

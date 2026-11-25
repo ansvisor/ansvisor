@@ -473,6 +473,8 @@ describe('coverage of the write routes', () => {
       (file) => file !== 'index.js' && !index.includes(`from './${file}'`),
     );
     expect(outside.sort()).toEqual([
+      // Anakin's finished jobs (ANAKIN_WEBHOOK_SECRET): a task a run submitted, by its job id.
+      'anakin-callback.js',
       'bot-ingest.js',
       'cloro-callback.js',
       // A person's Today ranking for the AEO Operator (CRON_SECRET, called by the web): a read.

@@ -7,6 +7,14 @@ import { dispatchBrandWebhook } from '../webhook-dispatch.js';
 import { computePulseMetrics } from './metrics.js';
 import { renderPulseEmail, sendPulseEmail } from './email.js';
 import { skipsAsNotNotable } from './send-rules.js';
+import {
+  brandChoices,
+  chose,
+  emailsOf,
+  sameAddress,
+  uniqueAddresses,
+  withoutSavers,
+} from './audience.js';
 import { deliverToSlack } from '../slack/deliver.js';
 import { pulseMessage } from '../slack/blocks/pulse.js';
 
@@ -45,18 +53,6 @@ export function appUrl() {
   }
 }
 
-/** The sign-in e-mail of each of `ids` that has one. */
-async function emailsOf(ids) {
-  const emails = [];
-  for (const id of ids) {
-    const { data: authUser } = await supabaseAdmin.auth.admin.getUserById(id);
-    if (authUser?.user?.email) emails.push(authUser.user.email);
-  }
-  return emails;
-}
-
-const sameAddress = (address) => String(address).trim().toLowerCase();
-
 /**
  * Recipient emails (brand access, spec §5.4): the explicit list from
  * settings, as an Admin or Manager set it, less the members who can't see
@@ -64,6 +60,10 @@ const sameAddress = (address) => String(address).trim().toLowerCase();
  * its numbers; an address that is no member's (a client, team@) stays.
  * Else every member who can see the brand: with All brands, every member.
  * The AI Traffic weekly digest (AT-013) sends to the same people.
+ *
+ * Since 00554 this is the brand's own audience: people outside the
+ * workspace, and the teammates who haven't saved their own e-mail choices
+ * (pulseRecipients leaves the others out and adds them by their choice).
  */
 export async function resolveRecipients(organizationId, settings, brandId) {
   if (settings?.recipients?.length) {
@@ -160,6 +160,31 @@ async function recentWarningKeys(brandId, now) {
   return keys;
 }
 
+/** Whether a pulse at `frequency` goes out today. */
+function isDue(frequency, now) {
+  if (frequency === 'daily' || frequency === 'notable') return true;
+  return frequency === 'weekly' && now.getUTCDay() === WEEKLY_SEND_UTC_DAY;
+}
+
+/** The order a day's frequencies are worked in: the brand's own first. */
+const FREQUENCY_ORDER = ['daily', 'notable', 'weekly'];
+
+/**
+ * Who is mailed a brand's pulse at `frequency` (00554): the brand's own
+ * audience when it is the brand's frequency (resolveRecipients, less the
+ * people who saved their own choices), and the people who chose it.
+ */
+export async function pulseRecipients({ organizationId, brandId, settings, choices, frequency }) {
+  const brandFrequency = settings?.frequency ?? 'notable';
+  const addresses = [];
+  if (frequency === brandFrequency) {
+    const list = await resolveRecipients(organizationId, settings, brandId);
+    addresses.push(...(await withoutSavers(list, choices.savers)));
+  }
+  addresses.push(...(await emailsOf(chose(choices.people, frequency))));
+  return uniqueAddresses(addresses);
+}
+
 export async function generatePulseForBrand(brandId, { pulseDate: pulseDateOverride } = {}) {
   try {
     const now = new Date();
@@ -194,12 +219,22 @@ export async function generatePulseForBrand(brandId, { pulseDate: pulseDateOverr
       .select('frequency, recipients')
       .eq('brand_id', brandId)
       .maybeSingle();
+    // The brand's own frequency: its outside recipients, the teammates who
+    // haven't saved their own choices, its webhook and its Slack channel.
     const frequency = settings?.frequency ?? 'notable';
 
-    if (frequency === 'off') return { skipped: 'off' };
-    if (frequency === 'weekly' && now.getUTCDay() !== WEEKLY_SEND_UTC_DAY) {
-      return { skipped: 'not_weekly_day' };
+    // People's own choices (00554), e-mailed on the cloud only. Each
+    // frequency due today is its own pulse: a weekly one on Mondays reads
+    // the last 7 days, daily and notable ones the latest run.
+    const choices = isCloud()
+      ? await brandChoices(brand.organization_id, brand.id, 'daily_pulse')
+      : { savers: new Set(), people: new Map() };
+    const due = new Set();
+    if (frequency !== 'off' && isDue(frequency, now)) due.add(frequency);
+    for (const choice of choices.people.values()) {
+      if (choice !== 'off' && isDue(choice, now)) due.add(choice);
     }
+    if (due.size === 0) return { skipped: frequency === 'off' ? 'off' : 'not_weekly_day' };
 
     // Dedup: at most one pulse per brand per day.
     const { data: existing } = await supabaseAdmin
@@ -215,18 +250,25 @@ export async function generatePulseForBrand(brandId, { pulseDate: pulseDateOverr
     // window (see waitForCloroDrain).
     await waitForCloroDrain(brandId);
 
-    const windowDays = frequency === 'weekly' ? 7 : 1;
-    const metrics = await computePulseMetrics(brandId, { windowDays, now: new Date() });
+    const dayMetrics =
+      due.has('daily') || due.has('notable')
+        ? await computePulseMetrics(brandId, { windowDays: 1, now: new Date() })
+        : null;
+    const weekMetrics = due.has('weekly')
+      ? await computePulseMetrics(brandId, { windowDays: 7, now: new Date() })
+      : null;
+    const metricsFor = (f) => (f === 'weekly' ? weekMetrics : dayMetrics);
 
-    // Skip brands with no fresh tracking results in the window.
-    if (metrics.kpis.totalResults === 0) return { skipped: 'no_fresh_results' };
+    // Skip windows with no fresh tracking results.
+    for (const f of [...due]) if (metricsFor(f).kpis.totalResults === 0) due.delete(f);
+    if (due.size === 0) return { skipped: 'no_fresh_results' };
 
     // Never mail the same window twice, whichever path fired (#701). The
     // pulse_date slot claimed above cannot see this: a recovery pulse dated to
     // the missed day and today's own pulse hold different dates while
     // describing the identical tracking run.
-    const windowKey = pulseWindowKey(metrics);
-    if (windowKey) {
+    const windowKey = dayMetrics && pulseWindowKey(dayMetrics);
+    if (windowKey && (due.has('daily') || due.has('notable'))) {
       const { data: samePulse, error: sameErr } = await supabaseAdmin
         .from('sent_pulses')
         .select('id, pulse_date')
@@ -243,45 +285,67 @@ export async function generatePulseForBrand(brandId, { pulseDate: pulseDateOverr
           { brandId, windowKey, alreadySentFor: samePulse.pulse_date },
           'skipping daily pulse — this window was already sent',
         );
-        return { skipped: 'window_already_sent' };
+        due.delete('daily');
+        due.delete('notable');
+        if (due.size === 0) return { skipped: 'window_already_sent' };
       }
     }
 
     // Warning cooldown: don't repeat the same warning for the same subject
     // within 7 days.
     const cooldown = await recentWarningKeys(brandId, now);
-    metrics.warnings = metrics.warnings.filter((w) => !cooldown.has(w.key));
+    for (const metrics of [dayMetrics, weekMetrics]) {
+      if (metrics) metrics.warnings = metrics.warnings.filter((w) => !cooldown.has(w.key));
+    }
 
     // "Only when notable" still sends a brand's first pulse. A failed read
     // counts as "not first", so a hiccup can't turn into an extra mail.
-    let isFirstPulse = false;
-    if (frequency === 'notable') {
+    if (due.has('notable')) {
       const { count, error: countError } = await supabaseAdmin
         .from('sent_pulses')
         .select('id', { count: 'exact', head: true })
         .eq('brand_id', brandId);
-      isFirstPulse = !countError && count === 0;
+      const isFirstPulse = !countError && count === 0;
+      if (skipsAsNotNotable({ frequency: 'notable', isFirstPulse, metrics: dayMetrics })) {
+        due.delete('notable');
+      }
     }
-    if (skipsAsNotNotable({ frequency, isFirstPulse, metrics })) {
-      return { skipped: 'nothing_notable' };
-    }
+    if (due.size === 0) return { skipped: 'nothing_notable' };
+
+    // The brand's own pulse (webhook, Slack, the row's frequency) when it is
+    // due; else the first of the people's.
+    const brandDue = due.has(frequency);
+    const primary = brandDue ? frequency : FREQUENCY_ORDER.find((f) => due.has(f));
+    const metrics = metricsFor(primary);
+    const sendOrder = [primary, ...FREQUENCY_ORDER.filter((f) => f !== primary && due.has(f))];
 
     // Read before the claim: a read that fails (a brief 503) then leaves no
     // claim, and the catch-up sweep sends the pulse later, webhook included.
-    const recipients = isCloud()
-      ? await resolveRecipients(brand.organization_id, settings, brand.id)
-      : [];
+    const sends = [];
+    if (isCloud()) {
+      for (const f of sendOrder) {
+        const to = await pulseRecipients({
+          organizationId: brand.organization_id,
+          brandId: brand.id,
+          settings,
+          choices,
+          frequency: f,
+        });
+        if (to.length) sends.push({ frequency: f, metrics: metricsFor(f), to });
+      }
+    }
 
     // Record first — the unique (brand_id, pulse_date) constraint makes
     // this the race-safe claim on "today's pulse".
+    const warningKeys = new Set(sendOrder.flatMap((f) => metricsFor(f).warnings.map((w) => w.key)));
     const { data: pulseRow, error: insertError } = await supabaseAdmin
       .from('sent_pulses')
       .insert({
         brand_id: brandId,
         pulse_date: pulseDate,
-        frequency,
+        frequency: primary,
         payload: metrics,
-        warning_keys: metrics.warnings.map((w) => w.key),
+        warning_keys: [...warningKeys],
       })
       .select('id')
       .single();
@@ -299,16 +363,14 @@ export async function generatePulseForBrand(brandId, { pulseDate: pulseDateOverr
     // Email leg — cloud only.
     let emailSent = false;
     let recipientCount = 0;
-    if (isCloud()) {
+    for (const send of sends) {
       // Each in their own language (LOC-008): one send per language. The
       // count is of those whose send was accepted.
-      const groups = recipients.length
-        ? await addressesByLanguage(brand.organization_id, recipients)
-        : [];
+      const groups = await addressesByLanguage(brand.organization_id, send.to);
       for (const [locale, to] of groups) {
         const { subject, html } = renderPulseEmail({
           brandName: brand.name,
-          metrics,
+          metrics: send.metrics,
           insightsUrl,
           settingsUrl,
           locale,
@@ -320,20 +382,22 @@ export async function generatePulseForBrand(brandId, { pulseDate: pulseDateOverr
       }
     }
 
-    // Webhook leg — cloud and self-host alike.
-    const { sent } = await dispatchBrandWebhook(brandId, {
-      event: 'daily_pulse.created',
-      brand: { id: brand.id, name: brand.name },
-      pulse: {
-        date: pulseDate,
-        frequency,
-        kpis: metrics.kpis,
-        highlights: metrics.highlights,
-        warnings: metrics.warnings,
-        degraded_platforms: metrics.degradedPlatforms,
-        insights_url: insightsUrl,
-      },
-    });
+    // Webhook leg — cloud and self-host alike, at the brand's own frequency.
+    const { sent } = brandDue
+      ? await dispatchBrandWebhook(brandId, {
+          event: 'daily_pulse.created',
+          brand: { id: brand.id, name: brand.name },
+          pulse: {
+            date: pulseDate,
+            frequency,
+            kpis: metrics.kpis,
+            highlights: metrics.highlights,
+            warnings: metrics.warnings,
+            degraded_platforms: metrics.degradedPlatforms,
+            insights_url: insightsUrl,
+          },
+        })
+      : { sent: 0 };
 
     await supabaseAdmin
       .from('sent_pulses')
@@ -345,14 +409,17 @@ export async function generatePulseForBrand(brandId, { pulseDate: pulseDateOverr
       .eq('id', pulseRow.id);
 
     // Slack leg — cloud and self-host alike (#2139): the brand's channel, when
-    // it picked one and has the Pulse on there. Never throws; recorded apart
-    // from the legs above, so a database without 00515 still records them.
-    const slack = await deliverToSlack({
-      brand,
-      kind: 'pulse',
-      dedupeKey: `pulse:${pulseDate}`,
-      message: () => pulseMessage({ brandName: brand.name, metrics, insightsUrl, settingsUrl }),
-    });
+    // it picked one and has the Pulse on there, at the brand's own frequency.
+    // Never throws; recorded apart from the legs above, so a database without
+    // 00515 still records them.
+    const slack = brandDue
+      ? await deliverToSlack({
+          brand,
+          kind: 'pulse',
+          dedupeKey: `pulse:${pulseDate}`,
+          message: () => pulseMessage({ brandName: brand.name, metrics, insightsUrl, settingsUrl }),
+        })
+      : { status: 'skipped', reason: 'brand_pulse_not_due' };
     const slackSent = slack.status === 'sent';
     if (slackSent) {
       const { error: slackError } = await supabaseAdmin
@@ -369,6 +436,7 @@ export async function generatePulseForBrand(brandId, { pulseDate: pulseDateOverr
         brandId,
         pulseDate,
         frequency,
+        sent: sends.map((send) => send.frequency),
         emailSent,
         recipientCount,
         webhooksSent: sent,

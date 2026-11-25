@@ -4,8 +4,8 @@ route: /dashboard/insights
 keywords: [brand visibility, overview tab, mentions tab, citations tab, product visibility tab, answer engine insights, visibility score, key metrics, leaderboard, by AI platform, topics vs competitors, opportunities, filters]
 synonyms: [visibility page, AI visibility report, analytics hub, insights page, dashboard overview, visibility dashboard]
 plan: all
-updated: 2026-11-19
-last_checked: 2026-11-19
+updated: 2026-11-23
+last_checked: 2026-11-23
 owner: Cihan
 app_version: 0.3.0
 approved: true
@@ -17,7 +17,7 @@ sources: [docs/guides/answer-engine-insights.mdx, docs/guides/competitors.mdx, d
 
 The tabs sit under the page's header. In the sidebar, **Visibility** under **Analytics** opens and closes a group with the same entries, **Overview**, **Mentions**, **Citations** and, for an online shop on a plan with it, **Products**; it is open whenever one of them is showing.
 
-Each tab loads its own data when you open it, and shows a placeholder while it loads. The date range, AI platform, country and topic you picked stay set when you switch tabs; Mentions has no **All** range, so it opens on its 30 days instead. Product Visibility keeps its own filters. A tab whose data can't be read says so, with **Retry**, and the other tabs keep working.
+Each tab loads its own data when you open it, and shows a placeholder while it loads. The date range, AI platform, country and topic you picked stay set when you switch tabs; Mentions has no **All** range, so it opens on its 30 days instead. Product Visibility keeps its own filters. On **Overview**, a part that can't be read is read again by itself a moment later, and shows as loading meanwhile. A tab or part whose data still can't be read says so, with **Retry**, and the other tabs keep working.
 
 ## The header
 
