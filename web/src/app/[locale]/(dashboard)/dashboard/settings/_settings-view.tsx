@@ -2,7 +2,6 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
-import { useRouter } from '@/i18n/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -63,7 +62,6 @@ import { UserPlus } from 'lucide-react';
 export function SettingsView({ section }: { section: SettingsSection }) {
   const t = useTranslations('settings');
   const tAuth = useTranslations('auth');
-  const router = useRouter();
   const { isCloud } = usePlanContext();
   const canManageMenus = useCanManageMenus();
   const chatAgentic = useChatAgentic();
@@ -137,8 +135,10 @@ export function SettingsView({ section }: { section: SettingsSection }) {
   async function handleSignOut() {
     const supabase = createClient();
     await supabase.auth.signOut();
-    router.push('/sign-in');
-    router.refresh();
+    // A full load, not router.push + refresh: refreshing the page left
+    // behind, now signed out, sent it to /sign-in?next=<that page>, and the
+    // next sign-in opened it instead of the home.
+    window.location.assign('/sign-in');
   }
 
   async function handleSaveAccount() {

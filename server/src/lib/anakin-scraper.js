@@ -34,10 +34,18 @@ export const ANAKIN_API = 'https://api.anakin.io';
  *   location takes a city or US state as Google's canonical name
  *   country  takes `country` (all but Wenxin)
  *
+ * `claude-web` asks the model a claude.ai user gets by default
+ * (CLAUDE_MODEL), at low effort: without `model`, Anakin's account answers
+ * with Claude Haiku, which is not what people see. Same credits either way
+ * (Anakin, 25 Nov 2026).
+ *
  * `copilot-web` is Bing AI Mode (Copilot search), as on Cloro since
  * 2026-11-06; Microsoft's Copilot app is `copilot-app`. The platforms past
  * Grok aren't tracked by any plan yet: they are here for the add-ons.
  */
+/** The model claude.ai gives its users by default; Anakin takes the full id. */
+export const CLAUDE_MODEL = 'claude-sonnet-5-5';
+
 export const ANAKIN_ENGINES = {
   'chatgpt-web': { action: 'chatgpt', query: 'prompt', params: { web_search: true }, state: true },
   'chatgpt-shopping': {
@@ -55,7 +63,7 @@ export const ANAKIN_ENGINES = {
   'claude-web': {
     action: 'ca_send_message',
     query: 'prompt',
-    params: { web_search: true },
+    params: { web_search: true, model: CLAUDE_MODEL, effort: 'low' },
     pool: true,
   },
   'deepseek-web': {
@@ -87,6 +95,22 @@ export const ANAKIN_ENGINES = {
  * NOT_FOUND); take it out when Anakin lists one.
  */
 export const UNAVAILABLE_PLATFORMS = ['deepseek-web'];
+
+/**
+ * The countries Anakin's Gemini answers from (Anakin, 25 Nov 2026). A
+ * country outside the list isn't refused: Gemini answers from the US, and
+ * says so only in `country` / `detected_location`. Runs skip those
+ * countries for Gemini on Anakin, as they skip Cloro's unlisted ones.
+ * Gemini takes a country only, no US state.
+ */
+export const GEMINI_COUNTRIES = Object.freeze(
+  (
+    'ad ae ar at au be bg br ca ch cl co cz de dk eg es fi fr gb gr hk hu id ie il in it jp ' +
+    'ke kr ma md mx my ng nl no nz pe ph pk pl pt qa ro sa se sg th tr tw ua us vn za'
+  )
+    .split(' ')
+    .map((code) => code.toUpperCase()),
+);
 
 const DEFAULT_MAX_WAIT_MS = 30 * 60 * 1000;
 const DEFAULT_POLL_INTERVAL_MS = 10_000;
@@ -291,7 +315,7 @@ export async function pollScraperResult(taskId, scraperId, opts = {}) {
         { taskId, scraperId, polls, credits: job.credits_used },
         'anakin task completed',
       );
-      return parseScraperResponse(job, scraperId);
+      return parseScraperResponse(job, scraperId, { region: opts.region });
     }
     if (job?.status === 'failed' || job?.status === 'EXECUTION_FAILED') {
       const reason = job.error?.message || job.error?.code || 'Unknown failure';
@@ -405,8 +429,28 @@ const FIXED_MODELS = {
  * @throws {Error} when the platform gave no answer (Google served no AI
  *   Overview, Naver no AI Briefing): nothing is stored for the task.
  */
-export function parseScraperResponse(job, scraperId) {
+/**
+ * Where Gemini answered from, when that isn't the asked country: `country`
+ * on its result (`detected_location` names the place). Null when they match,
+ * or when either is unknown (no region asked: the US; no country returned).
+ */
+export function wrongCountry(payload, region) {
+  const got = typeof payload?.country === 'string' ? payload.country.trim().toUpperCase() : '';
+  if (!/^[A-Z]{2}$/.test(got)) return null;
+  const asked = (parseLocation(region).country || 'US').toUpperCase();
+  const same = (code) => (code === 'UK' ? 'GB' : code);
+  return same(got) === same(asked) ? null : { asked, got };
+}
+
+export function parseScraperResponse(job, scraperId, { region } = {}) {
   const payload = answerPayload(job);
+  const wrong = scraperId === 'gemini-web' ? wrongCountry(payload, region) : null;
+  if (wrong) {
+    // Not refused by Anakin: Gemini answered from elsewhere (Anakin, 25 Nov
+    // 2026). Stored under the asked country it would be wrong data, so it is
+    // a missing answer instead, like a search with no AI Overview.
+    throw new Error(`Gemini did not answer from ${wrong.asked}: it answered from ${wrong.got}`);
+  }
   if (scraperId === 'google-aio' && !payload.overview_text && !payload.overview_markdown) {
     throw new Error('Google did not return an AI Overview for this query');
   }

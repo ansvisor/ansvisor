@@ -64,6 +64,8 @@ const ROW: AdsOpportunity = {
   volume: 14_000,
   estAiVolume: 6300,
   adChannels: ['chatgpt'],
+  wePay: null,
+  paid: null,
   paidMeasured: false,
   reasons: [
     { code: 'rival_leads', competitorId: 'c1' },
@@ -212,6 +214,56 @@ describe('AdsOpportunityDrawer', () => {
   it('says nothing about sponsored units while none are stored, and never estimates one', async () => {
     await open();
     expect(drawer()!.textContent).not.toMatch(/sponsor|paid ad|estimated/i);
+  });
+
+  it('shows nothing about Google spend until a Google account is read', async () => {
+    await open();
+    expect(drawer()!.querySelector('[data-slot="ads-paid"]')).toBeNull();
+  });
+
+  it('shows what was paid on Google for the prompt, its costliest terms, or that none matched', async () => {
+    await remount('analyst', {
+      ...ROW,
+      wePay: true,
+      reasons: [{ code: 'we_pay' }, { code: 'paid_not_measured', rivalPays: true, wePay: false }],
+      paid: {
+        channel: 'google',
+        spend: [
+          { currencyCode: 'USD', amount: 14.35 },
+          { currencyCode: 'EUR', amount: 3 },
+        ],
+        clicks: 7,
+        impressions: 70,
+        conversions: 1,
+        termCount: 6,
+        terms: [
+          { term: 'crm for small teams', currencyCode: 'USD', amount: 12.35, clicks: 4 },
+          { term: 'small team crm', currencyCode: 'EUR', amount: 3, clicks: 1 },
+        ],
+      },
+    });
+    await open();
+    const paid = drawer()!.querySelector('[data-slot="ads-paid"]')!;
+    expect(paid.textContent).toContain('Your Google ads on it');
+    expect(paid.textContent).toContain('$14.35 + €3.00 for 7 clicks in this period');
+    expect(paid.textContent).toContain('6 search terms matched, the costliest first:');
+    expect(
+      [...paid.querySelectorAll('[data-slot="ads-paid-terms"] li')].map((li) => li.textContent),
+    ).toEqual(['crm for small teams$12.35', 'small team crm€3.00']);
+    expect(paid.textContent).toContain("ChatGPT Ads spend isn't matched");
+    // Our paying is measured: only a competitor's isn't.
+    expect(
+      [...drawer()!.querySelectorAll('ul[aria-label="Why"] li')].map((li) => li.textContent),
+    ).toEqual(['You pay for ads on it', "Whether competitors pay for ads isn't measured yet"]);
+    await act(async () =>
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })),
+    );
+
+    await remount('analyst', { ...ROW, wePay: false, paid: null });
+    await open();
+    expect(drawer()!.querySelector('[data-slot="ads-paid"]')?.textContent).toContain(
+      'No Google ad spend matched it in this period.',
+    );
   });
 
   it('says so when there is no answer in the period, or the read fails', async () => {

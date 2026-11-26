@@ -106,6 +106,7 @@ export const DEMO_GUARDED = [
   guard('POST /ads/connections/notify', brandIn('body')),
   // A brand's ad accounts (Phase 1): a demo brand reads no real ad account.
   guard('POST /ads/accounts/chatgpt', brandIn('body')),
+  guard('POST /ads/accounts/google', brandIn('body')),
   guard(
     'DELETE /ads/accounts/:accountId',
     brandIn('query'),

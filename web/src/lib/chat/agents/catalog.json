@@ -540,7 +540,9 @@
       ],
       "industries": [],
       "roles": [],
-      "skills": [],
+      "skills": [
+        "feed-advisor"
+      ],
       "triggers": [
         {
           "kind": "schedule",
@@ -549,11 +551,14 @@
         }
       ],
       "mode": "auto",
-      "connections": [],
-      "status": "soon",
-      "needs": [
-        "catalog_read"
-      ]
+      "connections": [
+        {
+          "key": "catalog",
+          "required": true
+        }
+      ],
+      "status": "ready",
+      "needs": []
     },
     {
       "id": "seasonal-prompt-planner",

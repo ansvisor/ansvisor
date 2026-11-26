@@ -104,6 +104,7 @@ describe('the preset files', () => {
       'agency-reporter',
       'paid-opportunity',
       'product-answer-pages',
+      'shopping-feed-advisor',
       'seasonal-prompt-planner',
       'feature-question-coverage',
       'alternatives-comparison-pages',
@@ -736,12 +737,13 @@ describe('the filters', () => {
   it('put the packs for an e-commerce brand and a product person first in the catalog', () => {
     const viewer = { siteType: 'ecommerce', workAreas: ['product'] };
     const ready = filterPresets(AGENT_PRESETS, {}, viewer).filter((p) => p.status === 'ready');
-    expect(ready.slice(0, 3).map((p) => [p.id, presetFit(p, viewer)])).toEqual([
+    expect(ready.slice(0, 4).map((p) => [p.id, presetFit(p, viewer)])).toEqual([
       ['product-answer-pages', 'siteType'],
+      ['shopping-feed-advisor', 'siteType'],
       ['seasonal-prompt-planner', 'siteType'],
       ['unmet-needs-miner', 'role'],
     ]);
-    expect(ready[3].id).toBe('visibility-watch');
+    expect(ready[4].id).toBe('visibility-watch');
   });
 });
 
@@ -794,6 +796,7 @@ describe('the agents setup recommends (AGENTS plan §8)', () => {
     // An e-commerce brand and a product person.
     expect(ids({ siteType: 'ecommerce', workAreas: ['product'] })).toEqual([
       ['product-answer-pages', 'siteType'],
+      ['shopping-feed-advisor', 'siteType'],
       ['seasonal-prompt-planner', 'siteType'],
       ['unmet-needs-miner', 'role'],
     ]);

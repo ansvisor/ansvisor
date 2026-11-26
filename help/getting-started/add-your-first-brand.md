@@ -4,12 +4,12 @@ route: /dashboard/brands/new
 keywords: [add brand, onboarding, setup wizard, first brand, brand setup, target market, free trial, plan already active, how do you want to start, sample brand, connect your site]
 synonyms: [get started, create a brand, set up my account, onboard, add another brand, set up a brand after buying, start the free trial, explore the demo, add the tracking snippet during setup, send the snippet to my developer]
 plan: all
-updated: 2026-11-17
+updated: 2026-11-25
 last_checked: 2026-11-17
 owner: Cihan
 app_version: 0.3.0
 approved: true
-sources: [docs/guides/add-your-first-brand.mdx]
+sources: [docs/guides/add-your-first-brand.mdx, web/src/hooks/use-explore-demo.ts]
 ---
 When you start with Ansvisor, a setup wizard walks you through your first brand. It usually takes a few minutes, and you need the website of the brand you want to track. On the cloud, you first choose how to start: the free trial, a plan, or the sample brand. The setup itself has five steps, then on the cloud an optional last screen, **Connect your site**. From the second step on, your progress is saved as you go, so if you leave, you pick up where you stopped.
 
@@ -17,12 +17,12 @@ When you start with Ansvisor, a setup wizard walks you through your first brand.
 
 The first screen, **How do you want to start?**, opens on the free trial. You can pick **Monthly**, **Yearly** or **Demo** instead.
 
-- **Start 14-day free trial** opens checkout. You enter card details, nothing is charged until the trial ends, and you can cancel any time. The trial comes with an organization's first subscription only.
+- **Start 14-day free trial** opens checkout. Nothing is charged until the trial ends, and you can cancel any time. The trial comes with an organization's first subscription only.
 - **Buy now**, or a plan without a trial, starts the plan the same day.
 
-After checkout, the five setup steps open, and your brand's first run starts when you finish them.
+After checkout, the five setup steps open; your brand's first run starts when you finish.
 
-Not ready to add a card? Pick **Demo**, then **Explore the sample brand**, or select **Explore a sample brand first** under the plans. The sample brand is made up, with sample data: you can open every page, but nothing runs or changes. When you pick a plan there, you set up your own brand.
+Not ready to add a card? Pick **Demo**, then **Explore the sample brand**, or select **Explore a sample brand first** under the plans. It's made up, with sample data: every page opens, but nothing runs or changes. When you pick a plan there, you set up your own brand. If it doesn't open after it's prepared, **Open the demo** loads it again.
 
 A self-hosted install has no such screen.
 

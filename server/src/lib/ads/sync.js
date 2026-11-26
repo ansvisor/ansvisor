@@ -158,6 +158,59 @@ export async function writeCampaignDays(accountId, rows, { db = supabaseAdmin } 
   return all.length;
 }
 
+/**
+ * A Google Ads search term's day as ads_search_term_daily keeps it; null for
+ * a row without a campaign, a term or a valid day.
+ */
+export function searchTermDayRow(accountId, row, updatedAt) {
+  const campaignId = text(row?.campaignId, 64);
+  const term = text(row?.searchTerm, 1000);
+  const day = typeof row?.day === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(row.day) ? row.day : null;
+  if (!campaignId || !term || !day) return null;
+  return {
+    account_id: accountId,
+    campaign_id: campaignId,
+    search_term: term,
+    day,
+    impressions: count(row.impressions),
+    clicks: count(row.clicks),
+    cost_micros: count(row.costMicros),
+    conversions: amount(row.conversions),
+    updated_at: updatedAt,
+  };
+}
+
+/** Upserts search-term days in batches; the number written. */
+export async function writeSearchTermDays(accountId, rows, { db = supabaseAdmin } = {}) {
+  const updatedAt = new Date().toISOString();
+  // Google returns a search term once per ad group, so one campaign day can
+  // hold the same term twice: add them up rather than keep the last one,
+  // which undercounts spend and makes the upsert touch one row twice.
+  const byKey = new Map();
+  for (const row of rows) {
+    const clean = searchTermDayRow(accountId, row, updatedAt);
+    if (!clean) continue;
+    const key = `${clean.campaign_id}|${clean.search_term}|${clean.day}`;
+    const seen = byKey.get(key);
+    if (!seen) {
+      byKey.set(key, clean);
+      continue;
+    }
+    seen.impressions += clean.impressions;
+    seen.clicks += clean.clicks;
+    seen.cost_micros += clean.cost_micros;
+    seen.conversions = Math.round((seen.conversions + clean.conversions) * 100) / 100;
+  }
+  const all = [...byKey.values()];
+  for (let i = 0; i < all.length; i += WRITE_BATCH) {
+    const { error } = await db.from('ads_search_term_daily').upsert(all.slice(i, i + WRITE_BATCH), {
+      onConflict: 'account_id,campaign_id,search_term,day',
+    });
+    if (error) throw new Error(`ads_search_term_daily write: ${error.code ?? 'error'}`);
+  }
+  return all.length;
+}
+
 /** The accounts to sync: active or failed, of workspaces with an active plan. */
 export async function readSyncAccounts({ db = supabaseAdmin, now = new Date() } = {}) {
   let query = db

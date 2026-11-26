@@ -440,7 +440,8 @@ export function KpiRows({
           delta={upIsGood(summary.citationsChange, { percent: true, locale })}
           sub={vsPrevious(summary.citationsChange)}
           spark={daily('citations')}
-          onClick={() => onNavigate('/dashboard/citations')}
+          // The card counts the brand's own citations: Citations on Brand.
+          onClick={() => onNavigate('/dashboard/citations?scope=own')}
           clickLabel={t('openCitations')}
         />
         <MetricCard

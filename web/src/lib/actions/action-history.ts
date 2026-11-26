@@ -18,7 +18,7 @@ import { dbClient } from '@/lib/supabase/scoped';
 import type { ActionCategory } from '@/lib/action-center/registry';
 import {
   ACTION_OUTCOMES,
-  dismissReasonOf,
+  closedReasonOf,
   missingDismissReason,
   type ActionOutcome,
   type ActionStatus,
@@ -376,7 +376,7 @@ export async function getActionHistory(
       affected: affectedFrom(row.kind, row.payload ?? {}, triggerSignals.length),
       results,
       // Only while it is dismissed: another status leaves an earlier reason in place.
-      dismissReason: row.status === 'dismissed' ? dismissReasonOf(row.dismiss_reason) : null,
+      dismissReason: row.status === 'dismissed' ? closedReasonOf(row.dismiss_reason) : null,
       signalsAfter: signalsFrom(row.validation),
       measuredOn: measuredOnFrom(row.validation),
       auditAfter: auditFrom(row.validation),

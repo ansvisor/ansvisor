@@ -48,6 +48,8 @@ select json_build_object(
  where a.brand_id = :'brand_id'::uuid
    and a.deleted_at is null
    and a.status in ('completed', 'dismissed')
+   -- Replaced after going stale (00563): nobody closed it.
+   and a.dismiss_reason is distinct from 'replaced'
  order by a.created_at, a.id, b->>'kind';
 
 select json_build_object('withoutBaseline', count(*))
@@ -55,6 +57,8 @@ select json_build_object('withoutBaseline', count(*))
  where a.brand_id = :'brand_id'::uuid
    and a.deleted_at is null
    and a.status in ('completed', 'dismissed')
+   -- Replaced after going stale (00563): nobody closed it.
+   and a.dismiss_reason is distinct from 'replaced'
    and exists (select 1 from public.action_signals l where l.action_id = a.id)
    and case when jsonb_typeof(a.baseline->'signals') = 'array'
             then jsonb_array_length(a.baseline->'signals')
