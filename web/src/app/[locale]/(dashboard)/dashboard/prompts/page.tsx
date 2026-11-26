@@ -208,6 +208,7 @@ import {
   runInTurn,
   toggleAll,
 } from '@/lib/prompt-bulk-actions';
+import { GoogleSheetsExport } from '@/components/google-sheets-export';
 import { toCsv } from '@/lib/csv';
 import { formatRelative } from '@/lib/format-relative';
 import { frictionFlow } from '@/lib/friction-events';
@@ -1612,6 +1613,8 @@ export default function PromptsPage() {
     ids: string[] | null;
   } | null>(null);
   // The brand whose first read (with its column views) came back.
+  const exportKey = JSON.stringify([activeBrandId, regionFilter, range]);
+  const [loadedExportKey, setLoadedExportKey] = useState('');
   const firstReadFor = useRef<string | null>(null);
   // The latest table read: one sent earlier that lands after it is dropped,
   // so a slow read of the old range never overwrites the new one's rows.
@@ -1651,6 +1654,7 @@ export default function PromptsPage() {
         });
         if (stale()) return;
         const prompts = page.promptSets.flatMap((ps) => ps.prompts);
+        setLoadedExportKey(exportKey);
         setAllPrompts(prompts);
         setVisibility(page.visibility);
         setPositions(page.positions);
@@ -1672,7 +1676,7 @@ export default function PromptsPage() {
         if (!stale()) setLoading(false);
       }
     },
-    [activeBrandId, range, regionFilter, tPrompts, canManage],
+    [activeBrandId, range, regionFilter, tPrompts, canManage, exportKey],
   );
 
   useEffect(() => {
@@ -2104,7 +2108,12 @@ export default function PromptsPage() {
   });
 
   // The export carries the volumes: it waits for them, as the table's cells do.
-  const canExport = !loading && volumesState !== 'loading' && allPrompts.length > 0;
+  const canExport =
+    loadedExportKey === exportKey &&
+    !loadFailed &&
+    !loading &&
+    volumesState !== 'loading' &&
+    allPrompts.length > 0;
 
   // Tracked's count in the switch: the table's own (Active + New), once the
   // prompts are read. Suggestions has no count without a read of its own.
@@ -2117,11 +2126,10 @@ export default function PromptsPage() {
   const usageWarning = locationsWarning(usageState);
   const planHref = planUsageHref(usageState);
 
-  const handleExportCsv = useCallback(async () => {
-    if (!canExport) return;
-
+  const currentPromptRows = useRef<Prompt[] | null>(null);
+  const exportTable = () => {
     const rangeSuffix = rangePreset;
-    const rows = allPrompts.map((p) => ({
+    const rows = (view === 'tracked' ? (currentPromptRows.current ?? []) : allPrompts).map((p) => ({
       text: p.text,
       topic_id: p.topicId ?? '',
       category: p.category ?? '',
@@ -2148,7 +2156,13 @@ export default function PromptsPage() {
       last_run_at: visibility[p.id]?.lastRunAt ?? '',
     }));
 
-    const csv = toCsv(rows, promptExportHeaders(rangeSuffix));
+    return { rows, headers: promptExportHeaders(rangeSuffix) };
+  };
+
+  const handleExportCsv = async () => {
+    if (!canExport) return;
+    const { rows, headers } = exportTable();
+    const csv = toCsv(rows, headers);
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
@@ -2160,15 +2174,7 @@ export default function PromptsPage() {
     link.click();
 
     URL.revokeObjectURL(url);
-  }, [
-    activeBrand?.slug,
-    canExport,
-    allPrompts,
-    visibility,
-    volumeByPromptId,
-    estimateByPromptId,
-    rangePreset,
-  ]);
+  };
 
   // Chat's side panel sees the page (W1-08): its range, its location where
   // the tab reads one, and a tracked prompt the brand doesn't show up for
@@ -2250,20 +2256,31 @@ export default function PromptsPage() {
                 all the Prompts tab's. Topics has its own buttons in its place;
                 Query Fan-out and Insights have none here. */}
             {tab === 'all' && (
-              <PromptsMoreMenu
-                onExportCsv={handleExportCsv}
-                exportDisabled={!canExport}
-                planHref={planHref}
-                usage={
-                  view === 'tracked'
-                    ? {
-                        open: usageOpen,
-                        onToggle: () => setUsageOpen((o) => !o),
-                        warning: usageWarning,
-                      }
-                    : undefined
-                }
-              />
+              <>
+                {activeBrandId && view === 'tracked' && (
+                  <GoogleSheetsExport
+                    key={activeBrandId}
+                    brandId={activeBrandId}
+                    view="Prompts"
+                    disabled={!canExport}
+                    table={exportTable}
+                  />
+                )}
+                <PromptsMoreMenu
+                  onExportCsv={handleExportCsv}
+                  exportDisabled={!canExport}
+                  planHref={planHref}
+                  usage={
+                    view === 'tracked'
+                      ? {
+                          open: usageOpen,
+                          onToggle: () => setUsageOpen((o) => !o),
+                          warning: usageWarning,
+                        }
+                      : undefined
+                  }
+                />
+              </>
             )}
           </div>
         </div>
@@ -2346,6 +2363,7 @@ export default function PromptsPage() {
               )}
               {firstRun && allPrompts.length > 0 && <FirstRunEmptyState run={firstRun} />}
               <AllPromptsTab
+                exportRows={currentPromptRows}
                 loading={loading}
                 failed={loadFailed}
                 onRetry={() => void loadData()}
@@ -3174,6 +3192,7 @@ function PromptCellText({
 }
 
 function AllPromptsTab({
+  exportRows,
   loading,
   failed,
   onRetry,
@@ -3202,6 +3221,7 @@ function AllPromptsTab({
   onChanged,
   onChatView,
 }: {
+  exportRows: React.RefObject<Prompt[] | null>;
   loading: boolean;
   /** The last read failed: say so and offer to read again, never "No prompts yet". */
   failed: boolean;
@@ -4022,6 +4042,13 @@ function AllPromptsTab({
     estimateByPromptId,
     now,
   ]);
+
+  useEffect(() => {
+    exportRows.current = filtered;
+    return () => {
+      exportRows.current = null;
+    };
+  }, [exportRows, filtered]);
 
   // Pagination for the main prompt list.  resetKey encodes every variable that
   // changes the visible row set (search text, sort column, sort direction, work

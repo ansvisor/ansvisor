@@ -64,6 +64,7 @@ import {
   getTopics,
 } from '@/lib/visibility-reads';
 import { isSingleModel, modelFamilies, modelFamilyValue } from '@/lib/model-families';
+import { GoogleSheetsExport, type ExportTable } from '@/components/google-sheets-export';
 import { toCsv } from '@/lib/csv';
 import type { Topic } from '@/types';
 import { type SourceCategory } from '@/lib/citations/classify';
@@ -739,23 +740,23 @@ function CompetitorGapsTab({
   gaps,
   failed,
   onRetry,
+  view,
+  onViewChange,
+  competitorId,
+  onSelect,
 }: {
   loading: boolean;
   gaps: CitationGaps | null;
   /** The gaps' read failed: said, with Retry, not an endless "Checking…". */
   failed: boolean;
   onRetry: () => void;
+  view: 'list' | 'byCompetitor';
+  onViewChange: (view: 'list' | 'byCompetitor') => void;
+  competitorId: string;
+  onSelect: (id: string) => void;
 }) {
   const tBrandVisibility = useTranslations('brandVisibility.readError');
   const t = useTranslations('citations.page');
-  const [view, setView] = useState<'list' | 'byCompetitor'>('list');
-  // The user's pick; falls back to the first competitor (derived, no effect) so
-  // it stays valid when the gaps data changes under a filter switch.
-  const [picked, setPicked] = useState('');
-  const competitorId =
-    gaps && gaps.competitors.some((c) => c.id === picked)
-      ? picked
-      : (gaps?.competitors[0]?.id ?? '');
 
   if (loading) {
     return (
@@ -789,7 +790,7 @@ function CompetitorGapsTab({
         <div className="inline-flex rounded-md border p-0.5 text-xs">
           <button
             type="button"
-            onClick={() => setView('list')}
+            onClick={() => onViewChange('list')}
             className={cn(
               'rounded px-2.5 py-1 transition-colors',
               view === 'list'
@@ -801,7 +802,7 @@ function CompetitorGapsTab({
           </button>
           <button
             type="button"
-            onClick={() => setView('byCompetitor')}
+            onClick={() => onViewChange('byCompetitor')}
             className={cn(
               'rounded px-2.5 py-1 transition-colors',
               view === 'byCompetitor'
@@ -829,7 +830,7 @@ function CompetitorGapsTab({
       {view === 'list' ? (
         <GapListTable rows={gaps.gapDomains} />
       ) : (
-        <ByCompetitorView gaps={gaps} competitorId={competitorId} onSelect={setPicked} />
+        <ByCompetitorView gaps={gaps} competitorId={competitorId} onSelect={onSelect} />
       )}
     </div>
   );
@@ -991,6 +992,11 @@ export default function CitationsPage() {
 
   const [sourceTab, setSourceTab] = useState<'domains' | 'urls' | 'gaps' | 'types'>('domains');
   const [gaps, setGaps] = useState<CitationGaps | null>(null);
+  const [gapView, setGapView] = useState<'list' | 'byCompetitor'>('list');
+  const [pickedCompetitor, setPickedCompetitor] = useState('');
+  const gapCompetitorId = gaps?.competitors.some((c) => c.id === pickedCompetitor)
+    ? pickedCompetitor
+    : (gaps?.competitors[0]?.id ?? '');
   const [gapsLoading, setGapsLoading] = useState(false);
   const [gapsFailed, setGapsFailed] = useState(false);
   // Retry on Competitor Gaps reads them again.
@@ -1035,6 +1041,12 @@ export default function CitationsPage() {
   // Each load claims a generation. The effect's cleanup bumps the counter, so
   // a response arriving after the filters changed — or after the user left the
   // page — can recognise itself as stale instead of writing state or toasting.
+  const overviewKey = activeBrandId
+    ? readKey('citationsOverview', activeBrandId, pickedOf(overviewFilters))
+    : '';
+  const gapKey = JSON.stringify([activeBrandId, gapFilters]);
+  const [loadedOverview, setLoadedOverview] = useState('');
+  const [loadedGaps, setLoadedGaps] = useState('');
   const loadGen = useRef(0);
   // The single models already read as their family (modelFamilyValue): each
   // asks the brand's models once.
@@ -1042,7 +1054,8 @@ export default function CitationsPage() {
 
   // The overview on screen, from a read or from what the tab kept.
   const showOverview = useCallback(
-    (overview: CitationsOverview) => {
+    (overview: CitationsOverview, key: string) => {
+      setLoadedOverview(key);
       setData(overview);
 
       // Surface filter options from the observed models/regions.
@@ -1077,9 +1090,9 @@ export default function CitationsPage() {
     // The same brand and filters read before (this tab opened again, or a
     // range picked again): on screen at once, read again quietly. Kept by
     // the range picked, not its dates, which move with the clock.
-    const key = readKey('citationsOverview', activeBrandId, pickedOf(overviewFilters));
+    const key = overviewKey;
     const kept = cache.get<CitationsOverview>(key);
-    if (kept) showOverview(kept);
+    if (kept) showOverview(kept, key);
     setIsLoading(!kept);
     setLoadFailed(false);
     // A platform from an address can be one model of a family (Chat's link,
@@ -1105,7 +1118,7 @@ export default function CitationsPage() {
       const overview = await getCitationsOverview(activeBrandId, overviewFilters);
       cache.set(key, overview);
       if (stale()) return;
-      showOverview(overview);
+      showOverview(overview, key);
     } catch (err) {
       // Leaving the page aborts the in-flight request. That rejection is not a
       // failure worth reporting — and the toast is global, so it would surface
@@ -1118,7 +1131,7 @@ export default function CitationsPage() {
     } finally {
       if (!stale()) setIsLoading(false);
     }
-  }, [activeBrandId, overviewFilters, cache, showOverview, serverError, t]);
+  }, [activeBrandId, overviewFilters, overviewKey, cache, showOverview, serverError, t]);
 
   useEffect(() => {
     if (!urlRead) return;
@@ -1181,7 +1194,10 @@ export default function CitationsPage() {
     setGapsFailed(false);
     getCitationGaps(activeBrandId, gapFilters)
       .then((res) => {
-        if (!cancelled) setGaps(res);
+        if (!cancelled) {
+          setGaps(res);
+          setLoadedGaps(gapKey);
+        }
       })
       .catch(() => {
         // Said as a failed read, with Retry: not an endless "Checking…".
@@ -1193,7 +1209,7 @@ export default function CitationsPage() {
     return () => {
       cancelled = true;
     };
-  }, [sourceTab, activeBrandId, gapFilters, urlRead, gapsAttempt]);
+  }, [sourceTab, activeBrandId, gapFilters, gapKey, urlRead, gapsAttempt]);
 
   const totals = data?.totals;
   // Within the selected scope, as the Domains tab and the URL count under it.
@@ -1226,82 +1242,92 @@ export default function CitationsPage() {
     [totals, domainsInScope, t],
   );
 
-  const handleExportCsv = useCallback(async () => {
-    if (!brand) return;
+  const exportTable = (): ExportTable => {
+    if (sourceTab === 'domains' && data) {
+      const DOMAIN_HEADERS = [
+        'domain',
+        'category',
+        'total_citations',
+        'results_citing',
+        'usage_pct',
+        'models',
+      ];
 
-    setIsExporting(true);
+      const rows = filteredDomainRows.map((r) => ({
+        domain: r.domain,
+        category: r.category,
+        total_citations: r.totalCitations,
+        results_citing: r.resultsCiting,
+        usage_pct: r.usagePct,
+        models: r.models.join(', '),
+      }));
 
-    try {
-      const date = new Date().toISOString().slice(0, 10);
-      const slug = brand.slug ?? 'brand';
+      return { rows, headers: DOMAIN_HEADERS };
+    } else if (sourceTab === 'urls' && data) {
+      const URL_HEADERS = [
+        'url',
+        'domain',
+        'category',
+        'title',
+        'total_citations',
+        'results_citing',
+        'usage_pct',
+      ];
 
-      if (sourceTab === 'domains' && data) {
-        const DOMAIN_HEADERS = [
-          'domain',
-          'category',
-          'total_citations',
-          'results_citing',
-          'usage_pct',
-          'models',
-        ];
+      const rows = filteredUrlRows.map((r) => ({
+        url: r.url,
+        domain: r.domain,
+        category: r.category,
+        title: r.title ?? '',
+        total_citations: r.totalCitations,
+        results_citing: r.resultsCiting,
+        usage_pct: r.usagePct,
+      }));
 
-        const rows = filteredDomainRows.map((r) => ({
-          domain: r.domain,
-          category: r.category,
-          total_citations: r.totalCitations,
-          results_citing: r.resultsCiting,
-          usage_pct: r.usagePct,
-          models: r.models.join(', '),
-        }));
-
-        const csv = toCsv(rows, DOMAIN_HEADERS);
-
-        triggerDownload(csv, await exportFileName(`${slug}_citations_domains_${date}.csv`));
-      } else if (sourceTab === 'urls' && data) {
-        const URL_HEADERS = [
-          'url',
-          'domain',
-          'category',
-          'title',
-          'total_citations',
-          'results_citing',
-          'usage_pct',
-        ];
-
-        const rows = filteredUrlRows.map((r) => ({
-          url: r.url,
-          domain: r.domain,
-          category: r.category,
-          title: r.title ?? '',
-          total_citations: r.totalCitations,
-          results_citing: r.resultsCiting,
-          usage_pct: r.usagePct,
-        }));
-
-        const csv = toCsv(rows, URL_HEADERS);
-
-        triggerDownload(csv, await exportFileName(`${slug}_citations_urls_${date}.csv`));
-      } else if (sourceTab === 'gaps' && gaps) {
-        const GAP_HEADERS = ['domain', 'category', 'competitor_answers', 'competitors', 'strength'];
-
-        const rows = gaps.gapDomains.map((g) => ({
-          domain: g.domain,
-          category: g.category,
-          competitor_answers: g.competitorAnswers,
-          competitors: g.competitors.join('; '),
-          strength: g.strength,
-        }));
-
-        const csv = toCsv(rows, GAP_HEADERS);
-
-        triggerDownload(csv, await exportFileName(`${slug}_citations_gaps_${date}.csv`));
+      return { rows, headers: URL_HEADERS };
+    } else if (sourceTab === 'gaps' && gaps) {
+      if (gapView === 'byCompetitor') {
+        return {
+          headers: ['domain', 'category', 'answers_feeding', 'also_cites_brand', 'strength'],
+          rows: (gaps.byCompetitor[gapCompetitorId] ?? []).map((g) => ({
+            domain: g.domain,
+            category: g.category,
+            answers_feeding: g.answersFeeding,
+            also_cites_brand: g.alsoCitesUs,
+            strength: g.strength,
+          })),
+        };
       }
+      const GAP_HEADERS = ['domain', 'category', 'competitor_answers', 'competitors', 'strength'];
+
+      const rows = gaps.gapDomains.map((g) => ({
+        domain: g.domain,
+        category: g.category,
+        competitor_answers: g.competitorAnswers,
+        competitors: g.competitors.join('; '),
+        strength: g.strength,
+      }));
+
+      return { rows, headers: GAP_HEADERS };
+    }
+    throw new Error('No export for this tab.');
+  };
+  const handleExportCsv = async () => {
+    if (!brand) return;
+    setIsExporting(true);
+    try {
+      const { rows, headers } = exportTable();
+      const date = new Date().toISOString().slice(0, 10);
+      triggerDownload(
+        toCsv(rows, headers),
+        await exportFileName(`${brand.slug ?? 'brand'}_citations_${sourceTab}_${date}.csv`),
+      );
     } catch (err) {
       toast.error(caughtError(err, t('page.exportFailed')));
     } finally {
       setIsExporting(false);
     }
-  }, [brand, data, gaps, sourceTab, caughtError, t]);
+  };
 
   // Chat's side panel sees the page (W1-08): its dates and filters, the
   // source cited most, and the sources table to ask about.
@@ -1398,7 +1424,9 @@ export default function CitationsPage() {
     isExporting ||
     isLoading ||
     sourceTab === 'types' ||
-    (sourceTab === 'gaps' && (gapsLoading || !gaps));
+    (sourceTab === 'gaps'
+      ? gapsFailed || gapsLoading || !gaps || loadedGaps !== gapKey
+      : loadFailed || !data || loadedOverview !== overviewKey);
 
   if (!brand) {
     return (
@@ -1414,6 +1442,15 @@ export default function CitationsPage() {
     <div className="space-y-6">
       {/* This tab's Export CSV, in the shared header beside Reports. */}
       <TabHeaderActions>
+        {brand && sourceTab !== 'types' && (
+          <GoogleSheetsExport
+            key={brand.id}
+            brandId={brand.id}
+            view="Citations"
+            table={exportTable}
+            disabled={exportDisabled}
+          />
+        )}
         <span title={sourceTab === 'types' ? t('page.typesNotExportable') : undefined}>
           <Button
             variant="outline"
@@ -1537,6 +1574,10 @@ export default function CitationsPage() {
                     <CompetitorGapsTab
                       loading={gapsLoading}
                       gaps={gaps}
+                      view={gapView}
+                      onViewChange={setGapView}
+                      competitorId={gapCompetitorId}
+                      onSelect={setPickedCompetitor}
                       failed={gapsFailed}
                       onRetry={() => setGapsAttempt((n) => n + 1)}
                     />

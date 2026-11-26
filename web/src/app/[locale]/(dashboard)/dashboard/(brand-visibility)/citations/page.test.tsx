@@ -5,6 +5,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import messages from '../../../../../../../messages/en.json';
 import type { CitationDomainRow, CitationsOverview } from '@/lib/actions/citations';
 import type { SourceCategory } from '@/lib/citations/classify';
+import { readSheetStatus, writeGoogleSheet } from '@/lib/integrations-client';
+
+vi.mock('@/lib/integrations-client', () => ({
+  readSheetStatus: vi.fn(async () => ({ ok: true, value: { configured: false, accountId: null } })),
+  writeGoogleSheet: vi.fn(),
+}));
 
 /**
  * The Citations page's Unique Domains KPI (follow-up to #1218): it counts the
@@ -107,6 +113,61 @@ afterEach(() => {
   act(() => root.unmount());
   container.remove();
   window.history.replaceState(null, '', '/');
+});
+
+describe('CitationsPage: filtered exports', () => {
+  it('exports the sources feeding the selected competitor with the columns of that view', async () => {
+    vi.mocked(readSheetStatus).mockResolvedValueOnce({
+      ok: true,
+      value: { configured: true, accountId: 'account-A' },
+    });
+    vi.mocked(writeGoogleSheet).mockResolvedValueOnce({
+      ok: true,
+      value: 'https://docs.google.com/spreadsheets/d/example/edit',
+    });
+    getCitationsOverview.mockResolvedValue(overview(7));
+    getCitationGaps.mockResolvedValue({
+      competitors: [{ id: 'rival', name: 'Rival' }],
+      gapDomains: [
+        {
+          domain: 'all.example',
+          category: 'editorial',
+          competitorAnswers: 3,
+          competitors: ['Rival'],
+          strength: 1,
+        },
+      ],
+      byCompetitor: {
+        rival: [
+          {
+            domain: 'rival.example',
+            category: 'forum',
+            answersFeeding: 2,
+            alsoCitesUs: false,
+            strength: 0.5,
+          },
+        ],
+      },
+    });
+    await render('all');
+    const click = (label: string) =>
+      act(async () =>
+        [...document.querySelectorAll('button')].find((b) => b.textContent === label)!.click(),
+      );
+    await click('Competitor Gaps');
+    await click('By competitor');
+    await click(messages.sheets.export);
+    await click(messages.sheets.send);
+    expect(writeGoogleSheet).toHaveBeenCalledWith(
+      'b1',
+      expect.objectContaining({
+        values: [
+          ['domain', 'category', 'answers_feeding', 'also_cites_brand', 'strength'],
+          ['rival.example', 'forum', 2, false, 0.5],
+        ],
+      }),
+    );
+  });
 });
 
 describe('CitationsPage: Unique Domains', () => {

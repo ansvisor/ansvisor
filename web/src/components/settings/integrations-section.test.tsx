@@ -282,10 +282,14 @@ describe('IntegrationsSection', () => {
 
   it('keeps the set-up line on a server without credentials for a provider', async () => {
     statuses['google-search-console'] = 'not_configured';
+    statuses['google-sheets'] = 'not_configured';
     await render();
     const gsc = cardOf('Google Search Console')!;
     expect(badges(gsc)).toEqual(['Not configured']);
     expect(gsc.textContent).toContain('COMPOSIO_GSC_AUTH_CONFIG_ID');
+    const sheets = cardOf('Google Sheets')!;
+    expect(badges(sheets)).toEqual(['Not configured']);
+    expect(sheets.textContent).toContain('COMPOSIO_SHEETS_AUTH_CONFIG_ID');
   });
 
   it('reads each card on its own: a status that hangs leaves the others ready', async () => {
@@ -486,7 +490,7 @@ describe('IntegrationsSection on the demo brand', () => {
 
   it('shows Search Console and Analytics connected with sample data, read from nowhere', async () => {
     await render(false, true);
-    for (const label of ['Google Search Console', 'Google Analytics']) {
+    for (const label of ['Google Search Console', 'Google Analytics', 'Google Sheets']) {
       expect(badges(card(label)!)).toEqual(['Connected', 'Sample data']);
     }
     expect(client.readIntegrationStatus).not.toHaveBeenCalled();

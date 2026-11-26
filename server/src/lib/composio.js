@@ -21,6 +21,7 @@ let client = null;
  * API routes, the `integration_connections.provider` column and the UI.
  */
 export const PROVIDERS = {
+  'google-sheets': { label: 'Google Sheets', authConfigEnv: 'COMPOSIO_SHEETS_AUTH_CONFIG_ID' },
   'google-search-console': {
     label: 'Google Search Console',
     authConfigEnv: 'COMPOSIO_GSC_AUTH_CONFIG_ID',

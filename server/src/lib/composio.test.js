@@ -33,6 +33,8 @@ const {
   forgetWebflowAccounts,
   getActiveConnection,
   initiateSlackConnection,
+  isComposioConfigured,
+  initiateConnection,
   isSlackConfigured,
   isHubspotConfigured,
   isWebflowConfigured,
@@ -345,6 +347,32 @@ describe('HubSpot on Composio (#2140)', () => {
     });
     expect(sdk.link).toHaveBeenCalledWith('org_org-1', 'ac_hubspot', {
       callbackUrl: 'https://app.test/back',
+      allowMultiple: true,
+    });
+  });
+});
+
+describe('Google Sheets managed sign-in', () => {
+  it('requires both its own auth config and the Composio key', () => {
+    vi.stubEnv('COMPOSIO_SHEETS_AUTH_CONFIG_ID', '');
+    expect(isComposioConfigured('google-sheets')).toBe(false);
+    vi.stubEnv('COMPOSIO_SHEETS_AUTH_CONFIG_ID', 'ac_sheets');
+    expect(isComposioConfigured('google-sheets')).toBe(true);
+    vi.stubEnv('COMPOSIO_API_KEY', '');
+    expect(isComposioConfigured('google-sheets')).toBe(false);
+  });
+
+  it('connects another sign-in under the account through the Sheets auth config', async () => {
+    vi.stubEnv('COMPOSIO_SHEETS_AUTH_CONFIG_ID', 'ac_sheets');
+    sdk.link.mockResolvedValue({
+      redirectUrl: 'https://example.test/auth',
+      connectedAccountId: 'ca_sheet',
+    });
+    await initiateConnection('google-sheets', 'org_test', 'https://example.test/return', {
+      allowMultiple: true,
+    });
+    expect(sdk.link).toHaveBeenCalledWith('org_test', 'ac_sheets', {
+      callbackUrl: 'https://example.test/return',
       allowMultiple: true,
     });
   });

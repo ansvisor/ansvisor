@@ -1,4 +1,17 @@
 {
+  "sheets": {
+    "name": "Google Sheets",
+    "description": "Export filtered reports using the Google account selected for each brand.",
+    "export": "Export to Google Sheets",
+    "destination": "Spreadsheet URL (leave empty for a new spreadsheet)",
+    "hint": "Each export adds a new tab. Your other tabs stay intact.",
+    "failed": "Export failed. Check the brand’s Google Sheets connection and the spreadsheet’s edit permissions.",
+    "invalid": "Enter a Google Sheets spreadsheet URL.",
+    "open": "Open exported sheet",
+    "busy": "Exporting…",
+    "connect": "Connect Google Sheets in Brand settings",
+    "send": "Export"
+  },
   "apiFailure": {
     "session": "Your session expired. Sign in again.",
     "workspace": "This brand isn't in your workspace. Switch to one of your brands.",
@@ -19643,7 +19656,7 @@
       "integrations": {
         "tab": "Integrations",
         "title": "Google",
-        "description": "Which Google account this brand reads Search Console and Analytics from. A brand can use the workspace's account, the same account as another brand, or its own.",
+        "description": "Choose which Google account this brand uses for each service. A brand can use the workspace's account, the same account as another brand, or its own.",
         "workspaceAccount": "the workspace's Google account",
         "ownAccount": "its own Google account",
         "sameAs": "the same account as {brands}",

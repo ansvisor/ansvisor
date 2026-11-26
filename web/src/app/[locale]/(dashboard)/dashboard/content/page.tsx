@@ -138,6 +138,7 @@ import {
 import { Skeleton } from '@/components/ui/skeleton';
 import { LoadingDots } from '@/components/ui/loading-dots';
 import { PAGE_SIZE, TablePager, usePagination } from '@/components/table-pager';
+import { GoogleSheetsExport } from '@/components/google-sheets-export';
 import { toCsv } from '@/lib/csv';
 import { readUrlChoice, writeUrlParams } from '@/lib/url-state';
 import { exportFileName } from '@/lib/white-label/export-name';
@@ -972,34 +973,38 @@ export default function ContentPage() {
   }, [activeBrandId, pollJob]);
 
   // Every opportunity matching the filters and search, not just this page (#915).
+  const exportTable = async () => {
+    if (!activeBrandId) throw new Error();
+    const rows: ContentOpportunity[] = [];
+    for (let offset = 0; offset < EXPORT_MAX_ROWS; offset += EXPORT_PAGE_SIZE) {
+      const page = await getOpportunities(activeBrandId, {
+        ...listFilters,
+        limit: EXPORT_PAGE_SIZE,
+        offset,
+      });
+      rows.push(...page.opportunities);
+      if (page.opportunities.length < EXPORT_PAGE_SIZE) break;
+    }
+
+    return {
+      headers: OPPORTUNITY_EXPORT_HEADERS,
+      rows: rows.map((o) => ({
+        title: o.title,
+        type: o.type,
+        impact: o.impact,
+        score: Math.round(o.opportunityScore),
+        status: o.status,
+        related_prompt: o.sourceData.promptText ?? (o.sourceData.prompts ?? []).join(' | '),
+        // ISO 8601, whatever the UI language (CONTENT-002).
+        suggested_at: new Date(o.createdAt).toISOString(),
+      })),
+    };
+  };
   const handleExportCsv = async () => {
-    if (!activeBrandId) return;
     setExporting(true);
     try {
-      const rows: ContentOpportunity[] = [];
-      for (let offset = 0; offset < EXPORT_MAX_ROWS; offset += EXPORT_PAGE_SIZE) {
-        const page = await getOpportunities(activeBrandId, {
-          ...listFilters,
-          limit: EXPORT_PAGE_SIZE,
-          offset,
-        });
-        rows.push(...page.opportunities);
-        if (page.opportunities.length < EXPORT_PAGE_SIZE) break;
-      }
-
-      const csv = toCsv(
-        rows.map((o) => ({
-          title: o.title,
-          type: o.type,
-          impact: o.impact,
-          score: Math.round(o.opportunityScore),
-          status: o.status,
-          related_prompt: o.sourceData.promptText ?? (o.sourceData.prompts ?? []).join(' | '),
-          // ISO 8601, whatever the UI language (CONTENT-002).
-          suggested_at: new Date(o.createdAt).toISOString(),
-        })),
-        OPPORTUNITY_EXPORT_HEADERS,
-      );
+      const { rows, headers } = await exportTable();
+      const csv = toCsv(rows, headers);
       const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
@@ -1326,6 +1331,15 @@ export default function ContentPage() {
           <div className="flex items-center gap-2">
             {newButton}
             {/* Icons only, named on hover and to screen readers. */}
+            {activeBrandId && (
+              <GoogleSheetsExport
+                key={activeBrandId}
+                brandId={activeBrandId}
+                view="Content Opportunities"
+                table={exportTable}
+                disabled={exporting || loading || total === 0}
+              />
+            )}
             <HeaderIconButton label={tCommon('exportCsv')}>
               <Button
                 onClick={handleExportCsv}

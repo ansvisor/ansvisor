@@ -170,7 +170,7 @@ export function withReadTimeout<T>(
 // ─── A brand's own Google sign-in (BRAND-ACCESS PR 15) ──────────────────────
 
 /** The Google products a brand connects on its own. */
-export type BrandGoogleProvider = 'google-search-console' | 'google-analytics';
+export type BrandGoogleProvider = 'google-search-console' | 'google-analytics' | 'google-sheets';
 
 /** A sign-in as Brand settings › Integrations shows it: no token, entity or Composio id. */
 export interface BrandSignIn {
@@ -275,5 +275,29 @@ export function readBrandGaProperties(brandId: string): Promise<IntegrationResul
     {},
     GOOGLE_CALL_TIMEOUT_MS,
     (body) => (Array.isArray(body.properties) ? (body.properties as GaProperty[]) : []),
+  );
+}
+
+export function writeGoogleSheet(
+  brandId: string,
+  body: object,
+): Promise<IntegrationResult<string>> {
+  return call(
+    '/google-sheets/brands/' + brandId + '/export',
+    { method: 'POST', body: JSON.stringify(body) },
+    120_000,
+    (data) => (typeof data.url === 'string' ? data.url : undefined),
+  );
+}
+
+export function readSheetStatus(brandId: string) {
+  return call(
+    '/google-sheets/brands/' + brandId + '/status',
+    {},
+    INTEGRATION_READ_TIMEOUT_MS,
+    (body) => ({
+      configured: body.configured === true,
+      accountId: typeof body.accountId === 'string' ? body.accountId : null,
+    }),
   );
 }

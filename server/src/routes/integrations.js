@@ -31,6 +31,8 @@ import { detectPageOpportunitiesInWindow } from '../lib/page-opportunities.js';
 import { assertBrandAccess, assertAllBrands } from '../lib/access.js';
 import { assertSignInReach, reachableBrandIds } from '../lib/brand-integration-reach.js';
 
+import { exportSheet, sheetExportBody } from '../lib/sheets-export.js';
+
 const router = Router();
 
 const GSC = 'google-search-console';
@@ -644,6 +646,41 @@ function brandProvider(req, res) {
   return provider;
 }
 
+router.get('/google-sheets/brands/:brandId/status', async (req, res) => {
+  try {
+    const brand = await brandFor(req);
+    const configured = !brand.is_demo && isComposioConfigured('google-sheets');
+    const connection = configured ? await brandConnection(brand.id, 'google-sheets') : null;
+    return res.json({ configured, accountId: connection?.connected ? connection.accountId : null });
+  } catch (err) {
+    return res.status(err.status || 500).json({ error: 'Sheet status unavailable.' });
+  }
+});
+
+router.post('/google-sheets/brands/:brandId/export', async (req, res) => {
+  try {
+    const brand = await brandFor(req);
+    if (brand.is_demo || !isComposioConfigured('google-sheets')) {
+      return res.status(409).json({ error: 'Google Sheets is unavailable.' });
+    }
+    const input = sheetExportBody.safeParse(req.body);
+    if (!input.success) return res.status(400).json({ error: 'Invalid export.' });
+    const connection = await brandConnection(brand.id, 'google-sheets');
+    if (!connection?.connected || !connection.accountId || !connection.composioAccountId) {
+      return res.status(409).json({ error: 'Connect Google Sheets for this brand.' });
+    }
+    if (input.data.accountId !== connection.accountId) {
+      return res.status(409).json({ error: 'The selected Google account changed.' });
+    }
+    if (input.data.spreadsheetId) await assertSignInReach(req.user.id, connection);
+    const url = await exportSheet(connection.composioAccountId, input.data);
+    return res.json({ url });
+  } catch (err) {
+    // Provider errors may include request data. Never echo or log their payload.
+    return res.status(err.status || 502).json({ error: 'Sheet export failed.' });
+  }
+});
+
 function sendError(req, res, err, what) {
   if (!err.status) req.log.error({ err }, what);
   return res.status(err.status || 500).json({ error: err.message, code: err.code });
@@ -672,7 +709,11 @@ router.get('/brands/:brandId', async (req, res) => {
           configured: isComposioConfigured(provider),
           // The brand's property: the Search Console site or GA4 property id.
           property:
-            (provider === 'google-analytics' ? brand.ga_property_id : brand.gsc_property) ?? null,
+            (provider === GA
+              ? brand.ga_property_id
+              : provider === GSC
+                ? brand.gsc_property
+                : null) ?? null,
           current: current
             ? {
                 accountId: current.accountId,

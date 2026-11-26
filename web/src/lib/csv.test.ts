@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest';
-import { csvLine, toCsv } from './csv.js';
+import { csvLine, spreadsheetCell, toCsv } from './csv.js';
 
 test('plain values pass through unquoted', () => {
   const result = toCsv([{ name: 'hello', value: 'world' }], ['name', 'value']);
@@ -84,4 +84,35 @@ test('negative numbers remain untouched as numeric values', () => {
 
 test('csvLine escapes each value as a cell', () => {
   expect(csvLine(['Search', 'a, "b"', '=1+1', null])).toBe(`Search,"a, ""b""",'=1+1,`);
+});
+
+test('Sheets retains CSV formula protection without adding CSV transport quotes', () => {
+  const values = [
+    '=1',
+    '+1',
+    '-2',
+    '@x',
+    '\tvalue',
+    '\rvalue',
+    'a,b',
+    'a"b',
+    'a\nb',
+    -2,
+    false,
+    null,
+  ];
+  expect(values.map(spreadsheetCell)).toEqual([
+    "'=1",
+    "'+1",
+    "'-2",
+    "'@x",
+    "'\tvalue",
+    "'\rvalue",
+    'a,b',
+    'a"b',
+    'a\nb',
+    -2,
+    false,
+    '',
+  ]);
 });

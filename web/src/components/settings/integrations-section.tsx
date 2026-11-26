@@ -97,6 +97,7 @@ import {
  */
 export function IntegrationsSection() {
   const t = useTranslations('settings');
+  const sheets = useTranslations('sheets');
   const { isDemo } = useDemoBrand();
   // Merchant Center's card shows only where this server offers it (its Composio auth config),
   // as the API's config says: env only, read at once and never behind a status. Until it
@@ -158,6 +159,15 @@ export function IntegrationsSection() {
         >
           <GaPropertyMapping />
         </IntegrationCard>
+
+        <IntegrationCard
+          anchor="google-sheets"
+          provider="google-sheets"
+          label={sheets('name')}
+          description={sheets('description')}
+          icon={<BarChart3 className="h-5 w-5 text-muted-foreground" />}
+          authConfigEnv="COMPOSIO_SHEETS_AUTH_CONFIG_ID"
+        />
 
         {/* Which Google account each brand uses: changed in the brand's own settings. */}
         {!isDemo && <GoogleAccountsOverview />}

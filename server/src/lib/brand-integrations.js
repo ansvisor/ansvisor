@@ -218,7 +218,11 @@ export async function signInBrandIds(connection) {
 // The server writes these for an admin or manager who can access the brand.
 
 /** The Google products a brand connects on its own. */
-export const BRAND_GOOGLE_PROVIDERS = Object.freeze(['google-search-console', 'google-analytics']);
+export const BRAND_GOOGLE_PROVIDERS = Object.freeze([
+  'google-search-console',
+  'google-analytics',
+  'google-sheets',
+]);
 
 function httpError(message, status, code) {
   return Object.assign(new Error(message), { status, ...(code ? { code } : {}) });

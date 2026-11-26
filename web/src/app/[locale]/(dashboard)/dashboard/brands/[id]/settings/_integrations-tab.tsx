@@ -35,7 +35,7 @@ import {
 } from '@/lib/integrations-client';
 import type { Brand } from '@/types';
 
-const LABELS: Record<BrandGoogleProvider, string> = {
+const LABELS: Record<Exclude<BrandGoogleProvider, 'google-sheets'>, string> = {
   'google-search-console': 'Google Search Console',
   'google-analytics': 'Google Analytics',
 };
@@ -116,7 +116,8 @@ function GoogleCard({
   const { brands } = useBrandStore();
   const [busy, setBusy] = useState<'use' | 'connect' | 'disconnect' | null>(null);
   const pollGen = useRef(0);
-  const label = LABELS[product.provider];
+  const sheets = useTranslations('sheets');
+  const label = product.provider === 'google-sheets' ? sheets('name') : LABELS[product.provider];
   const current = product.current;
   const writable = canManage && !brand.isDemo && product.configured;
 
@@ -307,7 +308,7 @@ function GoogleCard({
         </div>
       )}
 
-      {current?.connected && (
+      {current?.connected && product.provider !== 'google-sheets' && (
         <PropertyPicker
           brand={brand}
           provider={product.provider}

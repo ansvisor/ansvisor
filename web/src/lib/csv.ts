@@ -1,6 +1,7 @@
 const FORMULA_PREFIX_REGEX = /^[=+\-@\t\r]/;
 
-function escape(value: unknown): string {
+export function spreadsheetCell(value: unknown): string | number | boolean {
+  if (typeof value === 'number' || typeof value === 'boolean') return value;
   if (value === null || value === undefined) return '';
 
   let s = String(value);
@@ -8,6 +9,11 @@ function escape(value: unknown): string {
     s = `'${s}`;
   }
 
+  return s;
+}
+
+function escape(value: unknown): string {
+  const s = String(spreadsheetCell(value));
   if (/[",\r\n]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
   return s;
 }

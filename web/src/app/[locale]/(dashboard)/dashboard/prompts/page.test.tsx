@@ -2,10 +2,17 @@ import { act, type ReactNode } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { NextIntlClientProvider } from 'next-intl';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { readSheetStatus, writeGoogleSheet } from '@/lib/integrations-client';
 import messages from '../../../../../../messages/en.json';
 import { UpgradeDialogContext } from '@/components/providers/upgrade-gate';
 import type { Prompt } from '@/types';
 import type { FirstRun } from '@/hooks/use-first-run';
+
+vi.mock('@/lib/integrations-client', async (original) => ({
+  ...(await original<typeof import('@/lib/integrations-client')>()),
+  readSheetStatus: vi.fn(async () => ({ ok: true, value: { configured: false, accountId: null } })),
+  writeGoogleSheet: vi.fn(),
+}));
 
 /**
  * Tracked Prompts on a read-only workspace (plan not active): Add prompt,
@@ -568,6 +575,33 @@ describe('the Tags filter (#2378)', () => {
       input.dispatchEvent(new Event('input', { bubbles: true }));
     });
   };
+
+  it('exports only prompts matching the current search to Sheets', async () => {
+    vi.mocked(readSheetStatus).mockResolvedValueOnce({
+      ok: true,
+      value: { configured: true, accountId: 'account-A' },
+    });
+    vi.mocked(writeGoogleSheet).mockResolvedValueOnce({
+      ok: true,
+      value: 'https://docs.google.com/spreadsheets/d/fixture/edit',
+    });
+    await renderTagged();
+    await typeSearch('espresso');
+    await act(async () => button(messages.sheets.export)!.click());
+    const send = [...document.querySelectorAll('button')].find(
+      (b) => b.textContent === messages.sheets.send,
+    );
+    await act(async () => send!.click());
+    expect(writeGoogleSheet).toHaveBeenCalledWith(
+      'b1',
+      expect.objectContaining({
+        values: [
+          expect.arrayContaining(['text', 'topic_id']),
+          expect.arrayContaining([coffeeOnly.text]),
+        ],
+      }),
+    );
+  });
 
   it('shows every prompt while no tag is picked', async () => {
     await renderTagged();

@@ -26,6 +26,7 @@ export interface DemoIntegration {
 export const DEMO_INTEGRATIONS: readonly DemoIntegration[] = [
   { id: 'google-search-console', state: 'connected' },
   { id: 'google-analytics', state: 'connected' },
+  { id: 'google-sheets', state: 'connected' },
   { id: 'google-merchant-center', state: 'soon' },
   { id: 'shopify', state: 'soon', group: 'stores' },
   { id: 'webflow', state: 'connected' },

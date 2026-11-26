@@ -8,6 +8,7 @@ import { assertWritable } from '@/lib/subscription-guard';
 /** Providers that expose the shared connect / status / disconnect flow. */
 export type IntegrationProvider =
   | 'google-search-console'
+  | 'google-sheets'
   | 'google-analytics'
   | 'google-merchant-center';
 
