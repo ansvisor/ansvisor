@@ -71,6 +71,29 @@ describe('readOverview', () => {
     expect(sum(overview.bar)).toBe(overview.total);
   });
 
+  it('says what was paid on Google per currency: overlap, all matched, unmatched', async () => {
+    const paid = (...spend) => ({ spend });
+    const usd = (amount) => ({ currencyCode: 'USD', amount });
+    readStanding.mockResolvedValue({
+      rows: [
+        { ...row('p1', true, true), paid: paid(usd(10.5), { currencyCode: 'EUR', amount: 2 }) },
+        { ...row('p2', true, true), paid: paid(usd(4.5)) },
+        { ...row('p3', false, true), paid: paid(usd(20)) },
+        row('p4', true, false),
+      ],
+      notAnalysed: 0,
+      paid: { measured: true, unmatched: [usd(7)] },
+    });
+    const overview = await readOverview({ brand: { id: 'b1' }, orgId: 'o1', period: '30d' });
+    expect(overview.spend).toEqual({
+      overlap: [usd(15), { currencyCode: 'EUR', amount: 2 }],
+      matched: [usd(35), { currencyCode: 'EUR', amount: 2 }],
+      unmatched: [usd(7)],
+    });
+    // Not measured: no spend at all, never 0.
+    expect((await read([row('p1', true)])).spend).toBeNull();
+  });
+
   it('keeps the whole Overview on Starter, and counts the Opportunities rows it locks', async () => {
     readsEveryOpportunity.mockResolvedValue(false);
     const rows = ['p1', 'p2', 'p3', 'p4', 'p5'].map((id) => row(id, false));

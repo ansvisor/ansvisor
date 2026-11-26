@@ -15036,7 +15036,11 @@
       "earnedPaid": "Earned + paid",
       "paidOnly": "Paid only",
       "neither": "Neither",
-      "paidNotMeasured": "Paid isn't measured yet, so the bar shows only earned and neither.",
+      "paidNotMeasured": "Paid isn't measured until a Google Ads account is connected and read, so the bar shows only earned and neither.",
+      "spendOverlap": "Paid on Google for prompts AI already cites you for: {amount}",
+      "spendMatched": "On all your tracked prompts: {amount}",
+      "spendUnmatched": "On search terms that match no tracked prompt: {amount}",
+      "spendNote": "From your Google Ads search terms. ChatGPT Ads spend is on Campaigns: it doesn't say which question an ad showed on.",
       "openPrompts": "See {count, plural, one {# open prompt} other {# open prompts}}",
       "locked": "{count, plural, one {# more prompt} other {# more prompts}} in Opportunities {count, plural, one {is} other {are}} included from the {plan} plan.",
       "openSov": "Who pays per prompt"
@@ -15113,7 +15117,7 @@
         "volume_at_least": "{volume} Google searches a month, at least {threshold}",
         "volume_below": "{volume} Google searches a month, below {threshold}",
         "volume_not_measured": "Google searches aren't measured yet",
-        "paid_not_measured": "Who pays isn't measured yet",
+        "paid_not_measured": "{wePay, select, false {Whether competitors pay for ads isn't measured yet} other {Who pays isn't measured yet}}",
         "no_ad_channel": "No ad channel reaches the AI platforms it's tracked on"
       },
       "answers": "What AI answers today",
@@ -15123,6 +15127,13 @@
       "cites": "Cites: {domains}",
       "fanOuts": "Fan-out queries",
       "keywords": "Keyword seeds",
+      "paid": {
+        "title": "Your Google ads on it",
+        "spend": "{amount} for {clicks, plural, one {# click} other {# clicks}} in this period",
+        "terms": "{count, plural, one {# search term matched} other {# search terms matched}}, the costliest first:",
+        "none": "No Google ad spend matched it in this period.",
+        "note": "Search terms are matched to the prompt by their words. ChatGPT Ads spend isn't matched: it doesn't say which question an ad showed on."
+      },
       "failed": "The answers couldn't be read. Close this and open it again.",
       "earn": {
         "title": "Earn · fix the answer",

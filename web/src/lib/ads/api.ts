@@ -60,6 +60,27 @@ async function call<T>(
   return (await res.json()) as T;
 }
 
+/** An amount in an ad account's currency; amounts are never added across currencies. */
+export interface AdsSpend {
+  currencyCode: string | null;
+  amount: number;
+}
+
+/**
+ * What the brand paid on Google for a prompt's matched search terms in the
+ * period (server lib/ads/paid.js).
+ */
+export interface AdsPromptPaid {
+  channel: 'google';
+  spend: AdsSpend[];
+  clicks: number;
+  impressions: number;
+  conversions: number;
+  /** All the terms matched to the prompt; `terms` holds the costliest. */
+  termCount: number;
+  terms: Array<{ term: string; currencyCode: string | null; amount: number; clicks: number }>;
+}
+
 /**
  * The Overview (GET /api/ads/overview, server lib/ads/overview.js), over
  * every buying-intent prompt, for every plan. Null is "not measured", never 0.
@@ -72,7 +93,7 @@ export interface AdsOverview {
   notAnalysed: number;
   /** Opportunities' rows past the plan's (Starter, the trial), from the server. */
   locked: number;
-  /** Our sponsored ads are measured: until then the paid parts are null. */
+  /** Our Google spend is measured (a Google account read): until then the paid parts are null. */
   paidMeasured: boolean;
   bar: {
     earned: number;
@@ -80,6 +101,12 @@ export interface AdsOverview {
     paidOnly: number | null;
     neither: number;
   };
+  /**
+   * Google spend on matched search terms, per currency: on prompts AI cites
+   * us for (overlap), on every matched prompt, on terms no prompt matched.
+   * Null until measured.
+   */
+  spend: { overlap: AdsSpend[]; matched: AdsSpend[]; unmatched: AdsSpend[] } | null;
   paidSov: number | null;
   /** The period's AI-assisted signups; null with conversions off or unread. */
   signups: number | null;
@@ -116,6 +143,10 @@ export interface AdsOpportunity {
   estAiVolume: number | null;
   /** Where ads can show beside the prompt's answers. */
   adChannels: AdsChannel[];
+  /** We pay on Google for it (matched search terms); null until a Google account is read. */
+  wePay: boolean | null;
+  /** What we paid on Google for it in the period; null when nothing matched or not measured. */
+  paid: AdsPromptPaid | null;
   paidMeasured: boolean;
   /** Why the rule decided `recommended` (server lib/ads/decision.js). */
   reasons: AdsReason[];
