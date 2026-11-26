@@ -1,0 +1,140 @@
+{
+  "categories": [
+    {
+      "data": [
+        {
+          "category_id": 21,
+          "parent_id": 0,
+          "name": "Kitchen"
+        }
+      ],
+      "meta": {
+        "pagination": {
+          "current_page": 1,
+          "total_pages": 2
+        }
+      }
+    },
+    {
+      "data": [
+        {
+          "category_id": 22,
+          "parent_id": 21,
+          "name": "Storage"
+        }
+      ],
+      "meta": {
+        "pagination": {
+          "current_page": 2,
+          "total_pages": 2
+        }
+      }
+    }
+  ],
+  "products": [
+    {
+      "data": [
+        {
+          "id": 174,
+          "name": "1L Le Parfait Jar",
+          "sku": "",
+          "custom_url": {
+            "url": "/all/1l-le-parfait-jar/",
+            "is_customized": true
+          },
+          "price": 7.95,
+          "sale_price": 0,
+          "availability": "available",
+          "inventory_tracking": "variant",
+          "inventory_level": 0,
+          "description": "<p>Glass jar</p>",
+          "categories": [22],
+          "variants": [
+            {
+              "id": 382,
+              "price": 10,
+              "sale_price": 8,
+              "sku": "SMIT",
+              "option_values": [
+                {
+                  "id": 174,
+                  "label": "Beige",
+                  "option_id": 220,
+                  "option_display_name": "Color"
+                }
+              ],
+              "inventory_level": 0,
+              "purchasing_disabled": false,
+              "image_url": ""
+            },
+            {
+              "id": 383,
+              "price": 25,
+              "sale_price": 20,
+              "sku": "SMIT-1",
+              "option_values": [
+                {
+                  "id": 175,
+                  "label": "Grey",
+                  "option_id": 220,
+                  "option_display_name": "Color"
+                }
+              ],
+              "inventory_level": 0,
+              "purchasing_disabled": false,
+              "image_url": ""
+            }
+          ],
+          "images": [
+            {
+              "id": 382,
+              "sort_order": 0,
+              "is_thumbnail": true,
+              "url_standard": "https://images.example/jar-1.jpg"
+            },
+            {
+              "id": 383,
+              "sort_order": 0,
+              "is_thumbnail": false,
+              "url_standard": "https://images.example/jar-2.jpg"
+            }
+          ]
+        }
+      ],
+      "meta": {
+        "pagination": {
+          "current_page": 1,
+          "total_pages": 2
+        }
+      }
+    },
+    {
+      "data": [
+        {
+          "id": 200,
+          "name": "Lid",
+          "custom_url": {
+            "url": "/lid/"
+          },
+          "availability": "available",
+          "inventory_tracking": "none",
+          "price": 2,
+          "images": [],
+          "variants": [
+            {
+              "id": 401,
+              "price": null,
+              "option_values": []
+            }
+          ]
+        }
+      ],
+      "meta": {
+        "pagination": {
+          "current_page": 2,
+          "total_pages": 2
+        }
+      }
+    }
+  ]
+}
