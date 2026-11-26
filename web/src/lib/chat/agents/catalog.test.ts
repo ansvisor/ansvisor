@@ -118,7 +118,7 @@ describe('the preset files', () => {
       'unmet-needs-miner',
       'market-source-finder',
     ]);
-    expect(AGENT_PRESETS.filter((preset) => preset.status === 'soon')).toHaveLength(11);
+    expect(AGENT_PRESETS.filter((preset) => preset.status === 'soon')).toHaveLength(10);
   });
 
   it('have the business-type packs: three agents for each type, in the plan’s order', () => {
