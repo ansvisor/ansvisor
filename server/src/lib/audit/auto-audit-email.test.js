@@ -25,6 +25,11 @@ vi.mock('../../config/supabase.js', () => ({
 }));
 const readers = vi.hoisted(() => ({ map: new Map() }));
 vi.mock('../access.js', () => ({ brandReaders: async () => readers.map }));
+// Each brand's "Audit finished" choices (Settings › Notifications): none by default.
+const finished = vi.hoisted(() => ({ byBrand: {} }));
+vi.mock('../notifications/choices.js', () => ({
+  brandAudience: async (_org, brandId) => finished.byBrand[brandId] ?? new Map(),
+}));
 const sendEmail = vi.hoisted(() => vi.fn());
 vi.mock('../email.js', () => ({ sendEmail }));
 
@@ -72,6 +77,7 @@ describe('sendAutoAuditEmail', () => {
 
   beforeEach(() => {
     sendEmail.mockReset().mockResolvedValue(true);
+    finished.byBrand = {};
   });
 
   it('sends one e-mail listing every brand when everyone sees them all, as before', async () => {
@@ -84,6 +90,35 @@ describe('sendAutoAuditEmail', () => {
     expect(sendEmail.mock.calls[0][0].to).toEqual(['ana@acme.test', 'bo@acme.test']);
     expect(sendEmail.mock.calls[0][0].html).toContain('Acme Coffee');
     expect(sendEmail.mock.calls[0][0].html).toContain('Acme Tea');
+  });
+
+  it('leaves out the brands a person gets "Audit finished" for, so they never get both', async () => {
+    readers.map = new Map([
+      ['all1', new Set(['coffee', 'tea'])],
+      ['all2', new Set(['coffee', 'tea'])],
+    ]);
+    finished.byBrand = {
+      coffee: new Map([
+        ['all1', 'instant'],
+        ['all2', 'off'],
+      ]),
+      tea: new Map([
+        ['all1', 'daily'],
+        ['all2', 'off'],
+      ]),
+    };
+    expect(await sendAutoAuditEmail('org-1', run)).toBe(true);
+    // all1 chose it for both brands: nothing here; all2 gets the run as before.
+    expect(sendEmail).toHaveBeenCalledTimes(1);
+    expect(sendEmail.mock.calls[0][0].to).toEqual(['bo@acme.test']);
+    finished.byBrand = { coffee: new Map([['all1', 'instant']]) };
+    sendEmail.mockClear();
+    await sendAutoAuditEmail('org-1', run);
+    // all1 still gets the tea brand's.
+    const mine = sendEmail.mock.calls.find(([mail]) => mail.to.includes('ana@acme.test'))[0];
+    // Tea's 2 pages alone, not Coffee's 3.
+    expect(mine.html).toContain('2 pages audited');
+    expect(mine.html).not.toContain('Acme Coffee');
   });
 
   it('gives someone with Selected brands only the brands they see', async () => {
@@ -144,6 +179,7 @@ describe('in each reader’s language (LOC-008)', () => {
   };
   beforeEach(() => {
     sendEmail.mockReset().mockResolvedValue(true);
+    finished.byBrand = {};
     fs.writeFileSync(
       file,
       JSON.stringify({

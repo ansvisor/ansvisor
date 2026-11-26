@@ -15,6 +15,8 @@ const FORMATS: readonly ChatFileFormat[] = [
   'pdf',
   'csv',
   'xlsx',
+  // A report deck, as it was made (#2298).
+  'pptx',
   // An image, in its own format (W4-08).
   ...CHAT_IMAGE_FORMATS,
 ];

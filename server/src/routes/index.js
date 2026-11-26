@@ -29,6 +29,7 @@ import demoRoutes from './demo.js';
 import chatOutboundRoutes from './chat-outbound.js';
 import slackRoutes from './slack.js';
 import adsRoutes from './ads.js';
+import adsAccountsRoutes from './ads-accounts.js';
 
 const router = Router();
 
@@ -63,6 +64,8 @@ router.use('/demo', demoRoutes);
 router.use('/chat-outbound', chatOutboundRoutes);
 router.use('/slack', slackRoutes);
 // Ads (ADS-01), in development: not found unless the server's ADS_ENABLED is on.
+// A brand's ad accounts (Ads Phase 1), hidden with Ads (ADS_ENABLED) like /ads.
+router.use('/ads/accounts', adsAccountsRoutes);
 router.use('/ads', adsRoutes);
 
 router.get('/health', (req, res) => {

@@ -351,10 +351,15 @@ export default function ContentPlanPage() {
               aria-label={t('period')}
               className="inline-flex h-8 rounded-lg border bg-muted/40 p-0.5"
             >
+              {/* "Last" once, then the lengths: the full name stays each button's label. */}
+              <span aria-hidden className="self-center px-2 text-sm text-muted-foreground">
+                {t('periodLast')}
+              </span>
               {PLAN_PERIODS.map((value) => (
                 <button
                   key={value}
                   type="button"
+                  aria-label={t('periods', { days: value })}
                   aria-pressed={days === value}
                   onClick={() => changeDays(value)}
                   className={cn(
@@ -364,7 +369,7 @@ export default function ContentPlanPage() {
                       : 'text-muted-foreground hover:text-foreground',
                   )}
                 >
-                  {t('periods', { days: value })}
+                  {t('periodDays', { days: value })}
                 </button>
               ))}
             </div>

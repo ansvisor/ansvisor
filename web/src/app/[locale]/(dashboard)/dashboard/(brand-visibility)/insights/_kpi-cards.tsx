@@ -3,6 +3,7 @@
 import { useId, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useLocale, useTranslations } from 'next-intl';
+import { Skeleton } from '@/components/ui/skeleton';
 import {
   ArrowUpRight,
   Eye,
@@ -169,7 +170,7 @@ interface MetricCardProps {
   label: string;
   tooltip: string;
   icon: LucideIcon;
-  value: string;
+  value: React.ReactNode;
   delta?: Change | null;
   /** Beside the value, smaller: "of 36 site pages". */
   unit?: React.ReactNode;
@@ -275,6 +276,8 @@ export function MetricCard({
 interface KpiRowsProps {
   summary: InsightsSummary;
   trend: VisibilityRateTrendData | null;
+  /** The trend's read failed and the page is reading it again: loading, not "No data". */
+  trendPending?: boolean;
   trackedPrompts: TrackedPromptsKpi | null;
   coverage: CoverageKpi | null;
   sov: ShareOfVoiceData | null;
@@ -296,6 +299,7 @@ interface KpiRowsProps {
 export function KpiRows({
   summary,
   trend,
+  trendPending = false,
   trackedPrompts,
   coverage,
   sov,
@@ -362,7 +366,15 @@ export function KpiRows({
           tooltip={rateTip(t('visibilityTip'), samples.visibility)}
           icon={Eye}
           // No trend read: "No data", never a 0 that reads as a score.
-          value={trend ? f.number(trend.summary.rate) : none}
+          value={
+            trend ? (
+              f.number(trend.summary.rate)
+            ) : trendPending ? (
+              <Skeleton data-slot="kpi-pending" className="h-9 w-24" />
+            ) : (
+              none
+            )
+          }
           delta={rateDelta(samples.visibility, upIsGood(trend?.summary.change ?? null, { locale }))}
           // The rank stays beside a short mark (the count is in the tooltip):
           // the card is narrow, and the leaderboard is marked too.

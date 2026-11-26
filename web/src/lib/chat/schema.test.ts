@@ -2,6 +2,7 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
+import { FILE_FORMATS, PPTX_MIME } from './files';
 import { CHAT_MODES } from './precedence';
 import { WHY_METRICS } from './why/explain';
 
@@ -1554,5 +1555,34 @@ describe('agents that run agents: the AEO Operator (00545)', () => {
       files.map((file) => readFileSync(`${dir}/${file}`, 'utf8').replace(/--[^\n]*/g, '')),
     );
     expect(all[all.length - 1]).toContain('agent_plan_summary');
+  });
+});
+
+describe('a filed deck (issue #2298)', () => {
+  // The formats check is rewritten by later migrations: the last rewrite wins.
+  const all = files.map((file) => readFileSync(`${dir}/${file}`, 'utf8').replace(/--[^\n]*/g, ''));
+  const checks = all.flatMap((text) =>
+    [
+      ...text.matchAll(
+        /add constraint chat_files_formats_check\s+check \(\s*formats <@ array\[([^\]]*)\]/g,
+      ),
+    ].map((m) => [...m[1].matchAll(/'([^']+)'/g)].map((v) => v[1])),
+  );
+
+  it('lets Files hold every format the app files, no more and no fewer', () => {
+    expect(checks.length).toBeGreaterThan(0);
+    expect(checks[checks.length - 1]).toEqual([...FILE_FORMATS]);
+  });
+
+  it('has the bucket take each bytes file’s own type', () => {
+    const types = new Set(bucket('chat-files').types);
+    for (const text of all) {
+      for (const m of text.matchAll(/array_append\(\s*allowed_mime_types,\s*'([^']+)'/g)) {
+        types.add(m[1]);
+      }
+    }
+    expect([...types]).toEqual(
+      expect.arrayContaining(['image/png', 'image/jpeg', 'image/webp', PPTX_MIME]),
+    );
   });
 });

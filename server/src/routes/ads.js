@@ -402,7 +402,7 @@ router.get('/export/opportunity/:promptId', async (req, res) => {
 // Never on the demo brand (402 demo_brand), as every Ads write.
 router.post('/connections/notify', async (req, res) => {
   const body = z
-    .object({ brandId: z.guid(), platform: z.enum(['meta', 'linkedin']) })
+    .object({ brandId: z.guid(), platform: z.enum(['microsoft', 'meta', 'linkedin']) })
     .safeParse(req.body);
   if (!body.success) return res.status(400).json({ error: 'invalid', code: 'invalid' });
   try {

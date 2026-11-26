@@ -192,6 +192,9 @@ vi.mock('@/lib/chat/images/chat-images', () => ({
   imageCostLine: tracked.track('chat/images.imageCostLine'),
   imagePrecheck: tracked.track('chat/images.imagePrecheck'),
 }));
+vi.mock('@/lib/chat/presentation-run', () => ({
+  makeChatPresentation: tracked.track('chat/presentation.makeChatPresentation'),
+}));
 vi.mock('@/lib/actions/content', () => ({
   updateOpportunityStatus: tracked.track('actions/content.updateOpportunityStatus'),
 }));
@@ -431,6 +434,10 @@ describe('the Chat tool registry', () => {
       if (tool.area === 'images') {
         // Chat's own image functions, with the member's context.
         expect(calls[0].from).toMatch(/^chat\/images\./);
+        expect(calls[0].args[0]).toBe(ctx);
+      } else if (tool.name === 'make_presentation') {
+        // Chat's own deck maker (issue #2298): the run's context, as the images'.
+        expect(calls[0].from).toMatch(/^chat\/presentation\./);
         expect(calls[0].args[0]).toBe(ctx);
       } else if (CHAT_PAGE_ROWS.has(tool.name)) {
         // A page's version in Chat (W4-12b part 2): Chat's own, with the member's context.
@@ -1209,6 +1216,8 @@ describe('approval policies', () => {
       // Take down (AUTONOMOUS-GO-LIVE PR 10): as the API's route, a Manager even while publishing is off.
       unpublish_cms: ['admin', 'manager'],
       build_report: ['admin', 'manager'],
+      // A saved report as a deck (issue #2298): as build_report.
+      make_presentation: ['admin', 'manager'],
       run_site_audit: ['admin', 'manager'],
       // Images (CHAT-20 §9 row 70, W4-08): Admins and Managers, as a report.
       generate_image: ['admin', 'manager'],

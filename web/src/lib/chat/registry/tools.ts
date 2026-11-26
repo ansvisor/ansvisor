@@ -11,6 +11,7 @@ import { FEED_READS } from './feed-tools';
 import { CONTENT_TOOLS } from './content-tools';
 import { IMAGE_READS, IMAGE_WRITES } from './image-tools';
 import { MCP_WRAPPED_READS } from './mcp-wrapped-reads';
+import { PRESENTATION_TOOLS } from './presentation-tools';
 import { PROMPT_TOOLS } from './prompt-tools';
 import { READ_TOOLS } from './read-tools';
 import { MEMORY_TOOLS } from './memory-tools';
@@ -57,6 +58,7 @@ export const CHAT_TOOLS: readonly ChatTool[] = [
   ...ACTION_CENTER_TOOLS,
   ...CONTENT_TOOLS,
   ...REPORT_TOOLS,
+  ...PRESENTATION_TOOLS,
   ...AUDIT_TOOLS,
   ...IMAGE_WRITES,
   ...SCHEDULE_TOOLS,

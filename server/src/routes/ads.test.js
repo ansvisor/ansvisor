@@ -849,6 +849,9 @@ describe('POST /api/ads/connections/notify while ADS_ENABLED is on', () => {
       userId: 'u1',
       platform: 'meta',
     });
+    // Microsoft waits for its API access, so it has Notify me too.
+    const microsoft = await notify({ brandId: BRAND, platform: 'microsoft' });
+    expect([microsoft.status, (await microsoft.json()).platform]).toEqual([201, 'microsoft']);
     notifyMe.mockResolvedValue(false);
     const again = await notify();
     expect([again.status, (await again.json()).logged]).toEqual([200, false]);

@@ -33,6 +33,17 @@
  *                          released only on a 4xx; it is then new-style, so it
  *                          is never picked again.
  *
+ *   --stuck-since <date>   also accounts whose new-style claim was written
+ *                          from then until this run started: claims the
+ *                          web's read-back got wrong (readback_mismatch,
+ *                          19 Nov 2026 until web/src/lib/supabase/admin.ts was
+ *                          fixed), so nothing was sent. Each is claimed again
+ *                          and sent. Its PostHog `signed_up`, stuck the same
+ *                          way, is sent too (POSTHOG_KEY), dated when the
+ *                          account was made. Use it only once the fix is live
+ *                          and Resend's Events show no `user.signed_up` for
+ *                          those accounts.
+ *
  *   USE --include-old-claims ONLY AFTER CHECKING RESEND'S LOGS show no
  *   `/events/send` request from 13 Nov 2026 until this change went live (as on
  *   production on 16 Nov 2026). An old-style claim written while the web had
@@ -58,14 +69,17 @@ import {
   SIGNUP_EVENT_SINCE,
   claimWelcome,
   isOldClaim,
+  isStuckClaim,
+  isStuckPosthogClaim,
   releaseWelcome,
   sendWelcomeEvent,
+  signupSourceOf,
   welcomeStatus,
 } from '../lib/welcome-claim.js';
 
 export const USAGE =
   'Usage: node src/scripts/send-missed-welcome.js [--dry-run | --send] [--since <ISO date>] ' +
-  '[--pause-ms <n>] [--include-early-oauth] [--include-old-claims]';
+  '[--pause-ms <n>] [--include-early-oauth] [--include-old-claims] [--stuck-since <ISO date>]';
 
 const PER_PAGE = 1000;
 
@@ -77,6 +91,7 @@ export function parseArgs(argv) {
     pauseMs: 1000,
     includeEarlyOAuth: false,
     includeOldClaims: false,
+    stuckSince: null,
     help: false,
   };
   let dryRun = false;
@@ -95,6 +110,10 @@ export function parseArgs(argv) {
       const text = value() ?? '';
       opts.since = Date.parse(text);
       if (Number.isNaN(opts.since)) throw new Error(`--since isn't a date: ${text}`);
+    } else if (flag === '--stuck-since') {
+      const text = value() ?? '';
+      opts.stuckSince = Date.parse(text);
+      if (Number.isNaN(opts.stuckSince)) throw new Error(`--stuck-since isn't a date: ${text}`);
     } else if (flag === '--pause-ms') {
       const text = value() ?? '';
       opts.pauseMs = Number(text);
@@ -139,12 +158,17 @@ const SKIPPED = {
  * each. `deps`: `admin` (the service client's auth.admin), `apiKey`
  * (RESEND_API_KEY), `fetchImpl`, `sleep(ms)`, `log(line)`. Returns the counts.
  */
-export async function run(opts, { admin, apiKey, fetchImpl = fetch, sleep, log, now = Date.now }) {
+export async function run(
+  opts,
+  { admin, apiKey, fetchImpl = fetch, sleep, log, now = Date.now, posthog = null },
+) {
   if (opts.send && !apiKey) throw new Error('RESEND_API_KEY is not set: nothing claimed or sent');
+  // Stuck claims are the ones written before this run: its own never are.
+  const picks = { ...opts, stuckUntil: opts.stuckSince == null ? null : now() };
   const counts = {};
   const owed = [];
   for (const user of await listAccounts(admin)) {
-    const status = welcomeStatus(user, opts);
+    const status = welcomeStatus(user, picks);
     if (status === 'before-since') continue;
     counts[status] = (counts[status] ?? 0) + 1;
     if (status === 'owed') {
@@ -153,6 +177,9 @@ export async function run(opts, { admin, apiKey, fetchImpl = fetch, sleep, log, 
         created: user.created_at,
         provider: user.app_metadata?.provider ?? 'unknown',
         oldClaim: isOldClaim(user.app_metadata),
+        stuck: isStuckClaim(user.app_metadata, picks.stuckSince, picks.stuckUntil),
+        posthogStuck: isStuckPosthogClaim(user.app_metadata, picks.stuckSince, picks.stuckUntil),
+        source: signupSourceOf(user),
       });
     }
   }
@@ -162,17 +189,27 @@ export async function run(opts, { admin, apiKey, fetchImpl = fetch, sleep, log, 
     `Accounts made since ${new Date(opts.since).toISOString()} that missed the welcome: ${owed.length}`,
   );
   const label = (account) =>
-    `made ${account.created} (${account.provider}${account.oldClaim ? ', old-style claim' : ''})`;
+    `made ${account.created} (${account.provider}${account.oldClaim ? ', old-style claim' : ''}` +
+    `${account.stuck ? ', stuck claim' : ''})`;
   for (const account of owed) log(`  ${label(account)}`);
   const oldClaims = owed.filter((account) => account.oldClaim).length;
   if (opts.includeOldClaims) log(`Of these, old-style claims (--include-old-claims): ${oldClaims}`);
+  const stuck = owed.filter((account) => account.stuck).length;
+  if (picks.stuckSince != null) {
+    log(
+      `Of these, stuck claims written since ${new Date(picks.stuckSince).toISOString()}: ${stuck}` +
+        ` (PostHog signed_up stuck too: ${owed.filter((a) => a.posthogStuck).length})`,
+    );
+  }
   for (const [status, label] of Object.entries(SKIPPED)) {
     if (counts[status]) log(`Left out, ${label}: ${counts[status]}`);
   }
   const result = {
     owed: owed.length,
     oldClaims,
+    stuck,
     sent: 0,
+    posthogSent: 0,
     refused: 0,
     unknown: 0,
     skipped: 0,
@@ -183,14 +220,34 @@ export async function run(opts, { admin, apiKey, fetchImpl = fetch, sleep, log, 
     return result;
   }
 
-  const isOwed = (user) => welcomeStatus(user, opts) === 'owed';
+  const isOwed = (user) => welcomeStatus(user, picks) === 'owed';
   for (const [i, account] of owed.entries()) {
     if (i > 0) await sleep(opts.pauseMs);
-    const claimed = await claimWelcome(admin, account.id, { isOwed, sleep, now });
+    // With PostHog's key, a stuck signed_up is re-stamped with the claim and sent below.
+    const restampPosthog = account.posthogStuck && Boolean(posthog);
+    const claimed = await claimWelcome(admin, account.id, {
+      isOwed,
+      sleep,
+      now,
+      restampPosthog,
+    });
     if (!claimed) {
       result.skipped++;
       log(`  ${label(account)}: skipped (no longer owed, claimed elsewhere, or not claimable)`);
       continue;
+    }
+    if (restampPosthog) {
+      // When they signed up, not now: PostHog's sign-up counts stay right.
+      const went = await posthog([
+        {
+          event: 'signed_up',
+          distinctId: account.id,
+          properties: account.source,
+          timestamp: account.created,
+        },
+      ]);
+      if (went > 0) result.posthogSent++;
+      log(`  ${label(account)}: PostHog signed_up ${went > 0 ? 'sent' : 'NOT sent'}`);
     }
     const answer = await sendWelcomeEvent(claimed, { apiKey, fetchImpl });
     const why = answer.status ? `HTTP ${answer.status}` : answer.error;
@@ -213,6 +270,7 @@ export async function run(opts, { admin, apiKey, fetchImpl = fetch, sleep, log, 
   log(
     `Done: ${result.sent} sent, ${result.refused} refused (claim released), ` +
       `${result.unknown} kept (unknown), ${result.skipped} skipped` +
+      (picks.stuckSince != null ? `, ${result.posthogSent} PostHog signed_up sent` : '') +
       (result.unreleased ? `, ${result.unreleased} claim(s) not released` : ''),
   );
   if (result.unknown) {
@@ -244,12 +302,15 @@ if (isMain) {
   }
   await import('dotenv/config');
   const { default: supabaseAdmin } = await import('../config/supabase.js');
+  const { captureProductEvents } = await import('../lib/product-events.js');
   try {
     const result = await run(opts, {
       admin: supabaseAdmin.auth.admin,
       apiKey: process.env.RESEND_API_KEY,
       sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
       log: (line) => console.log(line),
+      // PostHog's stuck signed_up, only where the server has its key.
+      posthog: process.env.POSTHOG_KEY ? (events) => captureProductEvents(events) : null,
     });
     process.exit(exitCodeOf(result));
   } catch (err) {

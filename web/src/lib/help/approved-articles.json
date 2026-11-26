@@ -93,11 +93,15 @@
         },
         {
           "heading": "Stale actions",
-          "text": "An action that has stayed **New** for 30 days, with no one assigning, editing, sending or updating its tasks, is marked **Stale** each night. It isn't closed or dismissed: its row keeps one status, **New**, with \"No update in 44 d\" under it, the open action shows a **Stale** label, and the **Status** filter's **Stale** lists them all.\n\nIf it still matters, click **Still relevant** in the open action, or in the row menu. The hint and label go, its 30 days start again, and History says who kept it. Any other change to the action, or moving it out of New, clears the label too. If it no longer matters, dismiss it.\n\nAn open action whose signals have all resolved shows **Signal resolved, review** instead of a signal count. It stays open: check whether the work is done, then complete or dismiss it."
+          "text": "An action that has stayed **New** for 30 days, with no one assigning, editing, sending or updating its tasks, is marked **Stale** each night. It isn't closed or dismissed: its row keeps one status, **New**, with \"No update in 44 d\" under it, the open action shows a **Stale** label, and the **Status** filter's **Stale** lists them all.\n\nIf it still matters, click **Keep** in the open action, or **Still relevant** in the row menu. The hint and label go, its 30 days start again, and History says who kept it. Any other change to the action, or moving it out of New, clears the label too. If it no longer matters, click **Dismiss**.\n\nAn open action whose signals have all resolved shows **Signal resolved, review** instead of a signal count. It stays open: check whether the work is done, then complete or dismiss it."
+        },
+        {
+          "heading": "The top of an action",
+          "text": "Click a row to open the action. Its top line shows the priority and the action's code, and **⋯** beside them holds **Run agent**, **Copy Data** and the exports. Under the title, small boxes count what it affects (prompts, pages, platforms and so on), and you set **Status**, **Assignee** and **Due date**."
         },
         {
           "heading": "Inside an action",
-          "text": "Click a row to open the action. Under its title you set **Status**, **Assignee** and **Due date**. Its tabs:\n\n- **Overview**: **Why this priority?**, with how sure the score is (low, medium or high confidence, and why, such as one kind of finding from one source), **Why this action?** with the signals behind it, the **Goal** (what done looks like, with a date) and the linked **KPIs**.\n- **Affected**: the prompts, pages, topics, competitors or platforms it is about, with each prompt's demand.\n- **Tasks**: the work, step by step.\n- **Signals**: the evidence. Click one to open it on the Signals tab.\n- **History**: every change, from status and assignee changes to tasks updated or sent.\n\nThe title's count, **Why this action?**, the **Goal**'s \"5 of 7 prompts\" and the AI searches a month all count the same prompts as the **Affected** tab, so the monthly searches are the sum of its rows."
+          "text": "An open action's tabs:\n\n- **Overview**: **Why this priority?**, with how sure the score is (low, medium or high confidence, and why, such as one kind of finding from one source), **Why this action?** with the signals behind it, the **Goal**, with **Done when** (what done looks like, with a date) and the linked **KPIs**.\n- **Affected**: the prompts, pages, topics, competitors or platforms it is about, with each prompt's demand.\n- **Tasks**: the work, step by step, with how many are done, such as **Tasks 2/5**.\n- **Signals**: the evidence. Click one to open it on the Signals tab.\n- **History**: every change, from status and assignee changes to tasks updated or sent.\n\nThe title's count, **Why this action?**, the **Goal**'s \"5 of 7 prompts\" and the AI searches a month all count the same prompts as the **Affected** tab, so the monthly searches are the sum of its rows."
         },
         {
           "heading": "A goal date that has passed",
@@ -109,7 +113,7 @@
         },
         {
           "heading": "Run an agent on an action",
-          "text": "When Chat is on, Admins and Managers see **Run agent** on each open action: an agent button next to its title in the list, and at the top of the open action.\n\nIt lists your agents that work on the action's brand, the ones used on this kind of action first. Pick one, and Chat starts a run on this action alone and opens it beside the action. **Run with Chat** does the same without an agent, in your default mode. **Create an agent for this kind of action** starts a new agent from a fitting skill.\n\nThe run drafts the work, but closing tasks stays your click. If the action is completed or dismissed, an agent's run stops; a **Run with Chat** run doesn't. The action's **History** shows when a run started and ended, and who started it."
+          "text": "When Chat is on, Admins and Managers see **Run agent** on each open action: an agent button next to its title in the list, and in the **⋯** menu at the top of the open action.\n\nIt lists your agents that work on the action's brand, the ones used on this kind of action first. Pick one, and Chat starts a run on this action alone and opens it beside the action. **Run with Chat** does the same without an agent, in your default mode. **Create an agent for this kind of action** starts a new agent from a fitting skill.\n\nThe run drafts the work, but closing tasks stays your click. If the action is completed or dismissed, an agent's run stops; a **Run with Chat** run doesn't. The action's **History** shows when a run started and ended, and who started it."
         },
         {
           "heading": "Assign work",
@@ -117,7 +121,7 @@
         },
         {
           "heading": "Export actions",
-          "text": "**Export CSV** on the Actions tab downloads the actions in the current view, as filtered, with their number, priority, status, assignee, due date, task progress and affected items.\n\nInside an action, **Copy Data** gives the whole action as Markdown to paste into a doc or ticket, and **Export** downloads it as **Export CSV** or **Export Excel**. The Excel file has one sheet each for the action, its affected items, tasks, signals and history."
+          "text": "**Export CSV** on the Actions tab downloads the actions in the current view, as filtered, with their number, priority, status, assignee, due date, task progress and affected items.\n\nInside an action, the **⋯** menu's **Copy Data** gives the whole action as Markdown to paste into a doc or ticket, and **Export CSV** or **Export Excel** downloads it. The Excel file has one sheet each for the action, its affected items, tasks, signals and history."
         },
         {
           "heading": "Send work here from other pages",
@@ -304,12 +308,12 @@
           "text": "An action sent from a prompt's Improve tab reports on how many platforms its position improved. It is read again daily while the action is open, and for 30 days after it is completed."
         },
         {
-          "heading": "The Scorecard",
-          "text": "Switch History from **Actions** to **Scorecard** to see what each kind of action did at this brand: the actions closed in the range, 90 days unless you pick another, by when they were completed or dismissed. It shows how many were completed, their results so far, the **Success rate** (the share of results that improved, shown once a kind has three), the median change in each action's main metric, and how many were dismissed, with the reason given most often. It counts this brand's own actions only, and its cards count the same closed actions: **Closed Actions**, completed, no improvement and dismissed."
+          "heading": "Results by kind",
+          "text": "Switch History from **Past actions**, the actions one by one, to **Results by kind** to see what each kind of action did at this brand: the actions closed in the range, 90 days unless you pick another, by when they were completed or dismissed. It shows how many were completed, their results so far, the **Success rate** (the share of results that improved, shown once a kind has three), the median change in each action's main metric, and how many were dismissed, with the reason given most often. It counts this brand's own actions only, and its cards count the same closed actions: **Closed Actions**, completed, no improvement and dismissed."
         },
         {
-          "heading": "The Scorecard by play",
-          "text": "When an action asks for new content, the page its prompts pick is its play, such as a comparison page or a how-to guide. On the **Scorecard**, switch from **By kind** to **By play** to see what each play did at this brand, whichever kind of action it was for. Only actions opened with a play count there. A play's results also weigh on the priority of new actions opened with it, once one of them has a result."
+          "heading": "Results by kind, by play",
+          "text": "When an action asks for new content, the page its prompts pick is its play, such as a comparison page or a how-to guide. In **Results by kind**, switch from **By kind** to **By play** to see what each play did at this brand, whichever kind of action it was for. Only actions opened with a play count there. A play's results also weigh on the priority of new actions opened with it, once one of them has a result."
         },
         {
           "heading": "When a problem comes back",
@@ -705,7 +709,7 @@
         },
         {
           "heading": "The tabs",
-          "text": "The Action Center has five tabs: **Today**, **Actions**, **Signals**, **Agents** and **History**. **Agents** (formerly Agent Center) is there when Chat's agents are on for your workspace and on your menu. **KPIs** opens from **History**, next to its Actions and Scorecard views. Admins and managers open **Needs review** from **Waiting for you** on Today.\n\nBeside **Agents** is how many of your agent runs wait for you."
+          "text": "The Action Center has five tabs: **Today**, **Actions**, **Signals**, **Agents** and **History**. **Agents** (formerly Agent Center) is there when Chat's agents are on for your workspace and on your menu. **KPIs** opens from **History**, next to its Past actions and Results by kind views. Admins and managers open **Needs review** from **Waiting for you** on Today.\n\nBeside **Agents** is how many of your agent runs wait for you."
         },
         {
           "heading": "The top of the page",
@@ -858,7 +862,7 @@
         },
         {
           "heading": "Weekly AI Traffic e-mail",
-          "text": "Every Monday, an e-mail about the week before goes to each brand's Daily Pulse recipients, if the brand had AI visits that week or the one before. It shows AI visits with the change, the top platform, the summary line, visits by day and platform, and the top changes.\n\nTo turn it off for a brand, untick the brand under **AI Traffic weekly digest** in **Settings › Notifications**; it's saved at once, and admins and managers can change it. It isn't sent while the brand's Daily Pulse is **Off**. The e-mail is on Ansvisor Cloud only."
+          "text": "Every Monday, an e-mail about the week before goes out for each brand, if the brand had AI visits that week or the one before. It shows AI visits with the change, the top platform, the summary line, visits by day and platform, and the top changes.\n\nEach person picks **Every Monday** or **Off** for it under **Your e-mails** in **Settings › Notifications**, for all their brands or one brand apart. An Admin sets it for people outside the workspace under the brand; they don't get it while the brand's Daily Pulse is **Off**. The e-mail is on Ansvisor Cloud only."
         }
       ]
     },
@@ -1388,16 +1392,23 @@
         "archived chats",
         "unarchive",
         "archive selected",
-        "ctrl k"
+        "ctrl k",
+        "clear chats",
+        "clear all",
+        "delete selected",
+        "delete many chats",
+        "too many chats"
       ],
       "synonyms": [
         "chat history",
         "old chats",
         "past conversations",
-        "look up a chat"
+        "look up a chat",
+        "clean up chats",
+        "remove old chats"
       ],
       "plan": "all",
-      "updated": "2026-10-30",
+      "updated": "2026-11-21",
       "sections": [
         {
           "heading": null,
@@ -1418,6 +1429,10 @@
         {
           "heading": "Archive and unarchive",
           "text": "**Archive** in a chat's **⋯** menu takes it off the chat menu; the message that appears says where it went. To archive several at once, tick your chats in **All chats** and click **Archive selected**.\n\nArchived chats are under **Archived** in **All chats**, or **Archived** at the bottom of the chat menu. Tick them and click **Unarchive selected** to put them back in your chat menu. You can still open an archived chat to read it."
+        },
+        {
+          "heading": "Clear old chats",
+          "text": "To tidy the chat menu, click **Clear** beside a day, such as **Previous 30 days**. Chat asks first and says how many chats will be deleted. To pick chats one by one, tick them in **All chats** and click **Delete selected**.\n\nOnly your own chats are deleted: chats teammates shared with you, and pinned chats, stay. Files they made stay in **Files**, and a chat that is still working is stopped first. Click **Undo** within a few seconds to bring them back; after that it can't be undone. To delete one chat, use **Delete** in its **⋯** menu, which shows when you point at the row."
         }
       ]
     },
@@ -1661,7 +1676,7 @@
         "ask ansvisor"
       ],
       "plan": "all",
-      "updated": "2026-11-19",
+      "updated": "2026-11-22",
       "sections": [
         {
           "heading": null,
@@ -1701,7 +1716,7 @@
         },
         {
           "heading": "Chats in the panel",
-          "text": "A chat you start in the panel is saved like any other: it is in **Chat**, where you can carry on with it. If you used a panel chat in the last 30 minutes, the panel opens on it again.\n\nOnce the panel has a chat, its **⋯** menu offers **Open as full page**, **Open in new window**, and for your own chats **Pin**, **Rename**, **Share with team**, **Archive** and **Delete**. On the full page, **↙ Back to** the page you came from takes you back there, with the chat in the panel as it is now.\n\nThe panel isn't on Chat's own pages, where **Ctrl J** takes you to the message box, or in the Content Editor, which has its own chat."
+          "text": "Panel chats are saved in **Chat** too. The panel opens on the chat you used in the last 30 minutes, else on your latest chat from this page and brand, even days later. Each draft or report counts as its own page. **New chat** starts fresh.\n\nOnce the panel has a chat, its **⋯** menu offers **Open as full page**, **Open in new window**, and for your own chats **Pin**, **Rename**, **Share with team**, **Archive** and **Delete**. On the full page, **↙ Back to** the page you came from takes you back there, with the chat in the panel as it is now.\n\nThe panel isn't on Chat's own pages, where **Ctrl J** takes you to the message box, or in the Content Editor, which has its own chat."
         },
         {
           "heading": "Stop or steer",
@@ -2821,6 +2836,8 @@
       "route": "/dashboard/chat",
       "keywords": [
         "whats new",
+        "one chat",
+        "what's new chat",
         "what's new",
         "new features",
         "updates",
@@ -2839,7 +2856,7 @@
         "recent improvements"
       ],
       "plan": "all",
-      "updated": "2026-11-06",
+      "updated": "2026-11-23",
       "sections": [
         {
           "heading": null,
@@ -2847,7 +2864,7 @@
         },
         {
           "heading": "On Chat Home",
-          "text": "When there is an update you haven't read, a line with a **New** tag shows under the shortcuts, for up to 14 days. Click **Show me** to put \"What's new: how can {feature} help me?\" in the box. Nothing is sent until you send it.\n\nThe **What's new** shortcut asks Chat what's new. A small dot on it means you have updates you haven't read."
+          "text": "When there is an update you haven't read, a line with a **New** tag shows under the shortcuts, for up to 14 days. Click **Show me** to put \"What's new: how can {feature} help me?\" in the box. Nothing is sent until you send it.\n\nThe **What's new** shortcut asks Chat what's new. A small dot on it means you have updates you haven't read.\n\nThe shortcut, and **What's new** in your profile menu, keep to one chat: asked again, the question goes on in your What's new chat for the brand open, so your chat menu doesn't fill up with copies. A renamed chat still counts, since the question was asked in it. If you archived or deleted that chat, a new one starts. Chats from before stay as they are."
         },
         {
           "heading": "The answer",
@@ -3626,7 +3643,7 @@
         },
         {
           "heading": "Filter, sort and export",
-          "text": "- Search the opportunities, and narrow the list by topic, prompt, type, impact, **Source** and status. The sources are **System**, suggested automatically; **Manual**, made with **New**; **Prompt**, suggested from a prompt; and **Action**, sent from an Action Center task.\n- **Suggested** picks a period, all time, this month, the last 30 days or your own dates, and the order: highest score, newest or oldest.\n- Archived opportunities stay hidden unless you filter to them.\n- Most filters and the order stay in the page's address, so a link opens the same view; the topic and the search don't.\n- **Export CSV** downloads every opportunity that matches the filters and the search, not only the page you see."
+          "text": "- Search the opportunities, and narrow the list by topic, prompt, type, impact, **Source** and status. The sources are **System**, suggested automatically; **Manual**, made with **New**; **Prompt**, suggested from a prompt; and **Action**, sent from an Action Center task.\n- **Suggested** picks a period, all time, this month, the last 30 days or your own dates, and the order: highest score, newest or oldest.\n- Archived opportunities stay hidden unless you filter to them.\n- Most filters and the order stay in the page's address, so a link opens the same view; the topic and the search don't.\n- **Export CSV**, the download icon at the top right, downloads every opportunity that matches the filters and the search, not only the page you see."
         },
         {
           "heading": "Quick actions on a row",
@@ -3670,7 +3687,7 @@
         },
         {
           "heading": "Automatic suggestions",
-          "text": "After each day's tracking run, Ansvisor writes new opportunities by itself, on a plan with an active subscription:\n\n- **Up to 3 a night**, one per topic, for groups of prompts with tracked answers and no opportunity yet. That's at most 21 a week, but only as many as there are such groups: new groups come when you add prompts.\n- **When no group is left, at most 1 a night** as another angle (at most 7 a week). It goes to the group with the most estimated AI volume whose opportunity has been done for 30 days, where your brand is still mentioned or cited in fewer than 1 in 5 answers. On many nights nothing qualifies, and nothing is written.\n\nWhen none can be added, a note above the list says why: every group has an opportunity, or the month's allowance is used up."
+          "text": "After each day's tracking run, Ansvisor writes new opportunities by itself, on a plan with an active subscription:\n\n- **Up to 3 a night**, one per topic, for groups of prompts with tracked answers and no opportunity yet. That's at most 21 a week, but only as many as there are such groups: new groups come when you add prompts.\n- **When no group is left, at most 1 a night** as another angle (at most 7 a week), for the group with the most estimated AI volume whose opportunity was done 30 days ago and where your brand still shows in fewer than 1 in 5 answers. Often nothing qualifies.\n\nWhen none can be added, a note above the list says why: every group has an opportunity, or the month's allowance is used up. Then Ansvisor also refreshes your prompt suggestions, at most weekly, so new prompts can open new groups."
         },
         {
           "heading": "While the first tracking runs",
@@ -3704,11 +3721,11 @@
         "editorial plan"
       ],
       "plan": "all",
-      "updated": "2026-11-11",
+      "updated": "2026-11-21",
       "sections": [
         {
           "heading": null,
-          "text": "The **Content plan**, **Plan** under **Content** in the sidebar, ranks what to create, optimize or protect next. It covers the last 7, 30 or 90 days: pick the period at the top right."
+          "text": "The **Content plan**, **Plan** under **Content** in the sidebar, ranks what to create, optimize or protect next. It covers the last 7, 30 or 90 days: pick **7**, **30** or **90 days** at the top right."
         },
         {
           "heading": "The four cards",
@@ -4902,7 +4919,7 @@
         "prompts for a topic"
       ],
       "plan": "all",
-      "updated": "2026-11-18",
+      "updated": "2026-11-21",
       "sections": [
         {
           "heading": null,
@@ -4923,6 +4940,10 @@
         {
           "heading": "Add, dismiss or refresh suggestions",
           "text": "Use **Search prompts…** to narrow the list, **+** to add a suggestion, **×** to dismiss it and **New** to generate a fresh list. **Clear All** asks first, then dismisses every suggestion listed. Admins and managers can add and generate suggestions; analysts can also dismiss them. Those from Search Console or Analytics stay hidden for 30 days once dismissed.\n\nSuggestions expire after 48 hours. Click **New** for fresh ideas, for example after you change your content.\n\nA prompt added from suggestions gets its first results with the next daily run."
+        },
+        {
+          "heading": "New suggestions on their own",
+          "text": "When every group of prompts already has a content opportunity, Ansvisor writes a fresh list by itself after the daily run, so you have new prompts to add and new opportunities can follow. It does that at most once a week, only when no suggestion is waiting for you, and for a brand with a topic. The **Suggestions** dot in the sidebar then shows there's something new."
         },
         {
           "heading": "Edit a suggestion before adding it",
@@ -5178,19 +5199,19 @@
         },
         {
           "heading": "Choose how often it comes",
-          "text": "Open **Settings › Notifications**. The page has two sections: **Daily Pulse** and **AI Traffic weekly digest**. Under **Daily Pulse**, every active brand has its own card with a frequency and a recipient list. Admins and managers can change them; other members see them read-only. The **Manage notification settings** link at the bottom of every pulse email opens this page.\n\n- **Daily**: after every scheduled daily tracking run.\n- **Weekly**: once a week on Monday (UTC), covering the last 7 days compared with the 7 days before.\n- **Only when notable** (the default): your first pulse always goes out, so you see your starting point. After that it is like Daily, but skipped when there are no highlights and no warnings. Brands that never chose a frequency use this; a brand whose admin saved **Daily** keeps it.\n- **Off**: no email, no webhook and no Slack post."
+          "text": "Open **Settings › Notifications**. Under **Your e-mails**, **Daily Pulse** is in the **Brand Visibility** group: pick how often it comes to you, for all your brands or one brand apart, and press **Save changes**. Each teammate picks their own. The **Manage notification settings** link at the bottom of every pulse email opens this page.\n\n- **Daily**: after every scheduled daily tracking run.\n- **Weekly**: once a week on Monday (UTC), covering the last 7 days compared with the 7 days before.\n- **Only when notable** (the default): your first pulse always goes out, so you see your starting point. After that it is like Daily, but skipped when there are no highlights and no warnings.\n- **Off**: you get no pulse email."
         },
         {
-          "heading": "Choose who gets it",
-          "text": "Enter email addresses separated by commas. Leave the field empty to send to every member of the organization. Each address is checked when you save: if one isn't valid, the save is rejected and the invalid entries are listed under the field, so fix or remove them and save again. Up to 50 addresses are stored. Recipients apply to the email only, not to the webhook."
+          "heading": "Choose who else gets it",
+          "text": "Admins can add people outside the workspace, such as a client, under **Send to people outside the workspace**: each brand has a list of addresses, separated by commas, and how often its pulse comes. Each address is checked when you save; invalid ones are listed under the field. Up to 50 addresses are stored. A teammate who hasn't saved their own choices gets the pulse as before: every teammate while the list is empty, else only those on it. The brand's frequency there also sets its webhook and Slack post; **Off** stops both."
         },
         {
           "heading": "AI Traffic weekly digest",
-          "text": "The **AI Traffic weekly digest** has its own section on the same page, with one tick box per brand: every Monday, last week's AI visits in one summary line, with the top three changes. Each brand's line shows who gets it: the brand's Daily Pulse recipients, or every member when that list is empty. A tick or untick is saved at once. The digest isn't sent while the brand's Daily Pulse is **Off**."
+          "text": "The **AI Traffic weekly digest** comes every Monday: last week's AI visits in one summary line, with the top three changes. Pick **Every Monday** or **Off** for it under **Your e-mails**, in the **AI Traffic** group. For people outside the workspace, an Admin ticks or unticks it under the brand; it isn't sent to them while the brand's Daily Pulse is **Off**."
         },
         {
           "heading": "When it is sent",
-          "text": "A pulse follows a brand's scheduled daily tracking run; manual runs and single-prompt refreshes never trigger one. It waits up to 90 minutes for late answers, so its numbers match the dashboard. No pulse is sent when the frequency is **Off**, or **Weekly** and it isn't Monday; when the brand already had one that day; when there are no tracking results in the window; when the frequency is **Only when notable**, it isn't the brand's first pulse and nothing is notable; or, on the cloud, when the subscription isn't active or trialing."
+          "text": "A pulse follows a brand's scheduled daily tracking run; manual runs and single-prompt refreshes never trigger one. It waits up to 90 minutes for late answers, so its numbers match the dashboard. Nobody gets a pulse whose frequency is **Off**, or **Weekly** when it isn't Monday. No pulse is sent when the brand already had one that day; when there are no tracking results in the window; when the frequency is **Only when notable**, it isn't the brand's first pulse and nothing is notable; or, on the cloud, when the subscription isn't active or trialing."
         },
         {
           "heading": "What's in a pulse",
@@ -5210,7 +5231,7 @@
         },
         {
           "heading": "Send it to a webhook",
-          "text": "Every pulse also goes to the brand's active webhook, if it is subscribed to the Daily Pulse event: under **Content**, open **Webhook Settings** and tick **Daily Pulse created**. On self-hosted installs, this is the only way the pulse is delivered. The webhook carries the same KPIs, highlights and warnings as the email. The frequency applies to it too; the recipient list doesn't."
+          "text": "Every pulse also goes to the brand's active webhook, if it is subscribed to the Daily Pulse event: under **Content**, open **Webhook Settings** and tick **Daily Pulse created**. On self-hosted installs, this is the only way the pulse is delivered. The webhook carries the same KPIs, highlights and warnings as the email. The brand's frequency under **Send to people outside the workspace** applies to it too; the recipient list and people's own choices don't."
         }
       ]
     },
@@ -5423,11 +5444,11 @@
         "what changed after publishing"
       ],
       "plan": "all",
-      "updated": "2026-11-01",
+      "updated": "2026-11-21",
       "sections": [
         {
           "heading": null,
-          "text": "**What Ansvisor did for you** lists the changes you shipped in a month, such as a page published to your CMS, and what each one did in AI answers. Open it from **Reports** with **What Ansvisor did for you**, and go back with **Back to Reports**. It shows the brand you have open."
+          "text": "**What Ansvisor did for you** lists the changes you shipped in a month, such as a page published to your CMS, and what each one did in AI answers. Open it from **Reports** with **What Ansvisor did for you**, and go back with **Back to Reports**. It shows the brand you have open.\n\nThe button appears once the brand has shipped its first change: a page your CMS confirmed after **Send to CMS**, or an agent's first go-live. Until then the page says it fills in after that first change."
         },
         {
           "heading": "What shipped means",
@@ -6018,7 +6039,7 @@
         "slack buttons"
       ],
       "plan": "starter",
-      "updated": "2026-11-15",
+      "updated": "2026-11-20",
       "sections": [
         {
           "heading": null,
@@ -6030,7 +6051,7 @@
         },
         {
           "heading": "When the Pulse is posted",
-          "text": "With **Daily Pulse** on under the channel, the Pulse is posted as often as it goes out by e-mail: **Daily**, **Weekly** on Mondays, or **Only when notable** (the default). Change how often in **Settings › Notifications**. When it is **Off** there, nothing is posted. Turn **Daily Pulse** off on the Slack card to keep the e-mail and stop the Slack post.\n\nEach Pulse is posted once. If Slack doesn't take it, Ansvisor tries once more, then leaves it for that day."
+          "text": "With **Daily Pulse** on under the channel, the Pulse is posted as often as the brand's Pulse is set to go out: **Daily**, **Weekly** on Mondays, or **Only when notable** (the default). An Admin changes how often for the brand under **Send to people outside the workspace** in **Settings › Notifications**. When it is **Off** there, nothing is posted. Turn **Daily Pulse** off on the Slack card to keep the e-mail and stop the Slack post.\n\nEach Pulse is posted once. If Slack doesn't take it, Ansvisor tries once more, then leaves it for that day."
         },
         {
           "heading": "Drop alerts",
@@ -6599,11 +6620,11 @@
         "audit priority"
       ],
       "plan": "all",
-      "updated": "2026-11-19",
+      "updated": "2026-11-21",
       "sections": [
         {
           "heading": null,
-          "text": "The **Site Audit** page sums up your audits: a summary line, four cards and a chart, then two tabs. **Opportunities** lists the pages worth auditing next, and **Pages** lists every page you audited."
+          "text": "The **Site Audit** page sums up your audits: a summary line, four cards and a chart, then two tabs. **Opportunities** lists the pages worth auditing next, and **Pages** lists every page you audited.\n\nThe page opens in one go: until its numbers are in, grey placeholders hold the place of the summary line, the chart and the lists, so nothing moves when they fill in."
         },
         {
           "heading": "Summary and cards",
@@ -6663,7 +6684,7 @@
         "visibility dashboard"
       ],
       "plan": "all",
-      "updated": "2026-11-19",
+      "updated": "2026-11-23",
       "sections": [
         {
           "heading": null,
@@ -6671,7 +6692,7 @@
         },
         {
           "heading": "The tabs and how to reach them",
-          "text": "The tabs sit under the page's header. In the sidebar, **Visibility** under **Analytics** opens and closes a group with the same entries, **Overview**, **Mentions**, **Citations** and, for an online shop on a plan with it, **Products**; it is open whenever one of them is showing.\n\nEach tab loads its own data when you open it, and shows a placeholder while it loads. The date range, AI platform, country and topic you picked stay set when you switch tabs; Mentions has no **All** range, so it opens on its 30 days instead. Product Visibility keeps its own filters. A tab whose data can't be read says so, with **Retry**, and the other tabs keep working."
+          "text": "The tabs sit under the page's header. In the sidebar, **Visibility** under **Analytics** opens and closes a group with the same entries, **Overview**, **Mentions**, **Citations** and, for an online shop on a plan with it, **Products**; it is open whenever one of them is showing.\n\nEach tab loads its own data when you open it, and shows a placeholder while it loads. The date range, AI platform, country and topic you picked stay set when you switch tabs; Mentions has no **All** range, so it opens on its 30 days instead. Product Visibility keeps its own filters. On **Overview**, a part that can't be read is read again by itself a moment later, and shows as loading meanwhile. A tab or part whose data still can't be read says so, with **Retry**, and the other tabs keep working."
         },
         {
           "heading": "The header",

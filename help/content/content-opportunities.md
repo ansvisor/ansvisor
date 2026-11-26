@@ -37,7 +37,7 @@ Ansvisor writes each opportunity's title and reason in English. When your interf
 - **Suggested** picks a period, all time, this month, the last 30 days or your own dates, and the order: highest score, newest or oldest.
 - Archived opportunities stay hidden unless you filter to them.
 - Most filters and the order stay in the page's address, so a link opens the same view; the topic and the search don't.
-- **Export CSV** downloads every opportunity that matches the filters and the search, not only the page you see.
+- **Export CSV**, the download icon at the top right, downloads every opportunity that matches the filters and the search, not only the page you see.
 
 ## Quick actions on a row
 
@@ -111,9 +111,9 @@ New opportunities come from a monthly allowance set by your plan, with a cap on 
 After each day's tracking run, Ansvisor writes new opportunities by itself, on a plan with an active subscription:
 
 - **Up to 3 a night**, one per topic, for groups of prompts with tracked answers and no opportunity yet. That's at most 21 a week, but only as many as there are such groups: new groups come when you add prompts.
-- **When no group is left, at most 1 a night** as another angle (at most 7 a week). It goes to the group with the most estimated AI volume whose opportunity has been done for 30 days, where your brand is still mentioned or cited in fewer than 1 in 5 answers. On many nights nothing qualifies, and nothing is written.
+- **When no group is left, at most 1 a night** as another angle (at most 7 a week), for the group with the most estimated AI volume whose opportunity was done 30 days ago and where your brand still shows in fewer than 1 in 5 answers. Often nothing qualifies.
 
-When none can be added, a note above the list says why: every group has an opportunity, or the month's allowance is used up.
+When none can be added, a note above the list says why: every group has an opportunity, or the month's allowance is used up. Then Ansvisor also refreshes your prompt suggestions, at most weekly, so new prompts can open new groups.
 
 ## While the first tracking runs
 
