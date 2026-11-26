@@ -696,6 +696,8 @@ describe('a brand added (00482)', () => {
     });
     expect(runs()).toHaveLength(1);
     expect(claims()).toHaveLength(1);
+    // No ref: the claim works on the key before 00558 too (deploy, then migrate).
+    expect(Object.keys(claims()[0])).not.toContain('ref');
   });
 
   it('runs on a second new brand minutes later: the cooldown reads the brand’s own runs', async () => {
