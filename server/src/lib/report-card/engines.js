@@ -1,5 +1,5 @@
 import logger from '../logger.js';
-import { answerProvider } from '../answer-providers/index.js';
+import { providerFor, supportedCountries } from '../answer-providers/index.js';
 import { supportsCountry } from '../cloro-countries.js';
 
 /**
@@ -49,7 +49,8 @@ async function pool(jobs, limit) {
 }
 
 /** Whether an error is Google showing no AI Overview for the question: no answer to count. */
-const noOverview = (err) => /did not return an AI Overview/i.test(String(err?.message ?? ''));
+const noOverview = (err) =>
+  /did not return an AI Overview|Gemini did not answer from/i.test(String(err?.message ?? ''));
 
 /**
  * The answers: one row per question and engine asked, with the answer's
@@ -66,8 +67,10 @@ export async function askEngines(
   questions,
   country,
   {
-    submit = answerProvider().submitScraperTask,
-    poll = answerProvider().pollScraperResult,
+    // Each engine on its own provider (PLATFORM_PROVIDER_OVERRIDES).
+    submit = (text, engine, region, opts) =>
+      providerFor(engine).submitScraperTask(text, engine, region, opts),
+    poll = (taskId, engine, opts) => providerFor(engine).pollScraperResult(taskId, engine, opts),
     supported = null,
     inFlight = IN_FLIGHT,
     maxWaitMs = MAX_WAIT_MS,
@@ -75,11 +78,7 @@ export async function askEngines(
     clock = Date.now,
   } = {},
 ) {
-  const countries =
-    supported ??
-    (await answerProvider()
-      .supportedCountries()
-      .catch(() => new Map()));
+  const countries = supported ?? (await supportedCountries().catch(() => new Map()));
   const engines = REPORT_CARD_ENGINES.filter((engine) =>
     supportsCountry(countries, engine, country),
   );
@@ -91,7 +90,10 @@ export async function askEngines(
         const { taskId } = await submit(question.text, engine, country);
         try {
           const left = Math.max(deadline - clock(), 0);
-          const answer = await poll(taskId, engine, { maxWaitMs: Math.min(maxWaitMs, left) });
+          const answer = await poll(taskId, engine, {
+            maxWaitMs: Math.min(maxWaitMs, left),
+            region: country,
+          });
           return {
             question: index,
             engine,

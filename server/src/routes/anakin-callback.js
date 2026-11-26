@@ -155,7 +155,7 @@ router.post('/', async (req, res) => {
     // Briefing) is a done task: its row goes, so the run isn't held open.
     let aiResponse;
     try {
-      aiResponse = parseScraperResponse(job, pending.scraper_id);
+      aiResponse = parseScraperResponse(job, pending.scraper_id, { region: pending.region });
     } catch (err) {
       req.log.info(
         { taskId, scraperId: pending.scraper_id, reason: err.message },

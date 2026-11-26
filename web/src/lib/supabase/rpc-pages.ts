@@ -34,3 +34,45 @@ export async function readAllRpcRows<T>(
   console.warn(`[rpc-pages] stopped after ${MAX_PAGES} pages; the result may be incomplete`);
   return rows;
 }
+
+/**
+ * Every row a set-returning RPC gives back, as readAllRpcRows, but past the
+ * first page in groups of `batch` pages at once: a result under a page still
+ * takes one request, and a long one waits a round trip per group instead of
+ * per page. Each page re-runs the RPC, so a group past the end costs those
+ * extra runs; `maxRows` stops at a limit the RPC itself applies (p_limit).
+ * `page` must ask in a fixed, total order (a tie-breaking last key), or a
+ * row can repeat or go missing between pages.
+ */
+export async function readAllRpcRowsParallel<T>(
+  page: (
+    from: number,
+    to: number,
+  ) => PromiseLike<{ data: T[] | null; error: { message: string } | null }>,
+  { batch = 4, maxRows = Number.POSITIVE_INFINITY }: { batch?: number; maxRows?: number } = {},
+): Promise<T[]> {
+  const read = async (i: number) => {
+    const from = i * RPC_PAGE_SIZE;
+    const { data, error } = await page(from, from + RPC_PAGE_SIZE - 1);
+    if (error) throw new Error(error.message);
+    return data ?? [];
+  };
+  const pages = Math.min(MAX_PAGES, Math.ceil(maxRows / RPC_PAGE_SIZE));
+  const rows: T[] = [];
+  const first = await read(0);
+  rows.push(...first);
+  if (first.length < RPC_PAGE_SIZE) return rows.slice(0, maxRows);
+  for (let next = 1; next < pages; next += batch) {
+    const group = await Promise.all(
+      Array.from({ length: Math.min(batch, pages - next) }, (_, k) => read(next + k)),
+    );
+    for (const data of group) {
+      rows.push(...data);
+      if (data.length < RPC_PAGE_SIZE) return rows.slice(0, maxRows);
+    }
+  }
+  if (rows.length >= MAX_PAGES * RPC_PAGE_SIZE) {
+    console.warn(`[rpc-pages] stopped after ${MAX_PAGES} pages; the result may be incomplete`);
+  }
+  return rows.slice(0, maxRows);
+}

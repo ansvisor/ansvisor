@@ -1,7 +1,7 @@
 import supabaseAdmin from '../../config/supabase.js';
 import { computeAiVisibilityScore } from '../../config/visibility-score.js';
 import { chunkIds, selectInChunks } from '../chunked-in.js';
-import { answerProvider } from '../answer-providers/index.js';
+import { unavailablePlatforms } from '../answer-providers/index.js';
 import { logger } from '../logger.js';
 import { readAllRpcRows } from '../rpc-pages.js';
 import { resolve } from '../../config/action-engine.js';
@@ -79,7 +79,7 @@ const TRACKED_PLATFORMS = [
  * outage and hold back the drop and lost-citation warnings for every brand.
  */
 function outageWatchedPlatforms() {
-  const paused = answerProvider().unavailablePlatforms();
+  const paused = unavailablePlatforms();
   return TRACKED_PLATFORMS.filter((platform) => !paused.includes(platform));
 }
 

@@ -26,6 +26,13 @@ import { randomUUID } from 'node:crypto';
  * a claim id: written before this split, for both events at once, and kept
  * whether or not Resend got the welcome. The script re-sends those only with
  * --include-old-claims.
+ *
+ * A stuck claim is a new-style one written while the web's read-back got a
+ * memoized answer from before the claim (Next.js deduped the identical GET;
+ * fixed in web/src/lib/supabase/admin.ts): every sign-up from 19 Nov 2026
+ * until the fix ended in readback_mismatch, its claims kept and nothing
+ * sent, PostHog's `signed_up` included. The script re-sends those only with
+ * --stuck-since, for claims written from then until the run started.
  */
 
 /** The welcome Automation started then (13 Nov 2026, 00:00 Istanbul time). */
@@ -75,7 +82,13 @@ export function isOldClaim(meta) {
  */
 export function welcomeStatus(
   user,
-  { since = SIGNUP_EVENT_SINCE, includeEarlyOAuth = false, includeOldClaims = false } = {},
+  {
+    since = SIGNUP_EVENT_SINCE,
+    includeEarlyOAuth = false,
+    includeOldClaims = false,
+    stuckSince = null,
+    stuckUntil = null,
+  } = {},
 ) {
   const made = Date.parse(user?.created_at ?? '');
   if (!(made >= since) || !(made >= SIGNUP_EVENT_SINCE)) return 'before-since';
@@ -85,13 +98,51 @@ export function welcomeStatus(
   if (!user.last_sign_in_at) return 'never-signed-in';
   const meta = user.app_metadata ?? {};
   if (meta[WELCOME_CLAIM_KEY]) {
-    if (!isOldClaim(meta)) return 'claimed';
-    if (!includeOldClaims) return 'old-claim';
+    if (isOldClaim(meta)) {
+      if (!includeOldClaims) return 'old-claim';
+    } else if (!inWindow(meta[WELCOME_CLAIM_KEY], stuckSince, stuckUntil)) {
+      return 'claimed';
+    }
   }
   if (meta.provider !== 'email' && made < OAUTH_CALLBACK_SENT_UNTIL && !includeEarlyOAuth) {
     return 'early-oauth';
   }
   return 'owed';
+}
+
+/** Whether a claim's time is in [since, until): a stuck claim's window. */
+function inWindow(value, since, until) {
+  if (since == null || until == null) return false;
+  const at = Date.parse(typeof value === 'string' ? value : '');
+  return !Number.isNaN(at) && at >= since && at < until;
+}
+
+/**
+ * Whether a new-style welcome claim is stuck: written in [since, until), the
+ * window --stuck-since names. Such an account's welcome was never sent.
+ */
+export function isStuckClaim(meta, since, until) {
+  return (
+    Boolean(meta?.[WELCOME_CLAIM_KEY]) &&
+    !isOldClaim(meta) &&
+    inWindow(meta[WELCOME_CLAIM_KEY], since, until)
+  );
+}
+
+/** Whether PostHog's `signed_up` claim is stuck too: written in [since, until). */
+export function isStuckPosthogClaim(meta, since, until) {
+  return inWindow(meta?.[POSTHOG_CLAIM_KEY], since, until);
+}
+
+/**
+ * PostHog's `signed_up` properties, as the web sends them (signupSource in
+ * web/src/lib/signup-event.ts): how the person signed up, never who.
+ */
+export function signupSourceOf(user) {
+  const provider = user?.app_metadata?.provider;
+  return provider === 'email'
+    ? { source: 'email' }
+    : { source: 'oauth', provider: provider ?? null };
 }
 
 async function readUser(admin, id) {
@@ -114,7 +165,7 @@ async function readUser(admin, id) {
 export async function claimWelcome(
   admin,
   id,
-  { isOwed, sleep, now = Date.now, newClaimId = randomUUID },
+  { isOwed, sleep, now = Date.now, newClaimId = randomUUID, restampPosthog = false },
 ) {
   const current = await readUser(admin, id);
   if (!current || !isOwed(current)) return null;
@@ -130,6 +181,8 @@ export async function claimWelcome(
       ...(isOldClaim(before)
         ? { [POSTHOG_CLAIM_KEY]: before[POSTHOG_CLAIM_KEY] ?? before[WELCOME_CLAIM_KEY] }
         : {}),
+      // A stuck PostHog claim is sent now: stamped now, so it is never stuck again.
+      ...(restampPosthog ? { [POSTHOG_CLAIM_KEY]: at } : {}),
     },
   });
   if (error) return null;

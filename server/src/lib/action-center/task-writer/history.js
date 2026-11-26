@@ -88,7 +88,11 @@ export async function loadPastRounds(action, { skip = () => false, limit = PAST_
     .order('updated_at', { ascending: false })
     .limit(limit + 1);
   if (error) throw new Error(`past rounds read failed: ${error.message}`);
-  const rows = (data ?? []).filter((row) => row.id !== action.id).slice(0, limit);
+  // A round replaced after it went stale (00563) was never worked on or
+  // turned down: it tells the writer nothing.
+  const rows = (data ?? [])
+    .filter((row) => row.id !== action.id && row.dismiss_reason !== 'replaced')
+    .slice(0, limit);
   if (rows.length === 0) return [];
 
   const { data: tasks, error: tasksError } = await supabaseAdmin

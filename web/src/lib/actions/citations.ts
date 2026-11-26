@@ -1,5 +1,6 @@
 'use server';
 
+import { readAllRpcRowsParallel } from '@/lib/supabase/rpc-pages';
 import { createClient } from '@/lib/supabase/server';
 import { dbClient } from '@/lib/supabase/scoped';
 import { expandDateToEndOfDay } from '@/lib/dates';
@@ -270,18 +271,47 @@ export async function getCitationsOverview(
     ? null
     : overviewArgs(brandId, filters, await resolveTopicPromptIds(supabase, filters));
   const daily = window ? dailyArgs(brandId, filters, window) : null;
+  // Every domain: PostgREST answers at most 1000 rows, and a page past the
+  // largest brands' top 1000 used to vanish, capping Unique domains, the
+  // citations total and Source types at that slice. Ordered to the last key,
+  // so a page never repeats or skips a domain.
   const readDomains = () =>
-    daily
-      ? supabase.rpc('citations_domains_daily', daily)
-      : supabase.rpc('citations_domains', rawArgs!);
+    readAllRpcRowsParallel<DomainAggRow>((from, to) =>
+      (daily
+        ? supabase.rpc('citations_domains_daily', daily)
+        : supabase.rpc('citations_domains', rawArgs!)
+      )
+        .order('total_citations', { ascending: false })
+        .order('domain', { ascending: true })
+        .range(from, to),
+    ).then(
+      (data) => ({ data, error: null }),
+      (err: Error) => ({ data: null, error: { message: err.message } }),
+    );
   const readStats = () =>
     daily
       ? supabase.rpc('citations_window_stats_daily', daily)
       : supabase.rpc('citations_window_stats', rawArgs!);
+  // The top CITATIONS_URL_LIMIT URLs, which PostgREST would cut to 1000.
   const readUrls = (extra: { p_domains?: string[]; p_exclude_domains?: string[] } = {}) =>
-    daily
-      ? supabase.rpc('citations_urls_daily', { ...daily, p_limit: CITATIONS_URL_LIMIT, ...extra })
-      : supabase.rpc('citations_urls', { ...rawArgs!, p_limit: CITATIONS_URL_LIMIT, ...extra });
+    readAllRpcRowsParallel<UrlAggRow>(
+      (from, to) =>
+        (daily
+          ? supabase.rpc('citations_urls_daily', {
+              ...daily,
+              p_limit: CITATIONS_URL_LIMIT,
+              ...extra,
+            })
+          : supabase.rpc('citations_urls', { ...rawArgs!, p_limit: CITATIONS_URL_LIMIT, ...extra })
+        )
+          .order('total_citations', { ascending: false })
+          .order('url', { ascending: true })
+          .range(from, to),
+      { maxRows: CITATIONS_URL_LIMIT },
+    ).then(
+      (data) => ({ data, error: null }),
+      (err: Error) => ({ data: null, error: { message: err.message } }),
+    );
   const scoped = Boolean(filters.sourceScope && filters.sourceScope !== 'all');
 
   // A scope is resolved from the classified domain list, so a scoped URL query
