@@ -20,6 +20,7 @@ import { importPrompts } from '@/lib/actions/prompt';
 import { useWaitingForSpotToast } from '@/components/prompts/waiting-for-spot';
 import {
   MAX_IMPORT_ROWS,
+  MAX_PROMPT_LENGTH,
   TEMPLATE_HEADER,
   TEMPLATE_ROWS,
   buildPreview,
@@ -55,24 +56,31 @@ function downloadCsv(name: string, csv: string) {
   URL.revokeObjectURL(url);
 }
 
-const STATUS_BADGE: Record<ImportRow['status'], { label: string; className: string }> = {
+/** Each status's look; its name is prompts.bulkImport.status.<status>. */
+const STATUS_BADGE: Record<ImportRow['status'], { className: string }> = {
   valid: {
-    label: 'Valid',
     className: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300',
   },
   duplicate: {
-    label: 'Duplicate',
     className: 'border-muted-foreground/30 text-muted-foreground',
   },
   error: {
-    label: 'Error',
     className: 'border-red-500/30 bg-red-500/10 text-red-700 dark:text-red-300',
   },
   over_limit: {
-    label: 'Over plan limit',
     className: 'border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300',
   },
 };
+
+/**
+ * Why a row is skipped, as the reader's language says it: from the row's
+ * status (buildPreview's reasons, which the errors CSV keeps in English).
+ */
+function reasonKey(row: ImportRow): 'empty' | 'tooLong' | 'duplicate' | null {
+  if (row.status === 'duplicate') return 'duplicate';
+  if (row.status === 'error') return row.text ? 'tooLong' : 'empty';
+  return null;
+}
 
 export function BulkImportPrompts({
   brandId,
@@ -95,6 +103,7 @@ export function BulkImportPrompts({
   // The rows past the plan's limit are imported too, saved waiting for a
   // spot, so the preview holds none back.
   const tWaiting = useTranslations('prompts.waiting');
+  const t = useTranslations('prompts.bulkImport');
   const showWaiting = useWaitingForSpotToast();
 
   const preview = useMemo(
@@ -105,25 +114,28 @@ export function BulkImportPrompts({
   const waitingRows =
     planSlots !== -1 && preview ? Math.max(0, preview.counts.valid - planSlots) : 0;
 
-  const readFile = useCallback(async (file: File) => {
-    setReadError(null);
-    setSheet(null);
-    setFileName(file.name);
-    const name = file.name.toLowerCase();
-    try {
-      if (name.endsWith('.csv')) {
-        setSheet(parseCsv(await file.text()));
-      } else if (name.endsWith('.xlsx')) {
-        // Loaded on demand: the reader is only needed when someone imports.
-        const { readSheet } = await import('read-excel-file/browser');
-        setSheet(cellsToText((await readSheet(file)) as unknown[][]));
-      } else {
-        setReadError('Choose an .xlsx or .csv file.');
+  const readFile = useCallback(
+    async (file: File) => {
+      setReadError(null);
+      setSheet(null);
+      setFileName(file.name);
+      const name = file.name.toLowerCase();
+      try {
+        if (name.endsWith('.csv')) {
+          setSheet(parseCsv(await file.text()));
+        } else if (name.endsWith('.xlsx')) {
+          // Loaded on demand: the reader is only needed when someone imports.
+          const { readSheet } = await import('read-excel-file/browser');
+          setSheet(cellsToText((await readSheet(file)) as unknown[][]));
+        } else {
+          setReadError(t('chooseFile'));
+        }
+      } catch {
+        setReadError(t('unreadable'));
       }
-    } catch {
-      setReadError('This file could not be read. Check that it is a valid .xlsx or .csv file.');
-    }
-  }, []);
+    },
+    [t],
+  );
 
   const overRows = preview?.rows.filter((r) => r.status === 'over_limit') ?? [];
   const errorRows = preview?.rows.filter((r) => r.status === 'error') ?? [];
@@ -157,17 +169,13 @@ export function BulkImportPrompts({
       }
       toast.success(
         notImported > 0
-          ? `${imported} imported · ${notImported} not imported due to plan limit`
-          : `${imported} prompt${imported === 1 ? '' : 's'} imported`,
-        {
-          description: result.analysisStarted
-            ? 'Analyzing them now. Set topics and locations with Edit in All Prompts.'
-            : 'They will be picked up by the next tracking run.',
-        },
+          ? t('importedSome', { imported, notImported })
+          : t('importedAll', { count: imported }),
+        { description: result.analysisStarted ? t('analyzing') : t('nextRun') },
       );
       onImported();
     } catch {
-      toast.error('Import failed. Please try again.');
+      toast.error(t('failed'));
     } finally {
       setImporting(false);
     }
@@ -181,11 +189,9 @@ export function BulkImportPrompts({
       <div className="flex items-start gap-2 rounded-md bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
         <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
         <p>
-          Put your prompts in <span className="font-medium text-foreground">one column</span>, one
-          prompt per row, going down. A first row titled{' '}
-          <span className="font-medium text-foreground">Prompt</span> is read as the header
-          (optional). Imported prompts use the platforms selected under Single and the brand&apos;s
-          location; set each one&apos;s topic and location afterwards with Edit in All Prompts.
+          {t.rich('intro', {
+            b: (chunks) => <span className="font-medium text-foreground">{chunks}</span>,
+          })}
         </p>
       </div>
 
@@ -215,11 +221,9 @@ export function BulkImportPrompts({
         ) : (
           <Upload className="h-6 w-6 text-muted-foreground" />
         )}
-        <p className="font-medium">
-          {fileName ?? 'Drop an .xlsx or .csv file, or click to browse'}
-        </p>
+        <p className="font-medium">{fileName ?? t('drop')}</p>
         <p className="text-xs text-muted-foreground">
-          One prompt per row · up to {formatNumber(MAX_IMPORT_ROWS)} rows
+          {t('perRow', { max: formatNumber(MAX_IMPORT_ROWS) })}
         </p>
         <input
           ref={inputRef}
@@ -240,7 +244,7 @@ export function BulkImportPrompts({
         className={linkClass}
       >
         <Download className="h-3.5 w-3.5" />
-        Download template
+        {t('template')}
       </button>
 
       {readError && <p className="text-xs text-red-600 dark:text-red-400">{readError}</p>}
@@ -248,26 +252,29 @@ export function BulkImportPrompts({
       {preview && (
         <>
           <p className="text-sm">
-            <span className="font-medium">{preview.counts.valid} valid</span> ·{' '}
-            {preview.counts.duplicates} duplicate{preview.counts.duplicates === 1 ? '' : 's'} ·{' '}
-            {preview.counts.errors} error{preview.counts.errors === 1 ? '' : 's'}
+            {t.rich('counts', {
+              valid: preview.counts.valid,
+              duplicates: preview.counts.duplicates,
+              errors: preview.counts.errors,
+              b: (chunks) => <span className="font-medium">{chunks}</span>,
+            })}
             {quota && quota.maxPrompts !== -1 && (
               <span className="text-muted-foreground">
                 {' '}
-                · {quota.used} / {quota.maxPrompts} prompt locations in use
+                {t('inUse', { used: quota.used, max: quota.maxPrompts })}
               </span>
             )}
           </p>
           {preview.truncated > 0 && (
             <p className="text-xs text-amber-700 dark:text-amber-400">
-              Only the first {formatNumber(MAX_IMPORT_ROWS)} rows were read;{' '}
-              {formatNumber(preview.truncated)} more were left out. Split larger files.
+              {t('truncated', {
+                max: formatNumber(MAX_IMPORT_ROWS),
+                more: formatNumber(preview.truncated),
+              })}
             </p>
           )}
           {preview.extraColumns && (
-            <p className="text-xs text-muted-foreground">
-              Only the prompt column is read; the file&apos;s other columns were ignored.
-            </p>
+            <p className="text-xs text-muted-foreground">{t('extraColumns')}</p>
           )}
 
           {waitingRows > 0 && (
@@ -288,10 +295,21 @@ export function BulkImportPrompts({
               <div className="space-y-2">
                 <p className="text-amber-900 dark:text-amber-200">
                   {preview.counts.valid === 0
-                    ? `No prompts can be imported. Your ${quota.planName} plan tracks up to ${quota.maxPrompts} prompt locations and ${quota.used} are already in use.`
-                    : `Only ${preview.counts.valid} of ${totalCandidates} prompts will be imported. Your ${quota.planName} plan tracks up to ${quota.maxPrompts} prompt locations and ${quota.used} are already in use. The remaining ${overRows.length} prompt${overRows.length === 1 ? '' : 's'} (from row ${overRows[0].row}) won't be imported.`}{' '}
-                  To add more prompts,{' '}
-                  {quota.planId === 'starter' ? 'upgrade your plan' : 'contact us'}.
+                    ? t('noneImportable', {
+                        plan: quota.planName,
+                        max: quota.maxPrompts,
+                        used: quota.used,
+                      })
+                    : t('someImportable', {
+                        valid: preview.counts.valid,
+                        total: totalCandidates,
+                        plan: quota.planName,
+                        max: quota.maxPrompts,
+                        used: quota.used,
+                        count: overRows.length,
+                        row: overRows[0].row,
+                      })}{' '}
+                  {t('toAddMore', { starter: quota.planId === 'starter' ? 'yes' : 'no' })}
                 </p>
                 <div className="flex flex-wrap gap-2">{limitActions}</div>
               </div>
@@ -302,9 +320,9 @@ export function BulkImportPrompts({
             <table className="w-full text-xs">
               <thead className="sticky top-0 bg-muted text-start text-muted-foreground">
                 <tr>
-                  <th className="w-12 px-2 py-1.5 font-medium">Row</th>
-                  <th className="px-2 py-1.5 font-medium">Prompt</th>
-                  <th className="w-40 px-2 py-1.5 font-medium">Status</th>
+                  <th className="w-12 px-2 py-1.5 font-medium">{t('head.row')}</th>
+                  <th className="px-2 py-1.5 font-medium">{t('head.prompt')}</th>
+                  <th className="w-40 px-2 py-1.5 font-medium">{t('head.status')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -317,10 +335,12 @@ export function BulkImportPrompts({
                         variant="outline"
                         className={cn('text-[10px]', STATUS_BADGE[r.status].className)}
                       >
-                        {STATUS_BADGE[r.status].label}
+                        {t(`status.${r.status}`)}
                       </Badge>
-                      {r.reason && r.status !== 'over_limit' && (
-                        <p className="mt-0.5 text-[11px] text-muted-foreground">{r.reason}</p>
+                      {reasonKey(r) && (
+                        <p className="mt-0.5 text-[11px] text-muted-foreground">
+                          {t(`reason.${reasonKey(r)}`, { max: MAX_PROMPT_LENGTH })}
+                        </p>
                       )}
                     </td>
                   </tr>
@@ -343,7 +363,7 @@ export function BulkImportPrompts({
                   className={linkClass}
                 >
                   <Download className="h-3.5 w-3.5" />
-                  Download not-imported prompts (.csv)
+                  {t('downloadNotImported')}
                 </button>
               )}
               {errorRows.length > 0 && (
@@ -358,7 +378,7 @@ export function BulkImportPrompts({
                   className={linkClass}
                 >
                   <Download className="h-3.5 w-3.5" />
-                  Download errors (.csv)
+                  {t('downloadErrors')}
                 </button>
               )}
             </div>
@@ -372,7 +392,7 @@ export function BulkImportPrompts({
               ) : (
                 <Upload className="me-2 h-4 w-4" />
               )}
-              Import {preview.counts.valid} prompt{preview.counts.valid === 1 ? '' : 's'}
+              {t('importButton', { count: preview.counts.valid })}
             </Button>
           </div>
         </>

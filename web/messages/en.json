@@ -15392,6 +15392,155 @@
     }
   },
   "prompts": {
+    "positionsSheet": {
+      "tracked": "Tracked prompt",
+      "paused": "Paused",
+      "improvingTitle": "Open the action and its Outcome",
+      "improving": "Improving · {code}",
+      "window": "{preset, select, custom {Custom range} other {Last {preset}}}",
+      "lastRun": "Last run: {at}",
+      "runs": "{count, plural, one {# run} other {# runs}}",
+      "period": "Period",
+      "discardNote": "Changing the period discards your unsent Improve edits.",
+      "keepEditing": "Keep editing",
+      "discard": "Discard & change",
+      "aiAnswers": "AI answers",
+      "back": "Back to prompts",
+      "loading": "Loading positions",
+      "loadError": "Couldn't load positions: {message}",
+      "retry": "Retry",
+      "noLongerAvailable": "This prompt is no longer available.",
+      "loadFailed": "Failed to load positions.",
+      "sentimentUnavailable": "Sentiment unavailable",
+      "sentiment": {
+        "positive": "positive",
+        "neutral": "neutral",
+        "negative": "negative"
+      },
+      "notMentioned": "Not mentioned",
+      "mentioned": "Mentioned",
+      "positionUnavailable": "Position unavailable",
+      "notCited": "Not cited",
+      "cited": "Cited",
+      "locked": {
+        "growth": "Available on Growth",
+        "notEnabled": "Not enabled for this workspace",
+        "enterprise": "Available on Enterprise",
+        "line": "{note} · {growth, select, yes {Upgrade} other {Contact us}} to track {platform} results and positions."
+      },
+      "upgrade": "Upgrade",
+      "contactUs": "Contact us",
+      "improve": "Improve",
+      "stat": {
+        "platformsAnswered": "Platforms answered",
+        "inLatestRun": "in their latest run",
+        "mentionedOn": "Mentioned on",
+        "citedOn": "Cited on",
+        "platforms": "platforms",
+        "avgPosition": "Avg. position",
+        "whenMentioned": "when mentioned",
+        "whenMentionedSources": "when mentioned · {avg} in sources",
+        "runs": "Runs",
+        "trackedOf": "{tracked} of {count, plural, one {# day} other {# days}} tracked",
+        "mentioned": "Mentioned",
+        "cited": "Cited",
+        "ofDays": "{n} / {count, plural, one {# day} other {# days}}",
+        "notMentionedCount": "{count} not mentioned",
+        "notCitedCount": "{count} not cited"
+      },
+      "tabs": {
+        "platforms": "Platform results",
+        "history": "Daily history ({count})"
+      },
+      "runAt": "Run at {at}",
+      "noRuns": "No completed tracking runs in this period",
+      "noRunsDot": "No completed tracking runs in this period.",
+      "mention": "Mention",
+      "citation": "Citation",
+      "detectedEarlier": "Detected earlier in this period",
+      "untracked": "{count, plural, one {# day} other {# days}} without a completed run. Untracked days don't count as not mentioned or not cited.",
+      "blocksNote": "Each block is one day in the selected range, in your time zone. Hover a block for that day's positions; open a platform for every run.",
+      "legend": {
+        "Early": "Mentioned early",
+        "Mid": "Mid",
+        "Late": "Late",
+        "cited": "Cited only",
+        "none": "No result",
+        "untracked": "Not tracked"
+      },
+      "tone": {
+        "Early": "Early",
+        "Mid": "Mid",
+        "Late": "Late"
+      },
+      "tip": {
+        "share": " in {n} of {runs} runs",
+        "rankOf": "#{rank} of {total}"
+      },
+      "heatmapLabel": "{platform}: mentioned on {mentioned} and cited on {cited} of {count, plural, one {# tracked day} other {# tracked days}}",
+      "trio": {
+        "best": "Best",
+        "worst": "Worst",
+        "avg": "Avg.",
+        "none": "No mention position",
+        "title": "Position when mentioned"
+      },
+      "runsNote": "{runs} runs · mentioned in {mentioned} · cited in {cited}",
+      "noData": "No tracking data for this period",
+      "toggle": "{open, select, yes {Hide} other {Show}} daily {platform} results",
+      "runsOnDays": "{runs, plural, one {# run} other {# runs}} on {days, plural, one {# day} other {# days}}",
+      "sentimentLine": " · sentiment in mentioning answers: {positive} positive, {neutral} neutral, {negative} negative",
+      "sentimentUnavailableTail": ", {count} unavailable",
+      "moreDays": "Show {count} more days",
+      "platformsAnswered": "{count, plural, one {# platform} other {# platforms}} answered"
+    },
+    "bulkImport": {
+      "intro": "Put your prompts in <b>one column</b>, one prompt per row, going down. A first row titled <b>Prompt</b> is read as the header (optional). Imported prompts use the platforms selected under Single and the brand's location; set each one's topic and location afterwards with Edit in All Prompts.",
+      "drop": "Drop an .xlsx or .csv file, or click to browse",
+      "perRow": "One prompt per row · up to {max} rows",
+      "template": "Download template",
+      "chooseFile": "Choose an .xlsx or .csv file.",
+      "unreadable": "This file could not be read. Check that it is a valid .xlsx or .csv file.",
+      "counts": "<b>{valid} valid</b> · {duplicates, plural, one {# duplicate} other {# duplicates}} · {errors, plural, one {# error} other {# errors}}",
+      "inUse": "· {used} / {max} prompt locations in use",
+      "truncated": "Only the first {max} rows were read; {more} more were left out. Split larger files.",
+      "extraColumns": "Only the prompt column is read; the file's other columns were ignored.",
+      "noneImportable": "No prompts can be imported. Your {plan} plan tracks up to {max} prompt locations and {used} are already in use.",
+      "someImportable": "Only {valid} of {total} prompts will be imported. Your {plan} plan tracks up to {max} prompt locations and {used} are already in use. The remaining {count, plural, one {# prompt} other {# prompts}} (from row {row}) won't be imported.",
+      "toAddMore": "To add more prompts, {starter, select, yes {upgrade your plan} other {contact us}}.",
+      "head": {
+        "row": "Row",
+        "prompt": "Prompt",
+        "status": "Status"
+      },
+      "status": {
+        "valid": "Valid",
+        "duplicate": "Duplicate",
+        "error": "Error",
+        "over_limit": "Over plan limit"
+      },
+      "reason": {
+        "empty": "Empty prompt",
+        "tooLong": "Longer than {max} characters",
+        "duplicate": "Already tracked or repeated in the file"
+      },
+      "downloadNotImported": "Download not-imported prompts (.csv)",
+      "downloadErrors": "Download errors (.csv)",
+      "importButton": "Import {count, plural, one {# prompt} other {# prompts}}",
+      "importedSome": "{imported} imported · {notImported} not imported due to plan limit",
+      "importedAll": "{count, plural, one {# prompt imported} other {# prompts imported}}",
+      "analyzing": "Analyzing them now. Set topics and locations with Edit in All Prompts.",
+      "nextRun": "They will be picked up by the next tracking run.",
+      "failed": "Import failed. Please try again."
+    },
+    "workStatus": {
+      "todo": "To do",
+      "in_progress": "In progress",
+      "done": "Done",
+      "set": "Set status",
+      "setLabel": "Set work status",
+      "none": "No status"
+    },
     "waiting": {
       "resultTitle": "{added} added, {waiting} waiting for a spot",
       "savedTitle": "{count, plural, one {Saved, but not tracked yet} other {# prompts saved, but not tracked yet}}",

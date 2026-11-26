@@ -15776,6 +15776,155 @@
     }
   },
   "prompts": {
+    "positionsSheet": {
+      "tracked": "Takip edilen Prompt",
+      "paused": "x",
+      "improvingTitle": "Aksiyonu ve Sonucunu aç",
+      "improving": "İyileşiyor · {code}",
+      "window": "{preset, select, custom {Özel aralık} other {Son {preset}}}",
+      "lastRun": "Son çalıştırma: {at}",
+      "runs": "{count, plural, one {# çalıştırma} other {# çalıştırma}}",
+      "period": "Dönem",
+      "discardNote": "Dönemi değiştirmek, gönderilmemiş İyileştir düzenlemelerinizi siler.",
+      "keepEditing": "Düzenlemeye devam et",
+      "discard": "Sil ve değiştir",
+      "aiAnswers": "AI yanıtları",
+      "back": "Prompt'lara dön",
+      "loading": "Konumlar yükleniyor",
+      "loadError": "Konumlar yüklenemedi: {message}",
+      "retry": "Yeniden dene",
+      "noLongerAvailable": "Bu Prompt artık mevcut değil.",
+      "loadFailed": "Konumlar yüklenemedi.",
+      "sentimentUnavailable": "Duygu analizi kullanılamıyor",
+      "sentiment": {
+        "positive": "olumlu",
+        "neutral": "nötr",
+        "negative": "olumsuz"
+      },
+      "notMentioned": "Bahsedilmedi",
+      "mentioned": "Bahsedildi",
+      "positionUnavailable": "Konum kullanılamıyor",
+      "notCited": "Atıf yapılmadı",
+      "cited": "Atıf yapıldı",
+      "locked": {
+        "growth": "Growth planında kullanılabilir",
+        "notEnabled": "Bu çalışma alanı için etkin değil",
+        "enterprise": "Enterprise planında kullanılabilir",
+        "line": "{note} · {platform} sonuçlarını ve konumlarını takip etmek için {growth, select, yes {yükseltin} other {bizimle iletişime geçin}}."
+      },
+      "upgrade": "Yükselt",
+      "contactUs": "Bizimle iletişime geçin",
+      "improve": "İyileştir",
+      "stat": {
+        "platformsAnswered": "Yanıt veren platformlar",
+        "inLatestRun": "son çalıştırmalarında",
+        "mentionedOn": "Bahsedilen platform",
+        "citedOn": "Atıf yapılan platform",
+        "platforms": "platform",
+        "avgPosition": "Ort. konum",
+        "whenMentioned": "bahsedildiğinde",
+        "whenMentionedSources": "bahsedildiğinde · kaynaklarda {avg}",
+        "runs": "Çalıştırmalar",
+        "trackedOf": "{count, plural, one {# gün} other {# gün}} içinde {tracked} gün takip edildi",
+        "mentioned": "Bahsedildi",
+        "cited": "Atıf yapıldı",
+        "ofDays": "{n} / {count, plural, one {# gün} other {# gün}}",
+        "notMentionedCount": "{count} bahsedilmedi",
+        "notCitedCount": "{count} atıf yapılmadı"
+      },
+      "tabs": {
+        "platforms": "Platform sonuçları",
+        "history": "Günlük geçmiş ({count})"
+      },
+      "runAt": "Çalıştırma zamanı: {at}",
+      "noRuns": "Bu dönemde tamamlanmış takip çalıştırması yok",
+      "noRunsDot": "Bu dönemde tamamlanmış takip çalıştırması yok.",
+      "mention": "Bahsedilme",
+      "citation": "Atıf",
+      "detectedEarlier": "Bu dönemde daha önce tespit edildi",
+      "untracked": "{count, plural, one {# gün} other {# gün}} tamamlanmış çalıştırma yok. Takip edilmeyen günler bahsedilmedi veya atıf yapılmadı olarak sayılmaz.",
+      "blocksNote": "Her blok, seçili aralıktaki bir günü temsil eder ve saat diliminize göre gösterilir. O günün konumları için bloğun üzerine gelin; tüm çalıştırmalar için bir platformu açın.",
+      "legend": {
+        "Early": "Erken bahsedildi",
+        "Mid": "Orta",
+        "Late": "Geç",
+        "cited": "Yalnızca atıf",
+        "none": "Sonuç yok",
+        "untracked": "Takip edilmedi"
+      },
+      "tone": {
+        "Early": "Erken",
+        "Mid": "Orta",
+        "Late": "Geç"
+      },
+      "tip": {
+        "share": " {runs} çalıştırmanın {n} tanesinde",
+        "rankOf": "#{rank} / {total}"
+      },
+      "heatmapLabel": "{platform}: takip edilen {count, plural, one {# gün} other {# gün}} içinde {mentioned} gün bahsedildi, {cited} gün atıf yapıldı",
+      "trio": {
+        "best": "En iyi",
+        "worst": "En kötü",
+        "avg": "Ort.",
+        "none": "Bahsedilme konumu yok",
+        "title": "Bahsedildiğinde konum"
+      },
+      "runsNote": "{runs} çalıştırma · {mentioned} içinde bahsedildi · {cited} içinde atıf yapıldı",
+      "noData": "Bu dönem için takip verisi yok",
+      "toggle": "{platform} günlük sonuçlarını {open, select, yes {gizle} other {göster}}",
+      "runsOnDays": "{days, plural, one {# gün} other {# gün}} içinde {runs, plural, one {# çalıştırma} other {# çalıştırma}}",
+      "sentimentLine": " · bahsedilen yanıtlardaki duygu durumu: {positive} olumlu, {neutral} nötr, {negative} olumsuz",
+      "sentimentUnavailableTail": ", {count} kullanılamıyor",
+      "moreDays": "{count} gün daha göster",
+      "platformsAnswered": "{count, plural, one {# platform} other {# platform}} yanıtladı"
+    },
+    "bulkImport": {
+      "intro": "Prompt'larınızı <b>tek bir sütuna</b>, her satıra bir Prompt gelecek şekilde aşağı doğru yazın. <b>Prompt</b> başlıklı ilk satır üst bilgi olarak okunur (isteğe bağlı). İçe aktarılan Prompt'lar, Tekli bölümünde seçilen platformları ve markanın konumunu kullanır; her birinin konusunu ve konumunu daha sonra Tüm Prompt'lar içinde Düzenle ile belirleyin.",
+      "drop": ".xlsx veya .csv dosyasını bırakın ya da göz atmak için tıklayın",
+      "perRow": "Satır başına bir Prompt · en fazla {max} satır",
+      "template": "Şablonu indir",
+      "chooseFile": "Bir .xlsx veya .csv dosyası seçin.",
+      "unreadable": "Bu dosya okunamadı. Geçerli bir .xlsx veya .csv dosyası olduğunu kontrol edin.",
+      "counts": "<b>{valid} geçerli</b> · {duplicates, plural, one {# yinelenen} other {# yinelenen}} · {errors, plural, one {# hata} other {# hata}}",
+      "inUse": "· {used} / {max} Prompt konumu kullanımda",
+      "truncated": "Yalnızca ilk {max} satır okundu; {more} satır dışarıda bırakıldı. Daha büyük dosyaları bölün.",
+      "extraColumns": "Yalnızca Prompt sütunu okunur; dosyadaki diğer sütunlar yok sayıldı.",
+      "noneImportable": "Hiçbir Prompt içe aktarılamıyor. {plan} planınız en fazla {max} Prompt konumunu takip eder ve {used} tanesi zaten kullanımda.",
+      "someImportable": "{total} Prompt'tan yalnızca {valid} tanesi içe aktarılacak. {plan} planınız en fazla {max} Prompt konumunu takip eder ve {used} tanesi zaten kullanımda. Kalan {count, plural, one {# Prompt} other {# Prompt}} ({row}. satırdan itibaren) içe aktarılmayacak.",
+      "toAddMore": "Daha fazla Prompt eklemek için {starter, select, yes {planınızı yükseltin} other {bizimle iletişime geçin}}.",
+      "head": {
+        "row": "Satır",
+        "prompt": "Prompt",
+        "status": "Durum"
+      },
+      "status": {
+        "valid": "Geçerli",
+        "duplicate": "Yinelenen",
+        "error": "Hata",
+        "over_limit": "Plan sınırı aşıldı"
+      },
+      "reason": {
+        "empty": "Boş Prompt",
+        "tooLong": "{max} karakterden uzun",
+        "duplicate": "Zaten takip ediliyor veya dosyada tekrarlanıyor"
+      },
+      "downloadNotImported": "İçe aktarılmayan Prompt'ları indir (.csv)",
+      "downloadErrors": "Hataları indir (.csv)",
+      "importButton": "{count, plural, one {# Prompt} other {# Prompt}} içe aktar",
+      "importedSome": "{imported} içe aktarıldı · {notImported} plan sınırı nedeniyle içe aktarılmadı",
+      "importedAll": "{count, plural, one {# Prompt içe aktarıldı} other {# Prompt içe aktarıldı}}",
+      "analyzing": "Şimdi analiz ediliyorlar. Konuları ve konumları Tüm Prompt'lar içinde Düzenle ile belirleyin.",
+      "nextRun": "Bir sonraki takip çalıştırmasında işleme alınacaklar.",
+      "failed": "İçe aktarma başarısız oldu. Lütfen tekrar deneyin."
+    },
+    "workStatus": {
+      "todo": "Yapılacak",
+      "in_progress": "Devam ediyor",
+      "done": "Tamamlandı",
+      "set": "Durumu ayarla",
+      "setLabel": "Çalışma durumunu ayarla",
+      "none": "Durum yok"
+    },
     "waiting": {
       "resultTitle": "{added} eklendi, {waiting} sıra bekliyor",
       "savedTitle": "{count, plural, one {Kaydedildi, ancak henüz takip edilmiyor} other {# Prompt kaydedildi, ancak henüz takip edilmiyor}}",

@@ -15735,6 +15735,155 @@
     }
   },
   "prompts": {
+    "positionsSheet": {
+      "tracked": "已跟踪的 Prompt",
+      "paused": "已暂停",
+      "improvingTitle": "打开操作及其成果",
+      "improving": "改进中 · {code}",
+      "window": "{preset, select, custom {自定义范围} other {最近 {preset}}}",
+      "lastRun": "上次运行:{at}",
+      "runs": "{count, plural, other {# 次运行}}",
+      "period": "时间段",
+      "discardNote": "更改时间段将丢弃您尚未提交的改进编辑内容。",
+      "keepEditing": "继续编辑",
+      "discard": "丢弃并更改",
+      "aiAnswers": "AI 回答",
+      "back": "返回 Prompts",
+      "loading": "正在加载排名",
+      "loadError": "无法加载排名:{message}",
+      "retry": "重试",
+      "noLongerAvailable": "此 Prompt 已不可用。",
+      "loadFailed": "加载排名失败。",
+      "sentimentUnavailable": "情感倾向不可用",
+      "sentiment": {
+        "positive": "正面",
+        "neutral": "中性",
+        "negative": "负面"
+      },
+      "notMentioned": "未被提及",
+      "mentioned": "已被提及",
+      "positionUnavailable": "排名不可用",
+      "notCited": "未被引用",
+      "cited": "已被引用",
+      "locked": {
+        "growth": "Growth 套餐可用",
+        "notEnabled": "此工作区未启用",
+        "enterprise": "Enterprise 套餐可用",
+        "line": "{note} · {growth, select, yes {升级} other {联系我们}}以跟踪 {platform} 的结果和排名。"
+      },
+      "upgrade": "升级",
+      "contactUs": "联系我们",
+      "improve": "改进",
+      "stat": {
+        "platformsAnswered": "已回答的平台",
+        "inLatestRun": "在其最近一次运行中",
+        "mentionedOn": "被提及的平台",
+        "citedOn": "被引用的平台",
+        "platforms": "个平台",
+        "avgPosition": "平均排名",
+        "whenMentioned": "被提及时",
+        "whenMentionedSources": "被提及时 · 来源中为 {avg}",
+        "runs": "运行次数",
+        "trackedOf": "共 {count, plural, other {# 天}}，已追踪 {tracked} 天",
+        "mentioned": "已提及",
+        "cited": "已引用",
+        "ofDays": "{n} / {count, plural, other {# 天}}",
+        "notMentionedCount": "{count} 次未提及",
+        "notCitedCount": "{count} 次未引用"
+      },
+      "tabs": {
+        "platforms": "平台结果",
+        "history": "每日历史（{count}）"
+      },
+      "runAt": "运行时间：{at}",
+      "noRuns": "此期间没有已完成的追踪运行",
+      "noRunsDot": "此期间没有已完成的追踪运行。",
+      "mention": "提及",
+      "citation": "引用",
+      "detectedEarlier": "在此期间早些时候已检测到",
+      "untracked": "{count, plural, other {# 天}}没有已完成的运行。未追踪的日期不会计为未提及或未引用。",
+      "blocksNote": "每个方块代表所选范围内按您所在时区计算的一天。将鼠标悬停在方块上可查看当天的排名位置；打开平台可查看每次运行。",
+      "legend": {
+        "Early": "较早提及",
+        "Mid": "中间",
+        "Late": "较晚",
+        "cited": "仅被引用",
+        "none": "无结果",
+        "untracked": "未追踪"
+      },
+      "tone": {
+        "Early": "较早",
+        "Mid": "中间",
+        "Late": "较晚"
+      },
+      "tip": {
+        "share": "，{runs} 次运行中有 {n} 次",
+        "rankOf": "第 {rank} 位，共 {total} 位"
+      },
+      "heatmapLabel": "{platform}：在 {count, plural, other {# 个已追踪日}}中，{mentioned} 天被提及，{cited} 天被引用",
+      "trio": {
+        "best": "最佳",
+        "worst": "最差",
+        "avg": "平均",
+        "none": "无提及位置",
+        "title": "被提及时的位置"
+      },
+      "runsNote": "{runs} 次运行 · {mentioned} 次提及 · {cited} 次引用",
+      "noData": "此期间没有追踪数据",
+      "toggle": "{open, select, yes {隐藏} other {显示}}每日 {platform} 结果",
+      "runsOnDays": "{days, plural, other {# 天}}共 {runs, plural, other {# 次运行}}",
+      "sentimentLine": " · 提及品牌的回答情感倾向:{positive} 条正面,{neutral} 条中性,{negative} 条负面",
+      "sentimentUnavailableTail": ",{count} 条不可用",
+      "moreDays": "再显示 {count} 天",
+      "platformsAnswered": "{count, plural, other {# 个平台}}已回答"
+    },
+    "bulkImport": {
+      "intro": "请将您的 Prompt 放在<b>同一列</b>中,每行一个 Prompt,自上而下排列。若第一行标题为 <b>Prompt</b>,将被视为表头(可选)。导入的 Prompt 将使用“单个添加”中所选的平台以及品牌所在地区;之后可在“全部 Prompts”中通过“编辑”设置每个 Prompt 的主题和地区。",
+      "drop": "拖放 .xlsx 或 .csv 文件,或点击浏览",
+      "perRow": "每行一个 Prompt · 最多 {max} 行",
+      "template": "下载模板",
+      "chooseFile": "请选择 .xlsx 或 .csv 文件。",
+      "unreadable": "无法读取此文件。请确认其为有效的 .xlsx 或 .csv 文件。",
+      "counts": "<b>{valid} 条有效</b> · {duplicates, plural, other {# 条重复}} · {errors, plural, other {# 条错误}}",
+      "inUse": "· 已使用 {used} / {max} 个 Prompt 地区位置",
+      "truncated": "仅读取了前 {max} 行,另有 {more} 行未读取。请拆分较大的文件。",
+      "extraColumns": "仅读取 Prompt 列,文件中的其他列已被忽略。",
+      "noneImportable": "无法导入任何 Prompt。您的 {plan} 套餐最多可追踪 {max} 个 Prompt 地区位置,已使用 {used} 个。",
+      "someImportable": "在 {total} 个 Prompt 中,仅会导入 {valid} 个。您的 {plan} 套餐最多可追踪 {max} 个 Prompt 地区位置,已使用 {used} 个。其余 {count, plural, other {# 个 Prompt}}(从第 {row} 行起)将不会被导入。",
+      "toAddMore": "如需添加更多 Prompt,请{starter, select, yes {升级您的套餐} other {联系我们}}。",
+      "head": {
+        "row": "行",
+        "prompt": "Prompt",
+        "status": "状态"
+      },
+      "status": {
+        "valid": "有效",
+        "duplicate": "重复",
+        "error": "错误",
+        "over_limit": "超出套餐限额"
+      },
+      "reason": {
+        "empty": "Prompt 为空",
+        "tooLong": "超过 {max} 个字符",
+        "duplicate": "已在追踪或在文件中重复"
+      },
+      "downloadNotImported": "下载未导入的 Prompt(.csv)",
+      "downloadErrors": "下载错误(.csv)",
+      "importButton": "导入 {count, plural, other {# 个 Prompt}}",
+      "importedSome": "已导入 {imported} 个 · 因套餐限额有 {notImported} 个未导入",
+      "importedAll": "已导入 {count, plural, other {# 个 Prompt}}",
+      "analyzing": "正在分析。可在“全部 Prompts”中通过“编辑”设置主题和地区。",
+      "nextRun": "它们将在下一次追踪运行时被处理。",
+      "failed": "导入失败,请重试。"
+    },
+    "workStatus": {
+      "todo": "待办",
+      "in_progress": "进行中",
+      "done": "已完成",
+      "set": "设置状态",
+      "setLabel": "设置工作状态",
+      "none": "无状态"
+    },
     "waiting": {
       "resultTitle": "已添加 {added} 个，{waiting} 个正在排队等待名额",
       "savedTitle": "{count, plural, other {已保存，但尚未追踪（共 # 个 Prompt）}}",

@@ -15788,6 +15788,155 @@
     }
   },
   "prompts": {
+    "positionsSheet": {
+      "tracked": "Getrackter Prompt",
+      "paused": "Pausiert",
+      "improvingTitle": "Aktion und ihr Ergebnis öffnen",
+      "improving": "Wird verbessert · {code}",
+      "window": "{preset, select, custom {Benutzerdefinierter Zeitraum} other {Letzte {preset}}}",
+      "lastRun": "Letzter Lauf: {at}",
+      "runs": "{count, plural, one {# Lauf} other {# Läufe}}",
+      "period": "Zeitraum",
+      "discardNote": "Wenn Sie den Zeitraum ändern, werden Ihre nicht gesendeten Verbesserungsänderungen verworfen.",
+      "keepEditing": "Weiter bearbeiten",
+      "discard": "Verwerfen & ändern",
+      "aiAnswers": "KI-Antworten",
+      "back": "Zurück zu Prompts",
+      "loading": "Positionen werden geladen",
+      "loadError": "Positionen konnten nicht geladen werden: {message}",
+      "retry": "Erneut versuchen",
+      "noLongerAvailable": "Dieser Prompt ist nicht mehr verfügbar.",
+      "loadFailed": "Positionen konnten nicht geladen werden.",
+      "sentimentUnavailable": "Stimmung nicht verfügbar",
+      "sentiment": {
+        "positive": "positiv",
+        "neutral": "neutral",
+        "negative": "negativ"
+      },
+      "notMentioned": "Nicht erwähnt",
+      "mentioned": "Erwähnt",
+      "positionUnavailable": "Position nicht verfügbar",
+      "notCited": "Nicht zitiert",
+      "cited": "Zitiert",
+      "locked": {
+        "growth": "Verfügbar im Growth-Tarif",
+        "notEnabled": "Für diesen Workspace nicht aktiviert",
+        "enterprise": "Verfügbar im Enterprise-Tarif",
+        "line": "{note} · {growth, select, yes {Upgraden Sie} other {Kontaktieren Sie uns}}, um {platform}-Ergebnisse und -Positionen zu tracken."
+      },
+      "upgrade": "Upgrade",
+      "contactUs": "Kontakt aufnehmen",
+      "improve": "Verbessern",
+      "stat": {
+        "platformsAnswered": "Antwortende Plattformen",
+        "inLatestRun": "in ihrem letzten Lauf",
+        "mentionedOn": "Erwähnt auf",
+        "citedOn": "Zitiert auf",
+        "platforms": "Plattformen",
+        "avgPosition": "Ø Position",
+        "whenMentioned": "wenn erwähnt",
+        "whenMentionedSources": "wenn erwähnt · {avg} in Quellen",
+        "runs": "Durchläufe",
+        "trackedOf": "{tracked} von {count, plural, one {# Tag} other {# Tagen}} erfasst",
+        "mentioned": "Erwähnt",
+        "cited": "Zitiert",
+        "ofDays": "{n} / {count, plural, one {# Tag} other {# Tage}}",
+        "notMentionedCount": "{count} nicht erwähnt",
+        "notCitedCount": "{count} nicht zitiert"
+      },
+      "tabs": {
+        "platforms": "Plattformergebnisse",
+        "history": "Tagesverlauf ({count})"
+      },
+      "runAt": "Durchlauf um {at}",
+      "noRuns": "Keine abgeschlossenen Tracking-Durchläufe in diesem Zeitraum",
+      "noRunsDot": "Keine abgeschlossenen Tracking-Durchläufe in diesem Zeitraum.",
+      "mention": "Erwähnung",
+      "citation": "Zitierung",
+      "detectedEarlier": "Früher in diesem Zeitraum erkannt",
+      "untracked": "{count, plural, one {# Tag} other {# Tage}} ohne abgeschlossenen Durchlauf. Nicht erfasste Tage zählen nicht als nicht erwähnt oder nicht zitiert.",
+      "blocksNote": "Jeder Block entspricht einem Tag im gewählten Zeitraum in Ihrer Zeitzone. Fahren Sie über einen Block, um die Positionen dieses Tages zu sehen; öffnen Sie eine Plattform für alle Durchläufe.",
+      "legend": {
+        "Early": "Früh erwähnt",
+        "Mid": "Mitte",
+        "Late": "Spät",
+        "cited": "Nur zitiert",
+        "none": "Kein Ergebnis",
+        "untracked": "Nicht erfasst"
+      },
+      "tone": {
+        "Early": "Früh",
+        "Mid": "Mitte",
+        "Late": "Spät"
+      },
+      "tip": {
+        "share": " in {n} von {runs} Durchläufen",
+        "rankOf": "#{rank} von {total}"
+      },
+      "heatmapLabel": "{platform}: erwähnt an {mentioned} und zitiert an {cited} von {count, plural, one {# erfassten Tag} other {# erfassten Tagen}}",
+      "trio": {
+        "best": "Beste",
+        "worst": "Schlechteste",
+        "avg": "Ø",
+        "none": "Keine Erwähnungsposition",
+        "title": "Position bei Erwähnung"
+      },
+      "runsNote": "{runs} Durchläufe · erwähnt in {mentioned} · zitiert in {cited}",
+      "noData": "Keine Tracking-Daten für diesen Zeitraum",
+      "toggle": "Tägliche {platform}-Ergebnisse {open, select, yes {ausblenden} other {anzeigen}}",
+      "runsOnDays": "{runs, plural, one {# Durchlauf} other {# Durchläufe}} an {days, plural, one {# Tag} other {# Tagen}}",
+      "sentimentLine": " · Stimmung in Antworten mit Erwähnung: {positive} positiv, {neutral} neutral, {negative} negativ",
+      "sentimentUnavailableTail": ", {count} nicht verfügbar",
+      "moreDays": "{count} weitere Tage anzeigen",
+      "platformsAnswered": "{count, plural, one {# Plattform} other {# Plattformen}} haben geantwortet"
+    },
+    "bulkImport": {
+      "intro": "Tragen Sie Ihre Prompts in <b>eine Spalte</b> ein, ein Prompt pro Zeile, untereinander. Eine erste Zeile mit dem Titel <b>Prompt</b> wird als Kopfzeile gelesen (optional). Importierte Prompts verwenden die unter „Einzeln“ ausgewählten Plattformen und den Standort der Marke; legen Sie Thema und Standort anschließend jeweils über „Bearbeiten“ in „Alle Prompts“ fest.",
+      "drop": "Eine .xlsx- oder .csv-Datei hierher ziehen oder klicken, um sie auszuwählen",
+      "perRow": "Ein Prompt pro Zeile · bis zu {max} Zeilen",
+      "template": "Vorlage herunterladen",
+      "chooseFile": "Wählen Sie eine .xlsx- oder .csv-Datei aus.",
+      "unreadable": "Diese Datei konnte nicht gelesen werden. Prüfen Sie, ob es sich um eine gültige .xlsx- oder .csv-Datei handelt.",
+      "counts": "<b>{valid} gültig</b> · {duplicates, plural, one {# Duplikat} other {# Duplikate}} · {errors, plural, one {# Fehler} other {# Fehler}}",
+      "inUse": "· {used} / {max} Prompt-Standorte belegt",
+      "truncated": "Nur die ersten {max} Zeilen wurden gelesen; {more} weitere wurden ausgelassen. Teilen Sie größere Dateien auf.",
+      "extraColumns": "Nur die Prompt-Spalte wird gelesen; die übrigen Spalten der Datei wurden ignoriert.",
+      "noneImportable": "Es können keine Prompts importiert werden. Ihr {plan}-Tarif umfasst bis zu {max} Prompt-Standorte, davon sind {used} bereits belegt.",
+      "someImportable": "Nur {valid} von {total} Prompts werden importiert. Ihr {plan}-Tarif umfasst bis zu {max} Prompt-Standorte, davon sind {used} bereits belegt. Die übrigen {count, plural, one {# Prompt} other {# Prompts}} (ab Zeile {row}) werden nicht importiert.",
+      "toAddMore": "Um weitere Prompts hinzuzufügen, {starter, select, yes {upgraden Sie Ihren Tarif} other {kontaktieren Sie uns}}.",
+      "head": {
+        "row": "Zeile",
+        "prompt": "Prompt",
+        "status": "Status"
+      },
+      "status": {
+        "valid": "Gültig",
+        "duplicate": "Duplikat",
+        "error": "Fehler",
+        "over_limit": "Tariflimit überschritten"
+      },
+      "reason": {
+        "empty": "Leerer Prompt",
+        "tooLong": "Länger als {max} Zeichen",
+        "duplicate": "Bereits erfasst oder in der Datei wiederholt"
+      },
+      "downloadNotImported": "Nicht importierte Prompts herunterladen (.csv)",
+      "downloadErrors": "Fehler herunterladen (.csv)",
+      "importButton": "{count, plural, one {# Prompt} other {# Prompts}} importieren",
+      "importedSome": "{imported} importiert · {notImported} wegen Tariflimit nicht importiert",
+      "importedAll": "{count, plural, one {# Prompt importiert} other {# Prompts importiert}}",
+      "analyzing": "Die Analyse läuft. Legen Sie Themen und Standorte über „Bearbeiten“ in „Alle Prompts“ fest.",
+      "nextRun": "Sie werden beim nächsten Tracking-Lauf berücksichtigt.",
+      "failed": "Import fehlgeschlagen. Bitte versuchen Sie es erneut."
+    },
+    "workStatus": {
+      "todo": "Zu erledigen",
+      "in_progress": "In Bearbeitung",
+      "done": "Erledigt",
+      "set": "Status festlegen",
+      "setLabel": "Arbeitsstatus festlegen",
+      "none": "Kein Status"
+    },
     "waiting": {
       "resultTitle": "{added} hinzugefügt, {waiting} warten auf einen Platz",
       "savedTitle": "{count, plural, one {Gespeichert, aber noch nicht getrackt} other {# Prompts gespeichert, aber noch nicht getrackt}}",

@@ -15778,6 +15778,155 @@
     }
   },
   "prompts": {
+    "positionsSheet": {
+      "tracked": "Śledzony Prompt",
+      "paused": "Wstrzymany",
+      "improvingTitle": "Otwórz działanie i jego wynik",
+      "improving": "Poprawa · {code}",
+      "window": "{preset, select, custom {Zakres niestandardowy} other {Ostatnie {preset}}}",
+      "lastRun": "Ostatnie uruchomienie: {at}",
+      "runs": "{count, plural, one {# uruchomienie} few {# uruchomienia} many {# uruchomień} other {# uruchomienia}}",
+      "period": "Okres",
+      "discardNote": "Zmiana okresu spowoduje odrzucenie niewysłanych zmian w sekcji Popraw.",
+      "keepEditing": "Kontynuuj edycję",
+      "discard": "Odrzuć i zmień",
+      "aiAnswers": "Odpowiedzi AI",
+      "back": "Wróć do Promptów",
+      "loading": "Ładowanie pozycji",
+      "loadError": "Nie udało się załadować pozycji: {message}",
+      "retry": "Spróbuj ponownie",
+      "noLongerAvailable": "Ten Prompt nie jest już dostępny.",
+      "loadFailed": "Nie udało się załadować pozycji.",
+      "sentimentUnavailable": "Sentyment niedostępny",
+      "sentiment": {
+        "positive": "pozytywny",
+        "neutral": "neutralny",
+        "negative": "negatywny"
+      },
+      "notMentioned": "Niewspomniano",
+      "mentioned": "Wspomniano",
+      "positionUnavailable": "Pozycja niedostępna",
+      "notCited": "Niecytowano",
+      "cited": "Cytowano",
+      "locked": {
+        "growth": "Dostępne w planie Growth",
+        "notEnabled": "Nie włączono dla tego obszaru roboczego",
+        "enterprise": "Dostępne w planie Enterprise",
+        "line": "{note} · {growth, select, yes {Przejdź na wyższy plan} other {Skontaktuj się z nami}}, aby śledzić wyniki i pozycje w {platform}."
+      },
+      "upgrade": "Przejdź na wyższy plan",
+      "contactUs": "Skontaktuj się z nami",
+      "improve": "Popraw",
+      "stat": {
+        "platformsAnswered": "Platformy, które odpowiedziały",
+        "inLatestRun": "w ostatnim uruchomieniu",
+        "mentionedOn": "Wspomniano na",
+        "citedOn": "Cytowano na",
+        "platforms": "platformach",
+        "avgPosition": "Śr. pozycja",
+        "whenMentioned": "gdy wspomniano",
+        "whenMentionedSources": "gdy wspomniano · {avg} w źródłach",
+        "runs": "Uruchomienia",
+        "trackedOf": "{tracked} z {count, plural, one {# dnia} few {# dni} many {# dni} other {# dnia}} śledzonych",
+        "mentioned": "Wspomniano",
+        "cited": "Zacytowano",
+        "ofDays": "{n} / {count, plural, one {# dzień} few {# dni} many {# dni} other {# dnia}}",
+        "notMentionedCount": "Niewspomniano: {count}",
+        "notCitedCount": "Niezacytowano: {count}"
+      },
+      "tabs": {
+        "platforms": "Wyniki platform",
+        "history": "Historia dzienna ({count})"
+      },
+      "runAt": "Uruchomienie: {at}",
+      "noRuns": "Brak zakończonych uruchomień śledzenia w tym okresie",
+      "noRunsDot": "Brak zakończonych uruchomień śledzenia w tym okresie.",
+      "mention": "Wzmianka",
+      "citation": "Cytowanie",
+      "detectedEarlier": "Wykryto wcześniej w tym okresie",
+      "untracked": "{count, plural, one {# dzień} few {# dni} many {# dni} other {# dnia}} bez zakończonego uruchomienia. Dni bez śledzenia nie są liczone jako brak wzmianki ani brak cytowania.",
+      "blocksNote": "Każdy blok to jeden dzień w wybranym zakresie, w Twojej strefie czasowej. Najedź na blok, aby zobaczyć pozycje z danego dnia; otwórz platformę, aby zobaczyć wszystkie uruchomienia.",
+      "legend": {
+        "Early": "Wspomniano na początku",
+        "Mid": "Środek",
+        "Late": "Koniec",
+        "cited": "Tylko cytowanie",
+        "none": "Brak wyniku",
+        "untracked": "Nie śledzono"
+      },
+      "tone": {
+        "Early": "Początek",
+        "Mid": "Środek",
+        "Late": "Koniec"
+      },
+      "tip": {
+        "share": " w {n} z {runs} uruchomień",
+        "rankOf": "#{rank} z {total}"
+      },
+      "heatmapLabel": "{platform}: wspomniano w {mentioned} i zacytowano w {cited} z {count, plural, one {# śledzonego dnia} few {# śledzonych dni} many {# śledzonych dni} other {# śledzonego dnia}}",
+      "trio": {
+        "best": "Najlepsza",
+        "worst": "Najgorsza",
+        "avg": "Śr.",
+        "none": "Brak pozycji wzmianki",
+        "title": "Pozycja przy wzmiance"
+      },
+      "runsNote": "Uruchomienia: {runs} · wspomniano w {mentioned} · zacytowano w {cited}",
+      "noData": "Brak danych śledzenia dla tego okresu",
+      "toggle": "{open, select, yes {Ukryj} other {Pokaż}} dzienne wyniki: {platform}",
+      "runsOnDays": "{runs, plural, one {# uruchomienie} few {# uruchomienia} many {# uruchomień} other {# uruchomienia}} w {days, plural, one {# dzień} few {# dni} many {# dni} other {# dnia}}",
+      "sentimentLine": " · sentyment w odpowiedziach wspominających: {positive} pozytywnych, {neutral} neutralnych, {negative} negatywnych",
+      "sentimentUnavailableTail": ", {count} niedostępnych",
+      "moreDays": "Pokaż {count} więcej dni",
+      "platformsAnswered": "{count, plural, one {Odpowiedziała # platforma} few {Odpowiedziały # platformy} many {Odpowiedziało # platform} other {Odpowiedziało # platformy}}"
+    },
+    "bulkImport": {
+      "intro": "Umieść swoje Prompty w <b>jednej kolumnie</b>, jeden Prompt w wierszu, od góry do dołu. Pierwszy wiersz zatytułowany <b>Prompt</b> jest traktowany jako nagłówek (opcjonalnie). Importowane Prompty używają platform wybranych w zakładce Pojedynczy oraz lokalizacji marki; temat i lokalizację każdego z nich ustawisz później przez Edytuj w Wszystkie Prompty.",
+      "drop": "Upuść plik .xlsx lub .csv albo kliknij, aby wybrać",
+      "perRow": "Jeden Prompt na wiersz · do {max} wierszy",
+      "template": "Pobierz szablon",
+      "chooseFile": "Wybierz plik .xlsx lub .csv.",
+      "unreadable": "Nie udało się odczytać tego pliku. Sprawdź, czy jest to prawidłowy plik .xlsx lub .csv.",
+      "counts": "<b>Prawidłowe: {valid}</b> · {duplicates, plural, one {# duplikat} few {# duplikaty} many {# duplikatów} other {# duplikatu}} · {errors, plural, one {# błąd} few {# błędy} many {# błędów} other {# błędu}}",
+      "inUse": "· wykorzystano {used} z {max} lokalizacji Promptów",
+      "truncated": "Odczytano tylko pierwsze {max} wierszy; pominięto jeszcze {more}. Podziel większe pliki.",
+      "extraColumns": "Odczytywana jest tylko kolumna z Promptem; pozostałe kolumny pliku zostały zignorowane.",
+      "noneImportable": "Nie można zaimportować żadnych Promptów. Twój plan {plan} obejmuje do {max} lokalizacji Promptów, a {used} jest już wykorzystanych.",
+      "someImportable": "Zaimportowanych zostanie tylko {valid} z {total} Prompts. Twój plan {plan} umożliwia śledzenie maksymalnie {max} lokalizacji Prompts, a {used} jest już wykorzystanych. Pozostałe {count, plural, one {# Prompt} few {# Prompts} many {# Prompts} other {# Prompts}} (od wiersza {row}) nie zostanie zaimportowane.",
+      "toAddMore": "Aby dodać więcej Promptów, {starter, select, yes {zmień plan na wyższy} other {skontaktuj się z nami}}.",
+      "head": {
+        "row": "Wiersz",
+        "prompt": "Prompt",
+        "status": "Status"
+      },
+      "status": {
+        "valid": "Prawidłowy",
+        "duplicate": "Duplikat",
+        "error": "Błąd",
+        "over_limit": "Przekroczono limit planu"
+      },
+      "reason": {
+        "empty": "Pusty Prompt",
+        "tooLong": "Dłuższy niż {max} znaków",
+        "duplicate": "Już śledzony lub powtórzony w pliku"
+      },
+      "downloadNotImported": "Pobierz niezaimportowane Prompty (.csv)",
+      "downloadErrors": "Pobierz błędy (.csv)",
+      "importButton": "Importuj {count, plural, one {# Prompt} few {# Prompty} many {# Promptów} other {# Promptu}}",
+      "importedSome": "Zaimportowano: {imported} · niezaimportowano z powodu limitu planu: {notImported}",
+      "importedAll": "{count, plural, one {Zaimportowano # Prompt} few {Zaimportowano # Prompty} many {Zaimportowano # Promptów} other {Zaimportowano # Promptu}}",
+      "analyzing": "Trwa ich analiza. Ustaw tematy i lokalizacje przez Edytuj w Wszystkie Prompty.",
+      "nextRun": "Zostaną uwzględnione w następnym przebiegu śledzenia.",
+      "failed": "Import nie powiódł się. Spróbuj ponownie."
+    },
+    "workStatus": {
+      "todo": "Do zrobienia",
+      "in_progress": "W toku",
+      "done": "Gotowe",
+      "set": "Ustaw status",
+      "setLabel": "Ustaw status pracy",
+      "none": "Brak statusu"
+    },
     "waiting": {
       "resultTitle": "Dodano: {added}, oczekuje na miejsce: {waiting}",
       "savedTitle": "{count, plural, one {Zapisano, ale jeszcze nie jest monitorowany} few {Zapisano # Prompty, ale jeszcze nie są monitorowane} many {Zapisano # Promptów, ale jeszcze nie są monitorowane} other {Zapisano # Promptów, ale jeszcze nie są monitorowane}}",

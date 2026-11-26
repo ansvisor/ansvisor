@@ -129,12 +129,14 @@ const formatDay = (day: string) => DAY_FMT.format(new Date(`${day}T00:00:00Z`));
 const formatTime = (iso: string) => TIME_FMT.format(new Date(iso));
 const formatDateTime = (iso: string) =>
   `${DATE_FMT.format(new Date(iso))}, ${TIME_FMT.format(new Date(iso))}`;
-const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
 const pct = (n: number, of: number) => (of > 0 ? `${Math.round((n / of) * 100)}%` : '—');
 
+/** The panel's own copy (prompts.positionsSheet). */
+type SheetT = ReturnType<typeof useTranslations<'prompts.positionsSheet'>>;
+
 // The resolved dates follow in the caption, so a custom range isn't spelled out twice.
-function windowTitle(preset: PromptRangePreset): string {
-  return preset === 'custom' ? 'Custom range' : `Last ${preset}`;
+function windowTitle(preset: PromptRangePreset, t: SheetT): string {
+  return t('window', { preset });
 }
 
 export function PromptPositionsSheet({
@@ -149,6 +151,7 @@ export function PromptPositionsSheet({
   onStartContent,
   contentSent = 0,
 }: Props) {
+  const t = useTranslations('prompts.positionsSheet');
   const preset = range.preset;
   // A range change asked for while the Improve tab has unsent edits waits here
   // until the user confirms discarding them.
@@ -174,14 +177,14 @@ export function PromptPositionsSheet({
     })
       .then((data) => {
         if (cancelled) return;
-        setLoaded({ key, data, error: data ? null : 'This prompt is no longer available.' });
+        setLoaded({ key, data, error: data ? null : t('noLongerAvailable') });
       })
       .catch((err: unknown) => {
         if (cancelled) return;
         setLoaded({
           key,
           data: null,
-          error: err instanceof Error ? err.message : 'Failed to load positions.',
+          error: err instanceof Error ? err.message : t('loadFailed'),
         });
       });
     return () => {
@@ -236,7 +239,7 @@ export function PromptPositionsSheet({
           {data && (
             <div className="flex flex-wrap items-center gap-1.5">
               <Badge variant="outline" className="text-[11px]">
-                {data.prompt.isActive ? 'Tracked prompt' : 'Paused'}
+                {data.prompt.isActive ? t('tracked') : t('paused')}
               </Badge>
               {data.prompt.topicName && (
                 <Badge variant="outline" className="text-[11px] text-muted-foreground">
@@ -249,11 +252,11 @@ export function PromptPositionsSheet({
                 // its platforms, 7 days before it was sent → the last 7 days.
                 <Link
                   href={actionCenterLink(data.improving.actionId)}
-                  title="Open the action and its Outcome"
+                  title={t('improvingTitle')}
                   className="inline-flex h-5 items-center gap-1 rounded-4xl border border-primary/30 bg-primary/5 px-2 text-[11px] font-medium text-primary transition-colors hover:bg-primary/10"
                 >
                   <TrendingUp className="h-3 w-3" />
-                  Improving · {actionCode(data.improving)}
+                  {t('improving', { code: actionCode(data.improving) })}
                   {data.improving.avgBefore !== null && data.improving.avgAfter !== null && (
                     <span className="tabular-nums">
                       {' '}
@@ -267,11 +270,12 @@ export function PromptPositionsSheet({
           )}
           <SheetDescription className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
             <CalendarDays className="h-3.5 w-3.5" />
-            <span className="font-medium text-foreground">{windowTitle(preset)}</span>
+            <span className="font-medium text-foreground">{windowTitle(preset, t)}</span>
             {data && latestMode && (
               <span>
-                Last run:{' '}
-                {data.summary.lastAnswerAt ? formatDateTime(data.summary.lastAnswerAt) : '—'}
+                {t('lastRun', {
+                  at: data.summary.lastAnswerAt ? formatDateTime(data.summary.lastAnswerAt) : '—',
+                })}
               </span>
             )}
             {data && !latestMode && data.summary.days.length > 0 && (
@@ -283,13 +287,13 @@ export function PromptPositionsSheet({
             {region && <span>· {formatRegionDisplay(region)}</span>}
             {data && !latestMode && (
               <Badge variant="secondary" className="text-[11px]">
-                {plural(data.summary.runs, 'run')}
+                {t('runs', { count: data.summary.runs })}
               </Badge>
             )}
           </SheetDescription>
           <div className="flex flex-wrap items-end gap-3 pt-1">
             <DateRangeFilter
-              label="Period"
+              label={t('period')}
               value={preset}
               presets={PROMPT_RANGE_PRESETS}
               onChange={(next) => changeRange({ ...range, preset: next })}
@@ -301,11 +305,9 @@ export function PromptPositionsSheet({
           </div>
           {pendingRange && (
             <div className="flex flex-wrap items-center gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs dark:border-amber-900/50 dark:bg-amber-950/30">
-              <span className="text-amber-900 dark:text-amber-200">
-                Changing the period discards your unsent Improve edits.
-              </span>
+              <span className="text-amber-900 dark:text-amber-200">{t('discardNote')}</span>
               <Button size="xs" variant="outline" onClick={() => setPendingRange(null)}>
-                Keep editing
+                {t('keepEditing')}
               </Button>
               <Button
                 size="xs"
@@ -314,7 +316,7 @@ export function PromptPositionsSheet({
                   setPendingRange(null);
                 }}
               >
-                Discard & change
+                {t('discard')}
               </Button>
             </div>
           )}
@@ -348,12 +350,12 @@ export function PromptPositionsSheet({
               className={buttonVariants({ variant: 'ghost', size: 'sm' })}
             >
               <MessageSquareText />
-              AI answers
+              {t('aiAnswers')}
             </Link>
           ) : (
             <span />
           )}
-          <SheetClose render={<Button variant="outline" size="sm" />}>Back to prompts</SheetClose>
+          <SheetClose render={<Button variant="outline" size="sm" />}>{t('back')}</SheetClose>
         </div>
       </SheetContent>
     </Sheet>
@@ -363,8 +365,9 @@ export function PromptPositionsSheet({
 // ─── States ───────────────────────────────────────────────────────────────────
 
 function PositionsSkeleton() {
+  const t = useTranslations('prompts.positionsSheet');
   return (
-    <div className="space-y-3" aria-busy="true" aria-label="Loading positions">
+    <div className="space-y-3" aria-busy="true" aria-label={t('loading')}>
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
         {Array.from({ length: 4 }).map((_, i) => (
           <Skeleton key={i} className="h-[72px] w-full" />
@@ -379,6 +382,7 @@ function PositionsSkeleton() {
 }
 
 function LoadError({ message, onRetry }: { message: string; onRetry: () => void }) {
+  const t = useTranslations('prompts.positionsSheet');
   return (
     <div
       role="alert"
@@ -386,11 +390,11 @@ function LoadError({ message, onRetry }: { message: string; onRetry: () => void 
     >
       <div className="flex items-start gap-2">
         <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-        <span>Couldn&apos;t load positions: {message}</span>
+        <span>{t('loadError', { message })}</span>
       </div>
       <Button type="button" variant="outline" size="sm" onClick={onRetry}>
         <RefreshCw />
-        Retry
+        {t('retry')}
       </Button>
     </div>
   );
@@ -469,26 +473,28 @@ const SENTIMENT_CLASS: Record<Sentiment, string> = {
 };
 
 function SentimentTag({ sentiment }: { sentiment: Sentiment | null }) {
-  if (!sentiment) return <span className="text-muted-foreground">Sentiment unavailable</span>;
+  const t = useTranslations('prompts.positionsSheet');
+  if (!sentiment) return <span className="text-muted-foreground">{t('sentimentUnavailable')}</span>;
   return (
     <Badge
       variant="outline"
       className={cn('h-4 px-1.5 text-[10px] font-medium capitalize', SENTIMENT_CLASS[sentiment])}
     >
-      {sentiment}
+      {t(`sentiment.${sentiment}`)}
     </Badge>
   );
 }
 
 function MentionStatus({ answer }: { answer: AnswerView }) {
-  if (!answer.mentioned) return <span className="text-muted-foreground">Not mentioned</span>;
+  const t = useTranslations('prompts.positionsSheet');
+  if (!answer.mentioned) return <span className="text-muted-foreground">{t('notMentioned')}</span>;
   return (
     <span className="inline-flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
-      <span className="font-medium">Mentioned</span>
+      <span className="font-medium">{t('mentioned')}</span>
       {answer.mention ? (
         <PositionLabel rank={answer.mention.position} total={answer.mention.total} />
       ) : (
-        <span className="text-muted-foreground">Position unavailable</span>
+        <span className="text-muted-foreground">{t('positionUnavailable')}</span>
       )}
       <SentimentTag sentiment={answer.sentiment} />
     </span>
@@ -496,14 +502,15 @@ function MentionStatus({ answer }: { answer: AnswerView }) {
 }
 
 function CitationStatus({ answer }: { answer: AnswerView }) {
-  if (!answer.cited) return <span className="text-muted-foreground">Not cited</span>;
+  const t = useTranslations('prompts.positionsSheet');
+  if (!answer.cited) return <span className="text-muted-foreground">{t('notCited')}</span>;
   return (
     <span className="inline-flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
-      <span className="font-medium">Cited</span>
+      <span className="font-medium">{t('cited')}</span>
       {answer.citation ? (
         <PositionLabel rank={answer.citation.rank} total={answer.citation.total} />
       ) : (
-        <span className="text-muted-foreground">Position unavailable</span>
+        <span className="text-muted-foreground">{t('positionUnavailable')}</span>
       )}
     </span>
   );
@@ -529,13 +536,14 @@ function AnswerLine({ answer, showTime }: { answer: AnswerView; showTime: boolea
 }
 
 function LockedRow({ platform, planId }: { platform: PlatformPositions; planId: PlanId }) {
+  const t = useTranslations('prompts.positionsSheet');
   if (platform.access.state !== 'locked') return null;
   const growth = platform.access.requiredPlan === 'growth';
   const note = growth
-    ? 'Available on Growth'
+    ? t('locked.growth')
     : planId === 'enterprise'
-      ? 'Not enabled for this workspace'
-      : 'Available on Enterprise';
+      ? t('locked.notEnabled')
+      : t('locked.enterprise');
   return (
     <div className="flex flex-wrap items-center justify-between gap-3 px-3 py-3">
       <div className="flex min-w-0 items-center gap-3">
@@ -543,8 +551,7 @@ function LockedRow({ platform, planId }: { platform: PlatformPositions; planId: 
         <div className="min-w-0">
           <p className="text-sm font-medium">{platform.label}</p>
           <p className="text-xs text-muted-foreground">
-            {note} · {growth ? 'Upgrade' : 'Contact us'} to track {platform.label} results and
-            positions.
+            {t('locked.line', { note, growth: growth ? 'yes' : 'no', platform: platform.label })}
           </p>
         </div>
       </div>
@@ -553,7 +560,7 @@ function LockedRow({ platform, planId }: { platform: PlatformPositions; planId: 
           href="/dashboard/settings?tab=billing"
           className={buttonVariants({ variant: 'outline', size: 'sm' })}
         >
-          Upgrade
+          {t('upgrade')}
         </Link>
       ) : (
         <a
@@ -562,7 +569,7 @@ function LockedRow({ platform, planId }: { platform: PlatformPositions; planId: 
           rel="noopener noreferrer"
           className={buttonVariants({ variant: 'outline', size: 'sm' })}
         >
-          Contact us
+          {t('contactUs')}
           <ExternalLink />
         </a>
       )}
@@ -577,9 +584,10 @@ function avgLabel(stats: PositionStats | null): string {
 // ─── 24h: each platform's latest answer ───────────────────────────────────────
 
 function ImproveTrigger({ improve }: { improve: ImproveController }) {
+  const t = useTranslations('prompts.positionsSheet');
   return (
     <TabsTrigger value="improve">
-      Improve
+      {t('improve')}
       {improve.count !== null && improve.count > 0 && (
         <Badge variant="secondary" className="ms-1 h-4 px-1.5 text-[10px]">
           {improve.count}
@@ -613,35 +621,36 @@ function LatestView({
       ? `#${Math.round((latestPositions.reduce((a, b) => a + b, 0) / latestPositions.length) * 10) / 10}`
       : '—';
   const details = useAnswerDetails(data, { latest: true });
+  const t = useTranslations('prompts.positionsSheet');
 
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
         <Stat
-          label="Platforms answered"
+          label={t('stat.platformsAnswered')}
           value={`${answered.length} / ${included.length}`}
-          sub="in their latest run"
+          sub={t('stat.inLatestRun')}
           detail={details.answers}
         />
         <Stat
-          label="Mentioned on"
+          label={t('stat.mentionedOn')}
           value={`${mentioned} / ${answered.length}`}
-          sub="platforms"
+          sub={t('stat.platforms')}
           detail={details.mentioned}
         />
         <Stat
-          label="Cited on"
+          label={t('stat.citedOn')}
           value={`${cited} / ${answered.length}`}
-          sub="platforms"
+          sub={t('stat.platforms')}
           detail={details.cited}
         />
-        <Stat label="Avg. position" value={avg} sub="when mentioned" />
+        <Stat label={t('stat.avgPosition')} value={avg} sub={t('stat.whenMentioned')} />
       </div>
       <IncludedOnlyNote note={details.includedOnly} />
 
       <Tabs defaultValue={initialTab}>
         <TabsList>
-          <TabsTrigger value="platforms">Platform results</TabsTrigger>
+          <TabsTrigger value="platforms">{t('tabs.platforms')}</TabsTrigger>
           <ImproveTrigger improve={improve} />
         </TabsList>
         <TabsContent value="platforms" className="mt-3">
@@ -669,42 +678,39 @@ function LatestView({
  * the right, under the platform's name.
  */
 function LatestRow({ platform: p }: { platform: PlatformPositions }) {
+  const t = useTranslations('prompts.positionsSheet');
   return (
     <div data-platform={p.id} className="px-3 py-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <PlatformName platform={p} />
         {p.latest && (
           <span className="text-xs text-muted-foreground">
-            Run at {formatDateTime(p.latest.at)}
+            {t('runAt', { at: formatDateTime(p.latest.at) })}
           </span>
         )}
       </div>
       {!p.latest ? (
-        <p className="mt-2 text-xs text-muted-foreground">
-          No completed tracking runs in this period
-        </p>
+        <p className="mt-2 text-xs text-muted-foreground">{t('noRuns')}</p>
       ) : (
         <dl className="mt-2 grid gap-3 text-xs sm:grid-cols-2">
           <div>
             <dt className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-              Mention
+              {t('mention')}
             </dt>
             <dd className="mt-1 space-y-1">
               <MentionStatus answer={p.latest} />
               {p.mentionedEarlier && (
-                <p className="text-muted-foreground">Detected earlier in this period</p>
+                <p className="text-muted-foreground">{t('detectedEarlier')}</p>
               )}
             </dd>
           </div>
           <div className="sm:text-end">
             <dt className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-              Citation
+              {t('citation')}
             </dt>
             <dd className="mt-1 space-y-1">
               <CitationStatus answer={p.latest} />
-              {p.citedEarlier && (
-                <p className="text-muted-foreground">Detected earlier in this period</p>
-              )}
+              {p.citedEarlier && <p className="text-muted-foreground">{t('detectedEarlier')}</p>}
             </dd>
           </div>
         </dl>
@@ -729,49 +735,49 @@ function PeriodView({
 }) {
   const s = data.summary;
   const details = useAnswerDetails(data, { latest: false });
+  const t = useTranslations('prompts.positionsSheet');
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
         <Stat
-          label="Runs"
+          label={t('stat.runs')}
           value={String(s.runs)}
-          sub={`${s.trackedDays} of ${plural(s.days.length, 'day')} tracked`}
+          sub={t('stat.trackedOf', { tracked: s.trackedDays, count: s.days.length })}
           detail={details.answers}
         />
         <Stat
-          label="Mentioned"
-          value={`${s.mentionedDays} / ${plural(s.trackedDays, 'day')}`}
-          sub={`${s.trackedDays - s.mentionedDays} not mentioned`}
+          label={t('stat.mentioned')}
+          value={t('stat.ofDays', { n: s.mentionedDays, count: s.trackedDays })}
+          sub={t('stat.notMentionedCount', { count: s.trackedDays - s.mentionedDays })}
           detail={details.mentioned}
         />
         <Stat
-          label="Cited"
-          value={`${s.citedDays} / ${plural(s.trackedDays, 'day')}`}
-          sub={`${s.trackedDays - s.citedDays} not cited`}
+          label={t('stat.cited')}
+          value={t('stat.ofDays', { n: s.citedDays, count: s.trackedDays })}
+          sub={t('stat.notCitedCount', { count: s.trackedDays - s.citedDays })}
           detail={details.cited}
         />
         <Stat
-          label="Avg. position"
+          label={t('stat.avgPosition')}
           value={avgLabel(s.mentionPosition)}
           sub={
             s.citationPosition
-              ? `when mentioned · ${avgLabel(s.citationPosition)} in sources`
-              : 'when mentioned'
+              ? t('stat.whenMentionedSources', { avg: avgLabel(s.citationPosition) })
+              : t('stat.whenMentioned')
           }
         />
       </div>
       <IncludedOnlyNote note={details.includedOnly} />
       {s.untrackedDays > 0 && (
         <p className="text-xs text-muted-foreground">
-          {plural(s.untrackedDays, 'day')} without a completed run. Untracked days don&apos;t count
-          as not mentioned or not cited.
+          {t('untracked', { count: s.untrackedDays })}
         </p>
       )}
 
       <Tabs defaultValue={initialTab}>
         <TabsList>
-          <TabsTrigger value="platforms">Platform results</TabsTrigger>
-          <TabsTrigger value="history">Daily history ({s.trackedDays})</TabsTrigger>
+          <TabsTrigger value="platforms">{t('tabs.platforms')}</TabsTrigger>
+          <TabsTrigger value="history">{t('tabs.history', { count: s.trackedDays })}</TabsTrigger>
           <ImproveTrigger improve={improve} />
         </TabsList>
         <TabsContent value="platforms" className="mt-3 space-y-3">
@@ -785,10 +791,7 @@ function PeriodView({
               ),
             )}
           </div>
-          <p className="text-xs text-muted-foreground">
-            Each block is one day in the selected range, in your time zone. Hover a block for that
-            day&apos;s positions; open a platform for every run.
-          </p>
+          <p className="text-xs text-muted-foreground">{t('blocksNote')}</p>
         </TabsContent>
         <TabsContent value="history" className="mt-3">
           <DailyHistory platforms={data.platforms} />
@@ -814,22 +817,17 @@ const CELL_CLASS: Record<CellTone, string> = {
   cited: 'bg-sky-400',
 };
 
-const LEGEND: { tone: CellTone; label: string }[] = [
-  { tone: 'Early', label: 'Mentioned early' },
-  { tone: 'Mid', label: 'Mid' },
-  { tone: 'Late', label: 'Late' },
-  { tone: 'cited', label: 'Cited only' },
-  { tone: 'none', label: 'No result' },
-  { tone: 'untracked', label: 'Not tracked' },
-];
+/** The legend's tones, in order; each one's name is prompts.positionsSheet.legend.<tone>. */
+const LEGEND: CellTone[] = ['Early', 'Mid', 'Late', 'cited', 'none', 'untracked'];
 
 function HeatmapLegend() {
+  const t = useTranslations('prompts.positionsSheet');
   return (
     <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
-      {LEGEND.map(({ tone, label }) => (
+      {LEGEND.map((tone) => (
         <span key={tone} className="inline-flex items-center gap-1.5">
           <span className={cn('h-2.5 w-2.5 rounded-[3px]', CELL_CLASS[tone])} />
-          {label}
+          {t(`legend.${tone}`)}
         </span>
       ))}
     </div>
@@ -856,28 +854,31 @@ function cellTone(entry: PlatformDay | undefined): CellTone {
   return 'none';
 }
 
-function dayTooltip(day: string, entry: PlatformDay | undefined): string {
-  if (!entry) return `${formatDay(day)}\nNot tracked`;
+function dayTooltip(day: string, entry: PlatformDay | undefined, t: SheetT): string {
+  if (!entry) return `${formatDay(day)}\n${t('legend.untracked')}`;
   const runs = entry.answers.length;
   const mentioned = entry.answers.filter((a) => a.mentioned).length;
   const cited = entry.answers.filter((a) => a.cited).length;
   const { mention, citation } = bestOf(entry.answers);
-  const share = (n: number) => (runs > 1 ? ` in ${n} of ${runs} runs` : '');
+  const share = (n: number) => (runs > 1 ? t('tip.share', { n, runs }) : '');
+  const rank = (position: number, total: number | null | undefined) =>
+    total ? t('tip.rankOf', { rank: position, total }) : `#${position}`;
+  const tone = (position: number, total: number) => t(`tone.${positionTone(position, total)}`);
   const mentionLine = mentioned
-    ? `Mentioned${share(mentioned)}${
+    ? `${t('mentioned')}${share(mentioned)}${
         mention
-          ? ` · ${mention.total ? `${positionTone(mention.position, mention.total)} · ` : ''}#${mention.position}${mention.total ? ` of ${mention.total}` : ''}`
+          ? ` · ${mention.total ? `${tone(mention.position, mention.total)} · ` : ''}${rank(mention.position, mention.total)}`
           : ''
       }`
-    : 'Not mentioned';
+    : t('notMentioned');
   const citationLine = cited
-    ? `Cited${share(cited)}${
+    ? `${t('cited')}${share(cited)}${
         citation
-          ? ` · ${positionTone(citation.rank, citation.total)} · #${citation.rank} of ${citation.total}`
+          ? ` · ${tone(citation.rank, citation.total)} · ${rank(citation.rank, citation.total)}`
           : ''
       }`
-    : 'Not cited';
-  return `${formatDay(day)} · ${plural(runs, 'run')}\n${mentionLine}\n${citationLine}`;
+    : t('notCited');
+  return `${formatDay(day)} · ${t('runs', { count: runs })}\n${mentionLine}\n${citationLine}`;
 }
 
 function Heatmap({ platform, days }: { platform: PlatformPositions; days: string[] }) {
@@ -887,10 +888,16 @@ function Heatmap({ platform, days }: { platform: PlatformPositions; days: string
   // follows the pointer from block to block. The blocks stay out of the tab
   // order (a row of 90 stops); the platform's day list says the same.
   const tooltip = useMemo(() => createTooltipHandle<string>(), []);
+  const t = useTranslations('prompts.positionsSheet');
   return (
     <div
       role="img"
-      aria-label={`${platform.label}: mentioned on ${platform.mentionedDays} and cited on ${platform.citedDays} of ${plural(platform.trackedDays, 'tracked day')}`}
+      aria-label={t('heatmapLabel', {
+        platform: platform.label,
+        mentioned: platform.mentionedDays,
+        cited: platform.citedDays,
+        count: platform.trackedDays,
+      })}
       className="mt-2 flex flex-wrap gap-[3px]"
     >
       {days.map((day) => {
@@ -899,7 +906,7 @@ function Heatmap({ platform, days }: { platform: PlatformPositions; days: string
           <TooltipTrigger
             key={day}
             handle={tooltip}
-            payload={dayTooltip(day, entry)}
+            payload={dayTooltip(day, entry, t)}
             delay={0}
             closeDelay={0}
             render={
@@ -931,18 +938,19 @@ function Metric({ label, value, sub }: { label: string; value: string; sub: stri
 }
 
 function PositionTrio({ stats }: { stats: PositionStats | null }) {
+  const t = useTranslations('prompts.positionsSheet');
   const cells: [string, string, string][] = stats
     ? [
-        ['Best', `#${stats.best}`, 'text-emerald-600 dark:text-emerald-400'],
-        ['Worst', `#${stats.worst}`, 'text-amber-600 dark:text-amber-400'],
-        ['Avg.', `#${stats.avg}`, ''],
+        [t('trio.best'), `#${stats.best}`, 'text-emerald-600 dark:text-emerald-400'],
+        [t('trio.worst'), `#${stats.worst}`, 'text-amber-600 dark:text-amber-400'],
+        [t('trio.avg'), `#${stats.avg}`, ''],
       ]
     : [];
   if (cells.length === 0) {
-    return <span className="text-[11px] text-muted-foreground">No mention position</span>;
+    return <span className="text-[11px] text-muted-foreground">{t('trio.none')}</span>;
   }
   return (
-    <span className="flex gap-3" title="Position when mentioned">
+    <span className="flex gap-3" title={t('trio.title')}>
       {cells.map(([label, value, cls]) => (
         <span key={label} className="flex flex-col items-center">
           <span className={cn('text-sm font-semibold tabular-nums', cls)}>{value}</span>
@@ -953,23 +961,24 @@ function PositionTrio({ stats }: { stats: PositionStats | null }) {
   );
 }
 
-function runsNote(d: PlatformDay): string {
+function runsNote(d: PlatformDay, t: SheetT): string {
   const runs = d.answers.length;
-  if (runs === 1) return '1 run';
+  if (runs === 1) return t('runs', { count: 1 });
   const mentioned = d.answers.filter((a) => a.mentioned).length;
   const cited = d.answers.filter((a) => a.cited).length;
-  return `${runs} runs · mentioned in ${mentioned} · cited in ${cited}`;
+  return t('runsNote', { runs, mentioned, cited });
 }
 
 function PlatformPeriodRow({ platform: p, days }: { platform: PlatformPositions; days: string[] }) {
   const [open, setOpen] = useState(false);
   const [shown, setShown] = useState(DAYS_PAGE);
+  const t = useTranslations('prompts.positionsSheet');
 
   if (p.runs === 0) {
     return (
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1 px-3 py-3">
         <PlatformName platform={p} />
-        <span className="text-xs text-muted-foreground">No tracking data for this period</span>
+        <span className="text-xs text-muted-foreground">{t('noData')}</span>
       </div>
     );
   }
@@ -981,17 +990,17 @@ function PlatformPeriodRow({ platform: p, days }: { platform: PlatformPositions;
         type="button"
         onClick={() => setOpen((o) => !o)}
         aria-expanded={open}
-        aria-label={`${open ? 'Hide' : 'Show'} daily ${p.label} results`}
+        aria-label={t('toggle', { open: open ? 'yes' : 'no', platform: p.label })}
         className="flex w-full flex-wrap items-center gap-x-5 gap-y-2 rounded-md text-start outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
       >
         <PlatformName platform={p} />
         <Metric
-          label="Mentioned"
+          label={t('stat.mentioned')}
           value={`${p.mentionedDays} / ${p.trackedDays}`}
           sub={pct(p.mentionedDays, p.trackedDays)}
         />
         <Metric
-          label="Cited"
+          label={t('stat.cited')}
           value={`${p.citedDays} / ${p.trackedDays}`}
           sub={pct(p.citedDays, p.trackedDays)}
         />
@@ -1008,18 +1017,20 @@ function PlatformPeriodRow({ platform: p, days }: { platform: PlatformPositions;
       {open && (
         <div className="mt-3 space-y-2">
           <p className="text-xs text-muted-foreground">
-            {plural(p.runs, 'run')} on {plural(p.trackedDays, 'day')}
+            {t('runsOnDays', { runs: p.runs, days: p.trackedDays })}
             {s.positive + s.neutral + s.negative + s.unavailable > 0 &&
-              ` · sentiment in mentioning answers: ${s.positive} positive, ${s.neutral} neutral, ${s.negative} negative${
-                s.unavailable ? `, ${s.unavailable} unavailable` : ''
-              }`}
+              t('sentimentLine', {
+                positive: s.positive,
+                neutral: s.neutral,
+                negative: s.negative,
+              }) + (s.unavailable ? t('sentimentUnavailableTail', { count: s.unavailable }) : '')}
           </p>
           <ul className="space-y-2">
             {p.days.slice(0, shown).map((d) => (
               <li key={d.day} className="rounded-md bg-muted/40 px-3 py-2">
                 <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
                   <span className="font-medium">{formatDay(d.day)}</span>
-                  <span className="text-muted-foreground">{runsNote(d)}</span>
+                  <span className="text-muted-foreground">{runsNote(d, t)}</span>
                 </div>
                 <div className="mt-1.5 space-y-1.5">
                   {d.answers.map((a, i) => (
@@ -1036,7 +1047,7 @@ function PlatformPeriodRow({ platform: p, days }: { platform: PlatformPositions;
               size="sm"
               onClick={() => setShown((n) => n + DAYS_PAGE)}
             >
-              Show {Math.min(DAYS_PAGE, p.days.length - shown)} more days
+              {t('moreDays', { count: Math.min(DAYS_PAGE, p.days.length - shown) })}
             </Button>
           )}
         </div>
@@ -1047,6 +1058,7 @@ function PlatformPeriodRow({ platform: p, days }: { platform: PlatformPositions;
 
 function DailyHistory({ platforms }: { platforms: PlatformPositions[] }) {
   const [shown, setShown] = useState(HISTORY_PAGE);
+  const t = useTranslations('prompts.positionsSheet');
   const days = useMemo(() => {
     const byDay = new Map<string, { platform: PlatformPositions; answers: AnswerView[] }[]>();
     for (const p of platforms) {
@@ -1058,11 +1070,7 @@ function DailyHistory({ platforms }: { platforms: PlatformPositions[] }) {
   }, [platforms]);
 
   if (days.length === 0) {
-    return (
-      <p className="py-6 text-center text-sm text-muted-foreground">
-        No completed tracking runs in this period.
-      </p>
-    );
+    return <p className="py-6 text-center text-sm text-muted-foreground">{t('noRunsDot')}</p>;
   }
 
   return (
@@ -1072,7 +1080,7 @@ function DailyHistory({ platforms }: { platforms: PlatformPositions[] }) {
           <div className="flex items-center justify-between border-b px-3 py-2 text-xs">
             <span className="font-medium">{formatDay(day)}</span>
             <span className="text-muted-foreground">
-              {plural(entries.length, 'platform')} answered
+              {t('platformsAnswered', { count: entries.length })}
             </span>
           </div>
           <div className="divide-y">
@@ -1096,7 +1104,7 @@ function DailyHistory({ platforms }: { platforms: PlatformPositions[] }) {
           size="sm"
           onClick={() => setShown((n) => n + HISTORY_PAGE)}
         >
-          Show {Math.min(HISTORY_PAGE, days.length - shown)} more days
+          {t('moreDays', { count: Math.min(HISTORY_PAGE, days.length - shown) })}
         </Button>
       )}
     </div>

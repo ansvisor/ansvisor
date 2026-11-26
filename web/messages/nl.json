@@ -15784,6 +15784,155 @@
     }
   },
   "prompts": {
+    "positionsSheet": {
+      "tracked": "Gevolgde prompt",
+      "paused": "Gepauzeerd",
+      "improvingTitle": "Open de actie en het resultaat",
+      "improving": "Wordt verbeterd · {code}",
+      "window": "{preset, select, custom {Aangepast bereik} other {Laatste {preset}}}",
+      "lastRun": "Laatste run: {at}",
+      "runs": "{count, plural, one {# run} other {# runs}}",
+      "period": "Periode",
+      "discardNote": "Als u de periode wijzigt, gaan uw niet-verzonden Improve-wijzigingen verloren.",
+      "keepEditing": "Doorgaan met bewerken",
+      "discard": "Verwerpen en wijzigen",
+      "aiAnswers": "AI-antwoorden",
+      "back": "Terug naar prompts",
+      "loading": "Posities laden",
+      "loadError": "Posities laden mislukt: {message}",
+      "retry": "Opnieuw proberen",
+      "noLongerAvailable": "Deze prompt is niet meer beschikbaar.",
+      "loadFailed": "Posities laden mislukt.",
+      "sentimentUnavailable": "Sentiment niet beschikbaar",
+      "sentiment": {
+        "positive": "positief",
+        "neutral": "neutraal",
+        "negative": "negatief"
+      },
+      "notMentioned": "Niet genoemd",
+      "mentioned": "Genoemd",
+      "positionUnavailable": "Positie niet beschikbaar",
+      "notCited": "Niet geciteerd",
+      "cited": "Geciteerd",
+      "locked": {
+        "growth": "Beschikbaar met Growth",
+        "notEnabled": "Niet ingeschakeld voor deze workspace",
+        "enterprise": "Beschikbaar met Enterprise",
+        "line": "{note} · {growth, select, yes {Upgrade} other {Neem contact met ons op}} om resultaten en posities van {platform} te volgen."
+      },
+      "upgrade": "Upgraden",
+      "contactUs": "Neem contact met ons op",
+      "improve": "Verbeteren",
+      "stat": {
+        "platformsAnswered": "Platforms met antwoord",
+        "inLatestRun": "in hun laatste run",
+        "mentionedOn": "Genoemd op",
+        "citedOn": "Geciteerd op",
+        "platforms": "platforms",
+        "avgPosition": "Gem. positie",
+        "whenMentioned": "indien genoemd",
+        "whenMentionedSources": "indien genoemd · {avg} in bronnen",
+        "runs": "Runs",
+        "trackedOf": "{tracked} van {count, plural, one {# dag} other {# dagen}} bijgehouden",
+        "mentioned": "Genoemd",
+        "cited": "Geciteerd",
+        "ofDays": "{n} / {count, plural, one {# dag} other {# dagen}}",
+        "notMentionedCount": "{count} niet genoemd",
+        "notCitedCount": "{count} niet geciteerd"
+      },
+      "tabs": {
+        "platforms": "Platformresultaten",
+        "history": "Dagelijkse geschiedenis ({count})"
+      },
+      "runAt": "Run op {at}",
+      "noRuns": "Geen voltooide trackingruns in deze periode",
+      "noRunsDot": "Geen voltooide trackingruns in deze periode.",
+      "mention": "Vermelding",
+      "citation": "Citaat",
+      "detectedEarlier": "Eerder in deze periode gedetecteerd",
+      "untracked": "{count, plural, one {# dag} other {# dagen}} zonder voltooide run. Niet-bijgehouden dagen tellen niet als niet genoemd of niet geciteerd.",
+      "blocksNote": "Elk blok is één dag in het geselecteerde bereik, in uw tijdzone. Beweeg over een blok voor de posities van die dag; open een platform voor alle runs.",
+      "legend": {
+        "Early": "Vroeg genoemd",
+        "Mid": "Midden",
+        "Late": "Laat",
+        "cited": "Alleen geciteerd",
+        "none": "Geen resultaat",
+        "untracked": "Niet bijgehouden"
+      },
+      "tone": {
+        "Early": "Vroeg",
+        "Mid": "Midden",
+        "Late": "Laat"
+      },
+      "tip": {
+        "share": " in {n} van {runs} runs",
+        "rankOf": "#{rank} van {total}"
+      },
+      "heatmapLabel": "{platform}: genoemd op {mentioned} en geciteerd op {cited} van {count, plural, one {# bijgehouden dag} other {# bijgehouden dagen}}",
+      "trio": {
+        "best": "Beste",
+        "worst": "Slechtste",
+        "avg": "Gem.",
+        "none": "Geen vermeldingspositie",
+        "title": "Positie indien genoemd"
+      },
+      "runsNote": "{runs} runs · genoemd in {mentioned} · geciteerd in {cited}",
+      "noData": "Geen trackinggegevens voor deze periode",
+      "toggle": "{open, select, yes {Dagelijkse {platform}-resultaten verbergen} other {Dagelijkse {platform}-resultaten tonen}}",
+      "runsOnDays": "{runs, plural, one {# run} other {# runs}} op {days, plural, one {# dag} other {# dagen}}",
+      "sentimentLine": " · sentiment in antwoorden met vermelding: {positive} positief, {neutral} neutraal, {negative} negatief",
+      "sentimentUnavailableTail": ", {count} niet beschikbaar",
+      "moreDays": "{count} extra dagen tonen",
+      "platformsAnswered": "{count, plural, one {# platform} other {# platforms}} heeft geantwoord"
+    },
+    "bulkImport": {
+      "intro": "Zet uw Prompts in <b>één kolom</b>, één Prompt per rij, onder elkaar. Een eerste rij met de titel <b>Prompt</b> wordt gelezen als koptekst (optioneel). Geïmporteerde Prompts gebruiken de platforms die onder Enkel zijn geselecteerd en de locatie van het merk; stel het onderwerp en de locatie van elke Prompt daarna in met Bewerken in Alle Prompts.",
+      "drop": "Sleep een .xlsx- of .csv-bestand hierheen, of klik om te bladeren",
+      "perRow": "Eén Prompt per rij · maximaal {max} rijen",
+      "template": "Sjabloon downloaden",
+      "chooseFile": "Kies een .xlsx- of .csv-bestand.",
+      "unreadable": "Dit bestand kon niet worden gelezen. Controleer of het een geldig .xlsx- of .csv-bestand is.",
+      "counts": "<b>{valid} geldig</b> · {duplicates, plural, one {# duplicaat} other {# duplicaten}} · {errors, plural, one {# fout} other {# fouten}}",
+      "inUse": "· {used} / {max} Prompt-locaties in gebruik",
+      "truncated": "Alleen de eerste {max} rijen zijn gelezen; {more} extra zijn weggelaten. Splits grotere bestanden op.",
+      "extraColumns": "Alleen de Prompt-kolom wordt gelezen; de andere kolommen van het bestand zijn genegeerd.",
+      "noneImportable": "Er kunnen geen Prompts worden geïmporteerd. Uw {plan}-abonnement volgt maximaal {max} Prompt-locaties en er zijn er al {used} in gebruik.",
+      "someImportable": "Slechts {valid} van {total} Prompts worden geïmporteerd. Uw {plan}-abonnement volgt maximaal {max} Prompt-locaties en er zijn er al {used} in gebruik. De resterende {count, plural, one {# Prompt} other {# Prompts}} (vanaf rij {row}) worden niet geïmporteerd.",
+      "toAddMore": "Om meer Prompts toe te voegen, {starter, select, yes {upgrade uw abonnement} other {neem contact met ons op}}.",
+      "head": {
+        "row": "Rij",
+        "prompt": "Prompt",
+        "status": "Status"
+      },
+      "status": {
+        "valid": "Geldig",
+        "duplicate": "Duplicaat",
+        "error": "Fout",
+        "over_limit": "Boven abonnementslimiet"
+      },
+      "reason": {
+        "empty": "Lege Prompt",
+        "tooLong": "Langer dan {max} tekens",
+        "duplicate": "Al gevolgd of herhaald in het bestand"
+      },
+      "downloadNotImported": "Niet-geïmporteerde Prompts downloaden (.csv)",
+      "downloadErrors": "Fouten downloaden (.csv)",
+      "importButton": "{count, plural, one {# Prompt} other {# Prompts}} importeren",
+      "importedSome": "{imported} geïmporteerd · {notImported} niet geïmporteerd vanwege abonnementslimiet",
+      "importedAll": "{count, plural, one {# Prompt geïmporteerd} other {# Prompts geïmporteerd}}",
+      "analyzing": "Ze worden nu geanalyseerd. Stel onderwerpen en locaties in met Bewerken in Alle Prompts.",
+      "nextRun": "Ze worden meegenomen in de volgende trackingrun.",
+      "failed": "Importeren mislukt. Probeer het opnieuw."
+    },
+    "workStatus": {
+      "todo": "Te doen",
+      "in_progress": "In uitvoering",
+      "done": "Klaar",
+      "set": "Status instellen",
+      "setLabel": "Werkstatus instellen",
+      "none": "Geen status"
+    },
     "waiting": {
       "resultTitle": "{added} toegevoegd, {waiting} in de wachtrij voor een plek",
       "savedTitle": "{count, plural, one {Opgeslagen, maar nog niet gevolgd} other {# prompts opgeslagen, maar nog niet gevolgd}}",
