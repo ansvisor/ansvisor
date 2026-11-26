@@ -168,6 +168,12 @@ describe('AdsOverview', () => {
     expect(kpis()[3]).toContain('No signups yet$90.00 ad spend in this period');
     await render({ ...UNPAID, signups: null, cost: { spend: [usd(90)], perSignup: null } });
     expect(kpis()[3]).toContain('Not measured$90.00 ad spend in this period');
+    // Read, nothing spent: never "No signups yet" while there are signups.
+    await render({ ...UNPAID, cost: { spend: [], perSignup: null } });
+    expect(kpis()[3]).toContain(
+      'No ad spendThe connected ad accounts spent nothing in this period9 AI-assisted signups',
+    );
+    expect(kpis()[3]).not.toContain('No signups yet');
     const two = [usd(90), { currencyCode: 'EUR', amount: 5 }];
     await render({ ...UNPAID, cost: { spend: two, perSignup: null } });
     expect(kpis()[3]).toContain(

@@ -15024,6 +15024,8 @@
       "costOf": "{spend} ad spend ÷ {count, plural, one {# AI-assisted signup} other {# AI-assisted signups}}",
       "costSpend": "{spend} ad spend in this period",
       "costNoSignups": "No signups yet",
+      "costNoSpend": "No ad spend",
+      "costNoSpendNote": "The connected ad accounts spent nothing in this period",
       "costCurrencies": "Several currencies",
       "costCurrenciesNote": "{spend} ad spend: amounts in different currencies aren't added, so there's no single cost per signup",
       "signups": "{count, plural, one {# AI-assisted signup} other {# AI-assisted signups}} in this period",
