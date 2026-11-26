@@ -20,6 +20,8 @@
         "run with chat",
         "stale actions",
         "still relevant",
+        "replaced actions",
+        "no new actions",
         "confidence",
         "sort actions",
         "recently updated",
@@ -49,7 +51,7 @@
         "oldest first"
       ],
       "plan": "all",
-      "updated": "2026-11-21",
+      "updated": "2026-11-25",
       "sections": [
         {
           "heading": null,
@@ -94,6 +96,10 @@
         {
           "heading": "Stale actions",
           "text": "An action that has stayed **New** for 30 days, with no one assigning, editing, sending or updating its tasks, is marked **Stale** each night. It isn't closed or dismissed: its row keeps one status, **New**, with \"No update in 44 d\" under it, the open action shows a **Stale** label, and the **Status** filter's **Stale** lists them all.\n\nIf it still matters, click **Keep** in the open action, or **Still relevant** in the row menu. The hint and label go, its 30 days start again, and History says who kept it. Any other change to the action, or moving it out of New, clears the label too. If it no longer matters, click **Dismiss**.\n\nAn open action whose signals have all resolved shows **Signal resolved, review** instead of a signal count. It stays open: check whether the work is done, then complete or dismiss it."
+        },
+        {
+          "heading": "Replaced actions",
+          "text": "If a stale action's kind still finds something, the nightly run replaces it: it closes the old one and opens a new action of the same kind from the latest findings, the old one's open signals included. History shows the old one as **Replaced by a newer action**, not as dismissed by you. An action someone is working on, or kept with **Still relevant**, is never replaced."
         },
         {
           "heading": "The top of an action",
