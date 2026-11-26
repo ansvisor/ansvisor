@@ -23,6 +23,7 @@ import {
   setDecision,
 } from '../lib/ads/opportunities.js';
 import { readOpportunity } from '../lib/ads/opportunity.js';
+import { readCampaigns } from '../lib/ads/campaigns.js';
 import { readOverview } from '../lib/ads/overview.js';
 import { ADS_PERIODS } from '../lib/ads/standing.js';
 import { PlanLimitError } from '../lib/plan-guard.js';
@@ -174,6 +175,22 @@ router.get('/overview', async (req, res) => {
     return res.json(await readOverview({ brand, orgId, period: parsed.data.period }));
   } catch (err) {
     return failed(req, res, err, 'ads overview read error');
+  }
+});
+
+// GET /api/ads/campaigns?brandId=…&period=7d|30d|90d — each campaign of the
+// brand's connected ad accounts over the period, from the daily sync
+// (lib/ads/campaigns.js). Read only, on a plan that reads every opportunity,
+// as the Campaigns tab is (§8).
+router.get('/campaigns', async (req, res) => {
+  const parsed = brandPeriod.safeParse(req.query);
+  if (!parsed.success) return res.status(400).json({ error: 'invalid', code: 'invalid' });
+  try {
+    const { brand, orgId } = await assertBrandAccess(parsed.data.brandId, req.user.id);
+    if (!(await readsEveryOpportunity(orgId, brand))) return planLimit(res);
+    return res.json(await readCampaigns({ orgId, brandId: brand.id, period: parsed.data.period }));
+  } catch (err) {
+    return failed(req, res, err, 'ads campaigns read error');
   }
 });
 

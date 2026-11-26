@@ -4,8 +4,8 @@ route: /dashboard/ads
 keywords: [ads, advertising, paid ads, earn or pay, buying-intent prompts, sponsored ads, ads in chat, /earn-or-pay, /ad-drafts, paid opportunity, paid opportunity agent]
 synonyms: [ad campaigns, paid search, ppc, chatgpt ads, google ads, microsoft advertising, advertise in ai answers, pay for ai answers, weekly ads agent]
 plan: all
-updated: 2026-11-16
-last_checked: 2026-11-16
+updated: 2026-11-22
+last_checked: 2026-11-22
 owner: Cihan
 app_version: 0.3.0
 approved: false
@@ -18,14 +18,14 @@ sources: [web/messages/en.json, web/src/app/[locale]/(dashboard)/dashboard/ads/_
 - **Overview**: your buying-intent prompts, how many you cover, and the earn-or-pay bar.
 - **Opportunities**: each prompt with its decision, and a drawer to act on it.
 - **Paid SoV**: your share of the sponsored ads in AI answers. It's not measured yet.
-- **Campaigns**: your plan and the safety rules, until an ad account can be connected.
+- **Campaigns**: the campaigns of your connected ad accounts over the period, your plan and the safety rules.
 - **Connections**: the ad platforms and Google Analytics.
 
 The period switch (**7d**, **30d**, **90d**) works on **Overview** and **Opportunities**, and **Export** on **Opportunities**.
 
 ## Nothing reaches an ad platform
 
-Ads never sends, publishes or launches an ad, and never spends. Decisions, Action Center tasks and ad drafts stay in Ansvisor. To run an ad, you copy a draft or export a file and use it in your own ad account. Spend, campaigns and their results show once an ad account is connected, and no ad account can be connected yet.
+Ads never sends, publishes or launches an ad, and never spends. Decisions, Action Center tasks and ad drafts stay in Ansvisor. To run an ad, you copy a draft or export a file and use it in your own ad account. Once an ad account is connected on **Connections**, its campaigns' spend and results show on **Campaigns**; Ansvisor only reads them.
 
 ## Who can do what
 

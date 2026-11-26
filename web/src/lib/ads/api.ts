@@ -408,3 +408,34 @@ export async function connectGoogleAds(brandId: string, customerIds: string[]) {
   return (await call<{ accounts: AdsAccount[] }>('accounts/google', { method: 'POST', body }))
     .accounts;
 }
+
+/** One campaign's totals over the period, in its account's currency. */
+export interface AdsCampaign {
+  accountId: string;
+  campaignId: string;
+  platform: 'chatgpt' | 'google';
+  currencyCode: string | null;
+  name: string | null;
+  status: 'active' | 'paused' | 'ended' | null;
+  impressions: number;
+  clicks: number;
+  costMicros: number;
+  spend: number;
+  cpc: number | null;
+  conversions: number;
+  conversionValue: number;
+  costPerConversion: number | null;
+}
+
+/** Ads › Campaigns: the brand's accounts (what each read last) and their campaigns. */
+export interface AdsCampaigns {
+  range: { from: string; to: string };
+  accounts: Omit<AdsAccount, 'timeZone' | 'createdAt'>[];
+  campaigns: AdsCampaign[];
+}
+
+/** The brand's campaigns over the period, from the daily sync. 403 plan_limit below Growth. */
+export function readAdsCampaigns(brandId: string, period: AdsPeriod): Promise<AdsCampaigns> {
+  const query = new URLSearchParams({ brandId, period });
+  return call<AdsCampaigns>(`campaigns?${query}`);
+}

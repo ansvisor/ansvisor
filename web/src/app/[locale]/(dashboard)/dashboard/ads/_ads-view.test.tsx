@@ -79,6 +79,7 @@ const api = vi.hoisted(() => ({
   disconnectAdsAccount: vi.fn(),
   readGoogleAdsCustomers: vi.fn(),
   connectGoogleAds: vi.fn(),
+  readAdsCampaigns: vi.fn(),
 }));
 // Google's sign-in popup is use-integration-connect's (its own test): here, that it starts.
 const signIn = vi.hoisted(() => ({
@@ -126,6 +127,11 @@ beforeEach(() => {
     fn.mockReset();
   api.readAdsAnalytics.mockResolvedValue({ status: 'connected' });
   api.readAdsAccounts.mockResolvedValue([]);
+  api.readAdsCampaigns.mockResolvedValue({
+    range: { from: '2026-10-24', to: '2026-11-22' },
+    accounts: [],
+    campaigns: [],
+  });
   setPage.mockClear();
   window.history.replaceState(null, '', '/dashboard/ads');
   useBrandStore.setState({ brands: [], activeBrandId: null });
@@ -293,12 +299,18 @@ describe('AdsView', () => {
     const exportButton = container.querySelector<HTMLButtonElement>('[data-action="ads.export"]')!;
     expect(exportButton.textContent).toBe('Export');
     expect(exportButton.disabled).toBe(true);
-    // Opportunities reads over it too, with its own Export; the other tabs have no data for a period yet.
+    // Opportunities reads over it too, with its own Export; Campaigns over it, with no Export
+    // yet; the other tabs have no data for a period yet.
     await act(async () => tab('Opportunities').click());
     expect(opportunities()?.dataset.period).toBe('7d');
     expect(periods().some((b) => b.disabled)).toBe(false);
     expect(container.querySelector('[data-action="ads.export"]')).toBeNull();
     await act(async () => tab('Campaigns').click());
+    expect(periods().some((b) => b.disabled)).toBe(false);
+    expect(container.querySelector<HTMLButtonElement>('[data-action="ads.export"]')?.disabled).toBe(
+      true,
+    );
+    await act(async () => tab('Connections').click());
     expect(periods().every((b) => b.disabled)).toBe(true);
     expect(container.querySelector<HTMLButtonElement>('[data-action="ads.export"]')?.disabled).toBe(
       true,
@@ -474,7 +486,10 @@ describe('AdsView', () => {
   });
 
   describe('Campaigns (ADS-01 §3.4)', () => {
-    beforeEach(() => window.history.replaceState(null, '', '/dashboard/ads#cmp'));
+    beforeEach(() => {
+      window.history.replaceState(null, '', '/dashboard/ads#cmp');
+      useBrandStore.setState({ activeBrandId: 'b1' });
+    });
 
     it('shows Growth read-only, with Compare plans and the add-on, which opens the contact form', async () => {
       await render();
@@ -501,30 +516,128 @@ describe('AdsView', () => {
       }
     });
 
-    it('lists no campaign yet and states the Safety rules and billing, with no payment control', async () => {
+    it('says how to connect an ad account when none is, and states the Safety rules and billing', async () => {
       await render();
+      expect(api.readAdsCampaigns).toHaveBeenCalledWith('b1', '30d');
       const table = slot('campaigns')!.querySelector('table')!;
       expect([...table.querySelectorAll('th')].map((th) => th.textContent)).toEqual([
         'Campaign',
         'Channel',
         'Status',
         'Spend',
-        'AI-assisted signups',
-        'Cost per signup',
+        'Clicks',
+        'CPC',
+        'Conversions',
+        'Cost per conversion',
       ]);
-      expect(table.querySelector('tbody')?.textContent).toContain(
-        'Connect an ad account · coming soon',
-      );
+      expect(table.querySelector('tbody')?.textContent).toContain('No ad account connected yet');
       expect(slot('safety')?.querySelectorAll('li')).toHaveLength(4);
       expect(slot('safety')?.textContent).toContain(
         'Ansvisor never sees or changes payment methods.',
       );
       expect(slot('campaigns')?.querySelectorAll('input, select, textarea')).toHaveLength(0);
-      // No dead control: each one says what it is and goes somewhere.
-      for (const control of slot('campaigns')!.querySelectorAll('a, button')) {
+      // No dead control: the plan's links go somewhere; Open Connections opens that tab.
+      for (const control of slot('campaigns')!.querySelectorAll('a')) {
         expect(control.getAttribute('data-action')).toMatch(/^plan\./);
         expect(control.getAttribute('href')).toBeTruthy();
       }
+      await act(async () => action('cmp.connections')!.click());
+      expect(window.location.hash).toBe('#con');
+    });
+
+    it("lists each campaign over the period picked, in its account's currency", async () => {
+      const account = {
+        id: 'g1',
+        platform: 'google',
+        externalId: '1234567890',
+        name: 'Acme US',
+        currencyCode: 'USD',
+        status: 'active',
+        lastError: null,
+        lastSyncedAt: '2026-11-22T05:20:00Z',
+        syncedThrough: '2026-11-21',
+      };
+      api.readAdsCampaigns.mockResolvedValue({
+        range: { from: '2026-10-24', to: '2026-11-22' },
+        accounts: [account, { ...account, id: 'c1', platform: 'chatgpt', status: 'error' }],
+        campaigns: [
+          {
+            accountId: 'g1',
+            campaignId: '111',
+            platform: 'google',
+            currencyCode: 'USD',
+            name: 'Brand search',
+            status: 'paused',
+            impressions: 900,
+            clicks: 40,
+            costMicros: 52_500_000,
+            spend: 52.5,
+            cpc: 1.31,
+            conversions: 3,
+            conversionValue: 120,
+            costPerConversion: 17.5,
+          },
+          {
+            accountId: 'c1',
+            campaignId: 'cmpn_1',
+            platform: 'chatgpt',
+            currencyCode: null,
+            name: null,
+            status: null,
+            impressions: 10,
+            clicks: 0,
+            costMicros: 0,
+            spend: 0,
+            cpc: null,
+            conversions: 0,
+            conversionValue: 0,
+            costPerConversion: null,
+          },
+        ],
+      });
+      await render();
+      const rows = [...container.querySelectorAll('[data-slot="ads-campaign"]')].map((row) =>
+        [...row.querySelectorAll('td')].map((td) => td.textContent),
+      );
+      expect(rows[0]).toEqual([
+        'Brand searchAcme US',
+        'Google Ads',
+        'Paused',
+        '$52.50',
+        '40',
+        '$1.31',
+        '3',
+        '$17.50',
+      ]);
+      expect(rows[1].slice(0, 6)).toEqual(['cmpn_1Acme US', 'ChatGPT Ads', '—', '0', '0', '—']);
+      expect(slot('campaigns-attention')?.textContent).toContain('1 ad account needs attention.');
+      expect(slot('campaigns')?.textContent).toContain("in its ad account's currency");
+      // The period applies to Campaigns too.
+      const ninety = periods().find((b) => b.textContent?.includes('90'));
+      expect(ninety?.disabled).toBe(false);
+    });
+
+    it('says when the first numbers arrive, a quiet period, or a failed read', async () => {
+      const account = {
+        id: 'g1',
+        platform: 'google',
+        externalId: '1',
+        name: null,
+        status: 'active',
+        lastSyncedAt: null,
+      };
+      api.readAdsCampaigns.mockResolvedValueOnce({ accounts: [account], campaigns: [] });
+      await render();
+      expect(slot('campaigns')?.textContent).toContain('first numbers arrive within a day');
+      api.readAdsCampaigns.mockResolvedValueOnce({
+        accounts: [{ ...account, lastSyncedAt: '2026-11-22T05:20:00Z' }],
+        campaigns: [],
+      });
+      await act(async () => useBrandStore.setState({ activeBrandId: 'b2' }));
+      expect(slot('campaigns')?.textContent).toContain('No campaign ran in this period.');
+      api.readAdsCampaigns.mockRejectedValueOnce(new Error('offline'));
+      await act(async () => useBrandStore.setState({ activeBrandId: 'b3' }));
+      expect(slot('campaigns')?.textContent).toContain("Couldn't load your campaigns");
     });
   });
 
