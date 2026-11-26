@@ -622,6 +622,8 @@
       "slow": "This is taking longer than usual.",
       "ready": "Ready. Opening Prompts…",
       "failed": "Couldn't prepare the demo. Check your connection and try again.",
+      "stuck": "The demo is ready, but its page didn't open. Open it again, or close this and try later.",
+      "open": "Open the demo",
       "retry": "Try again",
       "close": "Close"
     }
@@ -2482,6 +2484,8 @@
           "task_review_withdrawn": "Ready for review taken back with Undo: {task}{title}",
           "cancelled": "Cancelled from Chat by {by} · undo",
           "reopened": "Action reopened — its condition is firing again",
+          "replaced": "Replaced by a newer action of the same kind: nobody had worked on this one for 30 days",
+          "replaces": "Opened in place of an older action of the same kind that nobody had worked on for 30 days",
           "signals_linked": "{count, plural, one {1 new signal} other {# new signals}} linked",
           "status_changed": "Status changed to {to}",
           "assigned": "Assignee changed",
@@ -4063,6 +4067,7 @@
         "whatHappened": "What happened?",
         "triggeredBy": "Consolidated from {count, plural, one {# signal} other {# signals}}",
         "dismissedBecause": "Dismissed: {reason}.",
+        "replaced": "Replaced by a newer action of the same kind: nobody had worked on this one for 30 days, so tonight's findings opened a new one.",
         "readings": "Read after it closed: {list}.",
         "reading": "day {day}, {outcome}",
         "finalOn": "The final reading is on day {day}.",

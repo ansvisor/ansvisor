@@ -622,6 +622,8 @@
       "slow": "평소보다 오래 걸리고 있습니다.",
       "ready": "준비 완료. Prompts 여는 중…",
       "failed": "데모를 준비하지 못했습니다. 연결 상태를 확인하고 다시 시도해 주세요.",
+      "stuck": "데모가 준비되었지만 페이지가 열리지 않았습니다. 다시 열거나, 닫고 나중에 다시 시도하세요.",
+      "open": "데모 열기",
       "retry": "다시 시도",
       "close": "닫기"
     }
@@ -2482,6 +2484,8 @@
           "task_review_withdrawn": "실행 취소로 검토 준비 상태 회수됨: {task}{title}",
           "cancelled": "{by}님이 Chat에서 취소함 · 실행 취소",
           "reopened": "액션 다시 열림 — 조건이 다시 발생함",
+          "replaced": "같은 종류의 더 새로운 액션으로 대체되었습니다: 30일 동안 아무도 진행하지 않았습니다",
+          "replaces": "30일 동안 아무도 진행하지 않은 같은 종류의 이전 액션 대신 열렸습니다",
           "signals_linked": "{count, plural, other {#개의 새로운 시그널}} 연결됨",
           "status_changed": "상태가 {to}(으)로 변경됨",
           "assigned": "담당자 변경됨",
@@ -2967,191 +2971,105 @@
           "title": "KPI 설정",
           "summary": "3~5개의 목표를 선택하세요. Ansvisor가 추적해 드립니다.",
           "open": "KPI 열기",
-          "doneWhen": "KPI 1개 저장됨",
-          "why": [
-            "KPI는 데이터를 추적 가능한 목표로 변환합니다.",
-            "Action Center에 목표 대비 주간 진행 상황이 표시됩니다."
-          ],
-          "how": [
-            "KPI 열기",
-            "AI 가시성, 인용 등 3~5개를 선택하세요",
-            "각각의 목표를 설정하고 저장하기"
-          ]
+          "doneWhen": "KPI 1개 저장됨"
         },
         "competitors": {
           "title": "경쟁사 최소 3곳 추가하기",
           "summary": "경쟁사가 5~20곳일 때 가장 효과적입니다.",
           "open": "경쟁사 추가",
-          "doneWhen": "경쟁사 3곳",
-          "why": [
-            "모든 AI 답변은 경쟁사와 비교됩니다.",
-            "경쟁사가 5~20곳일 때 현황을 가장 명확히 파악할 수 있습니다."
-          ],
-          "how": [
-            "경쟁사 열기",
-            "구매자가 자사와 비교하는 브랜드를 추가하기",
-            "5~20곳을 목표로 하기"
-          ]
+          "doneWhen": "경쟁사 3곳"
         },
         "topics": {
           "title": "주제 최소 3개 추가하기",
           "summary": "추천 주제 중에서 선택하세요.",
           "open": "추천 주제 열기",
-          "doneWhen": "주제 3개",
-          "why": [
-            "주제는 Prompt를 그룹화하고 앞서거나 뒤처지는 영역을 보여줍니다.",
-            "추천은 웹사이트 및 시장을 바탕으로 제공됩니다."
-          ],
-          "how": ["주제 열기", "판매하는 제품 및 서비스와 일치하는 주제 3개 선택하기", "추가하기"]
+          "doneWhen": "주제 3개"
         },
         "prompts": {
           "title": "주제별 Prompt 3개 추가하기",
           "summary": "추천 Prompt 중에서 선택하세요.",
           "open": "추천 Prompt 열기",
-          "doneWhen": "모든 주제에 Prompt 3개",
-          "why": [
-            "Prompts는 구매자가 AI에게 묻는 질문입니다.",
-            "주제당 3개면 트렌드를 파악하기에 충분합니다."
-          ],
-          "how": [
-            "Prompt 제안 열기",
-            "주제별로 Prompt 3개 선택하기",
-            "추가하기. 몇 시간 내로 첫 답변이 도착합니다"
-          ]
+          "doneWhen": "모든 주제에 Prompt 3개"
         },
         "gsc": {
           "title": "Google Search Console 연결",
           "summary": "적극 권장합니다.",
           "name": "Google Search Console",
           "open": "연결",
-          "doneWhen": "연결됨",
-          "why": [
-            "24시간 이내에 데이터 분석을 시작합니다.",
-            "실제 검색을 기반으로 Prompt 및 콘텐츠 제안이 생성됩니다.",
-            "작업이 클릭으로 이어지는지 보여줍니다."
-          ],
-          "how": ["연결 클릭", "Google로 로그인하고 속성 선택", "읽기 전용 액세스 허용"]
+          "doneWhen": "연결됨"
         },
         "ga": {
           "title": "Google Analytics 연결",
           "summary": "어떤 AI 방문이 참여와 전환으로 이어지는지 확인하세요.",
           "name": "Google Analytics",
           "open": "연결",
-          "doneWhen": "연결됨",
-          "why": [
-            "어떤 AI 방문이 참여와 전환으로 이어지는지 보여줍니다.",
-            "트래픽 및 전환 보고서에 필요합니다."
-          ],
-          "how": ["연결 클릭", "GA4 속성 선택", "읽기 전용 액세스 허용"]
+          "doneWhen": "연결됨"
         },
         "snippet": {
           "title": "AI 트래픽 스니펫 추가",
           "summary": "사이트의 head 태그에 한 줄만 추가하세요.",
           "open": "코드 복사하기",
-          "doneWhen": "첫 방문 감지됨",
-          "why": [
-            "ChatGPT, Gemini, Perplexity 등에서의 방문을 집계합니다.",
-            "Google Analytics 없이도 작동합니다."
-          ],
-          "how": [
-            "코드 복사",
-            "사이트의 head 태그에 붙여넣으세요",
-            "게시하기 (첫 방문이 자동으로 감지됩니다)"
-          ]
+          "doneWhen": "첫 방문 감지됨"
         },
         "visibility": {
           "title": "가시성에서 현재 순위 확인하기",
           "summary": "경쟁사 대비 AI 답변 점유율입니다.",
           "open": "가시성 열기",
-          "doneWhen": "페이지 열림",
-          "why": ["경쟁사 대비 AI 답변 점유율입니다.", "모든 목표의 출발점입니다."],
-          "how": ["가시성 열기", "내 순위와 1위 확인하기", "점유율이 가장 낮은 플랫폼 확인하기"]
+          "doneWhen": "페이지 열림"
         },
         "answers": {
           "title": "첫 AI 답변 확인하기",
           "summary": "Prompt별 답변 및 후속 검색어입니다.",
           "open": "Prompts 열기",
-          "doneWhen": "페이지 열림",
-          "why": ["AI가 잠재 고객에게 어떤 답변을 제공하는지 정확히 확인하세요."],
-          "how": ["Prompts 열기", "Prompt 하나 열기", "답변과 후속 검색어 확인하기"]
+          "doneWhen": "페이지 열림"
         },
         "data_prompts": {
           "title": "가치가 높은 추천 Prompt 추적",
           "summary": "Search Console 및 애널리틱스 데이터를 기반으로 생성됩니다.",
           "open": "추천 Prompt 열기",
-          "doneWhen": "추천 Prompt 5개 추적 완료 시",
-          "why": [
-            "방문자를 유입시키는 검색어와 페이지를 바탕으로 생성됩니다.",
-            "수익 창출에 중요한 요소를 추적할 수 있습니다."
-          ],
-          "how": ["추천 Prompt 열기", "필터: 내 데이터 기반", "적합한 항목을 5개 이상 추적"]
+          "doneWhen": "추천 Prompt 5개 추적 완료 시"
         },
         "mentions": {
           "title": "AI가 나에 대해 무엇을 말하는지 확인",
           "summary": "언급 및 어조.",
           "open": "언급 열기",
-          "doneWhen": "페이지 열람 완료 시",
-          "why": ["AI가 나를 얼마나 자주 언급하고, 어떤 어조로 말하는지 확인합니다."],
-          "how": ["언급 열기", "점유율 및 감성 확인"]
+          "doneWhen": "페이지 열람 완료 시"
         },
         "citations": {
           "title": "AI가 인용하는 출처 확인",
           "summary": "AI가 출처로 사용하는 페이지 및 사이트입니다.",
           "open": "인용 열기",
-          "doneWhen": "페이지 열람 완료 시",
-          "why": ["AI가 신뢰하는 출처이자, 내 사이트가 등록되어야 할 곳입니다."],
-          "how": ["인용 열기", "AI가 가장 많이 인용하는 사이트 확인"]
+          "doneWhen": "페이지 열람 완료 시"
         },
         "traffic": {
           "title": "AI를 통한 방문 확인",
           "summary": "어떤 플랫폼이 어느 페이지로 방문자를 보내는지 확인합니다.",
           "open": "AI 트래픽 열기",
-          "doneWhen": "페이지 열림",
-          "why": ["어떤 AI 플랫폼이 어떤 페이지로 방문자를 보내는지 확인합니다."],
-          "how": ["AI 트래픽 열기", "인기 페이지 확인하기"]
+          "doneWhen": "페이지 열림"
         },
         "pick_content": {
           "title": "추천에서 콘텐츠 선택하기",
           "summary": "추천을 1~3개 선택하세요.",
           "open": "콘텐츠 열기",
-          "doneWhen": "추천 1개 선택됨",
-          "why": ["추천은 프롬프트와 검색을 바탕으로 생성됩니다."],
-          "how": [
-            "콘텐츠 열기",
-            "추천을 1~3개 선택하세요: 검토하거나 개요를 작성하거나 작업 센터로 전송할 수 있습니다."
-          ]
+          "doneWhen": "추천 1개 선택됨"
         },
         "create_content": {
           "title": "첫 콘텐츠 제작하기",
           "summary": "콘텐츠 계획에서 1위로 제안된 새 페이지 제작을 시작하세요.",
           "open": "계획 열기",
-          "doneWhen": "새 페이지가 준비 완료 또는 게시됨으로 표시되거나 CMS로 전송됨",
-          "why": ["콘텐츠는 더 많은 답변에 노출될 수 있는 핵심 방법입니다."],
-          "how": [
-            "계획 열기: 가장 순위가 높은 새 페이지가 시작에서 열립니다",
-            "작성자 선택: 본인, 콘텐츠 에이전트 또는 팀",
-            "준비 완료로 표시한 후 게시하기"
-          ]
+          "doneWhen": "새 페이지가 준비 완료 또는 게시됨으로 표시되거나 CMS로 전송됨"
         },
         "optimize_page": {
           "title": "페이지 최적화하기",
           "summary": "콘텐츠 계획에서 최적화 1순위로 선정한 페이지를 개선하세요.",
           "open": "계획 열기",
-          "doneWhen": "최적화된 페이지가 준비 완료 또는 게시됨으로 표시되거나 페이지 감사가 완료됨",
-          "why": ["AI가 이미 읽고 있는 페이지를 조금만 수정해도 빠르게 성과를 얻을 수 있습니다."],
-          "how": [
-            "플랜을 엽니다. 최적화할 최상위 페이지가 시작에서 열립니다.",
-            "규칙과 소스를 참고하여 에디터에서 개선합니다.",
-            "준비 완료로 표시한 다음 게시합니다."
-          ]
+          "doneWhen": "최적화된 페이지가 준비 완료 또는 게시됨으로 표시되거나 페이지 감사가 완료됨"
         },
         "ready": {
           "title": "준비가 완료되었습니다",
           "summary": "AI 작업이 여기에 표시되기 시작합니다.",
           "open": "다음 단계 확인하기",
-          "doneWhen": "자동",
-          "why": ["이제부터 AI가 신호를 작업으로 전환하여 여기에 표시합니다."],
-          "how": ["매주 작업 센터를 계속 확인하세요."]
+          "doneWhen": "자동"
         }
       },
       "panel": {
@@ -4059,6 +3977,7 @@
         "whatHappened": "어떤 결과가 있었나요?",
         "triggeredBy": "{count, plural, other {#개 신호}}에서 통합됨",
         "dismissedBecause": "무시됨: {reason}.",
+        "replaced": "같은 종류의 더 새로운 액션으로 대체되었습니다. 30일 동안 아무도 이 액션을 진행하지 않아 새로운 발견으로 새 액션이 열렸습니다.",
         "readings": "종료 후 확인된 수치: {list}.",
         "reading": "{day}일차, {outcome}",
         "finalOn": "최종 수치 측정일은 {day}일차입니다.",
@@ -4110,7 +4029,10 @@
         "actions": "작업",
         "scorecard": "스코어카드",
         "kpis": "KPI",
-        "label": "내역 보기"
+        "label": "내역 보기",
+        "actionsHint": "진행 중이거나 종료된 각 액션을 하나씩 보여 드립니다. 액션의 목표와 이후 측정된 결과를 확인하세요.",
+        "scorecardHint": "액션 유형별 전체 성과입니다. 완료된 수, 성공률, 변화량 중앙값을 확인하세요.",
+        "kpisHint": "브랜드의 목표와 각 목표의 달성 정도입니다."
       },
       "scorecard": {
         "note": "이 브랜드에서 수행된 자체 작업만을 바탕으로 각 작업 유형이 거둔 성과입니다. 결과는 현재까지의 수치이며, 작업이 종료되고 1개월 후에 최종 확정됩니다. 중앙값 변화는 각 작업의 주요 지표를 기준으로 합니다.",
@@ -6199,7 +6121,6 @@
       "home": "홈",
       "inbox": "받은편지함",
       "inboxLabel": "수신함 · {needsYou, plural, other {확인 필요 #개}}",
-      "inboxLabelNeedsYou": "받은편지함 · {count, plural, other {#개 항목}} · {needsYou, plural, other {#개 확인 필요}}",
       "skills": "스킬",
       "activity": "활동",
       "capabilities": "채팅 기능 안내",
@@ -6649,10 +6570,7 @@
       "landsWithSuggestions": "에이전트 결과와 일일 제안이 여기에 표시됩니다.",
       "nothingNeedsYou": "확인이 필요한 항목이 없습니다.",
       "summary": {
-        "needsYou": "{count, plural, other {#건 확인 필요}}",
-        "running": "{count}개 실행 중",
-        "doneToday": "오늘 {count}개 완료",
-        "suggestions": "이번 주 제안 {count, plural, other {#개}}"
+        "needsYou": "{count, plural, other {#건 확인 필요}}"
       },
       "empty": "확인이 필요한 항목이 없습니다. 에이전트 결과가 여기에 표시됩니다.",
       "tabs": {
@@ -14907,34 +14825,7 @@
           "cost": "Cloudflare 또는 Vercel 청구서에 추가 비용이 발생하지 않으며, 자체 로그 전달 도구 실행 비용만 듭니다."
         }
       },
-      "steps": {
-        "cloudflare_worker": [
-          "Cloudflare에서 Workers & Pages를 열고 Worker를 만드세요.",
-          "해당 코드를 아래의 Worker 코드로 교체하고 배포하세요.",
-          "Worker의 설정 › Variables and Secrets에서 아래의 이름과 값으로 Secret 유형의 변수를 추가하세요.",
-          "Worker가 요청을 감지할 수 있도록 사이트에 대한 경로(예: example.com/*)를 추가하세요."
-        ],
-        "cloudflare_logpush": [
-          "Cloudflare에서 Analytics & Logs › Logpush를 열고 HTTP 요청 데이터 세트에 대한 작업을 만드세요.",
-          "HTTP 대상을 선택하고 아래 대상을 붙여넣으세요.",
-          "아래 작업 설정에서 필드와 필터를 선택하거나, 해당 항목을 사용하여 API를 통해 작업을 생성하세요."
-        ],
-        "vercel_drain": [
-          "Vercel에서 Team Settings › Drains를 열고 사이트 프로젝트에 대한 Logs 드레인을 추가하세요.",
-          "Custom endpoint를 선택하고 아래 엔드포인트 URL을 붙여넣으세요.",
-          "형식을 JSON으로 설정하고 아래 커스텀 헤더를 추가하세요."
-        ],
-        "fastly_log_stream": [
-          "Fastly에서 서비스를 열고 HTTPS 로깅 엔드포인트를 추가하세요.",
-          "아래 엔드포인트 URL을 설정하고, POST 방식을 사용하며, Content-Type을 application/json으로 설정하고, 아래 커스텀 헤더(Bearer 값이 포함된 Authorization)를 추가하세요.",
-          "줄 바꿈으로 구분된 출력 및 사용자 지정 로그 라인 형식이 적용된 JSON 로그 항목을 선택하세요. 아래 형식을 붙여넣은 다음 서비스 구성을 활성화하세요. Ansvisor는 API 엔드포인트에 대한 Fastly의 도메인 제어 챌린지에 자동으로 응답하므로 DNS 레코드를 추가할 필요가 없습니다."
-        ],
-        "log_webhook": [
-          "로그 전달 도구(Vector, Fluent Bit, Logstash 또는 자체 스크립트)에서 아래 엔드포인트로 POST 요청을 보내는 HTTP 출력을 추가하세요.",
-          "Secret이 포함된 아래 헤더를 추가하세요.",
-          "예시 필드(user_agent, ip, url(또는 host 및 path), status, time(RFC 3339 또는 1970년 이후의 초 또는 밀리초), 있는 경우 country)를 포함하여 요청당 한 줄씩 JSON 라인을 전송하세요. 전송당 최대 20,000줄 및 20MB까지 가능하며, 필요한 경우 gzip으로 압축할 수 있습니다. 7일이 지난 요청은 집계되지 않습니다."
-        ]
-      },
+      "steps": {},
       "copyExample": "예시 라인",
       "upload": {
         "title": "또는 로그 파일 업로드",
@@ -18354,24 +18245,139 @@
       }
     },
     "notifications": "알림",
-    "notificationsDescription": "각 브랜드는 두 가지 이메일을 보낼 수 있습니다. 추적 실행 후 발송되는 Daily Pulse와 매주 월요일 발송되는 AI Traffic 주간 요약입니다. 두 이메일 모두 해당 브랜드의 Daily Pulse 수신자에게 전달됩니다.",
-    "pulseSection": "Daily Pulse",
-    "pulseSectionDescription": "추적 실행 후 브랜드별로 하이라이트와 경고를 담은 짧은 요약을 보냅니다. 발송 빈도와 수신자를 선택하세요.",
-    "pulseFrequencyLabel": "{brand}의 Daily Pulse 발송 빈도",
+    "yourEmails": {
+      "title": "내 이메일",
+      "description": "Ansvisor가 보내는 이메일의 종류와 빈도를 선택하세요. 본인에게만 적용되며, 팀원마다 각자 설정합니다.",
+      "carriedOver": "현재 받고 계신 이메일입니다. 저장하면 내 설정으로 유지됩니다.",
+      "for": "대상",
+      "scopeAll": "내 모든 브랜드 ({count})",
+      "deliveryHint": "브랜드 이메일은 브랜드별로 각각 받거나 하나의 이메일로 함께 받을 수 있습니다:",
+      "delivery_per_brand": "브랜드별로 이메일 1통",
+      "delivery_combined": "모든 브랜드를 이메일 1통으로 (출시 예정)",
+      "brandOnly": "{brand}에만 설정",
+      "useAll": "'내 모든 브랜드' 설정 사용",
+      "notableNote": "첫 번째 펄스를 보내드린 후에는 주목할 만한 일이 있을 때만 보내드립니다.",
+      "comingSoon": "출시 예정",
+      "comingSoonHint": "'출시 예정'으로 표시된 이메일은 저장하신 설정을 유지하며, 준비되면 발송이 시작됩니다.",
+      "admins": "관리자",
+      "groups": {
+        "visibility": "브랜드 가시성",
+        "traffic": "AI 트래픽",
+        "actions": "액션 센터",
+        "agents": "에이전트 및 채팅",
+        "audit": "사이트 감사",
+        "content": "콘텐츠",
+        "account": "계정"
+      },
+      "kinds": {
+        "daily_pulse": {
+          "name": "일간 펄스",
+          "description": "각 브랜드가 AI 답변에 어떻게 노출되었는지 알려드립니다: 가시성 점수, 언급, 인용, 주요 소식과 경고."
+        },
+        "traffic_digest": {
+          "name": "주간 요약",
+          "description": "지난주 AI 방문을 한 줄로 요약하고 상위 3개 변화를 알려드립니다. 매주 월요일."
+        },
+        "critical_action": {
+          "name": "새 긴급 액션",
+          "description": "내 브랜드에 긴급 우선순위의 새 액션이 생겼습니다."
+        },
+        "due_actions": {
+          "name": "기한 초과 및 오늘 마감",
+          "description": "내게 할당된 액션과 작업 중 마감일이 되었거나 지연된 항목입니다."
+        },
+        "weekly_actions": {
+          "name": "주간 액션 요약",
+          "description": "완료된 일, 진행 중인 일, 다음 할 일을 알려드립니다. 매주 월요일."
+        },
+        "run_finished": {
+          "name": "실행 완료",
+          "description": "내가 시작한 에이전트 실행이 완료되었으며, 수행한 작업을 알려드립니다."
+        },
+        "audit_finished": {
+          "name": "감사 완료",
+          "description": "일괄 또는 예약된 감사가 완료되었으며, 점수를 알려드립니다."
+        },
+        "score_dropped": {
+          "name": "점수 하락",
+          "description": "페이지 점수가 마지막 감사 이후 5점 이상 떨어졌습니다."
+        },
+        "drafts_review": {
+          "name": "검토 대기 중인 초안",
+          "description": "내 브랜드용으로 작성된 초안 중 게시 전에 검토가 필요한 항목입니다."
+        },
+        "ai_usage": {
+          "name": "AI 사용량",
+          "description": "월간 AI 한도의 80%와 100%에 도달했을 때 알려드립니다."
+        }
+      },
+      "links": {
+        "approvals": {
+          "name": "승인 대기 중",
+          "description": "에이전트 또는 채팅 실행이 무언가를 변경하거나 게시하기 전에 사용자의 승인이 필요합니다. '에이전트가 필요할 때 알림'에서 설정하세요.",
+          "link": "채팅 설정"
+        },
+        "scheduled": {
+          "name": "예약된 작업",
+          "description": "각 작업은 작업에 설정된 대로 이메일을 보냅니다.",
+          "link": "작업 열기"
+        },
+        "billing": {
+          "name": "결제 및 보안",
+          "description": "청구서, 결제 문제, 로그인 알림입니다. 항상 발송됩니다.",
+          "locked": "항상 켜짐"
+        }
+      },
+      "options": {
+        "pulse": {
+          "daily": "매일",
+          "weekly": "매주",
+          "notable": "주목할 만한 경우에만",
+          "off": "끔"
+        },
+        "instant": {
+          "instant": "즉시",
+          "daily": "일일 요약",
+          "off": "끔"
+        },
+        "digest": {
+          "daily": "일일 요약",
+          "weekly": "주간 요약",
+          "off": "끔"
+        },
+        "weekly": {
+          "weekly": "매주 월요일",
+          "off": "끔"
+        },
+        "onoff": {
+          "on": "켜짐",
+          "off": "끔"
+        }
+      },
+      "save": "변경 사항 저장",
+      "saved": "이메일 설정이 저장되었습니다",
+      "saveFailed": "이메일 설정을 저장하지 못했습니다. 다시 시도해 주세요.",
+      "loadFailed": "이메일 설정을 불러오지 못했습니다.",
+      "turnOffAll": "선택 이메일 모두 끄기",
+      "turnedOff": "선택 이메일이 모두 끔으로 설정되었습니다. 유지하려면 변경 사항을 저장하세요."
+    },
+    "outsideEmails": {
+      "title": "워크스페이스 외부 사용자에게 보내기",
+      "description": "Ansvisor 시트가 없는 클라이언트나 매니저도 브랜드 요약을 받을 수 있습니다. 승인 이메일이나 계정 이메일은 받지 않습니다.",
+      "sends": "Daily Pulse · AI Traffic 주간 요약",
+      "recipients": "수신자",
+      "placeholder": "client@example.com, boss@example.com",
+      "hint": "쉼표로 구분합니다. 자신의 이메일 설정을 저장하지 않은 팀원은 이전처럼 이 브랜드의 이메일을 계속 받습니다. 이 목록이 비어 있으면 모든 팀원이, 아니면 목록에 있는 팀원만 받습니다.",
+      "frequency": "Daily Pulse",
+      "frequencyNote": "브랜드의 Slack 채널과 웹훅, 그리고 자신의 설정을 저장하지 않은 팀원에게도 적용됩니다.",
+      "digest": "AI Traffic 주간 요약도 보내기",
+      "digestPulseOff": "이 Daily Pulse가 꺼져 있으면 주간 요약은 발송되지 않습니다."
+    },
     "pulseFrequency_daily": "매일",
     "pulseFrequency_weekly": "매주",
     "pulseFrequency_notable": "주요 변동 시에만",
-    "pulseFrequency_notableNote": "첫 Pulse 수신 후, 주목할 만한 변동이 발생할 때만 발송됩니다.",
     "pulseFrequency_off": "끄기",
-    "pulseRecipients": "수신자",
-    "pulseRecipientsPlaceholder": "alex@example.com, sam@example.com",
-    "pulseRecipientsHint": "쉼표로 구분된 이메일 주소입니다. 모든 조직 멤버에게 보내려면 비워 두세요.",
     "pulseRecipientsInvalid": "유효한 이메일 주소가 아닙니다: {emails}. 수정하거나 삭제한 후 저장하세요.",
-    "trafficDigest": "AI Traffic 주간 다이제스트",
-    "trafficDigestDescription": "매주 월요일, 지난주 AI 방문을 한 줄로 요약하고 가장 큰 변화 세 가지를 알려드립니다. 각 브랜드의 Daily Pulse 수신자에게 전달되며, 체크하거나 해제하면 바로 저장됩니다.",
-    "trafficDigestTo": "수신: {emails}",
-    "trafficDigestToEveryone": "모든 조직 멤버에게",
-    "trafficDigestPulseOff": "Daily Pulse가 꺼져 있는 동안에는 발송되지 않습니다. 다시 받으려면 Pulse를 켜세요.",
     "pulseSaved": "알림 설정을 저장했습니다",
     "pulseSaveFailed": "알림 설정을 저장할 수 없습니다. 다시 시도해 주세요.",
     "pulseLoadFailed": "알림 설정을 불러올 수 없습니다.",
@@ -18396,7 +18402,6 @@
       "loading": "언어를 불러오는 중…",
       "moreSoon": "더 많은 언어가 곧 추가될 예정입니다.",
       "preview": "직원 및 테스트 빌드에서는 아직 번역되지 않은 언어도 볼 수 있습니다. 텍스트가 없는 부분은 영문으로 표시됩니다.",
-      "testLanguage": "{language} · 테스트",
       "saved": "언어가 저장되었습니다",
       "saveFailed": "언어를 저장하지 못했습니다. 다시 시도해 주세요.",
       "suggest": {
@@ -18700,29 +18705,16 @@
     "subscriptionCanceled": "구독이 취소되었습니다.",
     "needCustomPlan": "맞춤형 요금제가 필요하신가요?",
     "customPlanDescription": "AI 가시성을 대규모로 관리하는 대기업과 에이전시를 위한 플랜입니다. 월 ${price}부터 시작합니다.",
-    "customPlanPoints": [
-      "시작 시 브랜드 1개와 Prompts 3,000개, 계약에 따라 추가 가능",
-      "모든 answer engine 지원, Claude는 계약에 따라 제공",
-      "콘텐츠 브리프, 기회 분석, 사이트 감사 무제한",
-      "SSO / SAML, 우선 지원 및 SLA",
-      "인보이스 결제 및 API 액세스",
-      "자체 AI 키 사용: OpenAI, Anthropic, Google, Azure 또는 OpenRouter"
-    ],
-    "customPlanPointsChat": ["채팅 및 에이전트", "자체적으로 게시하는 에이전트를 통한 완전 자동화"],
     "planCards": {
       "expandable": "+ 애드온",
       "expandableHint": "Growth는 설정 › 결제에서 언제든 추가 트래킹, 추가 브랜드, AI 사용량 충전을 더할 수 있습니다.",
       "starter": {
         "tagline": "AI 가시성 모니터링 및 최적화를 시작하는 소규모 팀에 적합합니다.",
-        "engines": "ChatGPT 및 Gemini 추적",
-        "extras": ["MCP 및 API 액세스"],
-        "extrasChat": ["채팅 및 에이전트"]
+        "engines": "ChatGPT 및 Gemini 추적"
       },
       "growth": {
         "tagline": "AI 검색 가시성을 모니터링하고 AI 검색에 맞게 콘텐츠를 최적화하려는 성장 중인 팀을 위한 플랜입니다.",
-        "engines": "ChatGPT, Gemini, Google AI Mode 및 Google AI Overviews 추적",
-        "extras": ["다중 지역 추적", "화이트라벨 보고서 및 내보내기", "Looker Studio"],
-        "extrasChat": ["채팅 및 에이전트", "스스로 게시하는 에이전트를 통한 완전 자동화"]
+        "engines": "ChatGPT, Gemini, Google AI Mode 및 Google AI Overviews 추적"
       },
       "brands": "{count, plural, other {브랜드 #개}}",
       "unlimitedBrands": "무제한 브랜드",

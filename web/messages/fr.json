@@ -622,6 +622,8 @@
       "slow": "Cela prend plus de temps que d'habitude.",
       "ready": "Prêt. Ouverture des Prompts…",
       "failed": "Impossible de préparer la démo. Vérifiez votre connexion et réessayez.",
+      "stuck": "La démo est prête, mais sa page ne s'est pas ouverte. Ouvrez-la à nouveau, ou fermez et réessayez plus tard.",
+      "open": "Ouvrir la démo",
       "retry": "Réessayer",
       "close": "Fermer"
     }
@@ -2482,6 +2484,8 @@
           "task_review_withdrawn": "Statut prêt pour révision annulé avec Défaire : {task}{title}",
           "cancelled": "Annulé depuis le chat par {by} · défaire",
           "reopened": "Action rouverte — sa condition se déclenche à nouveau",
+          "replaced": "Remplacée par une action plus récente du même type : personne n'y avait travaillé depuis 30 jours",
+          "replaces": "Ouverte à la place d'une action plus ancienne du même type sur laquelle personne n'avait travaillé depuis 30 jours",
           "signals_linked": "{count, plural, one {1 nouveau signal associé} other {# nouveaux signaux associés}}",
           "status_changed": "Statut changé en {to}",
           "assigned": "Attribution modifiée",
@@ -2967,220 +2971,105 @@
           "title": "Définissez vos KPI",
           "summary": "Choisissez 3 à 5 objectifs. Nous les suivons pour vous.",
           "open": "Ouvrir les KPI",
-          "doneWhen": "1 KPI enregistré",
-          "why": [
-            "Les KPI transforment vos données en objectifs que vous pouvez suivre.",
-            "Le Centre d'actions affiche vos progrès par rapport à ceux-ci chaque semaine."
-          ],
-          "how": [
-            "Ouvrez les KPI",
-            "Choisissez-en 3 à 5, comme la Visibilité IA ou les Citations",
-            "Définissez un objectif pour chacun et enregistrez"
-          ]
+          "doneWhen": "1 KPI enregistré"
         },
         "competitors": {
           "title": "Ajoutez au moins 3 concurrents",
           "summary": "Fonctionne mieux avec 5 à 20 concurrents.",
           "open": "Ajouter des concurrents",
-          "doneWhen": "3 concurrents",
-          "why": [
-            "Chaque réponse de l'IA est comparée à celles de vos concurrents.",
-            "5 à 20 concurrents offrent la vision la plus claire."
-          ],
-          "how": [
-            "Ouvrir Concurrents",
-            "Ajoutez les marques auxquelles les acheteurs vous comparent",
-            "Visez entre 5 et 20"
-          ]
+          "doneWhen": "3 concurrents"
         },
         "topics": {
           "title": "Ajoutez au moins 3 thématiques",
           "summary": "Choisissez parmi les suggestions de thématiques.",
           "open": "Ouvrir les suggestions de thématiques",
-          "doneWhen": "3 thématiques",
-          "why": [
-            "Les thématiques regroupent vos Prompts et montrent où vous êtes en tête ou en retard.",
-            "Les suggestions proviennent de votre site et de votre marché."
-          ],
-          "how": [
-            "Ouvrir Thématiques",
-            "Choisissez 3 thématiques correspondant à ce que vous vendez",
-            "Ajoutez-les"
-          ]
+          "doneWhen": "3 thématiques"
         },
         "prompts": {
           "title": "Ajoutez 3 Prompts par thématique",
           "summary": "Choisissez parmi les suggestions de Prompts.",
           "open": "Ouvrir les suggestions de Prompts",
-          "doneWhen": "3 Prompts dans chaque thématique",
-          "why": [
-            "Les Prompts sont les questions que les acheteurs posent à l'IA.",
-            "3 par thématique suffisent pour observer une tendance."
-          ],
-          "how": [
-            "Ouvrir les suggestions de Prompts",
-            "Choisissez 3 Prompts pour chaque sujet",
-            "Ajoutez-les. Les premières réponses arrivent en quelques heures"
-          ]
+          "doneWhen": "3 Prompts dans chaque thématique"
         },
         "gsc": {
           "title": "Connecter Google Search Console",
           "summary": "Fortement recommandé.",
           "name": "Google Search Console",
           "open": "Connecter",
-          "doneWhen": "Connecté",
-          "why": [
-            "Nous commençons à analyser vos données dans les 24 heures.",
-            "Les suggestions de Prompts et de Contenu proviennent de recherches réelles.",
-            "Indique si votre travail génère des clics."
-          ],
-          "how": [
-            "Cliquez sur Connecter",
-            "Connectez-vous avec Google et choisissez votre propriété",
-            "Autorisez l'accès en lecture seule"
-          ]
+          "doneWhen": "Connecté"
         },
         "ga": {
           "title": "Connecter Google Analytics",
           "summary": "Découvrez quelles visites IA suscitent de l'engagement et convertissent.",
           "name": "Google Analytics",
           "open": "Connecter",
-          "doneWhen": "Connecté",
-          "why": [
-            "Indique quelles visites IA suscitent de l'engagement et convertissent.",
-            "Nécessaire pour les Rapports de trafic et de conversion."
-          ],
-          "how": [
-            "Cliquez sur Connecter",
-            "Choisissez votre propriété GA4",
-            "Autorisez l'accès en lecture seule"
-          ]
+          "doneWhen": "Connecté"
         },
         "snippet": {
           "title": "Ajouter l'extrait Analyse du trafic IA",
           "summary": "Une seule ligne dans la balise head de votre site.",
           "open": "Obtenir le code",
-          "doneWhen": "Première visite détectée",
-          "why": [
-            "Comptabilise les visites depuis ChatGPT, Gemini, Perplexity et plus encore.",
-            "Fonctionne sans Google Analytics."
-          ],
-          "how": [
-            "Copiez le code",
-            "Collez-le dans la balise head de votre site",
-            "Publiez. Nous détectons la première visite"
-          ]
+          "doneWhen": "Première visite détectée"
         },
         "visibility": {
           "title": "Découvrez votre position dans Visibilité",
           "summary": "Votre part de réponses IA par rapport à vos concurrents.",
           "open": "Ouvrir Visibilité",
-          "doneWhen": "Page ouverte",
-          "why": [
-            "Votre part de réponses IA par rapport à vos concurrents.",
-            "Le point de départ de chaque objectif."
-          ],
-          "how": [
-            "Ouvrez Visibilité",
-            "Consultez votre rang et le leader",
-            "Repérez votre plateforme la plus faible"
-          ]
+          "doneWhen": "Page ouverte"
         },
         "answers": {
           "title": "Lisez vos premières réponses IA",
           "summary": "Réponses et recherches associées, par prompt.",
           "open": "Ouvrir Prompts",
-          "doneWhen": "Page ouverte",
-          "why": ["Découvrez exactement ce que l'IA dit à vos acheteurs."],
-          "how": [
-            "Ouvrez Prompts",
-            "Ouvrez un prompt",
-            "Lisez la réponse et ses recherches associées"
-          ]
+          "doneWhen": "Page ouverte"
         },
         "data_prompts": {
           "title": "Suivre les suggestions de Prompts à forte valeur",
           "summary": "Généré à partir de vos données Search Console et Analytics.",
           "open": "Ouvrir les suggestions de Prompts",
-          "doneWhen": "5 suggestions de Prompts suivies",
-          "why": [
-            "Généré à partir des recherches et des pages qui vous apportent des visiteurs.",
-            "Pour que vous suiviez ce qui compte pour vos revenus."
-          ],
-          "how": [
-            "Ouvrir les suggestions de Prompts",
-            "Filtrer : D'après vos données",
-            "Suivez ceux qui vous conviennent, 5 ou plus"
-          ]
+          "doneWhen": "5 suggestions de Prompts suivies"
         },
         "mentions": {
           "title": "Découvrez ce que l'IA dit de vous",
           "summary": "Mentions et tonalité.",
           "open": "Ouvrir les Mentions",
-          "doneWhen": "Page ouverte",
-          "why": ["La fréquence à laquelle l'IA vous mentionne, et sur quel ton."],
-          "how": ["Ouvrir les Mentions", "Consultez votre part et votre tonalité"]
+          "doneWhen": "Page ouverte"
         },
         "citations": {
           "title": "Découvrez qui l'IA cite",
           "summary": "Les pages et sites que l'IA utilise comme sources.",
           "open": "Ouvrir les Citations",
-          "doneWhen": "Page ouverte",
-          "why": ["Les sources de confiance de l'IA. Les endroits où vous devriez apparaître."],
-          "how": ["Ouvrir les Citations", "Découvrez quels sites l'IA cite le plus"]
+          "doneWhen": "Page ouverte"
         },
         "traffic": {
           "title": "Consultez les visites provenant de l'IA",
           "summary": "Quelles plateformes envoient des visiteurs, et vers quelles pages.",
           "open": "Ouvrir Analyse du trafic IA",
-          "doneWhen": "Page ouverte",
-          "why": ["Quelles plateformes d'IA envoient des visiteurs, et vers quelles pages."],
-          "how": ["Ouvrez Analyse du trafic IA", "Consultez vos meilleures pages"]
+          "doneWhen": "Page ouverte"
         },
         "pick_content": {
           "title": "Choisir du contenu parmi les suggestions",
           "summary": "Choisissez 1 à 3 suggestions.",
           "open": "Ouvrir Contenu",
-          "doneWhen": "1 suggestion choisie",
-          "why": ["Les suggestions sont générées à partir de vos prompts et de vos recherches."],
-          "how": [
-            "Ouvrez Contenu",
-            "Choisissez 1 à 3 suggestions : examinez-les, créez un brief ou envoyez-les au Centre d'actions"
-          ]
+          "doneWhen": "1 suggestion choisie"
         },
         "create_content": {
           "title": "Créer votre premier contenu",
           "summary": "Commencez la nouvelle page classée en premier dans votre plan de Contenu.",
           "open": "Ouvrir le Plan",
-          "doneWhen": "Une nouvelle page marquée comme prête ou publiée, ou envoyée à votre CMS",
-          "why": ["Le Contenu est le principal moyen d'apparaître dans davantage de réponses."],
-          "how": [
-            "Ouvrez le Plan : sa meilleure nouvelle page s'ouvre dans Démarrer",
-            "Choisissez qui la rédige : vous, l'agent de Contenu ou votre équipe",
-            "Marquez-la comme prête, puis publiez-la"
-          ]
+          "doneWhen": "Une nouvelle page marquée comme prête ou publiée, ou envoyée à votre CMS"
         },
         "optimize_page": {
           "title": "Optimiser une page",
           "summary": "Améliorez la page que votre plan de Contenu classe en tête des optimisations.",
           "open": "Ouvrir le Plan",
-          "doneWhen": "Une page optimisée marquée comme prête ou publiée, ou une page auditée",
-          "why": [
-            "De petites corrections sur les pages que l'IA lit déjà peuvent rapporter rapidement."
-          ],
-          "how": [
-            "Ouvrez le Plan : la page prioritaire à optimiser s'ouvre dans Démarrer",
-            "Améliorez-la dans l'éditeur, avec ses règles et ses sources",
-            "Marquez-la comme prête, puis publiez-la"
-          ]
+          "doneWhen": "Une page optimisée marquée comme prête ou publiée, ou une page auditée"
         },
         "ready": {
           "title": "Vous êtes prêt",
           "summary": "Les actions IA commencent à apparaître ici.",
           "open": "Découvrir la suite",
-          "doneWhen": "Automatique",
-          "why": ["Désormais, l'IA transforme ici vos signaux en actions."],
-          "how": ["Consultez le Centre d'actions chaque semaine"]
+          "doneWhen": "Automatique"
         }
       },
       "panel": {
@@ -4088,6 +3977,7 @@
         "whatHappened": "Que s'est-il passé ?",
         "triggeredBy": "Consolidé à partir de {count, plural, one {# signal} other {# signaux}}",
         "dismissedBecause": "Ignorée : {reason}.",
+        "replaced": "Remplacée par une action plus récente du même type : personne n'y avait travaillé depuis 30 jours, les nouveaux constats en ont donc ouvert une nouvelle.",
         "readings": "Relevés après clôture : {list}.",
         "reading": "jour {day}, {outcome}",
         "finalOn": "Le relevé final a lieu au jour {day}.",
@@ -4139,7 +4029,10 @@
         "actions": "Actions",
         "scorecard": "Fiche d'évaluation",
         "kpis": "KPI",
-        "label": "Vues de l'historique"
+        "label": "Vues de l'historique",
+        "actionsHint": "Chaque action en cours ou clôturée, une par une : ce qu'elle visait et ce qui a été mesuré depuis.",
+        "scorecardHint": "Ce que chaque type d'action a accompli globalement : combien ont été menées à terme, leur taux de réussite et la variation médiane.",
+        "kpisHint": "Les objectifs de votre marque et leur niveau d'avancement."
       },
       "scorecard": {
         "note": "Impact de chaque type d'action pour cette marque, à partir de ses propres actions uniquement. Les résultats correspondent aux mesures actuelles ; chaque résultat devient définitif un mois après la clôture de son action. La variation médiane concerne la métrique principale de chaque action.",
@@ -6228,7 +6121,6 @@
       "home": "Accueil",
       "inbox": "Boîte de réception",
       "inboxLabel": "Boîte de réception · {needsYou, plural, one {# requiert votre attention} other {# requièrent votre attention}}",
-      "inboxLabelNeedsYou": "Boîte de réception · {count, plural, one {# élément} other {# éléments}} · {needsYou, plural, one {# requiert votre attention} other {# requièrent votre attention}}",
       "skills": "Compétences",
       "activity": "Activité",
       "capabilities": "Ce que le Chat peut faire",
@@ -6678,10 +6570,7 @@
       "landsWithSuggestions": "Les résultats de vos agents et les suggestions quotidiennes apparaissent ici.",
       "nothingNeedsYou": "Rien ne requiert votre attention.",
       "summary": {
-        "needsYou": "{count, plural, one {# requiert votre attention} other {# requièrent votre attention}}",
-        "running": "{count} en cours",
-        "doneToday": "{count} terminées aujourd'hui",
-        "suggestions": "{count, plural, one {# suggestion} other {# suggestions}} cette semaine"
+        "needsYou": "{count, plural, one {# requiert votre attention} other {# requièrent votre attention}}"
       },
       "empty": "Rien ne requiert votre attention. Les résultats de vos agents apparaissent ici.",
       "tabs": {
@@ -14936,34 +14825,7 @@
           "cost": "Rien sur une facture Cloudflare ou Vercel : uniquement le coût d'exécution de votre propre collecteur de journaux."
         }
       },
-      "steps": {
-        "cloudflare_worker": [
-          "Dans Cloudflare, ouvrez Workers & Pages et créez un Worker.",
-          "Remplacez son code par le code de Worker ci-dessous et déployez-le.",
-          "Dans Settings › Variables and Secrets du Worker, ajoutez une variable de type Secret avec le nom et la valeur ci-dessous.",
-          "Ajoutez une route pour votre site, telle que example.com/*, afin que le Worker reçoive ses requêtes."
-        ],
-        "cloudflare_logpush": [
-          "Dans Cloudflare, ouvrez Analytics & Logs › Logpush et créez une tâche pour le jeu de données des requêtes HTTP.",
-          "Choisissez la destination HTTP et collez la destination ci-dessous.",
-          "Sélectionnez les champs et le filtre depuis les paramètres de la tâche ci-dessous, ou créez la tâche via l'API avec ces éléments."
-        ],
-        "vercel_drain": [
-          "Dans Vercel, ouvrez Team Settings › Drains et ajoutez un drain de journaux (Logs) pour le projet de votre site.",
-          "Choisissez Custom endpoint et collez l'URL du point de terminaison ci-dessous.",
-          "Définissez le format sur JSON et ajoutez l'en-tête personnalisé ci-dessous."
-        ],
-        "fastly_log_stream": [
-          "Dans Fastly, ouvrez votre service et ajoutez un point de terminaison de journalisation HTTPS.",
-          "Définissez l'URL du point de terminaison ci-dessous, utilisez POST, définissez Content-Type sur application/json et ajoutez l'en-tête personnalisé ci-dessous (Authorization avec la valeur Bearer).",
-          "Choisissez des entrées de journal JSON avec une sortie délimitée par des sauts de ligne (Newline delimited) et un format de ligne de journal personnalisé. Collez le format ci-dessous, puis activez la configuration du service. Ansvisor répond automatiquement au contrôle de domaine de Fastly pour son point de terminaison d'API ; vous n'avez pas besoin d'ajouter d'enregistrement DNS."
-        ],
-        "log_webhook": [
-          "Dans votre collecteur de journaux (Vector, Fluent Bit, Logstash ou votre propre script), ajoutez une sortie HTTP qui effectue un POST vers le point de terminaison ci-dessous.",
-          "Ajoutez l'en-tête ci-dessous, contenant le secret.",
-          "Envoyez des lignes JSON, une requête par ligne, avec les champs de l'exemple : user_agent, ip, url (ou host et path), status, time (RFC 3339, ou secondes ou millisecondes depuis 1970) et, si vous l'avez, country. Jusqu'à 20 000 lignes et 20 Mo par envoi, compressé en gzip si vous le souhaitez. Les requêtes de plus de 7 jours ne sont pas comptabilisées."
-        ]
-      },
+      "steps": {},
       "copyExample": "Un exemple de ligne",
       "upload": {
         "title": "Ou importez un fichier de logs",
@@ -18383,24 +18245,139 @@
       }
     },
     "notifications": "Notifications",
-    "notificationsDescription": "Chaque marque peut envoyer deux e-mails : le Daily Pulse après ses analyses, et le récapitulatif hebdomadaire du trafic IA chaque lundi. Les deux sont envoyés aux destinataires du Daily Pulse de la marque.",
-    "pulseSection": "Daily Pulse",
-    "pulseSectionDescription": "Un court récapitulatif par marque après chaque analyse, avec points forts et alertes. Choisissez sa fréquence et ses destinataires.",
-    "pulseFrequencyLabel": "Fréquence du Daily Pulse de {brand}",
+    "yourEmails": {
+      "title": "Vos e-mails",
+      "description": "Choisissez les e-mails que Ansvisor vous envoie et leur fréquence. Ces réglages vous sont propres : chaque membre de l'équipe définit les siens.",
+      "carriedOver": "Voici les e-mails que vous recevez actuellement. Enregistrez pour les conserver comme vos propres choix.",
+      "for": "Pour",
+      "scopeAll": "Toutes mes marques ({count})",
+      "deliveryHint": "Les e-mails de marque sont envoyés un par marque, ou regroupés dans un seul e-mail :",
+      "delivery_per_brand": "Un e-mail par marque",
+      "delivery_combined": "Toutes les marques dans un seul e-mail (bientôt disponible)",
+      "brandOnly": "Définir pour {brand} uniquement",
+      "useAll": "Utiliser mon choix « Toutes mes marques »",
+      "notableNote": "Votre premier pulse, puis uniquement lorsqu'un événement notable se produit.",
+      "comingSoon": "Bientôt disponible",
+      "comingSoonHint": "Les e-mails marqués « Bientôt disponible » conservent le choix que vous enregistrez et démarrent dès qu'ils sont prêts.",
+      "admins": "Administrateurs",
+      "groups": {
+        "visibility": "Visibilité de la marque",
+        "traffic": "Trafic IA",
+        "actions": "Centre d'actions",
+        "agents": "Agents et Chat",
+        "audit": "Audit du site",
+        "content": "Contenu",
+        "account": "Compte"
+      },
+      "kinds": {
+        "daily_pulse": {
+          "name": "Pulse quotidien",
+          "description": "Comment chaque marque est apparue dans les réponses IA : score de Visibilité, mentions, citations, points forts et alertes."
+        },
+        "traffic_digest": {
+          "name": "Résumé hebdomadaire",
+          "description": "Les visites IA de la semaine dernière en une ligne, avec les trois principaux changements. Le lundi."
+        },
+        "critical_action": {
+          "name": "Nouvelle action critique",
+          "description": "Une nouvelle action de priorité Critique pour vos marques."
+        },
+        "due_actions": {
+          "name": "En retard et à échéance aujourd'hui",
+          "description": "Actions et tâches qui vous sont assignées et qui arrivent à échéance ou sont en retard."
+        },
+        "weekly_actions": {
+          "name": "Résumé hebdomadaire des actions",
+          "description": "Ce qui a été fait, ce qui est en cours et la suite. Le lundi."
+        },
+        "run_finished": {
+          "name": "Exécution terminée",
+          "description": "Une exécution d'agent que vous avez lancée est terminée, avec le détail de ce qu'elle a fait."
+        },
+        "audit_finished": {
+          "name": "Audit terminé",
+          "description": "Un audit en masse ou planifié est terminé, avec le score."
+        },
+        "score_dropped": {
+          "name": "Baisse du score",
+          "description": "Le score d'une page a chuté de 5 points ou plus depuis son dernier audit."
+        },
+        "drafts_review": {
+          "name": "Brouillons en attente de votre relecture",
+          "description": "Brouillons créés pour vos marques qui nécessitent votre relecture avant leur mise en ligne."
+        },
+        "ai_usage": {
+          "name": "Utilisation de l'IA",
+          "description": "À 80 % et 100 % de la limite mensuelle d'IA."
+        }
+      },
+      "links": {
+        "approvals": {
+          "name": "En attente de votre approbation",
+          "description": "Un agent ou une exécution de Chat a besoin de votre accord avant de modifier ou de publier quoi que ce soit. Configurez-le avec « Me prévenir quand un agent a besoin de moi ».",
+          "link": "Paramètres du Chat"
+        },
+        "scheduled": {
+          "name": "Tâches planifiées",
+          "description": "Chaque tâche envoie ses e-mails selon ses propres paramètres.",
+          "link": "Ouvrir les tâches"
+        },
+        "billing": {
+          "name": "Facturation et sécurité",
+          "description": "Factures, problèmes de paiement et alertes de connexion. Toujours envoyés.",
+          "locked": "Toujours activé"
+        }
+      },
+      "options": {
+        "pulse": {
+          "daily": "Quotidien",
+          "weekly": "Hebdomadaire",
+          "notable": "Uniquement si notable",
+          "off": "Désactivé"
+        },
+        "instant": {
+          "instant": "Immédiatement",
+          "daily": "Résumé quotidien",
+          "off": "Désactivé"
+        },
+        "digest": {
+          "daily": "Résumé quotidien",
+          "weekly": "Résumé hebdomadaire",
+          "off": "Désactivé"
+        },
+        "weekly": {
+          "weekly": "Chaque lundi",
+          "off": "Désactivé"
+        },
+        "onoff": {
+          "on": "Activé",
+          "off": "Désactivé"
+        }
+      },
+      "save": "Enregistrer les modifications",
+      "saved": "Vos choix d'e-mails ont été enregistrés",
+      "saveFailed": "Impossible d'enregistrer vos choix d'e-mails. Veuillez réessayer.",
+      "loadFailed": "Impossible de charger vos choix d'e-mails.",
+      "turnOffAll": "Désactiver tous les e-mails facultatifs",
+      "turnedOff": "Tous les e-mails facultatifs sont désactivés. Enregistrez les modifications pour les conserver."
+    },
+    "outsideEmails": {
+      "title": "Envoyer aux personnes extérieures à l'espace de travail",
+      "description": "Un client ou un gestionnaire sans siège Ansvisor peut aussi recevoir les résumés d'une marque. Ces personnes ne reçoivent jamais les approbations ni les e-mails du compte.",
+      "sends": "Daily Pulse · Résumé hebdomadaire du trafic IA",
+      "recipients": "Destinataires",
+      "placeholder": "client@example.com, boss@example.com",
+      "hint": "Séparés par des virgules. Les collègues qui n'ont pas enregistré leurs propres choix d'e-mails continuent de recevoir les e-mails de cette marque comme avant : tous tant que cette liste est vide, sinon uniquement ceux qui y figurent.",
+      "frequency": "Daily Pulse",
+      "frequencyNote": "Cela définit aussi le canal Slack et les webhooks de la marque, ainsi que les collègues qui n'ont pas enregistré leurs propres choix.",
+      "digest": "Envoyer aussi le résumé hebdomadaire du trafic IA",
+      "digestPulseOff": "Le résumé hebdomadaire n'est pas envoyé tant que ce Daily Pulse est désactivé."
+    },
     "pulseFrequency_daily": "Quotidien",
     "pulseFrequency_weekly": "Hebdomadaire",
     "pulseFrequency_notable": "Uniquement lors d'événements notables",
-    "pulseFrequency_notableNote": "Votre premier pulse, puis uniquement lorsqu'un événement notable survient.",
     "pulseFrequency_off": "Désactivé",
-    "pulseRecipients": "Destinataires",
-    "pulseRecipientsPlaceholder": "alex@example.com, sam@example.com",
-    "pulseRecipientsHint": "Adresses e-mail séparées par des virgules. Laissez vide pour envoyer à chaque membre de l'organisation.",
     "pulseRecipientsInvalid": "Adresse e-mail non valide : {emails}. Corrigez-la ou supprimez-la avant d'enregistrer.",
-    "trafficDigest": "Récapitulatif hebdomadaire du trafic IA",
-    "trafficDigestDescription": "Chaque lundi : les visites IA de la semaine dernière en une ligne de synthèse, avec les trois principaux changements. Il est envoyé aux destinataires du Daily Pulse de chaque marque et enregistré dès que vous cochez ou décochez l'option.",
-    "trafficDigestTo": "À {emails}",
-    "trafficDigestToEveryone": "À tous les membres de l'organisation",
-    "trafficDigestPulseOff": "Non envoyé tant que le Daily Pulse est désactivé. Réactivez le pulse pour le recevoir à nouveau.",
     "pulseSaved": "Paramètres de notification enregistrés",
     "pulseSaveFailed": "Impossible d'enregistrer les paramètres de notification. Veuillez réessayer.",
     "pulseLoadFailed": "Impossible de charger les paramètres de notification.",
@@ -18425,7 +18402,6 @@
       "loading": "Chargement des langues…",
       "moreSoon": "D'autres langues arrivent bientôt.",
       "preview": "L'équipe interne et les versions de test ont également accès aux langues non encore traduites. L'anglais est affiché lorsque la traduction est manquante.",
-      "testLanguage": "{language} · test",
       "saved": "Langue enregistrée",
       "saveFailed": "Impossible d'enregistrer votre langue. Veuillez réessayer.",
       "suggest": {
@@ -18729,35 +18705,16 @@
     "subscriptionCanceled": "Votre abonnement a été résilié.",
     "needCustomPlan": "Besoin d'un forfait sur mesure ?",
     "customPlanDescription": "Pour les grandes entreprises et les agences qui gèrent la visibilité IA à grande échelle. À partir de ${price}/mois.",
-    "customPlanPoints": [
-      "1 marque et 3 000 Prompts pour commencer, davantage par contrat",
-      "Tous les moteurs de réponse, Claude selon contrat",
-      "Briefs de contenu, opportunités et audits de site illimités",
-      "SSO / SAML, support prioritaire et SLA",
-      "Facturation sur facture et accès API",
-      "Vos propres clés IA : OpenAI, Anthropic, Google, Azure ou OpenRouter"
-    ],
-    "customPlanPointsChat": [
-      "Chat et agents",
-      "Entièrement automatique, avec des agents qui publient de manière autonome"
-    ],
     "planCards": {
       "expandable": "+ modules complémentaires",
       "expandableHint": "Growth peut en ajouter à tout moment, dans Paramètres › Facturation : suivi supplémentaire, marques supplémentaires et recharges d'usage IA.",
       "starter": {
         "tagline": "Pour les petites équipes qui débutent dans le suivi et l'optimisation de la Visibilité IA.",
-        "engines": "Suivi ChatGPT et Gemini",
-        "extras": ["Accès MCP & API"],
-        "extrasChat": ["Chat et Agents"]
+        "engines": "Suivi ChatGPT et Gemini"
       },
       "growth": {
         "tagline": "Pour les équipes en pleine croissance souhaitant surveiller la visibilité IA et optimiser le contenu pour la recherche IA.",
-        "engines": "Suivi de ChatGPT, Gemini, Google AI Mode et Google AI Overviews",
-        "extras": ["Suivi multi-régions", "Rapports en marque blanche et exports", "Looker Studio"],
-        "extrasChat": [
-          "Chat et Agents",
-          "Entièrement automatique, avec des agents qui publient de manière autonome"
-        ]
+        "engines": "Suivi de ChatGPT, Gemini, Google AI Mode et Google AI Overviews"
       },
       "brands": "{count, plural, one {# marque} other {# marques}}",
       "unlimitedBrands": "Marques illimitées",

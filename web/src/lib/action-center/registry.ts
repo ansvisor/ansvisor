@@ -223,6 +223,18 @@ export const ACTION_DISMISS_REASONS = [
 ] as const;
 export type ActionDismissReason = (typeof ACTION_DISMISS_REASONS)[number];
 
+/**
+ * Why a dismissed action closed, as History says it: a person's reason, or
+ * `replaced` when the nightly pass replaced it with a new one of its kind
+ * after it went stale untouched (00563). Never offered to a person.
+ */
+export type ActionClosedReason = ActionDismissReason | 'replaced';
+
+/** A stored dismiss reason as History reads it: a person's, or `replaced`; null otherwise. */
+export function closedReasonOf(value: unknown): ActionClosedReason | null {
+  return value === 'replaced' ? 'replaced' : dismissReasonOf(value);
+}
+
 /** A stored dismiss reason, if it is one of ACTION_DISMISS_REASONS; null otherwise. */
 export function dismissReasonOf(value: unknown): ActionDismissReason | null {
   return (ACTION_DISMISS_REASONS as readonly unknown[]).includes(value)

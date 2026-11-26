@@ -25,7 +25,7 @@
 
 import type {
   ActionCategory,
-  ActionDismissReason,
+  ActionClosedReason,
   ActionOutcome,
   ActionStatus,
   TaskStatus,
@@ -180,8 +180,11 @@ export interface ActionHistoryItem {
    */
   readings?: OutcomeReading[];
   outcomeFinal?: boolean;
-  /** Why it was dismissed, when someone said (learning A5). */
-  dismissReason?: ActionDismissReason | null;
+  /**
+   * Why it was dismissed, when someone said (learning A5), or `replaced`
+   * when a new action of its kind replaced it after it went stale (00563).
+   */
+  dismissReason?: ActionClosedReason | null;
   /** Its signals when it was measured; absent before, or with no signal behind it. */
   signalsAfter?: SignalOutcome | null;
   /**

@@ -622,6 +622,8 @@
       "slow": "L'operazione sta richiedendo più tempo del solito.",
       "ready": "Pronto. Apertura di Prompts in corso…",
       "failed": "Impossibile preparare la demo. Verifichi la connessione e riprovi.",
+      "stuck": "La demo è pronta, ma la sua pagina non si è aperta. Aprila di nuovo, oppure chiudi e riprova più tardi.",
+      "open": "Apri la demo",
       "retry": "Riprova",
       "close": "Chiudi"
     }
@@ -2482,6 +2484,8 @@
           "task_review_withdrawn": "Stato pronto per la revisione ritirato con Annulla: {task}{title}",
           "cancelled": "Annullata dalla Chat da {by} · annulla",
           "reopened": "Azione riaperta — la sua condizione si sta verificando di nuovo",
+          "replaced": "Sostituita da un'azione più recente dello stesso tipo: nessuno ci lavorava da 30 giorni",
+          "replaces": "Aperta al posto di un'azione più vecchia dello stesso tipo su cui nessuno lavorava da 30 giorni",
           "signals_linked": "{count, plural, one {1 nuovo segnale collegato} other {# nuovi segnali collegati}}",
           "status_changed": "Stato modificato in {to}",
           "assigned": "Assegnatario modificato",
@@ -2967,216 +2971,105 @@
           "title": "Imposta i tuoi KPI",
           "summary": "Scegli 3–5 obiettivi. Li monitoriamo noi per te.",
           "open": "Apri KPI",
-          "doneWhen": "1 KPI salvato",
-          "why": [
-            "I KPI trasformano i tuoi dati in obiettivi che puoi monitorare.",
-            "Il Centro azioni mostra i tuoi progressi rispetto ad essi ogni settimana."
-          ],
-          "how": [
-            "Apri KPI",
-            "Scegline 3–5, come la visibilità IA o le citazioni",
-            "Imposta un obiettivo per ciascuno e salva"
-          ]
+          "doneWhen": "1 KPI salvato"
         },
         "competitors": {
           "title": "Aggiungi almeno 3 competitor",
           "summary": "Funziona al meglio con 5–20 competitor.",
           "open": "Aggiungi competitor",
-          "doneWhen": "3 competitor",
-          "why": [
-            "Ogni risposta dell'IA viene confrontata con i tuoi competitor.",
-            "Da 5 a 20 competitor offrono il quadro più chiaro."
-          ],
-          "how": [
-            "Apri Competitor",
-            "Aggiungi i brand con cui gli acquirenti ti confrontano",
-            "Punta a 5–20"
-          ]
+          "doneWhen": "3 competitor"
         },
         "topics": {
           "title": "Aggiungi almeno 3 argomenti",
           "summary": "Scegli tra i suggerimenti di argomenti.",
           "open": "Apri suggerimenti di argomenti",
-          "doneWhen": "3 argomenti",
-          "why": [
-            "Gli argomenti raggruppano i tuoi prompt e mostrano dove sei in vantaggio o in svantaggio.",
-            "I suggerimenti provengono dal tuo sito e dal mercato."
-          ],
-          "how": ["Apri Argomenti", "Scegli 3 argomenti in linea con ciò che vendi", "Aggiungili"]
+          "doneWhen": "3 argomenti"
         },
         "prompts": {
           "title": "Aggiungi 3 prompt per argomento",
           "summary": "Scegli tra i suggerimenti di prompt.",
           "open": "Apri suggerimenti di prompt",
-          "doneWhen": "3 prompt in ogni argomento",
-          "why": [
-            "I prompt sono le domande che gli acquirenti pongono all'IA.",
-            "3 per argomento sono sufficienti per individuare un trend."
-          ],
-          "how": [
-            "Apri Suggerimenti di Prompt",
-            "Scegli 3 prompt per ogni argomento",
-            "Aggiungili. Le prime risposte arrivano entro poche ore"
-          ]
+          "doneWhen": "3 prompt in ogni argomento"
         },
         "gsc": {
           "title": "Collega Google Search Console",
           "summary": "Fortemente consigliato.",
           "name": "Google Search Console",
           "open": "Collega",
-          "doneWhen": "Collegato",
-          "why": [
-            "Iniziamo ad analizzare i tuoi dati entro 24 ore.",
-            "I suggerimenti per prompt e contenuti derivano da ricerche reali.",
-            "Mostra se il tuo lavoro genera clic."
-          ],
-          "how": [
-            "Fai clic su Collega",
-            "Accedi con Google e scegli la tua proprietà",
-            "Consenti l'accesso in sola lettura"
-          ]
+          "doneWhen": "Collegato"
         },
         "ga": {
           "title": "Collega Google Analytics",
           "summary": "Scopri quali visite da IA generano interazioni e conversioni.",
           "name": "Google Analytics",
           "open": "Collega",
-          "doneWhen": "Collegato",
-          "why": [
-            "Mostra quali visite da IA generano interazioni e conversioni.",
-            "Necessario per i report su traffico e conversioni."
-          ],
-          "how": [
-            "Fai clic su Collega",
-            "Scegli la tua proprietà GA4",
-            "Consenti l'accesso in sola lettura"
-          ]
+          "doneWhen": "Collegato"
         },
         "snippet": {
           "title": "Aggiungi lo snippet di Analisi traffico IA",
           "summary": "Una riga nell'head del tuo sito.",
           "open": "Ottieni il codice",
-          "doneWhen": "Prima visita rilevata",
-          "why": [
-            "Conta le visite da ChatGPT, Gemini, Perplexity e altri.",
-            "Funziona senza Google Analytics."
-          ],
-          "how": [
-            "Copia il codice",
-            "Incollalo nell'head del tuo sito",
-            "Pubblica. Rileveremo la prima visita"
-          ]
+          "doneWhen": "Prima visita rilevata"
         },
         "visibility": {
           "title": "Scopri la tua posizione in Visibilità",
           "summary": "La tua quota di risposte IA rispetto ai concorrenti.",
           "open": "Apri Visibilità",
-          "doneWhen": "Pagina aperta",
-          "why": [
-            "La tua quota di risposte IA rispetto ai concorrenti.",
-            "Il punto di partenza per ogni obiettivo."
-          ],
-          "how": [
-            "Apri Visibilità",
-            "Controlla la tua posizione e il leader",
-            "Individua la tua piattaforma più debole"
-          ]
+          "doneWhen": "Pagina aperta"
         },
         "answers": {
           "title": "Leggi le tue prime risposte IA",
           "summary": "Risposte e ricerche correlate, per prompt.",
           "open": "Apri Prompts",
-          "doneWhen": "Pagina aperta",
-          "why": ["Scopri esattamente cosa dice l'IA ai tuoi acquirenti."],
-          "how": [
-            "Apri Prompts",
-            "Apri un prompt",
-            "Leggi la risposta e le relative ricerche correlate"
-          ]
+          "doneWhen": "Pagina aperta"
         },
         "data_prompts": {
           "title": "Monitora i suggerimenti di Prompt ad alto valore",
           "summary": "Creato dai tuoi dati di Search Console e Analytics.",
           "open": "Apri i suggerimenti di Prompt",
-          "doneWhen": "5 Prompt suggeriti monitorati",
-          "why": [
-            "Creato dalle ricerche e dalle pagine che ti portano visitatori.",
-            "Così monitori ciò che conta per il fatturato."
-          ],
-          "how": [
-            "Apri i suggerimenti di Prompt",
-            "Filtro: Dai tuoi dati",
-            "Monitora quelli pertinenti, 5 o più"
-          ]
+          "doneWhen": "5 Prompt suggeriti monitorati"
         },
         "mentions": {
           "title": "Controlla cosa dice l'IA su di te",
           "summary": "Menzioni e tono.",
           "open": "Apri Menzioni",
-          "doneWhen": "Pagina aperta",
-          "why": ["Quanto spesso l'IA ti nomina e con quale tono."],
-          "how": ["Apri Menzioni", "Controlla la tua quota e il sentiment"]
+          "doneWhen": "Pagina aperta"
         },
         "citations": {
           "title": "Scopri chi cita l'IA",
           "summary": "Le pagine e i siti che l'IA usa come fonti.",
           "open": "Apri Citazioni",
-          "doneWhen": "Pagina aperta",
-          "why": ["Le fonti di cui l'IA si fida. Dove dovresti essere presente."],
-          "how": ["Apri Citazioni", "Scopri quali siti l'IA cita di più"]
+          "doneWhen": "Pagina aperta"
         },
         "traffic": {
           "title": "Visualizza le visite dall'IA",
           "summary": "Quali piattaforme inviano visitatori e verso quali pagine.",
           "open": "Apri Analisi traffico IA",
-          "doneWhen": "Pagina aperta",
-          "why": ["Quali piattaforme IA inviano visitatori e verso quali pagine."],
-          "how": ["Apri Analisi traffico IA", "Controlla le tue pagine principali"]
+          "doneWhen": "Pagina aperta"
         },
         "pick_content": {
           "title": "Scegli contenuti dai suggerimenti",
           "summary": "Scegli 1–3 suggerimenti.",
           "open": "Apri Contenuti",
-          "doneWhen": "1 suggerimento scelto",
-          "why": ["I suggerimenti sono generati dai tuoi prompt e dalle tue ricerche."],
-          "how": [
-            "Apri Contenuti",
-            "Scegli 1–3 suggerimenti: esaminali, crea un brief o inviali al Centro azioni"
-          ]
+          "doneWhen": "1 suggerimento scelto"
         },
         "create_content": {
           "title": "Crea il tuo primo contenuto",
           "summary": "Inizia la nuova pagina posizionata al primo posto nel tuo Piano dei contenuti.",
           "open": "Apri il Piano",
-          "doneWhen": "Una nuova pagina contrassegnata come pronta o pubblicata, oppure inviata al tuo CMS",
-          "why": ["I Contenuti sono il modo principale per comparire in più risposte."],
-          "how": [
-            "Apri il Piano: la pagina principale consigliata si apre in Inizia",
-            "Scegli chi scrive: tu, l'Agente Contenuti o il tuo team",
-            "Contrassegnala come pronta, poi pubblicala"
-          ]
+          "doneWhen": "Una nuova pagina contrassegnata come pronta o pubblicata, oppure inviata al tuo CMS"
         },
         "optimize_page": {
           "title": "Ottimizza una pagina",
           "summary": "Migliora la pagina posizionata al primo posto da ottimizzare nel tuo Piano dei contenuti.",
           "open": "Apri il Piano",
-          "doneWhen": "Una pagina ottimizzata contrassegnata come pronta o pubblicata, oppure una pagina sottoposta ad Audit",
-          "why": [
-            "Piccole modifiche sulle pagine già lette dall'IA possono portare risultati rapidi."
-          ],
-          "how": [
-            "Apra il Piano: la pagina principale da ottimizzare si apre in Inizia",
-            "La migliori nell'editor, seguendo le sue regole e fonti",
-            "La contrassegni come pronta, poi la pubblichi"
-          ]
+          "doneWhen": "Una pagina ottimizzata contrassegnata come pronta o pubblicata, oppure una pagina sottoposta ad Audit"
         },
         "ready": {
           "title": "È tutto pronto",
           "summary": "Le azioni IA iniziano a comparire qui.",
           "open": "Scopra i prossimi passi",
-          "doneWhen": "Automatico",
-          "why": ["D'ora in poi, l'IA trasforma i suoi segnali in azioni qui."],
-          "how": ["Controlli regolarmente il Centro azioni ogni settimana"]
+          "doneWhen": "Automatico"
         }
       },
       "panel": {
@@ -4084,6 +3977,7 @@
         "whatHappened": "Cosa è successo?",
         "triggeredBy": "Consolidato da {count, plural, one {# segnale} other {# segnali}}",
         "dismissedBecause": "Ignorato: {reason}.",
+        "replaced": "Sostituita da un'azione più recente dello stesso tipo: nessuno ci lavorava da 30 giorni, quindi i nuovi riscontri ne hanno aperta una nuova.",
         "readings": "Rilevato dopo la chiusura: {list}.",
         "reading": "giorno {day}, {outcome}",
         "finalOn": "La rilevazione finale è prevista per il giorno {day}.",
@@ -4135,7 +4029,10 @@
         "actions": "Azioni",
         "scorecard": "Scorecard",
         "kpis": "KPI",
-        "label": "Viste cronologia"
+        "label": "Viste cronologia",
+        "actionsHint": "Ogni azione in corso o conclusa, una per una: cosa si proponeva di ottenere e cosa è stato misurato da allora.",
+        "scorecardHint": "Cosa ha ottenuto ogni tipo di azione nel complesso: quante ne sono state completate, il tasso di successo e la variazione mediana.",
+        "kpisHint": "Gli obiettivi del tuo brand e quanto manca per raggiungerli."
       },
       "scorecard": {
         "note": "I risultati ottenuti da ciascun tipo di azione per questo brand, basati solo sulle sue azioni. I risultati corrispondono ai rilevamenti attuali; ciascuno diventa definitivo un mese dopo la chiusura dell'azione. La variazione mediana riguarda la metrica principale di ciascuna azione.",
@@ -6224,7 +6121,6 @@
       "home": "Home",
       "inbox": "Posta in arrivo",
       "inboxLabel": "Posta in arrivo · {needsYou, plural, one {# richiede il tuo intervento} other {# richiedono il tuo intervento}}",
-      "inboxLabelNeedsYou": "Posta in arrivo · {count, plural, one {# elemento} other {# elementi}} · {needsYou, plural, one {# richiede il tuo intervento} other {# richiedono il tuo intervento}}",
       "skills": "Competenze",
       "activity": "Attività",
       "capabilities": "Cosa può fare la chat",
@@ -6674,10 +6570,7 @@
       "landsWithSuggestions": "I risultati dei tuoi agenti e i suggerimenti giornalieri arriveranno qui.",
       "nothingNeedsYou": "Nessuna attività richiede il tuo intervento.",
       "summary": {
-        "needsYou": "{count, plural, one {# richiede il tuo intervento} other {# richiedono il tuo intervento}}",
-        "running": "{count} in esecuzione",
-        "doneToday": "{count} completate oggi",
-        "suggestions": "{count, plural, one {# suggerimento} other {# suggerimenti}} questa settimana"
+        "needsYou": "{count, plural, one {# richiede il tuo intervento} other {# richiedono il tuo intervento}}"
       },
       "empty": "Nessuna attività richiede il tuo intervento. I risultati dei tuoi agenti arriveranno qui.",
       "tabs": {
@@ -14932,34 +14825,7 @@
           "cost": "Nessun costo sulla fattura di Cloudflare o Vercel: solo il costo di esecuzione del proprio mittente di log."
         }
       },
-      "steps": {
-        "cloudflare_worker": [
-          "In Cloudflare, apra Workers & Pages e crei un Worker.",
-          "Sostituisca il codice con quello del Worker sottostante ed esegua il deployment.",
-          "In Impostazioni › Variabili e secret del Worker, aggiunga una variabile di tipo Secret con il nome e il valore indicati di seguito.",
-          "Aggiunga una route per il sito, ad esempio example.com/*, affinché il Worker possa rilevarne le richieste."
-        ],
-        "cloudflare_logpush": [
-          "In Cloudflare, apra Analisi e log › Logpush e crei un processo per il set di dati delle richieste HTTP.",
-          "Scelga Destinazione HTTP e incolli la destinazione indicata di seguito.",
-          "Selezioni i campi e il filtro dalle impostazioni del processo sottostanti, oppure crei il processo tramite l'API utilizzandoli."
-        ],
-        "vercel_drain": [
-          "In Vercel, apra Impostazioni team › Drains e aggiunga un drain di log per il progetto del sito.",
-          "Scelga Endpoint personalizzato e incolli l'URL dell'endpoint indicato di seguito.",
-          "Imposti il formato su JSON e aggiunga l'intestazione personalizzata indicata di seguito."
-        ],
-        "fastly_log_stream": [
-          "In Fastly, apra il servizio e aggiunga un endpoint di logging HTTPS.",
-          "Imposti l'URL dell'endpoint indicato sotto, utilizzi POST, imposti Content-Type su application/json e aggiunga l'intestazione personalizzata sottostante (Authorization con il valore Bearer).",
-          "Scelga voci di log JSON con output delimitato da nuova riga e un formato personalizzato per la riga di log. Incolli il formato indicato sotto, quindi attivi la configurazione del servizio. Ansvisor risponde automaticamente alla verifica del controllo del dominio di Fastly per il proprio endpoint API; non è necessario aggiungere un record DNS."
-        ],
-        "log_webhook": [
-          "Nel mittente dei log (Vector, Fluent Bit, Logstash o script personalizzato), aggiunga un output HTTP che invii richieste POST all'endpoint indicato di seguito.",
-          "Aggiunga l'intestazione sottostante, includendo il secret.",
-          "Invii righe JSON, una richiesta per riga, con i campi indicati nell'esempio: user_agent, ip, url (oppure host e path), status, time (RFC 3339, oppure secondi o millisecondi dal 1970) e, se disponibile, country. Fino a 20.000 righe e 20 MB per invio, con compressione gzip facoltativa. Le richieste anteriori a 7 giorni non vengono conteggiate."
-        ]
-      },
+      "steps": {},
       "copyExample": "Una riga di esempio",
       "upload": {
         "title": "Oppure carica un file di log",
@@ -18379,24 +18245,139 @@
       }
     },
     "notifications": "Notifiche",
-    "notificationsDescription": "Ogni brand può inviare due e-mail: il Daily Pulse dopo le sue analisi di monitoraggio e il riepilogo settimanale AI Traffic ogni lunedì. Entrambe vanno ai destinatari del Daily Pulse del brand.",
-    "pulseSection": "Daily Pulse",
-    "pulseSectionDescription": "Un breve riepilogo per brand dopo ogni analisi di monitoraggio, con evidenze e avvisi. Scegli la frequenza e chi lo riceve.",
-    "pulseFrequencyLabel": "Frequenza del Daily Pulse di {brand}",
+    "yourEmails": {
+      "title": "Le tue e-mail",
+      "description": "Scegli quali e-mail ti invia Ansvisor e con che frequenza. Sono solo tue: ogni membro del team imposta le proprie.",
+      "carriedOver": "Queste sono le e-mail che ricevi oggi. Salva per mantenerle come tue scelte.",
+      "for": "Per",
+      "scopeAll": "Tutti i miei brand ({count})",
+      "deliveryHint": "Le e-mail dei brand arrivano una per brand, oppure insieme in un'unica e-mail:",
+      "delivery_per_brand": "Un'e-mail per brand",
+      "delivery_combined": "Tutti i brand in un'unica e-mail (prossimamente)",
+      "brandOnly": "Imposta solo per {brand}",
+      "useAll": "Usa la mia scelta per Tutti i miei brand",
+      "notableNote": "Il tuo primo Pulse, poi solo quando accade qualcosa di rilevante.",
+      "comingSoon": "Prossimamente",
+      "comingSoonHint": "Le e-mail contrassegnate come Prossimamente mantengono la scelta salvata e verranno inviate non appena saranno pronte.",
+      "admins": "Amministratori",
+      "groups": {
+        "visibility": "Visibilità del brand",
+        "traffic": "Traffico IA",
+        "actions": "Centro azioni",
+        "agents": "Agenti e Chat",
+        "audit": "Audit del sito",
+        "content": "Contenuti",
+        "account": "Account"
+      },
+      "kinds": {
+        "daily_pulse": {
+          "name": "Daily Pulse",
+          "description": "Come ogni brand è apparso nelle risposte IA: punteggio di Visibilità, menzioni, citazioni, aspetti positivi e avvisi."
+        },
+        "traffic_digest": {
+          "name": "Riepilogo settimanale",
+          "description": "Le visite IA della settimana scorsa in una riga, con le tre principali variazioni. Il lunedì."
+        },
+        "critical_action": {
+          "name": "Nuova azione critica",
+          "description": "Una nuova azione con priorità Critica per i tuoi brand."
+        },
+        "due_actions": {
+          "name": "Scadute e in scadenza oggi",
+          "description": "Azioni e attività assegnate a te in scadenza o in ritardo."
+        },
+        "weekly_actions": {
+          "name": "Riepilogo settimanale delle azioni",
+          "description": "Cosa è stato fatto, cosa è aperto e cosa c'è dopo. Il lunedì."
+        },
+        "run_finished": {
+          "name": "Esecuzione completata",
+          "description": "Un'esecuzione di un agente che hai avviato è terminata, con il resoconto di ciò che ha fatto."
+        },
+        "audit_finished": {
+          "name": "Audit completato",
+          "description": "Un audit in blocco o pianificato è terminato, con il punteggio."
+        },
+        "score_dropped": {
+          "name": "Punteggio in calo",
+          "description": "Il punteggio di una pagina è sceso di 5 punti o più rispetto all'ultimo audit."
+        },
+        "drafts_review": {
+          "name": "Bozze in attesa della tua revisione",
+          "description": "Bozze create per i tuoi brand che richiedono la tua revisione prima della pubblicazione."
+        },
+        "ai_usage": {
+          "name": "Utilizzo IA",
+          "description": "All'80% e al 100% del limite mensile IA."
+        }
+      },
+      "links": {
+        "approvals": {
+          "name": "In attesa della tua approvazione",
+          "description": "Un agente o un'esecuzione di Chat ha bisogno del tuo OK prima di modificare o pubblicare qualsiasi cosa. Impostalo con Avvisami quando un agente ha bisogno di me.",
+          "link": "Impostazioni di Chat"
+        },
+        "scheduled": {
+          "name": "Job pianificati",
+          "description": "Ogni job invia e-mail come impostato nel job stesso.",
+          "link": "Apri job"
+        },
+        "billing": {
+          "name": "Fatturazione e sicurezza",
+          "description": "Fatture, problemi di pagamento e avvisi di accesso. Sempre inviati.",
+          "locked": "Sempre attivo"
+        }
+      },
+      "options": {
+        "pulse": {
+          "daily": "Ogni giorno",
+          "weekly": "Ogni settimana",
+          "notable": "Solo se rilevante",
+          "off": "Disattivato"
+        },
+        "instant": {
+          "instant": "Subito",
+          "daily": "Riepilogo giornaliero",
+          "off": "Disattivato"
+        },
+        "digest": {
+          "daily": "Riepilogo giornaliero",
+          "weekly": "Riepilogo settimanale",
+          "off": "Disattivato"
+        },
+        "weekly": {
+          "weekly": "Ogni lunedì",
+          "off": "Disattivato"
+        },
+        "onoff": {
+          "on": "Attivo",
+          "off": "Disattivato"
+        }
+      },
+      "save": "Salva modifiche",
+      "saved": "Le tue preferenze e-mail sono state salvate",
+      "saveFailed": "Impossibile salvare le tue preferenze e-mail. Riprova.",
+      "loadFailed": "Impossibile caricare le tue preferenze e-mail.",
+      "turnOffAll": "Disattiva tutte le e-mail facoltative",
+      "turnedOff": "Tutte le e-mail facoltative sono impostate su Disattivato. Salva le modifiche per confermare."
+    },
+    "outsideEmails": {
+      "title": "Invia a persone esterne al workspace",
+      "description": "Un cliente o un responsabile senza un posto Ansvisor può ricevere anche i riepiloghi di un brand. Non riceverà mai approvazioni né e-mail dell'account.",
+      "sends": "Daily Pulse · Digest settimanale AI Traffic",
+      "recipients": "Destinatari",
+      "placeholder": "cliente@example.com, capo@example.com",
+      "hint": "Separati da virgola. I colleghi che non hanno salvato le proprie preferenze e-mail continuano a ricevere le e-mail di questo brand come prima: tutti finché questo elenco è vuoto, altrimenti solo quelli presenti nell'elenco.",
+      "frequency": "Daily Pulse",
+      "frequencyNote": "Questa impostazione vale anche per il canale Slack e i webhook del brand, e per i colleghi che non hanno salvato le proprie preferenze.",
+      "digest": "Invia anche il digest settimanale AI Traffic",
+      "digestPulseOff": "Il digest settimanale non viene inviato finché questo Daily Pulse è disattivato."
+    },
     "pulseFrequency_daily": "Giornaliera",
     "pulseFrequency_weekly": "Settimanale",
     "pulseFrequency_notable": "Solo se rilevante",
-    "pulseFrequency_notableNote": "Il tuo primo pulse, poi solo quando accade qualcosa di rilevante.",
     "pulseFrequency_off": "Disattivata",
-    "pulseRecipients": "Destinatari",
-    "pulseRecipientsPlaceholder": "alex@example.com, sam@example.com",
-    "pulseRecipientsHint": "Indirizzi email separati da virgola. Lascia vuoto per inviare a ogni membro dell'organizzazione.",
     "pulseRecipientsInvalid": "Indirizzo email non valido: {emails}. Correggilo o rimuovilo prima di salvare.",
-    "trafficDigest": "Riepilogo settimanale del traffico IA",
-    "trafficDigestDescription": "Ogni lunedì: le visite IA della settimana scorsa in una riga di riepilogo, con le tre principali variazioni. Va ai destinatari del Daily Pulse di ogni brand e viene salvato non appena lo selezioni o deselezioni.",
-    "trafficDigestTo": "A {emails}",
-    "trafficDigestToEveryone": "A tutti i membri dell'organizzazione",
-    "trafficDigestPulseOff": "Non inviato quando Daily Pulse è disattivato. Riattiva il pulse per riceverlo di nuovo.",
     "pulseSaved": "Impostazioni delle notifiche salvate",
     "pulseSaveFailed": "Impossibile salvare le impostazioni delle notifiche. Riprova.",
     "pulseLoadFailed": "Impossibile caricare le impostazioni delle notifiche.",
@@ -18421,7 +18402,6 @@
       "loading": "Caricamento delle lingue…",
       "moreSoon": "Altre lingue sono in arrivo.",
       "preview": "Il personale e le versioni di test visualizzano anche le lingue che non hanno ancora una traduzione. Mostrano il testo in inglese dove manca la traduzione.",
-      "testLanguage": "{language} · test",
       "saved": "Lingua salvata",
       "saveFailed": "Impossibile salvare la lingua. Riprovi.",
       "suggest": {
@@ -18725,39 +18705,16 @@
     "subscriptionCanceled": "Il tuo abbonamento è stato annullato.",
     "needCustomPlan": "Hai bisogno di un piano personalizzato?",
     "customPlanDescription": "Per grandi aziende e agenzie che gestiscono la visibilità IA su larga scala. A partire da {price} $/mese.",
-    "customPlanPoints": [
-      "1 brand e 3.000 Prompt per iniziare, di più su contratto",
-      "Tutti i motori di risposta, Claude su contratto",
-      "Brief di contenuti, opportunità e audit del sito illimitati",
-      "SSO / SAML, supporto prioritario e SLA",
-      "Fatturazione con fattura e accesso API",
-      "Le tue chiavi IA: OpenAI, Anthropic, Google, Azure o OpenRouter"
-    ],
-    "customPlanPointsChat": [
-      "Chat e agenti",
-      "Completamente automatico, con agenti che pubblicano autonomamente"
-    ],
     "planCards": {
       "expandable": "+ add-on",
       "expandableHint": "Growth può aggiungerne in qualsiasi momento, in Impostazioni › Fatturazione: monitoraggio extra, brand extra e ricariche di utilizzo IA.",
       "starter": {
         "tagline": "Per piccoli team che iniziano con il monitoraggio e l'ottimizzazione della visibilità IA.",
-        "engines": "Monitoraggio di ChatGPT e Gemini",
-        "extras": ["Accesso ad API e MCP"],
-        "extrasChat": ["Chat e agenti"]
+        "engines": "Monitoraggio di ChatGPT e Gemini"
       },
       "growth": {
         "tagline": "Per team in crescita che desiderano monitorare la Visibilità IA e ottimizzare i Contenuti per la ricerca basata sull'IA.",
-        "engines": "Monitoraggio di ChatGPT, Gemini, Google AI Mode e Google AI Overviews",
-        "extras": [
-          "Monitoraggio multiregionale",
-          "Report ed esportazioni white-label",
-          "Looker Studio"
-        ],
-        "extrasChat": [
-          "Chat e agenti",
-          "Completamente automatico, con agenti che pubblicano in autonomia"
-        ]
+        "engines": "Monitoraggio di ChatGPT, Gemini, Google AI Mode e Google AI Overviews"
       },
       "brands": "{count, plural, one {# brand} other {# brand}}",
       "unlimitedBrands": "Brand illimitati",
