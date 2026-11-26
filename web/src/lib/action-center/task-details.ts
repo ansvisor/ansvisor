@@ -379,6 +379,7 @@ export const MANUAL_TASKS: readonly string[] = [
   'validate_third_party_presence',
   // The bridge links' pairs, read before they go on the pages (AC plan P-10).
   'review_link_plan',
+  'review_paid_overlap',
 ];
 
 /**

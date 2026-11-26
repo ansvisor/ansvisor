@@ -55,11 +55,21 @@ function byPrompt(rows) {
 }
 
 /**
- * @param {{ brandId: string, orgId: string, period?: string, thresholds?: object, now?: Date }} input
+ * @param {{ brandId: string, orgId: string, period?: string, thresholds?: object, now?: Date,
+ *   paidBefore?: boolean }} input
+ *   paidBefore: also read the Google spend of the period before (the paid
+ *   watch, paid-watch.js), matched over the same prompts, as `paidBefore`.
  * @returns {Promise<{ rows: object[], notAnalysed: number,
  *   paid: { measured: boolean, unmatched: Array<{ currencyCode: string | null, amount: number }> } }>}
  */
-export async function readStanding({ brandId, orgId, period, thresholds, now = new Date() }) {
+export async function readStanding({
+  brandId,
+  orgId,
+  period,
+  thresholds,
+  now = new Date(),
+  paidBefore = false,
+}) {
   const days = ADS_PERIODS[period] ?? ADS_PERIODS['30d'];
   const window = {
     p_brand_id: brandId,
@@ -124,6 +134,11 @@ export async function readStanding({ brandId, orgId, period, thresholds, now = n
   const buying = prompts.filter((_, i) => kinds[i] === 'buying');
   if (buying.length === 0)
     return { rows: [], notAnalysed, paid: { measured: false, unmatched: [] } };
+  const paidPrompts = buying.map((p) => ({
+    promptId: p.id,
+    text: p.text,
+    keywords: demand.get(p.id)?.keywords ?? [],
+  }));
   const [positions, paid] = await Promise.all([
     competitors.length
       ? rpc('ae_competitor_positions', {
@@ -137,11 +152,7 @@ export async function readStanding({ brandId, orgId, period, thresholds, now = n
       brandId,
       from: window.p_cur_from,
       to: window.p_cur_to,
-      prompts: buying.map((p) => ({
-        promptId: p.id,
-        text: p.text,
-        keywords: demand.get(p.id)?.keywords ?? [],
-      })),
+      prompts: paidPrompts,
     }).catch((err) => {
       // Paid reads as not measured, as before Google was connected: the
       // page's earned side still answers.
@@ -150,6 +161,17 @@ export async function readStanding({ brandId, orgId, period, thresholds, now = n
     }),
   ]);
 
+  // The period before, over the same prompts: a term goes to the same prompt in both.
+  const before =
+    paidBefore && paid.measured
+      ? await readPaid({
+          orgId,
+          brandId,
+          from: window.p_prev_from,
+          to: window.p_prev_to,
+          prompts: paidPrompts,
+        })
+      : null;
   const statsOf = new Map(stats.map((s) => [s.prompt_id, s]));
   const [namedOf, positionsOf] = [byPrompt(named), byPrompt(positions)];
   const topicName = new Map(topics.map((t) => [t.id, t.name]));
@@ -200,6 +222,7 @@ export async function readStanding({ brandId, orgId, period, thresholds, now = n
       weNamed,
       leaderName: competitorName.get(leader) ?? null,
       paid: paid.byPrompt.get(p.id) ?? null,
+      ...(before ? { paidBefore: before.byPrompt.get(p.id) ?? null } : {}),
       standing,
       ...earnOrPay(standing, thresholds),
     };

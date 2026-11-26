@@ -4,7 +4,7 @@
  * The shared Task Library of the V1 specification: sixty-two primitives with
  * stable ids, which every definition builds its plan from, and one added
  * since (learning C4's analyze_winning_pages, AC plan P-10's
- * review_link_plan). An action tells the
+ * review_link_plan, Ads Phase 1 P4's review_paid_overlap). An action tells the
  * user what to achieve; its tasks say how, and a task is one of these.
  *
  * Each primitive declares, in the specification's terms:
@@ -40,6 +40,7 @@ const SOURCES = [
   'volumes',
   'ai_traffic',
   'topics',
+  'google_ads',
 ];
 
 export const MODES = Object.freeze(['system', 'agent', 'human', 'human_or_agent']);
@@ -219,6 +220,12 @@ export const TASKS = Object.freeze({
   // The bridge links' pairs and anchors, read by a person before they go on
   // the pages (AC plan P-10).
   review_link_plan: human('review_link_plan', { outputs: ['links'] }),
+  // Ads Phase 1 P4: the person checks, in their own Google Ads account, whether
+  // the search terms of prompts AI already picks them for still need the ad.
+  review_paid_overlap: human('review_paid_overlap', {
+    requires: ['google_ads'],
+    outputs: ['decisions'],
+  }),
   define_validation_baseline: system('define_validation_baseline', {
     outputs: ['baseline', 'window'],
   }),

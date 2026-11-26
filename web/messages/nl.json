@@ -1883,6 +1883,10 @@
         "title": "Sterke AI-conversies op {targets}",
         "description": "Deze pagina's zetten AI-verkeer om in belangrijke gebeurtenissen, ruim boven het gemiddelde van uw site."
       },
+      "paid_overlap": {
+        "title": "Google-advertentie-uitgaven stijgen voor {targets} waar AI u al voor kiest",
+        "description": "AI kiest u al in de antwoorden op deze koopprompts, en wat u aan Google betaalt voor de bijbehorende zoektermen is gestegen ten opzichte van de voorgaande 30 dagen."
+      },
       "bridge_link_gap": {
         "title": "Link {targets} naar pagina's die converteren",
         "description": "AI stuurt lezers naar deze pagina's en weinigen van hen converteren. Pagina's over hetzelfde onderwerp die wel converteren, hebben weinig AI-verkeer."
@@ -3354,6 +3358,12 @@
         "description": "Deze bronnen worden geciteerd wanneer antwoorden uw merk bespreken, en kunnen naar uw eigen pagina's verwijzen.",
         "goal": "Zet vermeldingen van derden om in referenties naar uw assets."
       },
+      "review_paid_overlap": {
+        "title": "Beoordeel de Google-advertenties voor {targets} waar AI u al voor kiest",
+        "titleGeneric": "Beoordeel Google-advertenties waar AI u al kiest",
+        "description": "AI kiest u al in de antwoorden op deze koopprompts, en uw Google-uitgaven voor de bijbehorende zoektermen stijgen. Mogelijk betaalt u voor klikken die u anders ook zou krijgen.",
+        "goal": "Besteed aan advertenties waar ze extra klikken opleveren, en behoud het AI-antwoord."
+      },
       "bridge_links": {
         "title": "Link {targets} naar pagina's die converteren",
         "titleGeneric": "Link door AI bezochte pagina's naar pagina's die converteren",
@@ -3818,6 +3828,8 @@
       "prioritize_targets_target": "Prioriteer {targets} op basis van impact",
       "review_link_plan": "Beoordeel de toe te voegen links",
       "review_link_plan_target": "Beoordeel de links die moeten worden toegevoegd aan {targets}",
+      "review_paid_overlap": "Beoordeel de Google-advertenties voor deze zoektermen",
+      "review_paid_overlap_target": "Beoordeel de Google-advertenties voor {targets}",
       "define_validation_baseline": "Leg de nulmeting vast om tegen af te zetten",
       "define_validation_baseline_target": "Leg de nulmeting vast voor {targets}",
       "create_content_brief": "Maak een contentbriefing",
@@ -3929,6 +3941,7 @@
       "strengthen_entity_content": "De pagina beschrijft het merk zoals het profiel dat doet, na opnieuw ophalen",
       "add_internal_links": "De pagina's die ernaar moeten linken doen dat, opnieuw opgehaald",
       "review_link_plan": "Elke link en de bijbehorende ankertekst is goedgekeurd of gewijzigd: u bevestigt dit",
+      "review_paid_overlap": "De advertentie voor elke zoekterm is behouden, verlaagd of onderbroken in Google Ads: u bevestigt dit",
       "improve_cta_path": "De call-to-action staat live op de pagina: u bevestigt dit",
       "publish_content": "De pagina is gepubliceerd op het adres en reageert wanneer deze wordt opgehaald",
       "fix_crawler_access": "robots.txt en de pagina laten de AI-crawlers toe, opnieuw opgehaald",
@@ -4502,6 +4515,10 @@
       "name": "Catalogusbronnen lezen",
       "step": "Catalogus lezen"
     },
+    "catalogFeedGaps": {
+      "name": "Feedlacunes lezen",
+      "step": "Producten · Feedlacunes lezen"
+    },
     "contentPlan": {
       "name": "Het contentplan lezen",
       "step": "Contentplan lezen"
@@ -4815,6 +4832,10 @@
     "adsOpportunities": {
       "name": "Advertentiekansen lezen",
       "step": "Advertentiekansen gelezen"
+    },
+    "adsPaidOverlap": {
+      "name": "Betaalde overlap uitlezen",
+      "step": "Betaalde overlap uitlezen"
     },
     "adDrafts": {
       "name": "Advertentieconcepten opslaan",
@@ -7775,7 +7796,9 @@
         "signal": "Signaal aangemaakt",
         "kpi": "KPI gewijzigd",
         "watch_rule": "Waakregel",
-        "brand_added": "Merk toegevoegd"
+        "brand_added": "Merk toegevoegd",
+        "page_published": "Pagina gepubliceerd",
+        "catalog_synced": "Catalogus gesynchroniseerd"
       },
       "daily": "Elke dag om {time}",
       "weekdays": "Werkdagen om {time}",
@@ -7790,13 +7813,17 @@
       "kpiAny": "Een KPI",
       "watchRule": "Meldingsregel",
       "brandAdded": "Wanneer een merk wordt toegevoegd",
+      "pagePublished": "Wanneer een pagina wordt gepubliceerd",
+      "catalogSynced": "Wanneer de catalogus wordt gesynchroniseerd",
       "manualOnly": "Alleen handmatig",
       "more": "+{count}",
       "firesWhen": {
         "signal": "Wordt geactiveerd wanneer Action Center een passend signaal vindt",
         "kpi": "Wordt geactiveerd wanneer de KPI de drempelwaarde overschrijdt",
         "watch_rule": "Wordt geactiveerd wanneer de bijbehorende meldingsregel afgaat",
-        "brand_added": "Wordt eenmalig geactiveerd voor elk merk dat aan de workspace wordt toegevoegd"
+        "brand_added": "Wordt eenmalig geactiveerd voor elk merk dat aan de workspace wordt toegevoegd",
+        "page_published": "Wordt eenmaal geactiveerd voor elke pagina die live gaat in het CMS van het merk",
+        "catalog_synced": "Wordt eenmaal geactiveerd voor elke catalogussynchronisatie die producten wijzigt"
       },
       "timeZone": "{zone}-tijd",
       "off": "Uit · wordt niet geactiveerd",
@@ -7896,6 +7923,8 @@
         "trigger": "Trigger",
         "signal": "Signaal",
         "slot": "Gepland voor",
+        "page": "Pagina gepubliceerd",
+        "catalog": "Catalogusbron gesynchroniseerd",
         "earlier": "Eerdere activeringen",
         "action": "Actie"
       },
@@ -7937,6 +7966,8 @@
       "kpi": "KPI gewijzigd",
       "watch_rule": "Watch-regel",
       "brand_added": "Merk toegevoegd",
+      "page_published": "Pagina gepubliceerd",
+      "catalog_synced": "Catalogus gesynchroniseerd",
       "manual": "Handmatig",
       "action": "Agent uitvoeren vanuit een actie",
       "agent": "Aangeroepen door een andere agent"
@@ -8012,8 +8043,10 @@
       "seasonal": "Seizoensgebonden prompts",
       "traffic": "AI-verkeer en aanmeldingen",
       "ai-revenue": "Klanten en omzet via AI",
+      "feed-advisor": "Lacunes in shoppingfeed",
       "earn-or-pay": "Verdienen of betalen",
       "ad-drafts": "Advertentieconcepten",
+      "paid-overlap": "Betaalde overlap",
       "operator": "AEO Operator"
     },
     "form": {
@@ -8080,7 +8113,9 @@
           "signal": "Signaal aangemaakt",
           "kpi": "KPI gewijzigd",
           "watch_rule": "Bewakingsregel",
-          "brand_added": "Wanneer een merk wordt toegevoegd"
+          "brand_added": "Wanneer een merk wordt toegevoegd",
+          "page_published": "Wanneer een pagina wordt gepubliceerd",
+          "catalog_synced": "Wanneer de catalogus wordt gesynchroniseerd"
         },
         "notes": {
           "manual": "Uitvoeren via Chat of een actie",
@@ -8088,7 +8123,9 @@
           "signal": "Een nieuw Actiecentrum-signaal",
           "kpi": "Een KPI overschrijdt een drempelwaarde",
           "watch_rule": "WANNEER · VOOR · DAN",
-          "brand_added": "Eenmalig per nieuw merk · vereist Alle merken"
+          "brand_added": "Eenmalig per nieuw merk · vereist Alle merken",
+          "page_published": "Eén keer per pagina die live gaat in uw CMS",
+          "catalog_synced": "Eén keer per synchronisatie die producten wijzigt"
         },
         "watchRuleNone": "Ingesteld op een bewakingsregel: de bijbehorende DAN voert de agent uit",
         "list": "Triggers",
@@ -8152,6 +8189,8 @@
         },
         "watchRuleWhen": "De controleerregel wordt geactiveerd",
         "brandAddedWhen": "er een merk wordt toegevoegd aan de werkruimte, eenmaal per merk",
+        "pagePublishedWhen": "een pagina live gaat in het CMS van het merk, eenmaal per pagina",
+        "catalogSyncedWhen": "een synchronisatie van de productcatalogus van het merk producten wijzigt, eenmaal per synchronisatie",
         "runAgent": "Agent uitvoeren"
       },
       "scope": {
@@ -8618,7 +8657,7 @@
       },
       "paid-opportunity": {
         "name": "Betaalde kansen",
-        "description": "Geeft wekelijks aan welke koopprompts u met content moet verdienen of voor moet betalen, signaleert wijzigingen zoals een concurrent die op uw naam adverteert, en ontwerpt advertenties in Ansvisor."
+        "description": "Geeft wekelijks aan welke koopprompts u organisch met content moet behalen of voor moet betalen, signaleert wijzigingen zoals een concurrent die nu op uw naam adverteert, toont wat u op Google betaalt waar AI u al citeert, en stelt advertenties op in Ansvisor."
       },
       "ai-ads-watch": {
         "name": "AI Ads Watch",
@@ -15405,7 +15444,14 @@
       "sov": "Betaalde SoV",
       "sovNote": "Gesponsorde advertenties in AI-antwoorden worden nog niet geregistreerd",
       "cost": "Kosten per AI-ondersteunde aanmelding",
-      "costNote": "Vereist een gekoppeld advertentieaccount",
+      "costNote": "Vereist een gekoppeld en uitgelezen advertentieaccount in Koppelingen",
+      "costOf": "{spend} advertentie-uitgaven ÷ {count, plural, one {# AI-ondersteunde aanmelding} other {# AI-ondersteunde aanmeldingen}}",
+      "costSpend": "{spend} advertentie-uitgaven in deze periode",
+      "costNoSignups": "Nog geen aanmeldingen",
+      "costNoSpend": "Geen advertentie-uitgaven",
+      "costNoSpendNote": "De gekoppelde advertentieaccounts hebben in deze periode niets uitgegeven",
+      "costCurrencies": "Meerdere valuta's",
+      "costCurrenciesNote": "{spend} advertentie-uitgaven: bedragen in verschillende valuta's worden niet opgeteld, dus er zijn geen eenduidige kosten per aanmelding",
       "signups": "{count, plural, one {# AI-ondersteunde aanmelding} other {# AI-ondersteunde aanmeldingen}} in deze periode",
       "signupsNotMeasured": "AI-ondersteunde aanmeldingen: niet gemeten",
       "barTitle": "Organisch of betaald · {count, plural, one {# prompt} other {# prompts}}",
@@ -15414,7 +15460,11 @@
       "earnedPaid": "Organisch + betaald",
       "paidOnly": "Alleen betaald",
       "neither": "Geen van beide",
-      "paidNotMeasured": "Betaald wordt nog niet gemeten, dus de balk toont alleen organisch en geen van beide.",
+      "paidNotMeasured": "Betaald wordt pas gemeten zodra een Google Ads-account is gekoppeld en uitgelezen, dus de balk toont alleen organisch en geen van beide.",
+      "spendOverlap": "Betaald op Google voor prompts waar AI u al voor citeert: {amount}",
+      "spendMatched": "Voor al uw gevolgde prompts: {amount}",
+      "spendUnmatched": "Voor zoektermen die met geen enkele gevolgde prompt overeenkomen: {amount}",
+      "spendNote": "Van uw Google Ads-zoektermen. Uitgaven aan ChatGPT Ads zijn te vinden onder Campagnes: daar staat niet bij bij welke vraag een advertentie werd getoond.",
       "openPrompts": "Bekijk {count, plural, one {# open prompt} other {# open prompts}}",
       "locked": "{count, plural, one {# extra prompt} other {# extra prompts}} in Kansen {count, plural, one {is} other {zijn}} inbegrepen vanaf het {plan}-abonnement.",
       "openSov": "Wie betaalt per prompt"
@@ -15491,7 +15541,7 @@
         "volume_at_least": "{volume} Google-zoekopdrachten per maand, minimaal {threshold}",
         "volume_below": "{volume} Google-zoekopdrachten per maand, onder {threshold}",
         "volume_not_measured": "Google-zoekopdrachten worden nog niet gemeten",
-        "paid_not_measured": "Wie betaalt wordt nog niet gemeten",
+        "paid_not_measured": "{wePay, select, false {Of concurrenten betalen voor advertenties is nog niet gemeten} other {Wie betaalt is nog niet gemeten}}",
         "no_ad_channel": "Geen enkel advertentiekanaal bereikt de AI-platforms waarop dit wordt gevolgd"
       },
       "answers": "Wat AI vandaag antwoordt",
@@ -15501,6 +15551,13 @@
       "cites": "Citeert: {domains}",
       "fanOuts": "Fan-out-zoekopdrachten",
       "keywords": "Keyword-seeds",
+      "paid": {
+        "title": "Uw Google-advertenties hiervoor",
+        "spend": "{amount} voor {clicks, plural, one {# klik} other {# klikken}} in deze periode",
+        "terms": "{count, plural, one {# zoekterm kwam overeen} other {# zoektermen kwamen overeen}}, de duurste eerst:",
+        "none": "Er zijn in deze periode geen Google Ads-uitgaven aan gekoppeld.",
+        "note": "Zoektermen worden op basis van hun woorden gekoppeld aan de prompt. ChatGPT Ads-uitgaven worden niet gekoppeld: daar staat niet bij bij welke vraag een advertentie werd getoond."
+      },
       "failed": "De antwoorden konden niet worden gelezen. Sluit dit venster en open het opnieuw.",
       "earn": {
         "title": "Earn · verbeter het antwoord",
@@ -15575,14 +15632,31 @@
         "channel": "Kanaal",
         "status": "Status",
         "spend": "Uitgaven",
-        "signups": "AI-ondersteunde aanmeldingen",
-        "cost": "Kosten per aanmelding"
+        "clicks": "Klikken",
+        "cpc": "CPC",
+        "conversions": "Conversies",
+        "costPerConversion": "Kosten per conversie"
       },
-      "empty": "Koppel een advertentieaccount · binnenkort beschikbaar",
-      "emptyNote": "Uw campagnes worden hier weergegeven, in het begin alleen-lezen.",
+      "channels": {
+        "google": "Google Ads",
+        "chatgpt": "ChatGPT Ads"
+      },
+      "statuses": {
+        "active": "Actief",
+        "paused": "Onderbroken",
+        "ended": "Beëindigd"
+      },
+      "empty": "Nog geen advertentieaccount gekoppeld",
+      "emptyNote": "Koppel Google Ads of ChatGPT Ads om uw campagnes hier te bekijken, alleen-lezen.",
+      "openConnections": "Verbindingen openen",
+      "failed": "Kan uw campagnes niet laden. Probeer het over een ogenblik opnieuw.",
+      "firstRead": "Uw eerste cijfers zijn binnen een dag na koppeling beschikbaar.",
+      "noneInPeriod": "Er liep geen campagne in deze periode.",
+      "attention": "{count, plural, one {# advertentieaccount vereist aandacht.} other {# advertentieaccounts vereisen aandacht.}}",
+      "currencyNote": "Elke campagne wordt weergegeven in de valuta van het betreffende advertentieaccount. Cijfers worden eenmaal per dag uitgelezen.",
       "safety": {
         "title": "Veiligheid",
-        "note": "Afgedwongen door Ansvisor, niet door een agent. Er wordt momenteel niets naar een advertentieaccount gestuurd.",
+        "note": "Afgedwongen door Ansvisor, niet door een agent. Momenteel leest Ansvisor uw advertentieaccounts alleen uit.",
         "click": "Elke activering, pauzering, budget- of bodwijziging vereist een klik en bevestiging van een persoon, in elke modus.",
         "agents": "Agents geven nooit geld uit: een agent kan een wijziging voorstellen, maar alleen een persoon kan deze doorvoeren.",
         "cap": "Beheerders stellen een maandelijks limiet in voor elk kanaal. Een wijziging boven de limiet wordt geblokkeerd, waarbij de wijzigingen van de afgelopen 24 uur worden meegeteld.",
@@ -15590,7 +15664,6 @@
       }
     },
     "connections": {
-      "soon": "Binnenkort beschikbaar",
       "later": "Komt later",
       "notify": "Houd me op de hoogte",
       "notified": "U ontvangt bericht",
@@ -15606,47 +15679,75 @@
       "connect": "Koppelen",
       "adminConnects": "Een Beheerder koppelt dit",
       "accountStatus": {
-        "active": "Gekoppeld",
-        "error": "Vereist aandacht",
-        "disconnected": "Ontkoppeld"
+        "active": "Verbonden",
+        "error": "Aandacht vereist",
+        "disconnected": "Niet verbonden"
       },
       "sync": {
-        "syncedAt": "Cijfers opgehaald {when}",
-        "pending": "Eerste uitlezing binnen een dag: de laatste 90 dagen",
+        "syncedAt": "Cijfers uitgelezen {when}",
+        "pending": "Eerste uitlezing binnen een dag: de afgelopen 90 dagen",
         "error": {
-          "key_refused": "ChatGPT Ads heeft de sleutel geweigerd. Plak een nieuwe sleutel.",
-          "key_missing": "De sleutel is verdwenen. Koppel het account opnieuw.",
-          "signin_gone": "De Google Ads-aanmelding is verdwenen. Koppel Google Ads opnieuw.",
+          "key_refused": "ChatGPT Ads heeft de sleutel geweigerd. Plak een nieuwe.",
+          "key_missing": "De sleutel ontbreekt. Koppel het account opnieuw.",
+          "signin_gone": "De Google Ads-inloggegevens ontbreken. Koppel Google Ads opnieuw.",
           "upstream": "Het advertentieplatform reageerde niet. Ansvisor probeert het binnen een dag opnieuw.",
-          "failed": "De cijfers konden niet worden opgehaald. Ansvisor probeert het binnen een dag opnieuw."
+          "failed": "Kan de cijfers niet uitlezen. Ansvisor probeert het binnen een dag opnieuw."
         }
       },
       "chatgpt": {
         "connect": "Koppelen",
         "addAnother": "Account toevoegen",
         "dialogTitle": "ChatGPT Ads koppelen",
-        "dialogLine": "Plak een Ads API-sleutel uit ChatGPT Ads Manager. Elke sleutel geeft toegang tot één advertentieaccount, dus voeg per account één sleutel toe.",
+        "dialogLine": "Plak een Ads API-sleutel van ChatGPT Ads Manager. Elke sleutel geeft toegang tot één advertentieaccount, voeg dus één sleutel per account toe.",
         "keyLabel": "Ads API-sleutel",
-        "keyNote": "Ansvisor controleert de sleutel bij ChatGPT Ads en slaat hem daarna versleuteld op. Alleen lezen.",
+        "keyNote": "Ansvisor controleert de sleutel bij ChatGPT Ads en slaat deze vervolgens versleuteld op. Het leest alleen gegevens uit.",
         "cancel": "Annuleren",
         "save": "Koppelen",
         "checking": "Controleren…",
-        "connectedToast": "{name} gekoppeld.",
+        "connectedToast": "{name} verbonden.",
         "accountLine": "ChatGPT Ads-account · {currency}",
         "accountLineNoCurrency": "ChatGPT Ads-account",
         "billing": "ChatGPT Ads Manager",
         "error": {
-          "invalid_key": "ChatGPT Ads heeft deze sleutel niet geaccepteerd. Controleer de sleutel en probeer het opnieuw.",
+          "invalid_key": "ChatGPT Ads heeft deze sleutel niet geaccepteerd. Controleer deze en probeer het opnieuw.",
           "upstream": "ChatGPT Ads reageerde niet. Probeer het over een minuut opnieuw.",
-          "other": "Koppelen mislukt. Probeer het opnieuw."
+          "other": "Kan geen verbinding maken. Probeer het opnieuw."
+        }
+      },
+      "google": {
+        "name": "Google Ads",
+        "connect": "Koppelen",
+        "addAnother": "Account toevoegen",
+        "billing": "Google Ads",
+        "pickTitle": "Google Ads-accounts kiezen",
+        "pickLine": "Dit zijn de accounts die bereikbaar zijn via uw Google-aanmelding. Ansvisor leest alleen de accounts die u selecteert; het wijzigt nooit campagnes of budgetten.",
+        "noCustomers": "Deze Google-aanmelding heeft geen toegang tot een Google Ads-account. Meld u aan met het Google-account waarmee u uw advertenties beheert.",
+        "unnamed": "Naamloos account",
+        "more": "{count, plural, one {Nog # ander account wordt niet weergegeven.} other {Nog # andere accounts worden niet weergegeven.}}",
+        "why": {
+          "connected": "Verbonden",
+          "manager": "Manager-account",
+          "unavailable": "Niet beschikbaar",
+          "test": "Testaccount"
+        },
+        "cancel": "Annuleren",
+        "save": "{count, plural, =0 {Verbinden} one {# account verbinden} other {# accounts verbinden}}",
+        "connectedToast": "{count, plural, one {# Google Ads-account verbonden.} other {# Google Ads-accounts verbonden.}}",
+        "error": {
+          "not_configured": "Google Ads is nog niet ingesteld op deze server.",
+          "not_connected": "Meld u eerst aan bij Google Ads en probeer het opnieuw.",
+          "not_accessible": "Deze Google-aanmelding heeft geen toegang meer tot dat account. Sluit dit venster en maak opnieuw verbinding.",
+          "manager_account": "Een Manager-account heeft zelf geen campagnes. Kies de onderliggende accounts.",
+          "upstream": "Google Ads reageerde niet. Probeer het over een minuut opnieuw.",
+          "other": "Kon geen verbinding maken. Probeer het opnieuw."
         }
       },
       "account": {
-        "disconnect": "Ontkoppelen",
-        "disconnectTitle": "{name} ontkoppelen?",
-        "disconnectLine": "Ansvisor verwijdert wat het voor dit account bewaart: de sleutel, indien aanwezig, en de uitgelezen cijfers. Uw advertenties blijven lopen in {billing}.",
-        "disconnectedToast": "{name} ontkoppeld.",
-        "disconnectFailed": "Ontkoppelen mislukt. Probeer het opnieuw.",
+        "disconnect": "Verbinding verbreken",
+        "disconnectTitle": "Verbinding met {name} verbreken?",
+        "disconnectLine": "Ansvisor verwijdert de gegevens die voor dit account zijn opgeslagen: de sleutel (indien aanwezig) en de uitgelezen cijfers. Uw advertenties blijven gewoon actief in {billing}.",
+        "disconnectedToast": "Verbinding met {name} verbroken.",
+        "disconnectFailed": "Kon verbinding niet verbreken. Probeer het opnieuw.",
         "cancel": "Annuleren"
       },
       "platforms": {

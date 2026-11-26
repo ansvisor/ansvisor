@@ -3,6 +3,7 @@ import { assertBrandAccess } from './access.js';
 import { logger } from './logger.js';
 import { onBrandDomain } from './audit/host.js';
 import { closeTakenDown, shipCmsPublish } from './impact-ledger/ship.js';
+import { notifyChatAgentsOfPagePublished } from './chat-agents.js';
 import { announcePublishedPage } from './indexnow.js';
 
 /**
@@ -18,8 +19,9 @@ import { announcePublishedPage } from './indexnow.js';
  * (the post updated in place) is the page as published again. The delivery
  * is written last: a write before it that fails throws, and the next try,
  * finding it not yet published, does it all again. Then the publish goes
- * into the impact ledger as a shipped change (shipCmsPublish), and the page
- * to IndexNow when its brand turned that on (indexnow.js, once per page).
+ * into the impact ledger as a shipped change (shipCmsPublish), the page
+ * to IndexNow when its brand turned that on (indexnow.js, once per page),
+ * and to Chat's agents (chat-agents.js, When a page is published).
  *
  * @param {{ id: string, draft_id: string|null, status: string, published_url: string|null }} delivery
  * @param {string} url
@@ -64,6 +66,11 @@ export async function markDeliveryPublished(delivery, url, { externalId = null }
   await shipCmsPublish({ deliveryId: delivery.id, url, publishedAt: now });
   // IndexNow, once per page, when the brand turned it on (#2142). Never throws.
   if (pagePublished) await announcePublishedPage({ draftId: delivery.draft_id, url });
+  // When a page is published (00558): the agents it fires, once per send.
+  // Behind the answer and never throws: an agent never slows a CMS's callback.
+  if (pagePublished) {
+    void notifyChatAgentsOfPagePublished({ draftId: delivery.draft_id, deliveryId: delivery.id });
+  }
 }
 
 /**

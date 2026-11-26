@@ -1883,6 +1883,10 @@
         "title": "{targets} 的 AI 转化表现强劲",
         "description": "这些页面将 AI 流量转化为关键事件的转化率远高于您全站的平均水平。"
       },
+      "paid_overlap": {
+        "title": "AI 已推荐您的 {targets} 的 Google 广告支出正在增加",
+        "description": "在这些购买意向 Prompts 的回答中，AI 已经推荐了您，并且您在过去 30 天内为这些搜索词支付给 Google 的费用有所上升。"
+      },
       "bridge_link_gap": {
         "title": "将 {targets} 链接到高转化页面",
         "description": "AI 将读者引流到这些页面，但转化率很低；而同主题的高转化页面却几乎没有 AI 流量。"
@@ -3305,6 +3309,12 @@
         "description": "当回答讨论您的品牌时引用了这些来源，它们本可以引用您自己的页面。",
         "goal": "将第三方提及转化为对您资产的引用。"
       },
+      "review_paid_overlap": {
+        "title": "审查 AI 已推荐您的 {targets} 的 Google 广告",
+        "titleGeneric": "审查 AI 已推荐您的 Google 广告",
+        "description": "在这些购买意向 Prompts 的回答中，AI 已经推荐了您，而您在这些搜索词上的 Google 支出正在增加。您可能在为本来就能获得的点击付费。",
+        "goal": "将广告预算花在能带来增量点击的地方，同时保留 AI 回答中的推荐。"
+      },
       "bridge_links": {
         "title": "将 {targets} 链接到高转化页面",
         "titleGeneric": "将 AI 访问的页面链接到高转化页面",
@@ -3769,6 +3779,8 @@
       "prioritize_targets_target": "按影响力排定 {targets} 的优先级",
       "review_link_plan": "审核待添加的链接",
       "review_link_plan_target": "审核要在 {targets} 上添加的链接",
+      "review_paid_overlap": "审查这些搜索词上的 Google 广告",
+      "review_paid_overlap_target": "审查 {targets} 上的 Google 广告",
       "define_validation_baseline": "记录用于衡量的基线",
       "define_validation_baseline_target": "记录 {targets} 的基线",
       "create_content_brief": "创建内容大纲",
@@ -3880,6 +3892,7 @@
       "strengthen_entity_content": "页面对品牌的描述与档案一致，重新抓取后确认",
       "add_internal_links": "应链接至该页面的页面已添加链接，重新抓取后确认",
       "review_link_plan": "每个链接及其锚文本均已获得批准或修改：由您确认",
+      "review_paid_overlap": "每个搜索词的广告已在 Google Ads 中保留、降低出价或暂停：由您确认",
       "improve_cta_path": "行动号召已在页面上线：由您确认",
       "publish_content": "页面已在其地址发布，重新抓取时响应正常",
       "fix_crawler_access": "robots.txt 和页面已允许 AI 爬虫访问，重新抓取后确认",
@@ -4453,6 +4466,10 @@
       "name": "读取目录来源",
       "step": "读取目录"
     },
+    "catalogFeedGaps": {
+      "name": "读取 Feed 缺口",
+      "step": "读取 产品 · Feed 缺口"
+    },
     "contentPlan": {
       "name": "读取内容规划",
       "step": "读取内容规划"
@@ -4766,6 +4783,10 @@
     "adsOpportunities": {
       "name": "读取广告机会",
       "step": "已读取广告机会"
+    },
+    "adsPaidOverlap": {
+      "name": "读取付费重叠",
+      "step": "读取付费重叠"
     },
     "adDrafts": {
       "name": "保存广告草稿",
@@ -7726,7 +7747,9 @@
         "signal": "信号已创建",
         "kpi": "KPI 已变动",
         "watch_rule": "监控规则",
-        "brand_added": "已添加品牌"
+        "brand_added": "已添加品牌",
+        "page_published": "页面已发布",
+        "catalog_synced": "目录已同步"
       },
       "daily": "每天 {time}",
       "weekdays": "工作日 {time}",
@@ -7741,13 +7764,17 @@
       "kpiAny": "某个 KPI",
       "watchRule": "监控规则",
       "brandAdded": "添加品牌时",
+      "pagePublished": "当页面发布时",
+      "catalogSynced": "当目录同步时",
       "manualOnly": "仅手动",
       "more": "+{count}",
       "firesWhen": {
         "signal": "当行动中心发现匹配信号时触发",
         "kpi": "当 KPI 达到阈值时触发",
         "watch_rule": "在监控规则触发时触发",
-        "brand_added": "在向工作区添加每个品牌时触发一次"
+        "brand_added": "在向工作区添加每个品牌时触发一次",
+        "page_published": "品牌 CMS 中每有一个页面上线,触发一次",
+        "catalog_synced": "每次目录同步导致产品变更时,触发一次"
       },
       "timeZone": "{zone}时间",
       "off": "已关闭 · 不会触发",
@@ -7847,6 +7874,8 @@
         "trigger": "触发器",
         "signal": "信号",
         "slot": "预定时间",
+        "page": "页面已发布",
+        "catalog": "目录源已同步",
         "earlier": "较早触发",
         "action": "操作"
       },
@@ -7888,6 +7917,8 @@
       "kpi": "KPI 已变更",
       "watch_rule": "监控规则",
       "brand_added": "已添加品牌",
+      "page_published": "页面已发布",
+      "catalog_synced": "目录已同步",
       "manual": "手动",
       "action": "通过操作运行 Agent",
       "agent": "由其他 Agent 调用"
@@ -7963,8 +7994,10 @@
       "seasonal": "季节性 Prompts",
       "traffic": "AI 流量与注册量",
       "ai-revenue": "来自 AI 的客户与收入",
+      "feed-advisor": "购物 Feed 缺口",
       "earn-or-pay": "赚取或付费",
       "ad-drafts": "广告草稿",
+      "paid-overlap": "付费重叠",
       "operator": "AEO 业务员"
     },
     "form": {
@@ -8031,7 +8064,9 @@
           "signal": "信号已创建",
           "kpi": "KPI 已变更",
           "watch_rule": "监控规则",
-          "brand_added": "添加品牌时"
+          "brand_added": "添加品牌时",
+          "page_published": "当页面发布时",
+          "catalog_synced": "当目录同步时"
         },
         "notes": {
           "manual": "从 Chat 或操作中运行",
@@ -8039,7 +8074,9 @@
           "signal": "新的操作中心信号",
           "kpi": "KPI 超过阈值",
           "watch_rule": "当 · 适用于 · 则",
-          "brand_added": "每个新品牌一次 · 需要“所有品牌”"
+          "brand_added": "每个新品牌一次 · 需要“所有品牌”",
+          "page_published": "CMS 中每个页面上线时触发一次",
+          "catalog_synced": "每次导致产品变更的同步触发一次"
         },
         "watchRuleNone": "在监控规则中设置：其“则”条件将运行 Agent",
         "list": "触发器",
@@ -8103,6 +8140,8 @@
         },
         "watchRuleWhen": "其监控规则触发",
         "brandAddedWhen": "品牌添加到工作区时，每个品牌触发一次",
+        "pagePublishedWhen": "品牌 CMS 中有页面上线时,每个页面触发一次",
+        "catalogSyncedWhen": "品牌产品目录同步导致产品变更时,每次同步触发一次",
         "runAgent": "运行 Agent"
       },
       "scope": {
@@ -8569,7 +8608,7 @@
       },
       "paid-opportunity": {
         "name": "付费机会",
-        "description": "每周指出哪些购买意向的 Prompt 应通过内容争取或进行付费投放，标记变动（例如竞对正在针对您的品牌名投放广告），并在 Ansvisor 中起草广告。"
+        "description": "每周指明哪些购买意向 Prompts 适合通过内容自然获取或通过付费投放，标记变化（例如竞争对手正在针对您的品牌词投放广告），显示 AI 已引用您时您在 Google 上支付的费用，并在 Ansvisor 中起草广告。"
       },
       "ai-ads-watch": {
         "name": "AI 广告监测",
@@ -15356,7 +15395,14 @@
       "sov": "付费 SoV",
       "sovNote": "AI 回答中的赞助广告尚未捕获",
       "cost": "每次 AI 辅助注册的成本",
-      "costNote": "需要关联广告账户",
+      "costNote": "需要在“连接”中关联并读取广告账户",
+      "costOf": "{spend} 广告支出 ÷ {count, plural, other {# 个 AI 辅助注册}}",
+      "costSpend": "在此期间广告支出为 {spend}",
+      "costNoSignups": "暂无注册",
+      "costNoSpend": "无广告支出",
+      "costNoSpendNote": "已连接的广告账户在此期间没有支出",
+      "costCurrencies": "多种货币",
+      "costCurrenciesNote": "{spend} 广告支出：不同币种的金额不会累计相加，因此没有单一的每次注册成本",
       "signups": "在此期间有 {count, plural, other {# 次 AI 辅助注册}}",
       "signupsNotMeasured": "AI 辅助注册：未测量",
       "barTitle": "自然或付费 · {count, plural, other {# 个 Prompt}}",
@@ -15365,7 +15411,11 @@
       "earnedPaid": "自然 + 付费",
       "paidOnly": "仅付费",
       "neither": "两者皆无",
-      "paidNotMeasured": "付费数据尚未衡量，因此进度条仅显示自然和两者皆无。",
+      "paidNotMeasured": "在关联并读取 Google Ads 账户之前无法衡量付费情况，因此进度条仅显示自然获取和两者皆无。",
+      "spendOverlap": "AI 已引用您的 Prompts 在 Google 上的付费支出：{amount}",
+      "spendMatched": "在所有已追踪的 Prompts 上：{amount}",
+      "spendUnmatched": "在未匹配任何已追踪 Prompt 的搜索词上：{amount}",
+      "spendNote": "来自您的 Google Ads 搜索词。ChatGPT Ads 支出显示在广告活动中：它不会指明广告出现在哪个问题上。",
       "openPrompts": "查看 {count, plural, other {# 个未解决的 Prompt}}",
       "locked": "“商机”中还有 {count, plural, other {# 个 Prompt}}，自 {plan} 方案起提供。",
       "openSov": "每个 Prompt 的付费方"
@@ -15442,7 +15492,7 @@
         "volume_at_least": "每月 Google 搜索量为 {volume}，达到或超过 {threshold}",
         "volume_below": "每月 Google 搜索量为 {volume}，低于 {threshold}",
         "volume_not_measured": "尚未统计 Google 搜索量",
-        "paid_not_measured": "尚未统计投放广告者",
+        "paid_not_measured": "{wePay, select, false {竞争对手是否投放广告尚未衡量} other {谁在投放广告尚未衡量}}",
         "no_ad_channel": "没有广告渠道能够覆盖其所追踪的 AI 平台"
       },
       "answers": "AI 当前的回答",
@@ -15452,6 +15502,13 @@
       "cites": "引用：{domains}",
       "fanOuts": "Fan-out 查询",
       "keywords": "种子关键词",
+      "paid": {
+        "title": "您投放的 Google 广告",
+        "spend": "在此期间支出 {amount}，获得 {clicks, plural, other {# 次点击}}",
+        "terms": "已匹配 {count, plural, other {# 个搜索词}}，花费最高的排在前面：",
+        "none": "在此期间未匹配到 Google 广告支出。",
+        "note": "搜索词按字词与 Prompt 进行匹配。ChatGPT Ads 支出未进行匹配：它不会指明广告出现在哪个问题上。"
+      },
       "failed": "无法读取回答。请关闭后重试。",
       "earn": {
         "title": "赢取 · 修正回答",
@@ -15526,14 +15583,31 @@
         "channel": "渠道",
         "status": "状态",
         "spend": "支出",
-        "signups": "AI 辅助注册量",
-        "cost": "每次注册成本"
+        "clicks": "点击次数",
+        "cpc": "CPC",
+        "conversions": "转化次数",
+        "costPerConversion": "每次转化费用"
       },
-      "empty": "关联广告账户 · 即将推出",
-      "emptyNote": "您的广告系列将在此处列出，初次使用为只读模式。",
+      "channels": {
+        "google": "Google Ads",
+        "chatgpt": "ChatGPT Ads"
+      },
+      "statuses": {
+        "active": "有效",
+        "paused": "已暂停",
+        "ended": "已结束"
+      },
+      "empty": "尚未关联广告账户",
+      "emptyNote": "关联 Google Ads 或 ChatGPT Ads 即可在此查看广告系列（只读）。",
+      "openConnections": "打开关联管理",
+      "failed": "无法加载广告系列。请稍后重试。",
+      "firstRead": "关联成功后，首批数据将在 24 小时内送达。",
+      "noneInPeriod": "在此期间没有运行任何广告系列。",
+      "attention": "{count, plural, other {# 个广告账户需要关注。}}",
+      "currencyNote": "每个广告系列均以其广告账户的币种显示。数据每天读取一次。",
       "safety": {
         "title": "安全",
-        "note": "由 Ansvisor 执行保障，而非由智能体执行。当前不会对广告账户进行任何实际操作。",
+        "note": "由 Ansvisor 强制执行，而非代理。目前 Ansvisor 仅读取您的广告账户。",
         "click": "在任何模式下，每次启用、暂停、预算或出价更改都需要人工点击并确认。",
         "agents": "智能体绝不会自行支出：智能体仅可建议更改，且只有人工才能执行。",
         "cap": "管理员为每个渠道设置月度上限。若计入过去 24 小时的更改后超出上限，该更改将被阻止。",
@@ -15541,7 +15615,6 @@
       }
     },
     "connections": {
-      "soon": "即将推出",
       "later": "随后推出",
       "notify": "通知我",
       "notified": "我们将通知您",
@@ -15555,47 +15628,75 @@
       },
       "manage": "管理",
       "connect": "连接",
-      "adminConnects": "由管理员进行连接",
+      "adminConnects": "由管理员负责关联",
       "accountStatus": {
-        "active": "已连接",
-        "error": "需要处理",
-        "disconnected": "已断开连接"
+        "active": "已关联",
+        "error": "需要关注",
+        "disconnected": "已断开关联"
       },
       "sync": {
         "syncedAt": "数据读取于 {when}",
-        "pending": "将在一天内首次读取：最近 90 天",
+        "pending": "将在 24 小时内完成首次读取：覆盖过去 90 天",
         "error": {
-          "key_refused": "ChatGPT Ads 拒绝了该密钥。请粘贴新的密钥。",
-          "key_missing": "密钥已丢失。请重新连接该账户。",
-          "signin_gone": "Google Ads 登录已失效。请重新连接 Google Ads。",
-          "upstream": "广告平台未响应。Ansvisor 将在一天内重试。",
-          "failed": "无法读取数据。Ansvisor 将在一天内重试。"
+          "key_refused": "ChatGPT Ads 拒绝了此密钥。请粘贴新密钥。",
+          "key_missing": "密钥已失效。请重新关联该账户。",
+          "signin_gone": "Google Ads 登录凭据已失效。请重新关联 Google Ads。",
+          "upstream": "广告平台未响应。Ansvisor 将在 24 小时内重试。",
+          "failed": "无法读取数据。Ansvisor 将在 24 小时内重试。"
         }
       },
       "chatgpt": {
-        "connect": "连接",
+        "connect": "关联",
         "addAnother": "添加账户",
-        "dialogTitle": "连接 ChatGPT Ads",
-        "dialogLine": "请粘贴来自 ChatGPT Ads Manager 的 Ads API 密钥。每个密钥只能访问一个广告账户，因此每个账户请添加一个密钥。",
+        "dialogTitle": "关联 ChatGPT Ads",
+        "dialogLine": "粘贴来自 ChatGPT Ads Manager 的 Ads API 密钥。每个密钥对应一个广告账户，请为每个账户添加一个密钥。",
         "keyLabel": "Ads API 密钥",
-        "keyNote": "Ansvisor 会通过 ChatGPT Ads 验证该密钥，然后加密存储。仅用于读取。",
+        "keyNote": "Ansvisor 会向 ChatGPT Ads 验证该密钥，随后加密存储。仅用于读取数据。",
         "cancel": "取消",
-        "save": "连接",
+        "save": "关联",
         "checking": "正在检查…",
-        "connectedToast": "已连接 {name}。",
+        "connectedToast": "已关联 {name}。",
         "accountLine": "ChatGPT Ads 账户 · {currency}",
         "accountLineNoCurrency": "ChatGPT Ads 账户",
         "billing": "ChatGPT Ads Manager",
         "error": {
-          "invalid_key": "ChatGPT Ads 不接受此密钥。请检查后重试。",
+          "invalid_key": "ChatGPT Ads 未接受此密钥。请核对后重试。",
           "upstream": "ChatGPT Ads 未响应。请稍后重试。",
+          "other": "无法关联。请重试。"
+        }
+      },
+      "google": {
+        "name": "Google Ads",
+        "connect": "关联",
+        "addAnother": "添加账户",
+        "billing": "Google Ads",
+        "pickTitle": "选择 Google Ads 账户",
+        "pickLine": "这些是您的 Google 登录可访问的账号。Ansvisor 仅会读取您选中的账号，绝不会更改任何广告系列或预算。",
+        "noCustomers": "此 Google 登录未关联任何 Google Ads 账号。请使用管理您广告的 Google 账号登录。",
+        "unnamed": "未命名账号",
+        "more": "{count, plural, other {还有 # 个账号未列出。}}",
+        "why": {
+          "connected": "已连接",
+          "manager": "经理账号",
+          "unavailable": "不可用",
+          "test": "测试账号"
+        },
+        "cancel": "取消",
+        "save": "{count, plural, =0 {连接} other {连接 # 个账号}}",
+        "connectedToast": "{count, plural, other {已连接 # 个 Google Ads 账号。}}",
+        "error": {
+          "not_configured": "此服务器上尚未配置 Google Ads。",
+          "not_connected": "请先登录 Google Ads，然后再试一次。",
+          "not_accessible": "此 Google 登录已无法访问该账号。请关闭并重新连接。",
+          "manager_account": "经理账号本身没有广告系列。请选择其下属的账号。",
+          "upstream": "Google Ads 未响应。请稍后重试。",
           "other": "无法连接。请重试。"
         }
       },
       "account": {
         "disconnect": "断开连接",
         "disconnectTitle": "断开 {name} 的连接？",
-        "disconnectLine": "Ansvisor 会删除为该账户保存的内容：密钥（如有）以及已读取的数据。您的广告仍会在 {billing} 中继续投放。",
+        "disconnectLine": "Ansvisor 将删除为此账号保留的所有内容：密钥（如有）及其读取的各项数据。您的广告将继续在 {billing} 中投放。",
         "disconnectedToast": "已断开 {name} 的连接。",
         "disconnectFailed": "无法断开连接。请重试。",
         "cancel": "取消"

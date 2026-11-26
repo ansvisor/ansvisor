@@ -114,6 +114,11 @@ export const LIBRARY_KINDS = Object.freeze({
   weak_entity: meta('technical', 'medium', ['mentions']),
   weak_internal_links: meta('technical', 'low', []),
   content_gap: meta('technical', 'medium', ['ai_visibility']),
+
+  // ── Ads ───────────────────────────────────────────────────────────────────
+  // Google spend rising on prompts AI already picks the brand for (Ads Phase
+  // 1 P4, lib/ads/paid-watch.js): only while Ads is on and Google is read.
+  paid_overlap: meta('visibility', 'medium', ['ai_visibility']),
 });
 
 /**

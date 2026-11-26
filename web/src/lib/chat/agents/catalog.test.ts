@@ -98,6 +98,8 @@ describe('the preset files', () => {
       'fanout-gap-filler',
       'prompt-portfolio',
       'onboarding-help',
+      'shopping-readiness',
+      'localization',
       'aeo-operator',
       'technical-fixer',
       'agency-reporter',
@@ -117,7 +119,7 @@ describe('the preset files', () => {
       'unmet-needs-miner',
       'market-source-finder',
     ]);
-    expect(AGENT_PRESETS.filter((preset) => preset.status === 'soon')).toHaveLength(11);
+    expect(AGENT_PRESETS.filter((preset) => preset.status === 'soon')).toHaveLength(9);
   });
 
   it('have the business-type packs: three agents for each type, in the plan’s order', () => {
@@ -391,7 +393,7 @@ describe('a ready preset', () => {
 
   it('is found by its id; a soon one, or no id, is not', () => {
     expect(readyPreset('weekly-report')?.id).toBe('weekly-report');
-    expect(readyPreset('localization')).toBeNull();
+    expect(readyPreset('ticket-loop')).toBeNull();
     expect(readyPreset('nope')).toBeNull();
     expect(readyPreset(null)).toBeNull();
   });
@@ -403,10 +405,10 @@ describe('the Paid Opportunity agent (Ads Phase 0 PR 18)', () => {
   const viewer = { siteType: null, workAreas: [] };
   afterEach(() => vi.unstubAllEnvs());
 
-  it('reads earn or pay, then drafts ads, on Mondays as AI Ads Watch would, asking before changes', () => {
+  it('reads earn or pay and the paid overlap, then drafts ads, on Mondays as AI Ads Watch would, asking before changes', () => {
     expect(paid).toMatchObject({
       goal: 'visibility',
-      skills: ['earn-or-pay', 'ad-drafts'],
+      skills: ['earn-or-pay', 'paid-overlap', 'ad-drafts'],
       triggers: [{ kind: 'schedule', repeat: 'MO', time: '09:00' }],
       mode: 'auto',
       connections: [],
@@ -504,7 +506,7 @@ describe('a soon preset', () => {
   });
 
   it('is refused as a file when it needs nothing, as a ready one that needs something is', () => {
-    const base = AGENT_PRESETS.find((preset) => preset.id === 'localization')!;
+    const base = AGENT_PRESETS.find((preset) => preset.id === 'ticket-loop')!;
     expect(() => buildPresetCatalog([{ file: 'x.json', json: { ...base, needs: [] } }])).toThrow(
       /needs/,
     );

@@ -39,6 +39,7 @@ const UNPAID: Overview = {
   spend: null,
   paidSov: null,
   signups: 9,
+  cost: null,
 };
 
 let container: HTMLDivElement;
@@ -149,11 +150,34 @@ describe('AdsOverview', () => {
       "Paid SoVNot measuredSponsored ads in AI answers aren't captured yetWho pays per prompt",
     );
     expect(kpis()[3]).toBe(
-      'Cost per AI-assisted signupNot measuredNeeds a connected ad account9 AI-assisted signups in this period',
+      'Cost per AI-assisted signupNot measuredNeeds an ad account connected and read in Connections9 AI-assisted signups in this period',
     );
     await render({ ...UNPAID, signups: null });
     expect(container.querySelector('[data-slot="ads-signups"]')?.textContent).toBe(
       'AI-assisted signups: not measured',
+    );
+  });
+
+  it('shows the cost per signup once an ad account is read: one currency only, with signups', async () => {
+    const usd = (amount: number) => ({ currencyCode: 'USD', amount });
+    await render({ ...UNPAID, cost: { spend: [usd(90)], perSignup: usd(10) } });
+    expect(kpis()[3]).toBe(
+      'Cost per AI-assisted signup$10.00$90.00 ad spend ÷ 9 AI-assisted signups9 AI-assisted signups in this period',
+    );
+    await render({ ...UNPAID, signups: 0, cost: { spend: [usd(90)], perSignup: null } });
+    expect(kpis()[3]).toContain('No signups yet$90.00 ad spend in this period');
+    await render({ ...UNPAID, signups: null, cost: { spend: [usd(90)], perSignup: null } });
+    expect(kpis()[3]).toContain('Not measured$90.00 ad spend in this period');
+    // Read, nothing spent: never "No signups yet" while there are signups.
+    await render({ ...UNPAID, cost: { spend: [], perSignup: null } });
+    expect(kpis()[3]).toContain(
+      'No ad spendThe connected ad accounts spent nothing in this period9 AI-assisted signups',
+    );
+    expect(kpis()[3]).not.toContain('No signups yet');
+    const two = [usd(90), { currencyCode: 'EUR', amount: 5 }];
+    await render({ ...UNPAID, cost: { spend: two, perSignup: null } });
+    expect(kpis()[3]).toContain(
+      "Several currencies$90.00 + €5.00 ad spend: amounts in different currencies aren't added",
     );
   });
 

@@ -1883,6 +1883,10 @@
         "title": "{targets}의 높은 AI 전환율",
         "description": "이 페이지들은 AI 트래픽을 사이트 평균보다 훨씬 높은 비율로 주요 이벤트로 전환하고 있습니다."
       },
+      "paid_overlap": {
+        "title": "AI가 이미 귀하를 추천하는 {targets}의 Google 광고 지출 증가",
+        "description": "AI가 이러한 구매 관련 프롬프트의 답변에서 이미 귀하를 추천하고 있으며, 해당 검색어에 대해 Google에 지불하는 비용이 지난 30일 대비 증가했습니다."
+      },
       "bridge_link_gap": {
         "title": "{targets}을(를) 전환율이 높은 페이지로 연결",
         "description": "AI가 독자를 이 페이지로 유입시키고 있지만 전환율은 낮습니다. 동일한 주제의 전환율이 높은 페이지에는 AI 트래픽이 거의 없습니다."
@@ -3329,6 +3333,12 @@
         "description": "이러한 출처는 답변에서 귀하의 브랜드를 다룰 때 인용되며, 귀하의 페이지를 직접 참조하도록 유도할 수 있습니다.",
         "goal": "서드파티 언급을 내 애셋으로 연결되는 인용으로 전환하세요."
       },
+      "review_paid_overlap": {
+        "title": "AI가 이미 귀하를 추천하는 {targets}의 Google 광고 검토",
+        "titleGeneric": "AI가 이미 귀하를 추천하는 검색어의 Google 광고 검토",
+        "description": "AI가 이러한 구매 관련 프롬프트 답변에서 이미 귀하를 추천하고 있으며, 해당 검색어에 대한 Google 광고 지출이 증가하고 있습니다. 이미 유입될 클릭에 불필요한 비용을 지불하고 있을 수 있습니다.",
+        "goal": "클릭이 추가되는 광고에만 비용을 지출하고 AI 답변 점유율은 유지하세요."
+      },
       "bridge_links": {
         "title": "{targets}을(를) 전환율이 높은 페이지로 링크하기",
         "titleGeneric": "AI가 방문한 페이지를 전환율이 높은 페이지로 링크하기",
@@ -3793,6 +3803,8 @@
       "prioritize_targets_target": "영향도에 따라 {targets}의 우선순위 지정",
       "review_link_plan": "추가할 링크 검토",
       "review_link_plan_target": "{targets}에 추가할 링크 검토",
+      "review_paid_overlap": "해당 검색어의 Google 광고 검토",
+      "review_paid_overlap_target": "{targets}의 Google 광고 검토",
       "define_validation_baseline": "측정 기준이 될 기준선 기록",
       "define_validation_baseline_target": "{targets}의 기준선 기록",
       "create_content_brief": "콘텐츠 브리프 작성",
@@ -3904,6 +3916,7 @@
       "strengthen_entity_content": "페이지가 프로필 내용대로 브랜드를 설명하고 있으며, 다시 가져왔을 때 확인되는 경우",
       "add_internal_links": "해당 페이지로 연결되어야 하는 페이지들의 링크가 연결되고 다시 가져와졌을 때",
       "review_link_plan": "각 링크와 앵커 텍스트가 승인되거나 변경되어 직접 확인했을 때",
+      "review_paid_overlap": "Google Ads에서 각 검색어의 광고가 유지, 감액 또는 일시중지됨: 확인 완료",
       "improve_cta_path": "페이지에 콜투액션(CTA)이 적용되어 직접 확인했을 때",
       "publish_content": "페이지가 해당 주소에 게시되고 가져왔을 때 정상 응답할 때",
       "fix_crawler_access": "robots.txt 및 페이지에서 AI 크롤러의 접근을 허용하고 다시 가져와졌을 때",
@@ -4477,6 +4490,10 @@
       "name": "카탈로그 소스 읽기",
       "step": "카탈로그 읽기"
     },
+    "catalogFeedGaps": {
+      "name": "피드 누락 항목 읽기",
+      "step": "제품 · 피드 누락 항목 읽기"
+    },
     "contentPlan": {
       "name": "콘텐츠 계획 읽기",
       "step": "콘텐츠 계획 읽기"
@@ -4790,6 +4807,10 @@
     "adsOpportunities": {
       "name": "광고 기회 읽기",
       "step": "광고 기회 읽기 완료"
+    },
+    "adsPaidOverlap": {
+      "name": "유료 중복 조회",
+      "step": "유료 중복 조회 중"
     },
     "adDrafts": {
       "name": "광고 초안 저장",
@@ -7750,7 +7771,9 @@
         "signal": "시그널 생성됨",
         "kpi": "KPI 변경됨",
         "watch_rule": "감시 규칙",
-        "brand_added": "브랜드 추가됨"
+        "brand_added": "브랜드 추가됨",
+        "page_published": "페이지 게시됨",
+        "catalog_synced": "카탈로그 동기화됨"
       },
       "daily": "매일 {time}",
       "weekdays": "주중 {time}",
@@ -7765,13 +7788,17 @@
       "kpiAny": "KPI",
       "watchRule": "감시 규칙",
       "brandAdded": "브랜드가 추가될 때",
+      "pagePublished": "페이지가 게시될 때",
+      "catalogSynced": "카탈로그가 동기화될 때",
       "manualOnly": "수동 전용",
       "more": "+{count}",
       "firesWhen": {
         "signal": "Action Center에서 일치하는 시그널을 찾을 때 실행됩니다",
         "kpi": "KPI가 임계값을 넘을 때 실행됩니다",
         "watch_rule": "해당 감시 규칙이 실행될 때 실행됩니다",
-        "brand_added": "워크스페이스에 브랜드가 추가될 때마다 한 번씩 실행됩니다"
+        "brand_added": "워크스페이스에 브랜드가 추가될 때마다 한 번씩 실행됩니다",
+        "page_published": "브랜드의 CMS에서 페이지가 라이브될 때마다 한 번 실행됩니다",
+        "catalog_synced": "제품이 변경되는 카탈로그 동기화마다 한 번 실행됩니다"
       },
       "timeZone": "{zone} 시간",
       "off": "꺼짐 · 실행되지 않음",
@@ -7871,6 +7898,8 @@
         "trigger": "트리거",
         "signal": "시그널",
         "slot": "예정 시각",
+        "page": "페이지 게시됨",
+        "catalog": "카탈로그 소스 동기화됨",
         "earlier": "이전 실행",
         "action": "조치"
       },
@@ -7912,6 +7941,8 @@
       "kpi": "KPI 변경됨",
       "watch_rule": "모니터링 규칙",
       "brand_added": "브랜드 추가됨",
+      "page_published": "페이지 게시됨",
+      "catalog_synced": "카탈로그 동기화됨",
       "manual": "수동",
       "action": "작업에서 에이전트 실행",
       "agent": "다른 에이전트에 의해 호출됨"
@@ -7987,8 +8018,10 @@
       "seasonal": "시즌별 Prompts",
       "traffic": "AI 트래픽 및 가입",
       "ai-revenue": "AI 유입 고객 및 수익",
+      "feed-advisor": "쇼핑 피드 누락 항목",
       "earn-or-pay": "수익 또는 지출",
       "ad-drafts": "광고 초안",
+      "paid-overlap": "유료 중복",
       "operator": "AEO Operator"
     },
     "form": {
@@ -8055,7 +8088,9 @@
           "signal": "신호 생성 시",
           "kpi": "KPI 변경 시",
           "watch_rule": "모니터링 규칙",
-          "brand_added": "브랜드 추가 시"
+          "brand_added": "브랜드 추가 시",
+          "page_published": "페이지가 게시될 때",
+          "catalog_synced": "카탈로그가 동기화될 때"
         },
         "notes": {
           "manual": "채팅 또는 액션에서 실행",
@@ -8063,7 +8098,9 @@
           "signal": "새로운 액션 센터 신호",
           "kpi": "KPI가 임계값을 넘어설 때",
           "watch_rule": "조건(WHEN) · 대상(FOR) · 실행(THEN)",
-          "brand_added": "새 브랜드당 1회 · 모든 브랜드 필요"
+          "brand_added": "새 브랜드당 1회 · 모든 브랜드 필요",
+          "page_published": "CMS에서 라이브되는 페이지마다 한 번",
+          "catalog_synced": "제품이 변경되는 동기화마다 한 번"
         },
         "watchRuleNone": "모니터링 규칙에서 설정: THEN 조건에서 에이전트를 실행합니다",
         "list": "트리거",
@@ -8127,6 +8164,8 @@
         },
         "watchRuleWhen": "모니터링 규칙이 실행될 때",
         "brandAddedWhen": "워크스페이스에 브랜드가 추가될 때(브랜드당 1회)",
+        "pagePublishedWhen": "브랜드의 CMS에서 페이지가 라이브될 때, 페이지마다 한 번",
+        "catalogSyncedWhen": "브랜드의 제품 카탈로그 동기화로 제품이 변경될 때, 동기화마다 한 번",
         "runAgent": "에이전트 실행"
       },
       "scope": {
@@ -8593,7 +8632,7 @@
       },
       "paid-opportunity": {
         "name": "유료 기회 분석",
-        "description": "매주 콘텐츠로 확보할 구매 Prompts와 유료로 진행할 Prompts를 제안하고, 경쟁업체의 브랜드 키워드 입찰 등 변경 사항을 표시하며, Ansvisor에서 광고 문안을 작성합니다."
+        "description": "매주 콘텐츠로 획득하거나 광고비를 지불할 구매 프롬프트를 안내하고, 경쟁업체의 브랜드 키워드 광고 등 변경사항을 표시하며, AI가 이미 귀하를 인용 중인 Google 광고 비용을 확인하고 Ansvisor에서 광고 초안을 작성합니다."
       },
       "ai-ads-watch": {
         "name": "AI 광고 모니터링",
@@ -15380,7 +15419,14 @@
       "sov": "유료 SoV",
       "sovNote": "AI 답변 내 스폰서 광고는 아직 수집되지 않습니다",
       "cost": "AI 유입 가입당 비용",
-      "costNote": "연결된 광고 계정 필요",
+      "costNote": "연결 메뉴에서 광고 계정을 연결하고 데이터를 불러와야 합니다",
+      "costOf": "광고 지출 {spend} ÷ {count, plural, other {AI 지원 가입 #건}}",
+      "costSpend": "해당 기간 광고 지출 {spend}",
+      "costNoSignups": "아직 가입자 없음",
+      "costNoSpend": "광고비 없음",
+      "costNoSpendNote": "연결된 광고 계정이 이 기간에 지출하지 않았습니다",
+      "costCurrencies": "여러 통화",
+      "costCurrenciesNote": "광고 지출 {spend}: 통화가 서로 다른 금액은 합산되지 않아 가입당 단일 비용이 제공되지 않습니다",
       "signups": "이 기간 동안 {count, plural, other {#건의 AI 지원 가입}}",
       "signupsNotMeasured": "AI 유입 가입: 측정되지 않음",
       "barTitle": "수익 또는 지출 · {count, plural, other {#개 Prompt}}",
@@ -15389,7 +15435,11 @@
       "earnedPaid": "오가닉 + 유료",
       "paidOnly": "유료만",
       "neither": "해당 없음",
-      "paidNotMeasured": "유료는 아직 측정되지 않아 막대그래프에 오가닉 및 해당 없음만 표시됩니다.",
+      "paidNotMeasured": "Google Ads 계정을 연결하여 불러올 때까지 유료 광고가 측정되지 않으므로, 그래프에는 자연 유입 및 둘 다 미해당만 표시됩니다.",
+      "spendOverlap": "AI가 이미 귀하를 인용하는 프롬프트에 지출된 Google 광고비: {amount}",
+      "spendMatched": "모든 추적 프롬프트 합계: {amount}",
+      "spendUnmatched": "추적되지 않은 검색어 지출: {amount}",
+      "spendNote": "Google Ads 검색어 기준입니다. ChatGPT Ads 지출은 캠페인 탭에 표시되며, 어떤 질문에 광고가 노출되었는지는 제공되지 않습니다.",
       "openPrompts": "{count, plural, other {#개의 열린 Prompt}} 보기",
       "locked": "기회 항목의 {count, plural, other {#개 추가 Prompt}}는 {plan} 플랜부터 포함됩니다.",
       "openSov": "Prompt별 광고 집행 주체"
@@ -15466,7 +15516,7 @@
         "volume_at_least": "월간 Google 검색 수 {volume}회 (최소 {threshold}회 이상)",
         "volume_below": "월간 Google 검색 수 {volume}회 ({threshold}회 미만)",
         "volume_not_measured": "Google 검색 수가 아직 측정되지 않음",
-        "paid_not_measured": "광고 지출 주체가 아직 측정되지 않음",
+        "paid_not_measured": "{wePay, select, false {경쟁업체의 광고비 지출 여부가 아직 측정되지 않았습니다} other {광고비 지출 주체가 아직 측정되지 않았습니다}}",
         "no_ad_channel": "추적 중인 AI 플랫폼에 도달하는 광고 채널이 없음"
       },
       "answers": "오늘의 AI 답변",
@@ -15476,6 +15526,13 @@
       "cites": "인용: {domains}",
       "fanOuts": "Fan-out 쿼리",
       "keywords": "시드 키워드",
+      "paid": {
+        "title": "해당 프롬프트의 Google 광고",
+        "spend": "해당 기간 {clicks, plural, other {클릭수 #회}}당 {amount}",
+        "terms": "{count, plural, other {검색어 #개 일치}}, 비용이 높은 순:",
+        "none": "해당 기간에 일치하는 Google 광고 지출이 없습니다.",
+        "note": "검색어는 단어 일치를 통해 프롬프트와 매칭됩니다. ChatGPT Ads 지출은 어떤 질문에 광고가 노출되었는지 제공되지 않아 매칭되지 않습니다."
+      },
       "failed": "답변을 불러오지 못했습니다. 창을 닫고 다시 열어주세요.",
       "earn": {
         "title": "확보 · 답변 개선하기",
@@ -15550,14 +15607,31 @@
         "channel": "채널",
         "status": "상태",
         "spend": "지출액",
-        "signups": "AI 지원 가입 수",
-        "cost": "가입당 비용"
+        "clicks": "클릭수",
+        "cpc": "CPC",
+        "conversions": "전환수",
+        "costPerConversion": "전환당 비용"
       },
-      "empty": "광고 계정 연결 · 출시 예정",
-      "emptyNote": "여기에 캠페인이 표시되며, 초기에는 읽기 전용으로 제공됩니다.",
+      "channels": {
+        "google": "Google Ads",
+        "chatgpt": "ChatGPT Ads"
+      },
+      "statuses": {
+        "active": "게재 중",
+        "paused": "일시중지됨",
+        "ended": "종료됨"
+      },
+      "empty": "아직 연결된 광고 계정이 없습니다",
+      "emptyNote": "Google Ads 또는 ChatGPT Ads를 연결하면 캠페인을 읽기 전용으로 확인할 수 있습니다.",
+      "openConnections": "연결 열기",
+      "failed": "캠페인을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.",
+      "firstRead": "연결 후 하루 이내에 첫 번째 수치가 도착합니다.",
+      "noneInPeriod": "이 기간에 실행된 캠페인이 없습니다.",
+      "attention": "{count, plural, other {#개 광고 계정에 확인이 필요합니다.}}",
+      "currencyNote": "각 캠페인은 해당 광고 계정의 통화로 표시됩니다. 수치는 하루에 한 번 읽어옵니다.",
       "safety": {
         "title": "안전 정책",
-        "note": "에이전트가 아닌 Ansvisor에 의해 강제 적용됩니다. 현재 광고 계정에는 아무것도 반영되지 않습니다.",
+        "note": "에이전트가 아닌 Ansvisor가 직접 적용합니다. 현재 Ansvisor는 광고 계정을 읽기만 합니다.",
         "click": "모든 모드에서 활성화, 일시 중지, 예산 또는 입찰가 변경 시 담당자의 클릭 및 확인이 필요합니다.",
         "agents": "에이전트는 절대로 비용을 지출하지 않습니다. 에이전트는 변경 사항을 제안할 뿐이며, 적용은 담당자만 할 수 있습니다.",
         "cap": "관리자가 채널별 월간 한도를 설정합니다. 지난 24시간 동안의 변경 사항을 합산하여 한도를 초과하는 변경은 차단됩니다.",
@@ -15565,7 +15639,6 @@
       }
     },
     "connections": {
-      "soon": "출시 예정",
       "later": "추후 출시 예정",
       "notify": "알림 받기",
       "notified": "알림 신청 완료",
@@ -15579,49 +15652,77 @@
       },
       "manage": "관리",
       "connect": "연결",
-      "adminConnects": "관리자가 연결합니다",
+      "adminConnects": "관리자가 연결할 수 있습니다",
       "accountStatus": {
         "active": "연결됨",
         "error": "확인 필요",
         "disconnected": "연결 해제됨"
       },
       "sync": {
-        "syncedAt": "수치 읽은 시점: {when}",
-        "pending": "하루 안에 첫 수집: 최근 90일",
+        "syncedAt": "{when} 수치 읽음",
+        "pending": "하루 이내 첫 읽기: 최근 90일 데이터",
         "error": {
-          "key_refused": "ChatGPT Ads에서 키를 거부했습니다. 새 키를 붙여넣어 주세요.",
+          "key_refused": "ChatGPT Ads에서 키를 거부했습니다. 새 키를 붙여넣으세요.",
           "key_missing": "키가 없습니다. 계정을 다시 연결해 주세요.",
-          "signin_gone": "Google Ads 로그인 정보가 없습니다. Google Ads를 다시 연결해 주세요.",
-          "upstream": "광고 플랫폼이 응답하지 않았습니다. Ansvisor가 하루 안에 다시 시도합니다.",
-          "failed": "수치를 읽지 못했습니다. Ansvisor가 하루 안에 다시 시도합니다."
+          "signin_gone": "Google Ads 로그인이 만료되었습니다. Google Ads를 다시 연결해 주세요.",
+          "upstream": "광고 플랫폼의 응답이 없습니다. Ansvisor가 하루 이내에 다시 시도합니다.",
+          "failed": "수치를 읽어오지 못했습니다. Ansvisor가 하루 이내에 다시 시도합니다."
         }
       },
       "chatgpt": {
         "connect": "연결",
         "addAnother": "계정 추가",
         "dialogTitle": "ChatGPT Ads 연결",
-        "dialogLine": "ChatGPT Ads Manager에서 발급한 Ads API 키를 붙여넣어 주세요. 키 하나로 광고 계정 하나에 접근하므로 계정마다 키를 하나씩 추가하세요.",
+        "dialogLine": "ChatGPT Ads 매니저의 Ads API 키를 붙여넣으세요. 키 하나당 하나의 광고 계정에 연결되므로, 계정마다 키를 하나씩 추가하세요.",
         "keyLabel": "Ads API 키",
-        "keyNote": "Ansvisor는 ChatGPT Ads로 키를 확인한 뒤 암호화하여 저장합니다. 읽기만 합니다.",
+        "keyNote": "Ansvisor는 ChatGPT Ads에서 키를 확인한 후 암호화하여 저장합니다. 읽기 전용으로만 사용됩니다.",
         "cancel": "취소",
         "save": "연결",
         "checking": "확인 중…",
-        "connectedToast": "{name}을(를) 연결했습니다.",
+        "connectedToast": "{name}에 연결되었습니다.",
         "accountLine": "ChatGPT Ads 계정 · {currency}",
         "accountLineNoCurrency": "ChatGPT Ads 계정",
-        "billing": "ChatGPT Ads Manager",
+        "billing": "ChatGPT Ads 매니저",
         "error": {
-          "invalid_key": "ChatGPT Ads에서 이 키를 승인하지 않았습니다. 키를 확인한 후 다시 시도해 주세요.",
-          "upstream": "ChatGPT Ads가 응답하지 않았습니다. 잠시 후 다시 시도해 주세요.",
+          "invalid_key": "ChatGPT Ads에서 이 키를 수락하지 않았습니다. 키를 확인한 후 다시 시도해 주세요.",
+          "upstream": "ChatGPT Ads의 응답이 없습니다. 1분 후 다시 시도해 주세요.",
           "other": "연결하지 못했습니다. 다시 시도해 주세요."
+        }
+      },
+      "google": {
+        "name": "Google Ads",
+        "connect": "연결",
+        "addAnother": "계정 추가",
+        "billing": "Google Ads",
+        "pickTitle": "Google Ads 계정 선택",
+        "pickLine": "Google 로그인으로 접근할 수 있는 계정 목록입니다. Ansvisor는 선택한 계정의 정보를 읽기만 하며, 캠페인이나 예산을 절대 변경하지 않습니다.",
+        "noCustomers": "이 Google 로그인으로 접근할 수 있는 Google Ads 계정이 없습니다. 광고를 관리하는 Google 계정으로 로그인해 주세요.",
+        "unnamed": "이름 없는 계정",
+        "more": "{count, plural, other {#개의 계정이 더 있습니다.}}",
+        "why": {
+          "connected": "연결됨",
+          "manager": "매니저 계정",
+          "unavailable": "사용할 수 없음",
+          "test": "테스트 계정"
+        },
+        "cancel": "취소",
+        "save": "{count, plural, =0 {연결} other {#개 계정 연결}}",
+        "connectedToast": "{count, plural, other {Google Ads 계정 #개를 연결했습니다.}}",
+        "error": {
+          "not_configured": "이 서버에 아직 Google Ads가 설정되지 않았습니다.",
+          "not_connected": "먼저 Google Ads에 로그인한 후 다시 시도해 주세요.",
+          "not_accessible": "이 Google 로그인으로는 더 이상 해당 계정에 접근할 수 없습니다. 창을 닫고 다시 연결해 주세요.",
+          "manager_account": "매니저 계정에는 자체 캠페인이 없습니다. 하위 계정을 선택해 주세요.",
+          "upstream": "Google Ads의 응답이 없습니다. 잠시 후 다시 시도해 주세요.",
+          "other": "연결할 수 없습니다. 다시 시도해 주세요."
         }
       },
       "account": {
         "disconnect": "연결 해제",
         "disconnectTitle": "{name} 연결을 해제하시겠습니까?",
-        "disconnectLine": "Ansvisor가 이 계정과 관련해 보관 중인 키(있는 경우)와 읽어 온 수치를 삭제합니다. 광고는 {billing}에서 계속 게재됩니다.",
+        "disconnectLine": "Ansvisor가 이 계정을 위해 보관하던 데이터(키(있는 경우) 및 읽어온 수치)를 삭제합니다. {billing}에서 광고는 계속 게재됩니다.",
         "disconnectedToast": "{name} 연결을 해제했습니다.",
-        "disconnectFailed": "연결을 해제하지 못했습니다. 다시 시도해 주세요.",
+        "disconnectFailed": "연결을 해제할 수 없습니다. 다시 시도해 주세요.",
         "cancel": "취소"
       },
       "platforms": {

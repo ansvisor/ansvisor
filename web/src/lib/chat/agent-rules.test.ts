@@ -239,6 +239,28 @@ describe('triggers', () => {
     expect(triggerScopeProblem(agentTriggersSchema.parse([schedule]), {})).toBeNull();
   });
 
+  it('takes When a page is published with no settings, on any scope (00558)', () => {
+    const page = { kind: 'page_published', config: {} };
+    expect(agentTriggersSchema.parse([page, schedule])[0]).toEqual({ ...page, enabled: true });
+    expect(agentTriggersSchema.safeParse([page, page]).success).toBe(false);
+    expect(
+      agentTriggersSchema.safeParse([
+        { kind: 'page_published', config: { url: 'https://x.example' } },
+      ]).success,
+    ).toBe(false);
+    expect(triggerScopeProblem(agentTriggersSchema.parse([page]), {})).toBeNull();
+  });
+
+  it('takes When the catalog syncs with no settings, on any scope (00558)', () => {
+    const synced = { kind: 'catalog_synced', config: {} };
+    expect(agentTriggersSchema.parse([synced])[0]).toEqual({ ...synced, enabled: true });
+    expect(
+      agentTriggersSchema.safeParse([{ kind: 'catalog_synced', config: { source_id: BRAND } }])
+        .success,
+    ).toBe(false);
+    expect(triggerScopeProblem(agentTriggersSchema.parse([synced]), {})).toBeNull();
+  });
+
   it('keeps a one-off schedule within the coming year', () => {
     const now = new Date('2026-10-29T12:00:00Z');
     const once = (at: string) =>

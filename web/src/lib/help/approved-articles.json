@@ -1183,6 +1183,15 @@
         "when a brand is added",
         "brand added",
         "new brand trigger",
+        "when a page is published",
+        "page published",
+        "when the catalog syncs",
+        "catalog synced",
+        "shopping readiness",
+        "/shopping",
+        "localization",
+        "translate pages",
+        "/translate",
         "goal",
         "role",
         "filter agents",
@@ -1236,7 +1245,7 @@
       "sections": [
         {
           "heading": null,
-          "text": "An agent is a saved skill, mode, connections and model that runs in Chat again and again: on a schedule, when Action Center finds a signal, when a KPI changes, when a brand is added, or when someone clicks **Run now**. **Agents**, a tab of the **Action Center** (formerly Agent Center), lists every agent you can see and offers ready-to-use agents, and each agent has its own page with its triggers, its runs and how much of your monthly AI limit it uses."
+          "text": "An agent is a saved skill, mode, connections and model that runs in Chat again and again: on a schedule, when Action Center finds a signal, when a KPI changes, when a brand is added, when a page is published, when the product catalog syncs, or when someone clicks **Run now**. **Agents**, a tab of the **Action Center** (formerly Agent Center), lists every agent you can see and offers ready-to-use agents, and each agent has its own page with its triggers, its runs and how much of your monthly AI limit it uses."
         },
         {
           "heading": "Open Agents",
@@ -1261,6 +1270,14 @@
         {
           "heading": "Onboarding & Help",
           "text": "**Onboarding & Help** gets a new brand or a new teammate going. Its skill is **Setup guide** (**/setup**). It starts on **All brands** with **When a brand is added**: once it's on, each brand someone adds gets one run, which acts as the agent's owner and shows in their Inbox. You can also click **Run now** on its page. Each run says how many set-up steps are done, lists the open ones with a link to each page, then recommends 3 to 5 ready-to-use agents for the brand's site type and your work areas, each linked to its card in **Ready to use**. It never turns an agent on: you click **Use this agent**, then **Turn on**. It runs on **Ask me first**, so it asks before every change, such as adding competitors. Ask it how to do something in Ansvisor, and Chat answers from Help."
+        },
+        {
+          "heading": "Shopping Readiness",
+          "text": "**Shopping Readiness** checks your products for AI shopping results each time your product catalog changes. Its skill is **AI shopping readiness**, and it starts with **When the catalog syncs**: each sync of one of the brand's catalog sources that adds, changes or removes products gets one run. A sync that changes nothing doesn't start it. Each run reads how the products show in ChatGPT Shopping and Google Shopping, and says what their pages and feed need. It needs a connected product catalog, and a plan that includes Product Visibility. It runs on **Auto, ask before changes**. In Chat, the same skill is **/shopping**."
+        },
+        {
+          "heading": "Localization",
+          "text": "**Localization** translates a page into the languages of your other markets once it goes live. Its skill is **Translate a page**, and it starts with **When a page is published**: each page that goes live in the brand's CMS gets one run, which acts as the agent's owner. A page an agent made, such as a translation, doesn't start it again. Each run reads the page and drafts it in each language. Only the language changes: the facts, sources and rules stay the same. It runs on **Auto, ask before changes**, and sending or publishing the drafts stays yours. In Chat, the same skill is **/translate**."
         },
         {
           "heading": "Prompt Portfolio Manager",
@@ -1336,7 +1353,7 @@
         },
         {
           "heading": "When an agent runs by itself",
-          "text": "A **Schedule** trigger runs at its time on the clock of its time zone, summer time included. A time missed while the agent was paused isn't made up later. A **Signal** trigger runs when Action Center finds a new signal of its category, definitions, pages and engines. **When a brand is added** runs once for each brand someone adds, never the demo brand, on an agent with **All brands** whose owner can use that brand. **KPI changed** and **Watch rule** triggers are saved, but don't start runs yet.\n\nSignals within 15 minutes join one run, a brand gets at most one signal run every 6 hours, and your plan sets how many signal and new-brand runs an agent may start a day. A fire that had to wait is listed in the agent's next run, and in **Run history** as **Skipped** with the reason."
+          "text": "A **Schedule** trigger runs at its time in its time zone, summer time included; missed times aren't made up. A **Signal** trigger runs on a new Action Center signal matching its category, definitions, pages and engines. **When a brand is added** runs once per new brand, never the demo brand, on an agent with **All brands** whose owner can use it. **When a page is published** and **When the catalog syncs** run once per page live in a brand's CMS, or per catalog sync that changes products, on the agent's brands. **KPI changed** and **Watch rule** triggers don't start runs yet.\n\nSignals within 15 minutes join one run, and a brand gets at most one signal run every 6 hours. Your plan caps how many runs other than schedules an agent starts a day. A fire that had to wait shows in **Run history** as **Skipped**, with the reason."
         },
         {
           "heading": "A schedule's time zone",

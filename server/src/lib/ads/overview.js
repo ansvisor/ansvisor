@@ -1,5 +1,6 @@
 import supabaseAdmin from '../../config/supabase.js';
 import { logger } from '../logger.js';
+import { readCampaigns } from './campaigns.js';
 import { OPEN_ROWS, readAdsSettings, readsEveryOpportunity } from './opportunities.js';
 import { sumSpend } from './paid.js';
 import { ADS_PERIODS, readStanding } from './standing.js';
@@ -19,15 +20,19 @@ import { ADS_PERIODS, readStanding } from './standing.js';
  * - paidSov: null until sponsored units are captured.
  * - signups: the period's AI-assisted signups from the snippet's conversions
  *   (brand_ai_conversions, 00288); null with conversions off or unread.
+ * - cost: the period's ad spend on every read account (Google and ChatGPT
+ *   campaigns, per currency) and, in one currency with signups, the cost
+ *   per AI-assisted signup; null until an ad account of the brand is read.
  */
 export async function readOverview({ brand, orgId, period, now = new Date() }) {
   const { thresholds } = await readAdsSettings(orgId);
   // Reads the brand within the organization first: not found otherwise.
   const standing = { brandId: brand.id, orgId, period, thresholds, now };
   const { rows, notAnalysed, paid } = await readStanding(standing);
-  const [everyRow, signups] = await Promise.all([
+  const [everyRow, signups, adSpend] = await Promise.all([
     readsEveryOpportunity(orgId, brand),
     readSignups(brand.id, period),
+    readAdSpend(orgId, brand.id, period, now),
   ]);
 
   const paidMeasured = rows.length > 0 && rows.every((r) => r.standing.wePay !== null);
@@ -54,7 +59,39 @@ export async function readOverview({ brand, orgId, period, now = new Date() }) {
       : null,
     paidSov: null,
     signups,
+    cost: costPerSignup(adSpend, signups),
   };
+}
+
+/**
+ * The period's spend on the brand's read ad accounts, per currency (the
+ * Campaigns tab's own read); null with no account read yet, or when it
+ * can't be read: the card then says Not measured, never a number.
+ */
+async function readAdSpend(orgId, brandId, period, now) {
+  try {
+    const { accounts, campaigns } = await readCampaigns({ orgId, brandId, period }, { now });
+    if (!accounts.some((a) => a.syncedThrough && a.status !== 'disconnected')) return null;
+    return sumSpend(campaigns.map((c) => [{ currencyCode: c.currencyCode, amount: c.spend }]));
+  } catch (err) {
+    logger.warn({ brandId, err: err.message }, '[ads] ad spend unread');
+    return null;
+  }
+}
+
+/**
+ * The cost per AI-assisted signup: the spend divided by the signups, only
+ * in one currency (never added across currencies) and with at least one
+ * signup; otherwise null, and `spend` says what was spent.
+ */
+export function costPerSignup(spend, signups) {
+  if (!spend) return null;
+  const one = spend.length === 1 ? spend[0] : null;
+  const perSignup =
+    one && typeof signups === 'number' && signups > 0
+      ? { currencyCode: one.currencyCode, amount: Math.round((one.amount / signups) * 100) / 100 }
+      : null;
+  return { spend, perSignup };
 }
 
 async function readSignups(brandId, period) {

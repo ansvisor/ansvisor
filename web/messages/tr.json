@@ -1883,6 +1883,10 @@
         "title": "{targets} üzerinde güçlü AI dönüşümleri",
         "description": "Bu sayfalar, AI trafiğini sitenizin ortalamasının oldukça üzerinde bir oranda önemli etkinliklere dönüştürüyor."
       },
+      "paid_overlap": {
+        "title": "Yapay zekanın sizi zaten seçtiği {targets} için Google reklam harcaması artıyor",
+        "description": "Yapay zeka bu satın alma odaklı prompt'ların yanıtlarında sizi zaten seçiyor ve bunların arama terimleri için Google'a ödediğiniz tutar önceki 30 güne göre arttı."
+      },
       "bridge_link_gap": {
         "title": "{targets} sayfalarını dönüşüm sağlayan sayfalara bağlayın",
         "description": "AI okuyucuları bu sayfalara yönlendiriyor ancak çok azı dönüşüm sağlıyor. Aynı konudaki dönüşüm sağlayan sayfalar ise çok az AI trafiği alıyor."
@@ -3346,6 +3350,12 @@
         "description": "Bu kaynaklar, yanıtlar markanızdan bahsettiğinde Atıf alıyor ve doğrudan kendi sayfalarınıza referans verebilir.",
         "goal": "Üçüncü taraf bahsedilmelerini varlıklarınıza yönlendiren referanslara dönüştürün."
       },
+      "review_paid_overlap": {
+        "title": "Yapay zekanın sizi zaten seçtiği {targets} üzerindeki Google reklamlarını inceleyin",
+        "titleGeneric": "Yapay zekanın sizi zaten seçtiği yerlerdeki Google reklamlarını inceleyin",
+        "description": "Yapay zeka bu satın alma odaklı prompt'ların yanıtlarında sizi zaten seçiyor ve bu terimlerdeki Google harcamanız artıyor. Zaten alacağınız tıklamalar için ödeme yapıyor olabilirsiniz.",
+        "goal": "Yalnızca fazladan tıklama kazandıran reklamlara harcama yapın ve yapay zeka yanıtını koruyun."
+      },
       "bridge_links": {
         "title": "{targets} hedefini dönüşüm sağlayan sayfalara bağlayın",
         "titleGeneric": "AI tarafından ziyaret edilen sayfaları dönüşüm sağlayan sayfalara bağlayın",
@@ -3810,6 +3820,8 @@
       "prioritize_targets_target": "{targets} etkiye göre önceliklendirin",
       "review_link_plan": "Eklenecek bağlantıları gözden geçirin",
       "review_link_plan_target": "{targets} üzerine eklenecek bağlantıları gözden geçirin",
+      "review_paid_overlap": "Bu arama terimlerindeki Google reklamlarını inceleyin",
+      "review_paid_overlap_target": "{targets} üzerindeki Google reklamlarını inceleyin",
       "define_validation_baseline": "Kıyaslama yapılacak referans noktasını kaydedin",
       "define_validation_baseline_target": "{targets} için referans noktasını kaydedin",
       "create_content_brief": "İçerik özeti oluşturun",
@@ -3921,6 +3933,7 @@
       "strengthen_entity_content": "Sayfa, yeniden getirildiğinde markayı profilinde olduğu gibi tanımladığında",
       "add_internal_links": "Sayfaya bağlantı vermesi gereken sayfalar, yeniden getirildiğinde bağlantı verdiğinde",
       "review_link_plan": "Her bağlantı ve bağlantı metni onaylandığında veya değiştirildiğinde: onaylarsınız",
+      "review_paid_overlap": "Her arama teriminin reklamı Google Ads'te tutuldu, düşürüldü veya duraklatıldı: siz onaylarsınız",
       "improve_cta_path": "Harekete geçirici mesaj sayfada yayında olduğunda: onaylarsınız",
       "publish_content": "Sayfa kendi adresinde yayınlandığında ve getirildiğinde yanıt verdiğinde",
       "fix_crawler_access": "robots.txt ve sayfa, yeniden getirildiğinde AI tarayıcılarına izin verdiğinde",
@@ -4494,6 +4507,10 @@
       "name": "Katalog kaynaklarını oku",
       "step": "Kataloğu Oku"
     },
+    "catalogFeedGaps": {
+      "name": "Feed boşluklarını oku",
+      "step": "Ürünler · Feed boşluklarını oku"
+    },
     "contentPlan": {
       "name": "İçerik planını oku",
       "step": "İçerik planını Oku"
@@ -4807,6 +4824,10 @@
     "adsOpportunities": {
       "name": "Reklam fırsatlarını oku",
       "step": "Reklam fırsatları okundu"
+    },
+    "adsPaidOverlap": {
+      "name": "Ücretli çakışmayı oku",
+      "step": "Ücretli çakışmayı oku"
     },
     "adDrafts": {
       "name": "Reklam taslaklarını kaydet",
@@ -7767,7 +7788,9 @@
         "signal": "Sinyal oluşturuldu",
         "kpi": "KPI değişti",
         "watch_rule": "İzleme kuralı",
-        "brand_added": "Marka eklendi"
+        "brand_added": "Marka eklendi",
+        "page_published": "Sayfa yayınlandı",
+        "catalog_synced": "Katalog senkronize edildi"
       },
       "daily": "Her gün {time}",
       "weekdays": "Hafta içi {time}",
@@ -7782,13 +7805,17 @@
       "kpiAny": "Bir KPI",
       "watchRule": "İzleme kuralı",
       "brandAdded": "Bir marka eklendiğinde",
+      "pagePublished": "Bir sayfa yayınlandığında",
+      "catalogSynced": "Katalog senkronize olduğunda",
       "manualOnly": "Yalnızca manuel",
       "more": "+{count}",
       "firesWhen": {
         "signal": "Aksiyon Merkezi eşleşen bir sinyal bulduğunda tetiklenir",
         "kpi": "KPI eşiği aştığında tetiklenir",
         "watch_rule": "İzleme kuralı tetiklendiğinde tetiklenir",
-        "brand_added": "Çalışma alanına eklenen her marka için bir kez tetiklenir"
+        "brand_added": "Çalışma alanına eklenen her marka için bir kez tetiklenir",
+        "page_published": "Markanın CMS'inde yayına giren her sayfa için bir kez tetiklenir",
+        "catalog_synced": "Ürünleri değiştiren her katalog senkronizasyonu için bir kez tetiklenir"
       },
       "timeZone": "{zone} saati",
       "off": "Kapalı · tetiklenmez",
@@ -7888,6 +7915,8 @@
         "trigger": "Tetikleyici",
         "signal": "Sinyal",
         "slot": "Planlanan zaman",
+        "page": "Sayfa yayınlandı",
+        "catalog": "Katalog kaynağı senkronize edildi",
         "earlier": "Önceki tetiklenmeler",
         "action": "Aksiyon"
       },
@@ -7929,6 +7958,8 @@
       "kpi": "KPI değişti",
       "watch_rule": "İzleme kuralı",
       "brand_added": "Marka eklendi",
+      "page_published": "Sayfa yayınlandı",
+      "catalog_synced": "Katalog senkronize edildi",
       "manual": "Manuel",
       "action": "Ajanı bir aksiyondan çalıştır",
       "agent": "Başka bir ajan tarafından çağrıldı"
@@ -8004,8 +8035,10 @@
       "seasonal": "Mevsimsel Prompts",
       "traffic": "AI trafiği ve kayıtlar",
       "ai-revenue": "AI kaynaklı müşteriler ve gelir",
+      "feed-advisor": "Alışveriş feed boşlukları",
       "earn-or-pay": "Kazan ya da öde",
       "ad-drafts": "Reklam taslakları",
+      "paid-overlap": "Ücretli çakışma",
       "operator": "AEO Operatörü"
     },
     "form": {
@@ -8072,7 +8105,9 @@
           "signal": "Sinyal oluşturulduğunda",
           "kpi": "KPI değiştiğinde",
           "watch_rule": "İzleme kuralı",
-          "brand_added": "Bir marka eklendiğinde"
+          "brand_added": "Bir marka eklendiğinde",
+          "page_published": "Bir sayfa yayınlandığında",
+          "catalog_synced": "Katalog senkronize olduğunda"
         },
         "notes": {
           "manual": "Sohbetten veya bir aksiyondan çalıştırın",
@@ -8080,7 +8115,9 @@
           "signal": "Yeni bir Aksiyon Merkezi sinyali",
           "kpi": "Bir KPI eşiği aştığında",
           "watch_rule": "ŞU DURUMDA · ŞUNUN İÇİN · ŞUNU YAP",
-          "brand_added": "Yeni marka başına bir kez · Tüm markalar gerekir"
+          "brand_added": "Yeni marka başına bir kez · Tüm markalar gerekir",
+          "page_published": "CMS'inizde yayına giren her sayfa için bir kez",
+          "catalog_synced": "Ürünleri değiştiren her senkronizasyon için bir kez"
         },
         "watchRuleNone": "Bir izleme kuralında ayarlayın: ŞUNU YAP adımı ajanı çalıştırır",
         "list": "Tetikleyiciler",
@@ -8144,6 +8181,8 @@
         },
         "watchRuleWhen": "İzleme kuralı tetiklendiğinde",
         "brandAddedWhen": "çalışma alanına bir marka eklendiğinde, marka başına bir kez",
+        "pagePublishedWhen": "markanın CMS'inde bir sayfa yayına girdiğinde, sayfa başına bir kez",
+        "catalogSyncedWhen": "markanın ürün kataloğunun senkronizasyonu ürünleri değiştirdiğinde, senkronizasyon başına bir kez",
         "runAgent": "Ajanı çalıştır"
       },
       "scope": {
@@ -8610,7 +8649,7 @@
       },
       "paid-opportunity": {
         "name": "Ücretli Fırsat",
-        "description": "Her hafta hangi satın alma prompt'larının içerikle kazanılacağını veya ücret ödeneceğini belirtir; bir rakibin adınıza reklam vermesi gibi değişiklikleri işaretler ve Ansvisor'da reklam taslakları hazırlar."
+        "description": "Her hafta hangi satın alma odaklı prompt'ların içerikle kazanılacağını veya ücretli olarak hedefleneceğini belirtir; adınıza reklam veren bir rakip gibi değişiklikleri işaretler, yapay zekanın size zaten atıf yaptığı yerlerde Google'a ne ödediğinizi gösterir ve Ansvisor'da reklam taslakları hazırlar."
       },
       "ai-ads-watch": {
         "name": "AI Reklam Takibi",
@@ -15397,7 +15436,14 @@
       "sov": "Ücretli SoV",
       "sovNote": "AI yanıtlarındaki sponsorlu reklamlar henüz kaydedilmiyor",
       "cost": "AI destekli kayıt başına maliyet",
-      "costNote": "Bağlı bir reklam hesabı gerektirir",
+      "costNote": "Bağlantılar bölümünde bir reklam hesabının bağlanması ve okunması gerekir",
+      "costOf": "{spend} reklam harcaması ÷ {count, plural, other {# yapay zeka destekli kayıt}}",
+      "costSpend": "Bu dönemde {spend} reklam harcaması",
+      "costNoSignups": "Henüz kayıt yok",
+      "costNoSpend": "Reklam harcaması yok",
+      "costNoSpendNote": "Bağlı reklam hesapları bu dönemde harcama yapmadı",
+      "costCurrencies": "Birden fazla para birimi",
+      "costCurrenciesNote": "{spend} reklam harcaması: farklı para birimlerindeki tutarlar toplanmaz, bu nedenle kayıt başına tek bir maliyet yoktur",
       "signups": "Bu dönemde {count, plural, one {# AI destekli kayıt} other {# AI destekli kayıt}}",
       "signupsNotMeasured": "AI destekli kayıtlar: Ölçülmedi",
       "barTitle": "Organik veya ücretli · {count, plural, one {# prompt} other {# prompt}}",
@@ -15406,7 +15452,11 @@
       "earnedPaid": "Organik + ücretli",
       "paidOnly": "Yalnızca ücretli",
       "neither": "Hiçbiri",
-      "paidNotMeasured": "Ücretli henüz ölçülmediğinden çubuk yalnızca organik ve hiçbiri durumlarını gösterir.",
+      "paidNotMeasured": "Bir Google Ads hesabı bağlanıp okunana kadar ücretli ölçülmez; bu nedenle çubuk yalnızca organik ve hiçbiri durumlarını gösterir.",
+      "spendOverlap": "Yapay zekanın size zaten atıf yaptığı prompt'lar için Google'da ödenen: {amount}",
+      "spendMatched": "Takip edilen tüm prompt'larınızda: {amount}",
+      "spendUnmatched": "Takip edilen hiçbir prompt ile eşleşmeyen arama terimlerinde: {amount}",
+      "spendNote": "Google Ads arama terimlerinizden alınmıştır. ChatGPT Ads harcaması Kampanyalar'dadır: reklamın hangi soruda gösterildiğini belirtmez.",
       "openPrompts": "{count, plural, one {# açık Prompt'u gör} other {# açık Prompt'u gör}}",
       "locked": "Fırsatlar'daki {count, plural, one {# ek Prompt} other {# ek Prompt}}, {plan} planına {count, plural, one {dahildir} other {dahildir}}.",
       "openSov": "Prompt başına kim ödüyor"
@@ -15483,7 +15533,7 @@
         "volume_at_least": "Ayda {volume} Google araması, en az {threshold}",
         "volume_below": "Ayda {volume} Google araması, {threshold} eşiğinin altında",
         "volume_not_measured": "Google aramaları henüz ölçülmedi",
-        "paid_not_measured": "Kimin ödeme yaptığı henüz ölçülmedi",
+        "paid_not_measured": "{wePay, select, false {Rakiplerin reklam verip vermediği henüz ölçülmüyor} other {Kimin ödeme yaptığı henüz ölçülmüyor}}",
         "no_ad_channel": "Hiçbir reklam kanalı izlendiği AI platformlarına ulaşmıyor"
       },
       "answers": "AI bugün ne yanıt veriyor",
@@ -15493,6 +15543,13 @@
       "cites": "Atıflar: {domains}",
       "fanOuts": "Fan-out sorguları",
       "keywords": "Tohum anahtar kelimeler",
+      "paid": {
+        "title": "Bununla ilgili Google reklamlarınız",
+        "spend": "Bu dönemde {clicks, plural, other {# tıklama}} için {amount}",
+        "terms": "{count, plural, other {# arama terimi eşleşti}}, en maliyetliler başta:",
+        "none": "Bu dönemde bununla eşleşen Google reklam harcaması yok.",
+        "note": "Arama terimleri içerdikleri sözcüklere göre prompt ile eşleştirilir. ChatGPT Ads harcaması eşleştirilmez: reklamın hangi soruda gösterildiğini belirtmez."
+      },
       "failed": "Yanıtlar okunamadı. Burayı kapatıp tekrar açın.",
       "earn": {
         "title": "Kazan · yanıtı düzelt",
@@ -15567,14 +15624,31 @@
         "channel": "Kanal",
         "status": "Durum",
         "spend": "Harcama",
-        "signups": "Yapay zeka destekli kayıtlar",
-        "cost": "Kayıt başına maliyet"
+        "clicks": "Tıklamalar",
+        "cpc": "TBM",
+        "conversions": "Dönüşümler",
+        "costPerConversion": "Dönüşüm başına maliyet"
       },
-      "empty": "Reklam hesabı bağlayın · yakında",
-      "emptyNote": "Kampanyalarınız başlangıçta salt okunur olarak burada listelenecektir.",
+      "channels": {
+        "google": "Google Ads",
+        "chatgpt": "ChatGPT Ads"
+      },
+      "statuses": {
+        "active": "Etkin",
+        "paused": "Duraklatıldı",
+        "ended": "Sona erdi"
+      },
+      "empty": "Henüz bağlı bir reklam hesabı yok",
+      "emptyNote": "Kampanyalarınızı burada salt okunur olarak görmek için Google Ads veya ChatGPT Ads bağlayın.",
+      "openConnections": "Bağlantıları Aç",
+      "failed": "Kampanyalarınız yüklenemedi. Birazdan tekrar deneyin.",
+      "firstRead": "İlk verileriniz bağlantı kurulduktan sonra bir gün içinde gelir.",
+      "noneInPeriod": "Bu dönemde çalışan kampanya yok.",
+      "attention": "{count, plural, one {# reklam hesabıyla ilgilenilmesi gerekiyor.} other {# reklam hesabıyla ilgilenilmesi gerekiyor.}}",
+      "currencyNote": "Her kampanya, bağlı olduğu reklam hesabının para biriminde gösterilir. Sayılar günde bir kez okunur.",
       "safety": {
         "title": "Güvenlik",
-        "note": "Bir aracı tarafından değil, Ansvisor tarafından uygulanır. Bugün hiçbir şey bir reklam hesabına ulaşmaz.",
+        "note": "Bir aracı tarafından değil, Ansvisor tarafından uygulanır. Ansvisor şu anda reklam hesaplarınızı yalnızca okur.",
         "click": "Her etkinleştirme, duraklatma, bütçe veya teklif değişikliği, her modda bir kullanıcının tıklamasını ve onayını gerektirir.",
         "agents": "Aracılar asla harcama yapmaz: Bir aracı değişiklik önerebilir, ancak bunu yalnızca bir kişi gerçekleştirebilir.",
         "cap": "Adminler her kanal için aylık bir üst sınır belirler. Son 24 saatteki değişiklikler hesaba katılarak, üst sınırı aşan değişiklikler engellenir.",
@@ -15582,7 +15656,6 @@
       }
     },
     "connections": {
-      "soon": "Yakında",
       "later": "Daha sonra gelecek",
       "notify": "Bana bildir",
       "notified": "Haber vereceğiz",
@@ -15598,28 +15671,28 @@
       "connect": "Bağla",
       "adminConnects": "Bunu bir Admin bağlar",
       "accountStatus": {
-        "active": "Bağlı",
-        "error": "Dikkat gerekiyor",
+        "active": "Bağlandı",
+        "error": "İlgilenilmesi gerekiyor",
         "disconnected": "Bağlantı kesildi"
       },
       "sync": {
-        "syncedAt": "Rakamlar okundu: {when}",
+        "syncedAt": "Sayılar okundu: {when}",
         "pending": "İlk okuma bir gün içinde: son 90 gün",
         "error": {
           "key_refused": "ChatGPT Ads anahtarı reddetti. Yeni bir anahtar yapıştırın.",
-          "key_missing": "Anahtar artık yok. Hesabı yeniden bağlayın.",
-          "signin_gone": "Google Ads oturumu artık yok. Google Ads'i yeniden bağlayın.",
-          "upstream": "Reklam platformu yanıt vermedi. Ansvisor bir gün içinde yeniden dener.",
-          "failed": "Rakamlar okunamadı. Ansvisor bir gün içinde yeniden dener."
+          "key_missing": "Anahtar artık yok. Hesabı tekrar bağlayın.",
+          "signin_gone": "Google Ads oturumu artık geçerli değil. Google Ads hesabını tekrar bağlayın.",
+          "upstream": "Reklam platformu yanıt vermedi. Ansvisor bir gün içinde tekrar deneyecek.",
+          "failed": "Sayılar okunamadı. Ansvisor bir gün içinde tekrar deneyecek."
         }
       },
       "chatgpt": {
         "connect": "Bağla",
         "addAnother": "Hesap ekle",
-        "dialogTitle": "ChatGPT Ads'i bağla",
-        "dialogLine": "ChatGPT Ads Manager'dan bir Ads API anahtarı yapıştırın. Her anahtar tek bir reklam hesabına erişir, bu yüzden hesap başına bir anahtar ekleyin.",
+        "dialogTitle": "ChatGPT Ads Bağla",
+        "dialogLine": "ChatGPT Ads Manager üzerinden bir Ads API anahtarı yapıştırın. Her anahtar tek bir reklam hesabına erişir, bu yüzden hesap başına bir anahtar ekleyin.",
         "keyLabel": "Ads API anahtarı",
-        "keyNote": "Ansvisor anahtarı ChatGPT Ads ile doğrular, ardından şifreli olarak saklar. Yalnızca okuma yapar.",
+        "keyNote": "Ansvisor anahtarı ChatGPT Ads ile doğrular, ardından şifrelenmiş olarak saklar. Yalnızca okuma işlemi yapar.",
         "cancel": "İptal",
         "save": "Bağla",
         "checking": "Kontrol ediliyor…",
@@ -15629,14 +15702,42 @@
         "billing": "ChatGPT Ads Manager",
         "error": {
           "invalid_key": "ChatGPT Ads bu anahtarı kabul etmedi. Kontrol edip tekrar deneyin.",
-          "upstream": "ChatGPT Ads yanıt vermedi. Bir dakika sonra tekrar deneyin.",
+          "upstream": "ChatGPT Ads yanıt vermedi. Bir dakika içinde tekrar deneyin.",
           "other": "Bağlanamadı. Tekrar deneyin."
+        }
+      },
+      "google": {
+        "name": "Google Ads",
+        "connect": "Bağla",
+        "addAnother": "Hesap ekle",
+        "billing": "Google Ads",
+        "pickTitle": "Google Ads hesaplarını seçin",
+        "pickLine": "Google oturumunuzun erişebildiği hesaplar bunlardır. Ansvisor yalnızca seçtiğiniz hesapları okur; bir kampanyayı veya bütçeyi asla değiştirmez.",
+        "noCustomers": "Bu Google oturumu hiçbir Google Ads hesabına erişemiyor. Reklamlarınızı yöneten Google hesabıyla oturum açın.",
+        "unnamed": "Adsız hesap",
+        "more": "{count, plural, one {# hesap daha listelenmiyor.} other {# hesap daha listelenmiyor.}}",
+        "why": {
+          "connected": "Bağlandı",
+          "manager": "Yönetici hesabı",
+          "unavailable": "Kullanılamıyor",
+          "test": "Test hesabı"
+        },
+        "cancel": "İptal",
+        "save": "{count, plural, =0 {Bağla} one {# hesabı bağla} other {# hesabı bağla}}",
+        "connectedToast": "{count, plural, one {# Google Ads hesabı bağlandı.} other {# Google Ads hesabı bağlandı.}}",
+        "error": {
+          "not_configured": "Google Ads henüz bu sunucuda ayarlanmadı.",
+          "not_connected": "Önce Google Ads oturumu açın, ardından tekrar deneyin.",
+          "not_accessible": "Bu Google oturumu artık söz konusu hesaba erişemiyor. Kapatıp tekrar bağlayın.",
+          "manager_account": "Bir yönetici hesabının kendi kampanyaları yoktur. Altındaki hesapları seçin.",
+          "upstream": "Google Ads yanıt vermedi. Bir dakika sonra tekrar deneyin.",
+          "other": "Bağlanılamadı. Tekrar deneyin."
         }
       },
       "account": {
         "disconnect": "Bağlantıyı kes",
         "disconnectTitle": "{name} bağlantısı kesilsin mi?",
-        "disconnectLine": "Ansvisor bu hesap için sakladığı her şeyi siler: varsa anahtarını ve okuduğu rakamları. Reklamlarınız {billing} içinde çalışmaya devam eder.",
+        "disconnectLine": "Ansvisor bu hesap için sakladıklarını siler: varsa anahtarını ve okuduğu rakamları. Reklamlarınız {billing} içinde çalışmaya devam eder.",
         "disconnectedToast": "{name} bağlantısı kesildi.",
         "disconnectFailed": "Bağlantı kesilemedi. Tekrar deneyin.",
         "cancel": "İptal"
