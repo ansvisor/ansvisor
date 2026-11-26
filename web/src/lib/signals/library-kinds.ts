@@ -50,6 +50,8 @@ export const LIBRARY_SIGNAL_KINDS = {
   ai_visits_weekly_drop: { stateKey: 'dropped', positive: false },
   bridge_link_gap: { stateKey: 'opportunity', positive: false },
   product_pages_to_optimize: { stateKey: 'opportunity', positive: false },
+  // Google spend rising where AI already picks the brand (Ads Phase 1 P4).
+  paid_overlap: { stateKey: 'opportunity', positive: false },
   broken_citation_target: { stateKey: 'issue', positive: false },
   cited_page_uncrawled: { stateKey: 'issue', positive: false },
   crawler_blocked: { stateKey: 'issue', positive: false },

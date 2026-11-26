@@ -1,15 +1,15 @@
 ---
 title: Ads Opportunities: the decision for each buying-intent prompt
 route: /dashboard/ads
-keywords: [ads opportunities, earn, pay, earn + pay, your google ads on it, google ad spend per prompt, search terms, decision, change decision, back to the recommendation, thresholds, who ai picks, google searches, ad channels, opportunity drawer, what ai answers today, send to action center, do both, export for google ads editor, export this prompt, /earn-or-pay]
+keywords: [ads opportunities, earn, pay, earn + pay, your google ads on it, google ad spend per prompt, search terms, review google ads where ai already picks you, paid overlap suggestion, decision, change decision, back to the recommendation, thresholds, who ai picks, google searches, ad channels, opportunity drawer, what ai answers today, send to action center, do both, export for google ads editor, export this prompt, /earn-or-pay]
 synonyms: [earn or pay, buying prompts list, override decision, which prompts to pay for, ads csv, google ads editor file, fix the answer]
 plan: all
-updated: 2026-11-22
-last_checked: 2026-11-22
+updated: 2026-11-23
+last_checked: 2026-11-23
 owner: Cihan
 app_version: 0.3.0
 approved: false
-sources: [web/messages/en.json, web/src/app/[locale]/(dashboard)/dashboard/ads/_opportunities.tsx, web/src/app/[locale]/(dashboard)/dashboard/ads/_opportunity-drawer.tsx, web/src/app/[locale]/(dashboard)/dashboard/ads/_earn-card.tsx, web/src/app/[locale]/(dashboard)/dashboard/ads/_do-both.tsx, web/src/app/[locale]/(dashboard)/dashboard/ads/_export.tsx, web/src/app/[locale]/(dashboard)/dashboard/ads/_thresholds.tsx, server/src/lib/ads/decision.js, server/src/lib/ads/opportunities.js, server/src/lib/ads/paid.js, server/src/lib/ads/paid-match.js, server/src/lib/ads/export.js, skills/earn-or-pay/SKILL.md]
+sources: [web/messages/en.json, web/src/app/[locale]/(dashboard)/dashboard/ads/_opportunities.tsx, web/src/app/[locale]/(dashboard)/dashboard/ads/_opportunity-drawer.tsx, web/src/app/[locale]/(dashboard)/dashboard/ads/_earn-card.tsx, web/src/app/[locale]/(dashboard)/dashboard/ads/_do-both.tsx, web/src/app/[locale]/(dashboard)/dashboard/ads/_export.tsx, web/src/app/[locale]/(dashboard)/dashboard/ads/_thresholds.tsx, server/src/lib/ads/decision.js, server/src/lib/ads/opportunities.js, server/src/lib/ads/paid.js, server/src/lib/ads/paid-match.js, server/src/lib/ads/paid-watch.js, server/src/lib/action-center/definitions/f15-review-paid-overlap.js, server/src/lib/ads/export.js, skills/earn-or-pay/SKILL.md]
 ---
 **Opportunities**, a tab of **Ads**, lists your brand's buying-intent prompts for the period, the most searched first. Each has a decision: **Earn** the AI answer with content, **Pay** for an ad beside it, or **Earn + pay**. A decision is a recommendation, and **Open** on a row shows why and what to do.
 
@@ -58,6 +58,12 @@ Each field shows its default; leave it empty to keep that. **Save** updates the 
 ## Your Google ads on it
 
 This drawer section shows once a Google Ads account is read. It shows what you paid in the period for the Google search terms that match the prompt, the clicks, and the costliest terms. Otherwise it says nothing matched. A term matches by its words and counts for one prompt only. ChatGPT Ads spend isn't matched, because ChatGPT Ads don't say which question an ad showed on.
+
+## Suggestion: review Google ads where AI already picks you
+
+Each night, with a Google Ads account read, Ads looks for buying-intent prompts where AI already picks you and your Google spend on their search terms rose. Spend counts as rising when it is up by a fifth or more on the 30 days before, with at least 10 clicks. Those prompts appear in the **Action Center** as **Review Google ads where AI already picks you**.
+
+Its task asks you to check those search terms in Google Ads: keep, lower or pause each ad, and confirm it. The next task checks that AI still picks you. Ansvisor never changes your ads.
 
 ## Earn: send the fix to the Action Center
 

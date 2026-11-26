@@ -58,6 +58,8 @@ const TEMPLATES = Object.freeze({
   validate_third_party_presence: { check: 'manual' },
   // The bridge links' pairs, read before they go on the pages (AC plan P-10).
   review_link_plan: { check: 'manual' },
+  // In the person's own Google Ads account: they confirm it.
+  review_paid_overlap: { check: 'manual' },
 });
 
 /** The task ids with a check, for the tests. */

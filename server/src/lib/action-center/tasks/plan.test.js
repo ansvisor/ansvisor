@@ -182,8 +182,14 @@ describe('planTasks', () => {
 });
 
 describe('the task registry', () => {
-  it('holds the specification’s sixty-two task primitives, learning C4’s and the AC plan’s', () => {
-    expect(libraryTasks()).toHaveLength(65);
+  it('holds the specification’s sixty-two task primitives, learning C4’s, the AC plan’s and Ads’', () => {
+    expect(libraryTasks()).toHaveLength(66);
+    // Google ads where AI already picks the brand, reviewed by a person in their own account (Ads P4).
+    expect(TASKS.review_paid_overlap).toMatchObject({
+      mode: 'human',
+      permission: 'read',
+      requires: ['google_ads'],
+    });
     // The bridge links' pairs, read by a person (AC plan P-10).
     expect(TASKS.review_link_plan).toMatchObject({ mode: 'human', permission: 'read' });
     // A canonical tag fixed, checked on its page (AC plan P-11).

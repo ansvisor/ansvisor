@@ -1883,6 +1883,10 @@
         "title": "Strong AI conversions on {targets}",
         "description": "These pages turn AI traffic into key events well above your site’s rate."
       },
+      "paid_overlap": {
+        "title": "Google ad spend rising on {targets} AI already picks you for",
+        "description": "AI already picks you in the answers to these buying prompts, and what you pay Google for their search terms rose on the 30 days before."
+      },
       "bridge_link_gap": {
         "title": "Link {targets} to pages that convert",
         "description": "AI sends readers to these pages and few of them convert. Pages on the same topic that convert have little AI traffic."
@@ -3333,6 +3337,12 @@
         "description": "These sources are cited when answers discuss your brand, and could reference your own pages.",
         "goal": "Turn third-party mentions into references to your assets."
       },
+      "review_paid_overlap": {
+        "title": "Review the Google ads on {targets} AI already picks you for",
+        "titleGeneric": "Review Google ads where AI already picks you",
+        "description": "AI already picks you in the answers to these buying prompts, and your Google spend on their search terms is rising. You may be paying for clicks you'd get anyway.",
+        "goal": "Spend on ads where they add clicks, and keep the AI answer."
+      },
       "bridge_links": {
         "title": "Link {targets} to pages that convert",
         "titleGeneric": "Link AI-visited pages to pages that convert",
@@ -3797,6 +3807,8 @@
       "prioritize_targets_target": "Prioritize {targets} by impact",
       "review_link_plan": "Review the links to add",
       "review_link_plan_target": "Review the links to add on {targets}",
+      "review_paid_overlap": "Review the Google ads on these search terms",
+      "review_paid_overlap_target": "Review the Google ads on {targets}",
       "define_validation_baseline": "Record the baseline to measure against",
       "define_validation_baseline_target": "Record the baseline for {targets}",
       "create_content_brief": "Create a content brief",
@@ -3908,6 +3920,7 @@
       "strengthen_entity_content": "The page describes the brand as its profile does, fetched again",
       "add_internal_links": "The pages that should link to it do, fetched again",
       "review_link_plan": "Each link and its anchor text is approved or changed: you confirm it",
+      "review_paid_overlap": "Each search term's ad is kept, lowered or paused in Google Ads: you confirm it",
       "improve_cta_path": "The call to action is live on the page: you confirm it",
       "publish_content": "The page is published at its address and answers when fetched",
       "fix_crawler_access": "robots.txt and the page let the AI crawlers in, fetched again",

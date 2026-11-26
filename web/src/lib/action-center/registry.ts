@@ -91,6 +91,8 @@ export type ActionKind =
   | 'fix_structured_data'
   // Canonical tags missing or pointing where they shouldn't (F14, AC plan P-11).
   | 'fix_canonical_tags'
+  // Google ads on prompts AI already picks the brand for (F15, Ads Phase 1 P4).
+  | 'review_paid_overlap'
   | 'fix_content_gaps'
   | 'fix_outdated_content'
   | 'fix_entity_signals'
@@ -331,6 +333,7 @@ export const ACTION_KINDS: readonly ActionKind[] = [
   'fix_crawler_access',
   'fix_structured_data',
   'fix_canonical_tags',
+  'review_paid_overlap',
   'fix_content_gaps',
   'fix_outdated_content',
   'fix_entity_signals',
