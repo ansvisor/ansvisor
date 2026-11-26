@@ -204,11 +204,11 @@
         "home page"
       ],
       "plan": "all",
-      "updated": "2026-11-17",
+      "updated": "2026-11-26",
       "sections": [
         {
           "heading": null,
-          "text": "The **Action Center** is where Ansvisor turns what changed in AI search into a ranked list of work. Open it from **Action Center**, first under **Execution** in the main menu, after the **Analytics** group: it opens on its **Today** tab, and its tabs are listed under it too. When you sign in, Ansvisor opens on **Prompts › Tracked Prompts**, whatever the plan, or on **Today** when Prompts is off your menu. Everything in it is per brand: switch brands to see another brand's work."
+          "text": "The **Action Center** is where Ansvisor turns what changed in AI search into a ranked list of work. Open it from **Action Center**, first under **Execution** in the main menu, after the **Analytics** group: it opens on its **Today** tab, and its tabs are listed under it too. When you sign in, Ansvisor opens on **Brand Visibility › Overview** once your brands have answers, on **Prompts › Tracked Prompts** before that, or on **Today** when neither is on your menu. Everything in it is per brand: switch brands to see another brand's work."
         },
         {
           "heading": "The tabs",
@@ -707,11 +707,11 @@
         "my day"
       ],
       "plan": "all",
-      "updated": "2026-11-20",
+      "updated": "2026-11-26",
       "sections": [
         {
           "heading": null,
-          "text": "**Today** is the first tab of the **Action Center**: what changed since your last visit, what to do today and what is waiting for you, on one page per brand. Open it from **Action Center**, first under **Execution** in the main menu. When you sign in, Ansvisor opens on **Prompts › Tracked Prompts**, whatever the plan; Today is one click away. When Prompts is off your menu, Ansvisor opens here instead."
+          "text": "**Today** is the first tab of the **Action Center**: what changed since your last visit, what to do today and what is waiting for you, on one page per brand. Open it from **Action Center**, first under **Execution** in the main menu. When you sign in, Ansvisor opens on **Brand Visibility › Overview** once your brands have answers, and on **Prompts › Tracked Prompts** before that; Today is one click away. When neither is on your menu, Ansvisor opens here instead."
         },
         {
           "heading": "The tabs",
@@ -1169,6 +1169,11 @@
         "ai traffic",
         "sign-ups",
         "/traffic",
+        "shopping feed advisor",
+        "feed gaps",
+        "product feed",
+        "gtin",
+        "/feed-advisor",
         "when a brand is added",
         "brand added",
         "new brand trigger",
@@ -1212,7 +1217,10 @@
         "holiday prompts",
         "black friday",
         "ai traffic report",
-        "ai visitors who sign up"
+        "ai visitors who sign up",
+        "what is my feed missing",
+        "missing gtin",
+        "feed fixes"
       ],
       "plan": "all",
       "updated": "2026-11-21",
@@ -1260,6 +1268,10 @@
         {
           "heading": "AI Traffic → Signups",
           "text": "**AI Traffic → Signups** runs every Monday at 09:00 on **Auto, ask before changes**. It is made for the **Growth** work area. It reports the visits AI assistants sent to your site last week, by assistant and by landing page, against the week before. With Google Analytics connected, it adds the key events, such as sign-ups, and the sessions that came from AI. Without it, sign-ups show as **Not measured**. Sign-ups by assistant or by page, and the prompt behind a visit, aren't measured, and the report says so. Sending a page to the Action Center is a card you approve. Google Analytics is optional. In Chat, the same skill is **/traffic**."
+        },
+        {
+          "heading": "Shopping Feed Advisor",
+          "text": "**Shopping Feed Advisor** runs every Monday at 09:00 on **Auto, ask before changes**. It is made for e-commerce brands and needs a product catalog: connect one in **Settings › Integrations › Catalog**. Each run checks every live product in your catalog for what AI shopping answers need: a GTIN, a photo, a price, stock, a full description that says early on what the product is, a category and a brand. It lists the gaps by impact, the readiness points your catalog loses on each, and gives example products and a fix for each gap. It never changes your store or feed. Sending a fix to the Action Center is a card you approve. In Chat, the same skill is **/feed-advisor**."
         },
         {
           "heading": "Agency Client Reporter",
@@ -2897,7 +2909,7 @@
         "citations page"
       ],
       "plan": "all",
-      "updated": "2026-11-06",
+      "updated": "2026-11-23",
       "sections": [
         {
           "heading": null,
@@ -2913,7 +2925,7 @@
         },
         {
           "heading": "Top Sources and the source choice",
-          "text": "The **Top Sources** card has four tabs: **Domains**, **URLs**, **Competitor Gaps** and **Source Types**.\n\nAbove the Domains and URLs tables, four buttons choose which sources they list:\n\n- **Brand** (the default): your brand's own domains.\n- **Competitors**: the domains of the competitors you track.\n- **Third-Party**: every other site.\n- **All**: every source.\n\nThe choice doesn't change **Total Citations**, **Avg citations per result**, **Competitor Gaps** or **Source Types**."
+          "text": "The **Top Sources** card has four tabs: **Domains**, **URLs**, **Competitor Gaps** and **Source Types**. It opens on **URLs**.\n\nAbove the Domains and URLs tables, four buttons choose which sources they list:\n\n- **Brand**: your brand's own domains. The **Citations** card on Overview opens the page here.\n- **Competitors**: the domains of the competitors you track.\n- **Third-Party**: every other site.\n- **All** (the default): every source.\n\nThe choice doesn't change **Total Citations**, **Avg citations per result**, **Competitor Gaps** or **Source Types**."
         },
         {
           "heading": "The Domains tab",
@@ -2937,7 +2949,7 @@
         },
         {
           "heading": "How to use the tab",
-          "text": "- **See which of your pages AI cites**: keep **Brand**, the default, and open the **URLs** tab. It lists your own pages that AI cites, on which platforms and how often. Open a page to see the prompts it's cited for.\n- **Find the third-party sources AI trusts**: choose **Third-Party**. The top of the Domains and URLs lists are the sites AI leans on most for your prompts: places to be mentioned or cited.\n- **Watch your competitors' pages**: choose **Competitors** to see which competitor domains and pages AI cites in your answers.\n- **Find outreach targets**: the **Competitor Gaps** tab lists the third-party sites AI cites when it names a competitor and not you."
+          "text": "- **See which of your pages AI cites**: pick **Brand** and stay on the **URLs** tab. It lists your own pages that AI cites, on which platforms and how often. Open a page to see the prompts it's cited for.\n- **Find the third-party sources AI trusts**: choose **Third-Party**. The top of the Domains and URLs lists are the sites AI leans on most for your prompts: places to be mentioned or cited.\n- **Watch your competitors' pages**: choose **Competitors** to see which competitor domains and pages AI cites in your answers.\n- **Find outreach targets**: the **Competitor Gaps** tab lists the third-party sites AI cites when it names a competitor and not you."
         }
       ]
     },

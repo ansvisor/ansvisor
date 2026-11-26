@@ -2971,105 +2971,167 @@
           "title": "设定您的 KPI",
           "summary": "挑选 3–5 个目标，我们将为您追踪。",
           "open": "打开 KPI",
-          "doneWhen": "已保存 1 个 KPI"
+          "doneWhen": "已保存 1 个 KPI",
+          "why": [
+            "KPI 可将您的数据转化为可追踪的目标。",
+            "Action Center 每周向您展示 KPI 的达成进度。"
+          ],
+          "how": ["打开 KPI", "挑选 3–5 个指标，例如 AI 可见度或引用量", "为每项设定目标并保存"]
         },
         "competitors": {
           "title": "添加至少 3 个竞争对手",
           "summary": "添加 5–20 个竞争对手效果最佳。",
           "open": "添加竞争对手",
-          "doneWhen": "3 个竞争对手"
+          "doneWhen": "3 个竞争对手",
+          "why": [
+            "每个 AI 回答都会与您的竞争对手进行对比。",
+            "5–20 个竞争对手能提供最清晰的全貌。"
+          ],
+          "how": ["打开竞争对手", "添加买家常拿来与您对比的品牌", "建议添加 5–20 个"]
         },
         "topics": {
           "title": "添加至少 3 个主题",
           "summary": "从推荐主题中选择。",
           "open": "打开推荐主题",
-          "doneWhen": "3 个主题"
+          "doneWhen": "3 个主题",
+          "why": [
+            "主题可将您的 Prompt 进行归类，并展示您的领先或落后领域。",
+            "推荐内容基于您的网站和市场生成。"
+          ],
+          "how": ["打开主题", "挑选 3 个与您的业务相符的主题", "添加它们"]
         },
         "prompts": {
           "title": "为每个主题添加 3 个 Prompt",
           "summary": "从推荐 Prompt 中选择。",
           "open": "打开推荐 Prompt",
-          "doneWhen": "每个主题包含 3 个 Prompt"
+          "doneWhen": "每个主题包含 3 个 Prompt",
+          "why": ["Prompt 即买家向 AI 提出的问题。", "每个主题 3 个即可观察到趋势。"],
+          "how": [
+            "打开推荐 Prompt",
+            "为每个主题挑选 3 个 Prompt",
+            "添加它们。首批回答将在数小时内送达"
+          ]
         },
         "gsc": {
           "title": "关联 Google Search Console",
           "summary": "强烈建议。",
           "name": "Google Search Console",
           "open": "关联",
-          "doneWhen": "已关联"
+          "doneWhen": "已关联",
+          "why": [
+            "我们将在 24 小时内开始分析您的数据。",
+            "Prompt 和内容建议均来源于真实搜索。",
+            "展示您的优化是否带来了点击。"
+          ],
+          "how": ["点击“关联”", "使用 Google 登录并选择您的媒体资源", "授予只读访问权限"]
         },
         "ga": {
           "title": "关联 Google Analytics",
           "summary": "查看哪些 AI 访问带来了互动与转化。",
           "name": "Google Analytics",
           "open": "关联",
-          "doneWhen": "已关联"
+          "doneWhen": "已关联",
+          "why": ["展示哪些 AI 访问带来了互动与转化。", "生成流量与转化报告所需。"],
+          "how": ["点击“关联”", "选择您的 GA4 媒体资源", "授予只读访问权限"]
         },
         "snippet": {
           "title": "添加 AI 流量代码片段",
           "summary": "在网站的 head 中添加一行代码。",
           "open": "获取代码",
-          "doneWhen": "检测到首次访问"
+          "doneWhen": "检测到首次访问",
+          "why": [
+            "统计来自 ChatGPT、Gemini、Perplexity 等平台的访问量。",
+            "无需 Google Analytics 即可使用。"
+          ],
+          "how": ["复制代码", "粘贴到网站的 head 中", "发布。我们将检测首次访问"]
         },
         "visibility": {
           "title": "在 Visibility 中查看您的当前状况",
           "summary": "您与竞争对手在 AI 回答中的占比份额。",
           "open": "打开 Visibility",
-          "doneWhen": "页面已打开"
+          "doneWhen": "页面已打开",
+          "why": ["您与竞争对手在 AI 回答中的占比份额。", "实现所有目标的起点。"],
+          "how": ["打开 Visibility", "查看您的排名与领先者", "记下您表现最弱的平台"]
         },
         "answers": {
           "title": "阅读您的第一条 AI 回答",
           "summary": "按 Prompt 查看回答及后续搜索。",
           "open": "打开 Prompts",
-          "doneWhen": "页面已打开"
+          "doneWhen": "页面已打开",
+          "why": ["准确了解 AI 对潜在买家传达的内容。"],
+          "how": ["打开 Prompts", "打开一个 Prompt", "阅读回答及其后续搜索"]
         },
         "data_prompts": {
           "title": "追踪高价值 Prompt 建议",
           "summary": "基于您的 Search Console 和分析数据构建。",
           "open": "打开 Prompt 建议",
-          "doneWhen": "已追踪 5 个建议的 Prompt"
+          "doneWhen": "已追踪 5 个建议的 Prompt",
+          "why": ["基于为您带来访客的搜索和页面构建。", "以便您追踪对营收至关重要的内容。"],
+          "how": ["打开 Prompt 建议", "筛选：来自您的数据", "追踪符合需求的项，5 个或更多"]
         },
         "mentions": {
           "title": "查看 AI 对您的评价",
           "summary": "提及与基调。",
           "open": "打开 Mentions",
-          "doneWhen": "页面已打开"
+          "doneWhen": "页面已打开",
+          "why": ["AI 提及您的频率以及采用的基调。"],
+          "how": ["打开 Mentions", "查看您的占比与情感倾向"]
         },
         "citations": {
           "title": "查看 AI 引用的对象",
           "summary": "AI 用作来源的页面和网站。",
           "open": "打开引用来源",
-          "doneWhen": "页面已打开"
+          "doneWhen": "页面已打开",
+          "why": ["AI 信任的来源。也是您应当被列入的地方。"],
+          "how": ["打开引用来源", "查看 AI 引用最多的网站"]
         },
         "traffic": {
           "title": "查看来自 AI 的访问",
           "summary": "哪些平台向哪些页面输送了访客。",
           "open": "打开 AI 流量",
-          "doneWhen": "页面已打开"
+          "doneWhen": "页面已打开",
+          "why": ["哪些 AI 平台向哪些页面输送了访客。"],
+          "how": ["打开 AI 流量", "查看您的热门页面"]
         },
         "pick_content": {
           "title": "从建议中选取内容",
           "summary": "选择 1–3 条建议。",
           "open": "打开内容",
-          "doneWhen": "已选取 1 条建议"
+          "doneWhen": "已选取 1 条建议",
+          "why": ["建议基于您的 Prompt 和搜索生成。"],
+          "how": ["打开内容", "选取 1–3 条建议：查看它们、创建概要或发送至行动中心"]
         },
         "create_content": {
           "title": "创建您的首篇内容",
           "summary": "开始创建您的内容计划中排名第一的新页面。",
           "open": "打开计划",
-          "doneWhen": "新页面已标记为就绪或已发布，或已发送至您的 CMS"
+          "doneWhen": "新页面已标记为就绪或已发布，或已发送至您的 CMS",
+          "why": ["内容是出现在更多回答中的主要方式。"],
+          "how": [
+            "打开计划：其排名第一的新页面将在“开始”中打开",
+            "选择由谁撰写：您自己、内容代理或您的团队",
+            "将其标记为就绪，然后发布"
+          ]
         },
         "optimize_page": {
           "title": "优化页面",
           "summary": "改善您的内容计划中排名第一待优化的页面。",
           "open": "打开计划",
-          "doneWhen": "已优化的页面已标记为就绪或已发布，或页面已完成审计"
+          "doneWhen": "已优化的页面已标记为就绪或已发布，或页面已完成审计",
+          "why": ["对 AI 已经阅读的页面进行微调，可以快速见效。"],
+          "how": [
+            "打开计划：其排名第一待优化的页面将在“开始”中打开",
+            "在编辑器中根据其规则和来源进行优化",
+            "将其标记为就绪，然后发布"
+          ]
         },
         "ready": {
           "title": "一切就绪",
           "summary": "AI 行动将开始显示在此处。",
           "open": "查看后续步骤",
-          "doneWhen": "自动完成"
+          "doneWhen": "自动完成",
+          "why": ["从现在开始，AI 会在此将您的信号转化为行动。"],
+          "how": ["每周定期查看行动中心"]
         }
       },
       "panel": {
@@ -4404,6 +4466,7 @@
       "name": "读取目录来源",
       "step": "读取目录"
     },
+    "catalogFeedGaps": {},
     "contentPlan": {
       "name": "读取内容规划",
       "step": "读取内容规划"
@@ -14825,7 +14888,34 @@
           "cost": "无 Cloudflare 或 Vercel 账单费用：仅包含您自建日志传输程序的运行成本。"
         }
       },
-      "steps": {},
+      "steps": {
+        "cloudflare_worker": [
+          "在 Cloudflare 中，打开 Workers 和 Pages 并创建一个 Worker。",
+          "将其代码替换为下方的 Worker 代码并部署。",
+          "在该 Worker 的“设置”›“变量和机密”中，添加一个类型为机密的变量，并填入下方的名称和值。",
+          "为您网站添加一个路由，例如 example.com/*，以便 Worker 能捕获其请求。"
+        ],
+        "cloudflare_logpush": [
+          "在 Cloudflare 中，打开“分析和日志”› Logpush，并为 HTTP requests 数据集创建一个任务。",
+          "选择 HTTP 目标并粘贴下方的目标地址。",
+          "从下方的任务设置中选择字段和筛选条件，或使用它们通过 API 创建任务。"
+        ],
+        "vercel_drain": [
+          "在 Vercel 中，打开“Team Settings”›“Drains”，并为您网站的项目添加一个 Logs drain。",
+          "选择“Custom endpoint”并粘贴下方的端点 URL。",
+          "将格式设置为 JSON 并添加下方的自定义标头。"
+        ],
+        "fastly_log_stream": [
+          "在 Fastly 中，打开您的服务并添加一个 HTTPS 日志端点。",
+          "设置下方的端点 URL，使用 POST，将 Content-Type 设置为 application/json，并添加下方的自定义标头（包含 Bearer 值的 Authorization）。",
+          "选择带有换行分隔输出（Newline delimited）的 JSON 日志条目以及自定义日志行格式。粘贴下方的格式，然后激活服务配置。Ansvisor 会自动响应 Fastly 对其 API 端点的域名控制验证；您无需添加 DNS 记录。"
+        ],
+        "log_webhook": [
+          "在您的日志收集器（Vector、Fluent Bit、Logstash 或您自己的脚本）中，添加一个向下方端点发送 POST 请求的 HTTP 输出。",
+          "添加下方的标头，其中包含机密信息。",
+          "发送 JSON lines，每行一个请求，包含示例中的字段：user_agent、ip、url（或 host 和 path）、status、time（RFC 3339，或自 1970 年以来的秒数/毫秒数），如果有的话还可包含 country。每次推送最多 20,000 行和 20 MB，可按需使用 gzip 压缩。超过 7 天的请求不计入统计。"
+        ]
+      },
       "copyExample": "示例文本行",
       "upload": {
         "title": "或上传日志文件",
@@ -18705,16 +18795,29 @@
     "subscriptionCanceled": "您的订阅已取消。",
     "needCustomPlan": "需要定制方案？",
     "customPlanDescription": "适用于大规模管理 AI 可见度的大型企业和代理机构。起价每月 ${price}。",
+    "customPlanPoints": [
+      "起步包含 1 个品牌和 3,000 个 Prompts,更多可通过合同约定",
+      "所有答案引擎,Claude 需通过合同约定",
+      "不限量的内容简报、优化机会和网站审核",
+      "SSO / SAML、优先支持和 SLA",
+      "发票结算和 API 访问",
+      "使用您自己的 AI 密钥:OpenAI、Anthropic、Google、Azure 或 OpenRouter"
+    ],
+    "customPlanPointsChat": ["Chat 与 Agent", "全自动模式，支持 Agent 独立发布"],
     "planCards": {
       "expandable": "+ 附加项",
       "expandableHint": "Growth 可随时在“设置 › 账单”中添加更多:额外追踪、额外品牌和 AI 用量充值。",
       "starter": {
         "tagline": "适合刚开始进行 AI 可见度监测与优化的小型团队。",
-        "engines": "ChatGPT 和 Gemini 追踪"
+        "engines": "ChatGPT 和 Gemini 追踪",
+        "extras": ["MCP 和 API 访问权限"],
+        "extrasChat": ["Chat 与 Agent"]
       },
       "growth": {
         "tagline": "适合希望监测 AI 可见度并针对 AI 搜索优化内容的发展中团队。",
-        "engines": "ChatGPT、Gemini、Google AI Mode 和 Google AI Overviews 追踪"
+        "engines": "ChatGPT、Gemini、Google AI Mode 和 Google AI Overviews 追踪",
+        "extras": ["多区域追踪", "白标报告与导出", "Looker Studio"],
+        "extrasChat": ["Chat 与 Agent", "全自动模式，支持 Agent 独立发布"]
       },
       "brands": "{count, plural, other {# 个品牌}}",
       "unlimitedBrands": "无限制品牌数",

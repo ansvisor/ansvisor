@@ -2971,105 +2971,214 @@
           "title": "Establezca sus KPI",
           "summary": "Elija entre 3 y 5 objetivos. Nosotros los monitorizamos por usted.",
           "open": "Abrir KPI",
-          "doneWhen": "1 KPI guardado"
+          "doneWhen": "1 KPI guardado",
+          "why": [
+            "Los KPI convierten sus datos en objetivos que puede monitorizar.",
+            "El Centro de acciones muestra su progreso con respecto a ellos cada semana."
+          ],
+          "how": [
+            "Abra KPI",
+            "Elija entre 3 y 5, como Visibilidad en IA o Citas",
+            "Establezca un objetivo para cada uno y guarde"
+          ]
         },
         "competitors": {
           "title": "Añada al menos 3 competidores",
           "summary": "Funciona mejor con 5–20 competidores.",
           "open": "Añadir competidores",
-          "doneWhen": "3 competidores"
+          "doneWhen": "3 competidores",
+          "why": [
+            "Cada respuesta de IA se compara con sus competidores.",
+            "Entre 5 y 20 competidores ofrecen la imagen más clara."
+          ],
+          "how": [
+            "Abra Competidores",
+            "Añada las marcas con las que le comparan los compradores",
+            "Procure tener entre 5 y 20"
+          ]
         },
         "topics": {
           "title": "Añada al menos 3 temas",
           "summary": "Elija entre las sugerencias de temas.",
           "open": "Abrir sugerencias de temas",
-          "doneWhen": "3 temas"
+          "doneWhen": "3 temas",
+          "why": [
+            "Los temas agrupan sus Prompts y muestran dónde va por delante o por detrás.",
+            "Las sugerencias proceden de su sitio web y de su mercado."
+          ],
+          "how": ["Abra Temas", "Elija 3 temas que se ajusten a lo que vende", "Añádalos"]
         },
         "prompts": {
           "title": "Añada 3 Prompts por tema",
           "summary": "Elija entre las sugerencias de Prompts.",
           "open": "Abrir sugerencias de Prompts",
-          "doneWhen": "3 Prompts en cada tema"
+          "doneWhen": "3 Prompts en cada tema",
+          "why": [
+            "Los Prompts son las preguntas que los compradores hacen a la IA.",
+            "3 por tema son suficientes para observar una tendencia."
+          ],
+          "how": [
+            "Abrir sugerencias de Prompts",
+            "Elija 3 prompts para cada tema",
+            "Añádalos. Las primeras respuestas llegarán en cuestión de horas"
+          ]
         },
         "gsc": {
           "title": "Conectar Google Search Console",
           "summary": "Muy recomendado.",
           "name": "Google Search Console",
           "open": "Conectar",
-          "doneWhen": "Conectado"
+          "doneWhen": "Conectado",
+          "why": [
+            "Empezamos a analizar sus datos en un plazo de 24 horas.",
+            "Las sugerencias de Prompts y de Contenido provienen de búsquedas reales.",
+            "Muestra si su trabajo genera clics."
+          ],
+          "how": [
+            "Haga clic en Conectar",
+            "Inicie sesión con Google y elija su propiedad",
+            "Permita el acceso de solo lectura"
+          ]
         },
         "ga": {
           "title": "Conectar Google Analytics",
           "summary": "Vea qué visitas de IA interactúan y convierten.",
           "name": "Google Analytics",
           "open": "Conectar",
-          "doneWhen": "Conectado"
+          "doneWhen": "Conectado",
+          "why": [
+            "Muestra qué visitas de IA interactúan y convierten.",
+            "Necesario para los informes de tráfico y conversión."
+          ],
+          "how": [
+            "Haga clic en Conectar",
+            "Elija su propiedad de GA4",
+            "Permita el acceso de solo lectura"
+          ]
         },
         "snippet": {
           "title": "Añadir el fragmento de código de tráfico de IA",
           "summary": "Una línea en el head de su sitio.",
           "open": "Obtener el código",
-          "doneWhen": "Primera visita detectada"
+          "doneWhen": "Primera visita detectada",
+          "why": [
+            "Cuenta las visitas de ChatGPT, Gemini, Perplexity y más.",
+            "Funciona sin Google Analytics."
+          ],
+          "how": [
+            "Copie el código",
+            "Péguelo en el head de su sitio",
+            "Publique. Detectaremos la primera visita"
+          ]
         },
         "visibility": {
           "title": "Vea su posición en Visibilidad",
           "summary": "Su cuota de respuestas de IA frente a la competencia.",
           "open": "Abrir Visibilidad",
-          "doneWhen": "Página abierta"
+          "doneWhen": "Página abierta",
+          "why": [
+            "Su cuota de respuestas de IA frente a la competencia.",
+            "El punto de partida para cada objetivo."
+          ],
+          "how": [
+            "Abra Visibilidad",
+            "Compruebe su posición y quién lidera",
+            "Identifique su plataforma más débil"
+          ]
         },
         "answers": {
           "title": "Lea sus primeras respuestas de IA",
           "summary": "Respuestas y búsquedas de seguimiento, por prompt.",
           "open": "Abrir Prompts",
-          "doneWhen": "Página abierta"
+          "doneWhen": "Página abierta",
+          "why": ["Vea exactamente qué dice la IA a sus compradores."],
+          "how": [
+            "Abra Prompts",
+            "Abra un prompt",
+            "Lea la respuesta y sus búsquedas de seguimiento"
+          ]
         },
         "data_prompts": {
           "title": "Rastree sugerencias de Prompts de alto valor",
           "summary": "Creadas a partir de sus datos de Search Console y Analytics.",
           "open": "Abrir sugerencias de Prompts",
-          "doneWhen": "5 Prompts sugeridos rastreados"
+          "doneWhen": "5 Prompts sugeridos rastreados",
+          "why": [
+            "Creadas a partir de las búsquedas y páginas que le traen visitantes.",
+            "Para que rastree lo que realmente importa para los ingresos."
+          ],
+          "how": [
+            "Abra Sugerencias de Prompts",
+            "Filtre: A partir de sus datos",
+            "Rastree los que encajen, 5 o más"
+          ]
         },
         "mentions": {
           "title": "Compruebe qué dice la IA sobre usted",
           "summary": "Menciones y tono.",
           "open": "Abrir Menciones",
-          "doneWhen": "Página abierta"
+          "doneWhen": "Página abierta",
+          "why": ["Con qué frecuencia le nombra la IA y con qué tono."],
+          "how": ["Abra Menciones", "Compruebe su cuota y el sentimiento"]
         },
         "citations": {
           "title": "Vea a quién cita la IA",
           "summary": "Las páginas y sitios web que la IA utiliza como fuentes.",
           "open": "Abrir Citas",
-          "doneWhen": "Página abierta"
+          "doneWhen": "Página abierta",
+          "why": ["Las fuentes en las que confía la IA. Dónde debería aparecer."],
+          "how": ["Abra Citas", "Vea qué sitios web cita más la IA"]
         },
         "traffic": {
           "title": "Vea las visitas procedentes de la IA",
           "summary": "Qué plataformas envían visitantes y a qué páginas.",
           "open": "Abrir Tráfico IA",
-          "doneWhen": "Página abierta"
+          "doneWhen": "Página abierta",
+          "why": ["Qué plataformas de IA envían visitantes y a qué páginas."],
+          "how": ["Abra Tráfico IA", "Revise sus páginas principales"]
         },
         "pick_content": {
           "title": "Elegir contenido a partir de sugerencias",
           "summary": "Elija entre 1 y 3 sugerencias.",
           "open": "Abrir Contenido",
-          "doneWhen": "1 sugerencia elegida"
+          "doneWhen": "1 sugerencia elegida",
+          "why": ["Las sugerencias se generan a partir de sus Prompts y búsquedas."],
+          "how": [
+            "Abra Contenido",
+            "Elija entre 1 y 3 sugerencias: revíselas, cree un brief o envíelas al Centro de acciones"
+          ]
         },
         "create_content": {
           "title": "Crear su primer contenido",
           "summary": "Inicie la nueva página que encabeza su Plan de Contenido.",
           "open": "Abrir el Plan",
-          "doneWhen": "Una página nueva marcada como lista o publicada, o enviada a su CMS"
+          "doneWhen": "Una página nueva marcada como lista o publicada, o enviada a su CMS",
+          "why": ["El Contenido es la principal forma de aparecer en más respuestas."],
+          "how": [
+            "Abra el Plan: la página nueva principal se abre en Empezar",
+            "Elija quién la redacta: usted, el Agente de Contenido o su equipo",
+            "Márquela como lista y luego publíquela"
+          ]
         },
         "optimize_page": {
           "title": "Optimizar una página",
           "summary": "Mejore la página que encabeza su Plan de Contenido para optimizar.",
           "open": "Abrir el Plan",
-          "doneWhen": "Una página optimizada marcada como lista o publicada, o una página auditada"
+          "doneWhen": "Una página optimizada marcada como lista o publicada, o una página auditada",
+          "why": ["Pequeños ajustes en páginas que la IA ya lee pueden dar resultados rápidos."],
+          "how": [
+            "Abra el plan: su página principal para optimizar se abre en Inicio",
+            "Mejórela en el editor, con sus reglas y fuentes",
+            "Márquela como lista y luego publíquela"
+          ]
         },
         "ready": {
           "title": "Todo listo",
           "summary": "Las acciones de IA comenzarán a aparecer aquí.",
           "open": "Ver qué sigue",
-          "doneWhen": "Automático"
+          "doneWhen": "Automático",
+          "why": ["A partir de ahora, la IA convertirá sus señales en acciones aquí."],
+          "how": ["Siga consultando el Centro de acciones cada semana"]
         }
       },
       "panel": {
@@ -4404,6 +4513,7 @@
       "name": "Leer fuentes del catálogo",
       "step": "Leer Catálogo"
     },
+    "catalogFeedGaps": {},
     "contentPlan": {
       "name": "Leer el plan de Contenido",
       "step": "Leer plan de Contenido"
@@ -14825,7 +14935,34 @@
           "cost": "Nada en su factura de Cloudflare o Vercel: solo el coste de ejecutar su propio emisor de registros."
         }
       },
-      "steps": {},
+      "steps": {
+        "cloudflare_worker": [
+          "En Cloudflare, abra Workers & Pages y cree un Worker.",
+          "Sustituya su código por el código de Worker que aparece a continuación e impleméntelo.",
+          "En Settings › Variables and Secrets del Worker, añada una variable de tipo Secret con el nombre y el valor siguientes.",
+          "Añada una ruta para su sitio, como ejemplo.com/*, para que el Worker detecte sus solicitudes."
+        ],
+        "cloudflare_logpush": [
+          "En Cloudflare, abra Analytics & Logs › Logpush y cree un trabajo para el conjunto de datos de solicitudes HTTP.",
+          "Seleccione destino HTTP y pegue el destino que aparece a continuación.",
+          "Elija los campos y el filtro de la configuración del trabajo indicada abajo, o cree el trabajo a través de la API con ellos."
+        ],
+        "vercel_drain": [
+          "En Vercel, abra Team Settings › Drains y añada un Logs drain para el proyecto de su sitio.",
+          "Elija Custom endpoint y pegue la URL del endpoint indicada abajo.",
+          "Establezca el formato en JSON y añada el encabezado personalizado que aparece a continuación."
+        ],
+        "fastly_log_stream": [
+          "En Fastly, abra su servicio y añada un endpoint de registro HTTPS.",
+          "Establezca la URL del endpoint indicada abajo, utilice POST, configure Content-Type como application/json y añada el encabezado personalizado siguiente (Authorization con el valor Bearer).",
+          "Elija entradas de registro en JSON con salida delimitada por saltos de línea (Newline delimited) y un formato personalizado de línea de registro. Pegue el formato siguiente y active la configuración del servicio. Ansvisor responde automáticamente al control de dominio de Fastly para su endpoint de API; no necesita añadir un registro DNS."
+        ],
+        "log_webhook": [
+          "En su emisor de registros (Vector, Fluent Bit, Logstash o su propio script), añada una salida HTTP que envíe peticiones POST al endpoint siguiente.",
+          "Añada el encabezado que aparece a continuación, incluyendo el secreto.",
+          "Envíe líneas JSON, una solicitud por línea, con los campos del ejemplo: user_agent, ip, url (o host y path), status, time (RFC 3339, o segundos o milisegundos desde 1970) y, si dispone de él, country. Hasta 20 000 líneas y 20 MB por envío, comprimido con gzip si lo prefiere. Las solicitudes de más de 7 días no se contabilizan."
+        ]
+      },
       "copyExample": "Una línea de ejemplo",
       "upload": {
         "title": "O suba un archivo de registro",
@@ -18705,16 +18842,39 @@
     "subscriptionCanceled": "Su suscripción ha sido cancelada.",
     "needCustomPlan": "¿Necesita un plan personalizado?",
     "customPlanDescription": "Para grandes empresas y agencias que gestionan la visibilidad en IA a gran escala. Desde ${price}/mes.",
+    "customPlanPoints": [
+      "1 marca y 3000 Prompts para empezar, más por contrato",
+      "Todos los motores de respuesta, Claude por contrato",
+      "Briefs de contenido, oportunidades y auditorías de sitio ilimitados",
+      "SSO / SAML, soporte prioritario y un SLA",
+      "Facturación por factura y acceso a la API",
+      "Sus propias claves de IA: OpenAI, Anthropic, Google, Azure u OpenRouter"
+    ],
+    "customPlanPointsChat": [
+      "Chat y agentes",
+      "Totalmente automático, con agentes que publican por su cuenta"
+    ],
     "planCards": {
       "expandable": "+ complementos",
       "expandableHint": "Growth puede añadir más en cualquier momento, en Ajustes › Facturación: seguimiento adicional, marcas adicionales y recargas de uso de IA.",
       "starter": {
         "tagline": "Para equipos pequeños que se inician en la monitorización y optimización de la Visibilidad de IA.",
-        "engines": "Seguimiento de ChatGPT y Gemini"
+        "engines": "Seguimiento de ChatGPT y Gemini",
+        "extras": ["Acceso a MCP y API"],
+        "extrasChat": ["Chat y agentes"]
       },
       "growth": {
         "tagline": "Para equipos en crecimiento que quieren monitorizar la Visibilidad en IA y optimizar el Contenido para búsquedas con IA.",
-        "engines": "Seguimiento en ChatGPT, Gemini, Google AI Mode y Google AI Overviews"
+        "engines": "Seguimiento en ChatGPT, Gemini, Google AI Mode y Google AI Overviews",
+        "extras": [
+          "Seguimiento multirregión",
+          "Informes de marca blanca y exportaciones",
+          "Looker Studio"
+        ],
+        "extrasChat": [
+          "Chat y agentes",
+          "Totalmente automático, con agentes que publican por sí mismos"
+        ]
       },
       "brands": "{count, plural, one {# marca} other {# marcas}}",
       "unlimitedBrands": "Marcas ilimitadas",

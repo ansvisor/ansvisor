@@ -54,7 +54,9 @@ export const DEFAULT_CITATIONS_FILTERS: CitationsUIFilters = {
   region: '',
   topic: '',
   prompt: '',
-  sourceScope: 'own',
+  // Every source first: the brand's own pages alone are often few, and the
+  // page opened looking empty. Brand is one click away.
+  sourceScope: 'all',
 };
 
 export type SourceScope = CitationsUIFilters['sourceScope'];

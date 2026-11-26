@@ -7,6 +7,7 @@ import { AGENT_CALL_TOOLS } from './agent-call-tools';
 import { OPERATOR_READS, OPERATOR_WRITES } from './operator-tools';
 import { AUDIT_TOOLS } from './audit-tools';
 import { COMPETITOR_TOOLS } from './competitor-tools';
+import { FEED_READS } from './feed-tools';
 import { CONTENT_TOOLS } from './content-tools';
 import { IMAGE_READS, IMAGE_WRITES } from './image-tools';
 import { MCP_WRAPPED_READS } from './mcp-wrapped-reads';
@@ -38,6 +39,7 @@ import { TODAY_READS } from './today-tools';
 export const CHAT_TOOLS: readonly ChatTool[] = [
   ...READ_TOOLS,
   ...MCP_WRAPPED_READS,
+  ...FEED_READS,
   ...AREA_READS,
   ...NAVIGATION_READS,
   ...WHATS_NEW_READS,

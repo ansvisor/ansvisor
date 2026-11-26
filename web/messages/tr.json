@@ -2971,105 +2971,208 @@
           "title": "KPI'larınızı belirleyin",
           "summary": "3–5 hedef seçin. Sizin için takip edelim.",
           "open": "KPI'ları Aç",
-          "doneWhen": "1 KPI kaydedildi"
+          "doneWhen": "1 KPI kaydedildi",
+          "why": [
+            "KPI'lar verilerinizi takip edebileceğiniz hedeflere dönüştürür.",
+            "Aksiyon Merkezi, bunlara yönelik ilerlemenizi her hafta gösterir."
+          ],
+          "how": [
+            "KPI'ları Açın",
+            "AI Görünürlük veya Atıflar gibi 3–5 adet seçin",
+            "Her biri için bir hedef belirleyin ve kaydedin"
+          ]
         },
         "competitors": {
           "title": "En az 3 rakip ekleyin",
           "summary": "En iyi sonucu 5–20 rakiple verir.",
           "open": "Rakip ekle",
-          "doneWhen": "3 rakip"
+          "doneWhen": "3 rakip",
+          "why": [
+            "Her AI yanıtı rakiplerinizle karşılaştırılır.",
+            "5–20 rakip en net resmi sunar."
+          ],
+          "how": [
+            "Rakipleri Açın",
+            "Alıcıların sizi karşılaştırdığı markaları ekleyin",
+            "5–20 adedi hedefleyin"
+          ]
         },
         "topics": {
           "title": "En az 3 konu ekleyin",
           "summary": "Konu önerileri arasından seçim yapın.",
           "open": "Konu önerilerini aç",
-          "doneWhen": "3 konu"
+          "doneWhen": "3 konu",
+          "why": [
+            "Konular, Prompt'larınızı gruplandırır ve nerede önde veya geride olduğunuzu gösterir.",
+            "Öneriler sitenizden ve pazarınızdan gelir."
+          ],
+          "how": ["Konular'ı açın", "Sattıklarınızla eşleşen 3 konu seçin", "Bunları ekleyin"]
         },
         "prompts": {
           "title": "Konu başına 3 Prompt ekleyin",
           "summary": "Prompt önerileri arasından seçim yapın.",
           "open": "Prompt önerilerini aç",
-          "doneWhen": "Her konuda 3 Prompt"
+          "doneWhen": "Her konuda 3 Prompt",
+          "why": [
+            "Prompt'lar, alıcıların AI'a sorduğu sorulardır.",
+            "Bir trendi görmek için konu başına 3 adet yeterlidir."
+          ],
+          "how": [
+            "Prompt Önerilerini açın",
+            "Her konu için 3 Prompt seçin",
+            "Bunları ekleyin. İlk yanıtlar birkaç saat içinde gelir"
+          ]
         },
         "gsc": {
           "title": "Google Search Console'u bağlayın",
           "summary": "Kesinlikle önerilir.",
           "name": "Google Search Console",
           "open": "Bağla",
-          "doneWhen": "Bağlandı"
+          "doneWhen": "Bağlandı",
+          "why": [
+            "Verilerinizi 24 saat içinde analiz etmeye başlarız.",
+            "Prompt ve İçerik önerileri gerçek aramalardan gelir.",
+            "Çalışmalarınızın tıklama getirip getirmediğini gösterir."
+          ],
+          "how": [
+            "Bağla'ya tıklayın",
+            "Google ile giriş yapın ve mülkünüzü seçin",
+            "Salt okunur erişime izin verin"
+          ]
         },
         "ga": {
           "title": "Google Analytics'i bağlayın",
           "summary": "Hangi AI ziyaretlerinin etkileşim ve dönüşüm sağladığını görün.",
           "name": "Google Analytics",
           "open": "Bağla",
-          "doneWhen": "Bağlandı"
+          "doneWhen": "Bağlandı",
+          "why": [
+            "Hangi AI ziyaretlerinin etkileşim ve dönüşüm sağladığını gösterir.",
+            "Trafik ve dönüşüm raporları için gereklidir."
+          ],
+          "how": ["Bağla'ya tıklayın", "GA4 mülkünüzü seçin", "Salt okunur erişime izin verin"]
         },
         "snippet": {
           "title": "AI Trafik kod parçacığını ekleyin",
           "summary": "Sitenizin head bölümüne tek bir satır.",
           "open": "Kodu alın",
-          "doneWhen": "İlk ziyaret algılandı"
+          "doneWhen": "İlk ziyaret algılandı",
+          "why": [
+            "ChatGPT, Gemini, Perplexity ve daha fazlasından gelen ziyaretleri sayar.",
+            "Google Analytics olmadan çalışır."
+          ],
+          "how": [
+            "Kodu kopyalayın",
+            "Sitenizin head bölümüne yapıştırın",
+            "Yayınlayın. İlk ziyareti biz algılarız"
+          ]
         },
         "visibility": {
           "title": "Görünürlük'te nerede olduğunuzu görün",
           "summary": "Rakiplere kıyasla yapay zeka yanıtlarındaki payınız.",
           "open": "Görünürlük'ü açın",
-          "doneWhen": "Sayfa açıldı"
+          "doneWhen": "Sayfa açıldı",
+          "why": [
+            "Rakiplere kıyasla yapay zeka yanıtlarındaki payınız.",
+            "Her hedef için başlangıç noktası."
+          ],
+          "how": [
+            "Görünürlük'ü açın",
+            "Sıralamanızı ve lideri kontrol edin",
+            "En zayıf platformunuzu not edin"
+          ]
         },
         "answers": {
           "title": "İlk yapay zeka yanıtlarınızı okuyun",
           "summary": "Prompt başına yanıtlar ve devam aramaları.",
           "open": "Prompts'u açın",
-          "doneWhen": "Sayfa açıldı"
+          "doneWhen": "Sayfa açıldı",
+          "why": ["Yapay zekanın alıcılarınıza tam olarak ne söylediğini görün."],
+          "how": ["Prompts'u açın", "Bir prompt açın", "Yanıtı ve devam aramalarını okuyun"]
         },
         "data_prompts": {
           "title": "Yüksek değerli prompt önerilerini takip edin",
           "summary": "Search Console ve Analytics verilerinizden oluşturulur.",
           "open": "Prompt önerilerini açın",
-          "doneWhen": "5 önerilen prompt takip edildi"
+          "doneWhen": "5 önerilen prompt takip edildi",
+          "why": [
+            "Size ziyaretçi getiren aramalardan ve sayfalardan oluşturulur.",
+            "Böylece gelir için önemli olanları takip edersiniz."
+          ],
+          "how": [
+            "Prompt Önerileri'ni açın",
+            "Filtre: Verilerinizden",
+            "Uygun olanları takip edin, 5 veya daha fazla"
+          ]
         },
         "mentions": {
           "title": "Yapay zekanın sizin hakkınızda ne söylediğini kontrol edin",
           "summary": "Bahsedilmeler ve ton.",
           "open": "Bahsedilmeler'i açın",
-          "doneWhen": "Sayfa açıldı"
+          "doneWhen": "Sayfa açıldı",
+          "why": ["Yapay zekanın sizden ne sıklıkla ve hangi tonda bahsettiği."],
+          "how": ["Bahsedilmeler'i açın", "Payınızı ve duyarlılığınızı kontrol edin"]
         },
         "citations": {
           "title": "Yapay zekanın kimden alıntı yaptığını görün",
           "summary": "Yapay zekanın kaynak olarak kullandığı sayfalar ve siteler.",
           "open": "Atıflar'ı Aç",
-          "doneWhen": "Sayfa açıldı"
+          "doneWhen": "Sayfa açıldı",
+          "why": ["Yapay zekanın güvendiği kaynaklar. Listelenmeniz gereken yerler."],
+          "how": ["Atıflar'ı Aç", "Yapay zekanın en çok hangi sitelerden alıntı yaptığını görün"]
         },
         "traffic": {
           "title": "Yapay zekadan gelen ziyaretleri görün",
           "summary": "Hangi platformlar hangi sayfalara ziyaretçi gönderiyor.",
           "open": "AI Trafik Analitiği'ni Aç",
-          "doneWhen": "Sayfa açıldı"
+          "doneWhen": "Sayfa açıldı",
+          "why": ["Hangi yapay zeka platformlarının hangi sayfalara ziyaretçi gönderdiği."],
+          "how": ["AI Trafik Analitiği'ni Aç", "En popüler sayfalarınızı kontrol edin"]
         },
         "pick_content": {
           "title": "Önerilerden içerik seçin",
           "summary": "1–3 öneri seçin.",
           "open": "İçerik'i Aç",
-          "doneWhen": "1 öneri seçildi"
+          "doneWhen": "1 öneri seçildi",
+          "why": ["Öneriler, prompt'larınızdan ve aramalarınızdan oluşturulur."],
+          "how": [
+            "İçerik'i Aç",
+            "1–3 öneri seçin: bunları inceleyin, bir brief oluşturun veya Aksiyon Merkezi'ne gönderin"
+          ]
         },
         "create_content": {
           "title": "İlk içeriğinizi oluşturun",
           "summary": "İçerik Planınızın ilk sıraya koyduğu yeni sayfayı başlatın.",
           "open": "Planı Aç",
-          "doneWhen": "Yeni bir sayfa hazır veya yayınlandı olarak işaretlendiğinde ya da CMS'inize gönderildiğinde"
+          "doneWhen": "Yeni bir sayfa hazır veya yayınlandı olarak işaretlendiğinde ya da CMS'inize gönderildiğinde",
+          "why": ["İçerik, daha fazla yanıtta görünmenin temel yoludur."],
+          "how": [
+            "Planı açın: en üstteki yeni sayfa Başlangıç'ta açılır",
+            "Kimin yazacağını seçin: siz, İçerik Ajanı veya ekibiniz",
+            "Hazır olarak işaretleyin, ardından yayınlayın"
+          ]
         },
         "optimize_page": {
           "title": "Bir sayfayı optimize edin",
           "summary": "İçerik Planınızın optimize etmek için ilk sıraya koyduğu sayfayı iyileştirin.",
           "open": "Planı Aç",
-          "doneWhen": "Optimize edilmiş bir sayfa hazır veya yayınlandı olarak işaretlendiğinde ya da bir sayfa denetlendiğinde"
+          "doneWhen": "Optimize edilmiş bir sayfa hazır veya yayınlandı olarak işaretlendiğinde ya da bir sayfa denetlendiğinde",
+          "why": [
+            "Yapay zekanın zaten okuduğu sayfalardaki küçük düzeltmeler hızla sonuç verebilir."
+          ],
+          "how": [
+            "Planı açın: optimize edilecek en üstteki sayfa Başlangıç'ta açılır",
+            "Editörde, kuralları ve kaynaklarıyla birlikte iyileştirin",
+            "Hazır olarak işaretleyin, ardından yayınlayın"
+          ]
         },
         "ready": {
           "title": "Hazırsınız",
           "summary": "Yapay zeka aksiyonları burada görünmeye başlar.",
           "open": "Sırada ne olduğunu görün",
-          "doneWhen": "Otomatik"
+          "doneWhen": "Otomatik",
+          "why": ["Bundan böyle AI, sinyallerinizi burada aksiyonlara dönüştürür."],
+          "how": ["Aksiyon Merkezi'ni her hafta kontrol etmeye devam edin"]
         }
       },
       "panel": {
@@ -4404,6 +4507,7 @@
       "name": "Katalog kaynaklarını oku",
       "step": "Kataloğu Oku"
     },
+    "catalogFeedGaps": {},
     "contentPlan": {
       "name": "İçerik planını oku",
       "step": "İçerik planını Oku"
@@ -14825,7 +14929,34 @@
           "cost": "Cloudflare veya Vercel faturasına hiçbir ücret yansımaz: yalnızca kendi günlük aktarıcınızı çalıştırma maliyetini ödersiniz."
         }
       },
-      "steps": {},
+      "steps": {
+        "cloudflare_worker": [
+          "Cloudflare'de Workers & Pages'i açın ve bir Worker oluşturun.",
+          "Kodunu aşağıdaki Worker koduyla değiştirin ve dağıtın.",
+          "Worker'ın Ayarlar › Variables and Secrets bölümünde, aşağıdaki ad ve değere sahip Secret türünde bir değişken ekleyin.",
+          "Worker'ın istekleri görebilmesi için sitenize example.com/* gibi bir rota ekleyin."
+        ],
+        "cloudflare_logpush": [
+          "Cloudflare'da Analytics & Logs › Logpush bölümünü açın ve HTTP requests veri kümesi için bir iş oluşturun.",
+          "HTTP destination seçeneğini belirleyin ve aşağıdaki hedefi yapıştırın.",
+          "Aşağıdaki iş ayarlarından alanları ve filtreyi seçin veya işi bunlarla API üzerinden oluşturun."
+        ],
+        "vercel_drain": [
+          "Vercel'de Team Settings › Drains bölümünü açın ve sitenizin projesi için bir Logs drain ekleyin.",
+          "Custom endpoint seçeneğini belirleyin ve aşağıdaki uç nokta URL'sini yapıştırın.",
+          "Biçimi JSON olarak ayarlayın ve aşağıdaki özel başlığı ekleyin."
+        ],
+        "fastly_log_stream": [
+          "Fastly'de hizmetinizi açın ve bir HTTPS günlük kaydı uç noktası ekleyin.",
+          "Aşağıdaki uç nokta URL'sini ayarlayın, POST kullanın, Content-Type değerini application/json yapın ve aşağıdaki özel başlığı ekleyin (Bearer değerine sahip Authorization).",
+          "Newline delimited çıktısı ve özel günlük satırı biçimiyle JSON log entries seçeneğini belirleyin. Biçimi aşağıya yapıştırın, ardından hizmet yapılandırmasını etkinleştirin. Ansvisor, API uç noktası için Fastly'nin etki alanı denetim doğrulamasını otomatik olarak yanıtlar; bir DNS kaydı eklemenize gerek yoktur."
+        ],
+        "log_webhook": [
+          "Günlük ileticinizde (Vector, Fluent Bit, Logstash veya kendi betiğiniz), aşağıdaki uç noktaya POST isteği gönderen bir HTTP çıktısı ekleyin.",
+          "İçinde gizli anahtarın bulunduğu aşağıdaki başlığı ekleyin.",
+          "Örnekteki alanları içeren, her satırda bir istek olacak şekilde JSON satırları gönderin: user_agent, ip, url (veya host ve path), status, time (RFC 3339 veya 1970'ten bu yana saniye ya da milisaniye) ve varsa country. İstek başına en fazla 20.000 satır ve 20 MB; dilerseniz gzip ile sıkıştırabilirsiniz. 7 günden eski istekler sayılmaz."
+        ]
+      },
       "copyExample": "Örnek bir satır",
       "upload": {
         "title": "Veya bir günlük dosyası yükleyin",
@@ -18705,16 +18836,36 @@
     "subscriptionCanceled": "Aboneliğiniz iptal edildi.",
     "needCustomPlan": "Özel bir plana mı ihtiyacınız var?",
     "customPlanDescription": "AI görünürlüğünü büyük ölçekte yöneten büyük şirketler ve ajanslar için. Aylık ${price} fiyatından başlayan fiyatlarla.",
+    "customPlanPoints": [
+      "Başlangıç için 1 marka ve 3.000 Prompt, daha fazlası sözleşmeyle",
+      "Tüm yanıt motorları, Claude sözleşmeyle",
+      "Sınırsız içerik brief'i, fırsat ve site denetimi",
+      "SSO / SAML, öncelikli destek ve SLA",
+      "Faturayla ödeme ve API erişimi",
+      "Kendi AI anahtarlarınız: OpenAI, Anthropic, Google, Azure veya OpenRouter"
+    ],
+    "customPlanPointsChat": [
+      "Sohbet ve Ajanlar",
+      "Kendi kendine yayın yapan ajanlarla tam otomatik"
+    ],
     "planCards": {
       "expandable": "+ eklentiler",
       "expandableHint": "Growth, Ayarlar › Faturalandırma bölümünden istediği zaman bunlardan daha fazlasını ekleyebilir: ek takip, ek markalar ve AI kullanım yüklemeleri.",
       "starter": {
         "tagline": "AI Görünürlük takibi ve optimizasyonuna yeni başlayan küçük ekipler için.",
-        "engines": "ChatGPT ve Gemini takibi"
+        "engines": "ChatGPT ve Gemini takibi",
+        "extras": ["MCP ve API erişimi"],
+        "extrasChat": ["Sohbet ve Ajanlar"]
       },
       "growth": {
         "tagline": "AI Görünürlük takibi yapmak ve içeriklerini AI araması için optimize etmek isteyen büyüyen ekipler için.",
-        "engines": "ChatGPT, Gemini, Google AI Mode ve Google AI Overviews takibi"
+        "engines": "ChatGPT, Gemini, Google AI Mode ve Google AI Overviews takibi",
+        "extras": [
+          "Çoklu bölge takibi",
+          "White-label Raporlar ve dışa aktarmalar",
+          "Looker Studio"
+        ],
+        "extrasChat": ["Sohbet ve Ajanlar", "Kendi başına yayın yapan ajanlarla tam otomatik"]
       },
       "brands": "{count, plural, one {# marka} other {# marka}}",
       "unlimitedBrands": "Sınırsız marka",

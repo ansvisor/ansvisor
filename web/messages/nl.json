@@ -2971,105 +2971,216 @@
           "title": "Stel uw KPI's in",
           "summary": "Kies 3–5 doelen. Wij houden ze voor u bij.",
           "open": "KPI's openen",
-          "doneWhen": "1 KPI opgeslagen"
+          "doneWhen": "1 KPI opgeslagen",
+          "why": [
+            "KPI's zetten uw gegevens om in doelen die u kunt volgen.",
+            "Action Center toont wekelijks uw voortgang hierop."
+          ],
+          "how": [
+            "KPI's openen",
+            "Kies er 3–5, zoals AI-zichtbaarheid of citaten",
+            "Stel voor elk een doel in en sla op"
+          ]
         },
         "competitors": {
           "title": "Voeg minimaal 3 concurrenten toe",
           "summary": "Werkt het beste met 5–20 concurrenten.",
           "open": "Concurrenten toevoegen",
-          "doneWhen": "3 concurrenten"
+          "doneWhen": "3 concurrenten",
+          "why": [
+            "Elk AI-antwoord wordt vergeleken met uw concurrenten.",
+            "5–20 concurrenten geven het duidelijkste beeld."
+          ],
+          "how": [
+            "Open Concurrenten",
+            "Voeg de merken toe waarmee kopers u vergelijken",
+            "Streef naar 5–20"
+          ]
         },
         "topics": {
           "title": "Voeg minimaal 3 onderwerpen toe",
           "summary": "Kies uit onderwerpsuggesties.",
           "open": "Open onderwerpsuggesties",
-          "doneWhen": "3 onderwerpen"
+          "doneWhen": "3 onderwerpen",
+          "why": [
+            "Onderwerpen groeperen uw prompts en laten zien waar u vooroploopt of achterblijft.",
+            "Suggesties zijn gebaseerd op uw site en markt."
+          ],
+          "how": [
+            "Open Onderwerpen",
+            "Kies 3 onderwerpen die aansluiten bij wat u aanbiedt",
+            "Voeg ze toe"
+          ]
         },
         "prompts": {
           "title": "Voeg 3 prompts per onderwerp toe",
           "summary": "Kies uit promptsuggesties.",
           "open": "Open promptsuggesties",
-          "doneWhen": "3 prompts in elk onderwerp"
+          "doneWhen": "3 prompts in elk onderwerp",
+          "why": [
+            "Prompts zijn de vragen die kopers aan AI stellen.",
+            "3 per onderwerp is voldoende om een trend te zien."
+          ],
+          "how": [
+            "Open Prompt-suggesties",
+            "Kies 3 prompts voor elk onderwerp",
+            "Voeg ze toe. De eerste antwoorden volgen binnen enkele uren"
+          ]
         },
         "gsc": {
           "title": "Google Search Console koppelen",
           "summary": "Sterk aanbevolen.",
           "name": "Google Search Console",
           "open": "Koppelen",
-          "doneWhen": "Gekoppeld"
+          "doneWhen": "Gekoppeld",
+          "why": [
+            "We beginnen binnen 24 uur met het analyseren van uw gegevens.",
+            "Suggesties voor prompts en content zijn gebaseerd op echte zoekopdrachten.",
+            "Laat zien of uw werk tot klikken leidt."
+          ],
+          "how": [
+            "Klik op Koppelen",
+            "Meld u aan met Google en kies uw property",
+            "Geef alleen-lezen toegang"
+          ]
         },
         "ga": {
           "title": "Google Analytics koppelen",
           "summary": "Bekijk welke AI-bezoeken voor betrokkenheid en conversies zorgen.",
           "name": "Google Analytics",
           "open": "Koppelen",
-          "doneWhen": "Gekoppeld"
+          "doneWhen": "Gekoppeld",
+          "why": [
+            "Laat zien welke AI-bezoeken voor betrokkenheid en conversies zorgen.",
+            "Nodig voor verkeers- en conversierapporten."
+          ],
+          "how": ["Klik op Koppelen", "Kies uw GA4-property", "Geef alleen-lezen toegang"]
         },
         "snippet": {
           "title": "Voeg het AI Traffic-codefragment toe",
           "summary": "Eén regel in de head van uw site.",
           "open": "Code ophalen",
-          "doneWhen": "Eerste bezoek gedetecteerd"
+          "doneWhen": "Eerste bezoek gedetecteerd",
+          "why": [
+            "Telt bezoeken van ChatGPT, Gemini, Perplexity en meer.",
+            "Werkt zonder Google Analytics."
+          ],
+          "how": [
+            "Kopieer de code",
+            "Plak deze in de head van uw site",
+            "Publiceer. Wij detecteren het eerste bezoek"
+          ]
         },
         "visibility": {
           "title": "Bekijk uw positie in Zichtbaarheid",
           "summary": "Uw aandeel in AI-antwoorden ten opzichte van concurrenten.",
           "open": "Zichtbaarheid openen",
-          "doneWhen": "Pagina geopend"
+          "doneWhen": "Pagina geopend",
+          "why": [
+            "Uw aandeel in AI-antwoorden ten opzichte van concurrenten.",
+            "Het startpunt voor elk doel."
+          ],
+          "how": [
+            "Open Zichtbaarheid",
+            "Controleer uw positie en de koploper",
+            "Noteer uw zwakste platform"
+          ]
         },
         "answers": {
           "title": "Lees uw eerste AI-antwoorden",
           "summary": "Antwoorden en vervolgzoekopdrachten, per prompt.",
           "open": "Prompts openen",
-          "doneWhen": "Pagina geopend"
+          "doneWhen": "Pagina geopend",
+          "why": ["Zie precies wat AI uw kopers vertelt."],
+          "how": [
+            "Open Prompts",
+            "Open één prompt",
+            "Lees het antwoord en de bijbehorende vervolgzoekopdrachten"
+          ]
         },
         "data_prompts": {
           "title": "Volg waardevolle Prompt-suggesties",
           "summary": "Gebaseerd op uw Search Console- en Analytics-gegevens.",
           "open": "Prompt-suggesties openen",
-          "doneWhen": "5 voorgestelde Prompts gevolgd"
+          "doneWhen": "5 voorgestelde Prompts gevolgd",
+          "why": [
+            "Gebaseerd op de zoekopdrachten en pagina's die u bezoekers opleveren.",
+            "Zodat u volgt wat belangrijk is voor uw omzet."
+          ],
+          "how": [
+            "Prompt-suggesties openen",
+            "Filter: Uit uw gegevens",
+            "Volg de relevante suggesties, 5 of meer"
+          ]
         },
         "mentions": {
           "title": "Bekijk wat AI over u zegt",
           "summary": "Vermeldingen en toon.",
           "open": "Vermeldingen openen",
-          "doneWhen": "Pagina geopend"
+          "doneWhen": "Pagina geopend",
+          "why": ["Hoe vaak AI u noemt en op welke toon."],
+          "how": ["Vermeldingen openen", "Bekijk uw aandeel en sentiment"]
         },
         "citations": {
           "title": "Bekijk wie AI citeert",
           "summary": "De pagina's en websites die AI als bronnen gebruikt.",
           "open": "Citaties openen",
-          "doneWhen": "Pagina geopend"
+          "doneWhen": "Pagina geopend",
+          "why": ["De bronnen die AI vertrouwt. Waar u vermeld zou moeten staan."],
+          "how": ["Citaties openen", "Bekijk welke websites AI het meest citeert"]
         },
         "traffic": {
           "title": "Bekijk bezoeken vanuit AI",
           "summary": "Welke platforms bezoekers sturen, naar welke pagina's.",
           "open": "Open AI-verkeer",
-          "doneWhen": "Pagina geopend"
+          "doneWhen": "Pagina geopend",
+          "why": ["Welke AI-platformen bezoekers sturen en naar welke pagina's."],
+          "how": ["Open AI-verkeer", "Bekijk uw toppagina's"]
         },
         "pick_content": {
           "title": "Kies content uit suggesties",
           "summary": "Kies 1–3 suggesties.",
           "open": "Open Content",
-          "doneWhen": "1 suggestie gekozen"
+          "doneWhen": "1 suggestie gekozen",
+          "why": ["Suggesties worden samengesteld op basis van uw prompts en zoekopdrachten."],
+          "how": [
+            "Open Content",
+            "Kies 1–3 suggesties: beoordeel ze, maak een briefing of stuur ze naar het Action Center"
+          ]
         },
         "create_content": {
           "title": "Maak uw eerste content",
           "summary": "Start de nieuwe pagina die als eerste staat in uw Content Plan.",
           "open": "Open het Plan",
-          "doneWhen": "Een nieuwe pagina gemarkeerd als gereed of gepubliceerd, of verzonden naar uw CMS"
+          "doneWhen": "Een nieuwe pagina gemarkeerd als gereed of gepubliceerd, of verzonden naar uw CMS",
+          "why": ["Content is de belangrijkste manier om in meer antwoorden te verschijnen."],
+          "how": [
+            "Open het Plan: de beste nieuwe pagina opent in Start",
+            "Kies wie het schrijft: u, de Content Agent of uw team",
+            "Markeer het als gereed en publiceer het vervolgens"
+          ]
         },
         "optimize_page": {
           "title": "Optimaliseer een pagina",
           "summary": "Verbeter de pagina die als eerste staat in uw Content Plan om te optimaliseren.",
           "open": "Open het Plan",
-          "doneWhen": "Een geoptimaliseerde pagina gemarkeerd als gereed of gepubliceerd, of een pagina gecontroleerd"
+          "doneWhen": "Een geoptimaliseerde pagina gemarkeerd als gereed of gepubliceerd, of een pagina gecontroleerd",
+          "why": [
+            "Kleine aanpassingen op pagina's die AI al leest, kunnen snel resultaat opleveren."
+          ],
+          "how": [
+            "Open het Plan: de belangrijkste te optimaliseren pagina opent in Start",
+            "Verbeter deze in de editor, met de bijbehorende regels en bronnen",
+            "Markeer als gereed en publiceer vervolgens"
+          ]
         },
         "ready": {
           "title": "U bent klaar",
           "summary": "AI-acties verschijnen vanaf nu hier.",
           "open": "Bekijk wat de volgende stap is",
-          "doneWhen": "Automatisch"
+          "doneWhen": "Automatisch",
+          "why": ["Vanaf nu zet AI uw signalen hier om in acties."],
+          "how": ["Controleer wekelijks het Actiecentrum"]
         }
       },
       "panel": {
@@ -4404,6 +4515,7 @@
       "name": "Catalogusbronnen lezen",
       "step": "Catalogus lezen"
     },
+    "catalogFeedGaps": {},
     "contentPlan": {
       "name": "Het contentplan lezen",
       "step": "Contentplan lezen"
@@ -14825,7 +14937,34 @@
           "cost": "Niets op een Cloudflare- of Vercel-factuur: alleen de operationele kosten van uw eigen log-shipper."
         }
       },
-      "steps": {},
+      "steps": {
+        "cloudflare_worker": [
+          "Open in Cloudflare Workers & Pages en maak een Worker aan.",
+          "Vervang de code door de onderstaande Worker-code en implementeer deze.",
+          "Voeg in de instellingen van de Worker onder Settings › Variables and Secrets een variabele van het type Secret toe met de onderstaande naam en waarde.",
+          "Voeg een route toe voor uw site, zoals example.com/*, zodat de Worker de verzoeken kan detecteren."
+        ],
+        "cloudflare_logpush": [
+          "Open in Cloudflare Analytics & Logs › Logpush en maak een taak aan voor de gegevensset HTTP requests.",
+          "Kies HTTP destination en plak de onderstaande bestemming.",
+          "Selecteer de velden en het filter uit de onderstaande taakinstellingen, of maak de taak via de API met deze instellingen aan."
+        ],
+        "vercel_drain": [
+          "Open in Vercel Team Settings › Drains en voeg een Logs-drain toe voor het project van uw site.",
+          "Kies Custom endpoint en plak de onderstaande eindpunt-URL.",
+          "Stel de indeling in op JSON en voeg de onderstaande aangepaste header toe."
+        ],
+        "fastly_log_stream": [
+          "Open in Fastly uw dienst en voeg een HTTPS-logboek-eindpunt toe.",
+          "Stel de onderstaande eindpunt-URL in, gebruik POST, stel Content-Type in op application/json en voeg de onderstaande aangepaste header toe (Authorization met de Bearer-waarde).",
+          "Kies JSON log entries met Newline delimited uitvoer en een aangepaste logboekregelindeling. Plak de onderstaande indeling en activeer vervolgens de dienstconfiguratie. Ansvisor beantwoordt automatisch Fastly's domeincontrole-uitdaging voor zijn API-eindpunt; u hoeft geen DNS-record toe te voegen."
+        ],
+        "log_webhook": [
+          "Voeg in uw log-shipper (Vector, Fluent Bit, Logstash of uw eigen script) een HTTP-uitvoer toe die via POST naar het onderstaande eindpunt verstuurt.",
+          "Voeg de onderstaande header toe, met daarin het geheim.",
+          "Verstuur JSON-regels, één verzoek per regel, met de velden uit het voorbeeld: user_agent, ip, url (of host en path), status, time (RFC 3339, of seconden of milliseconden sinds 1970) en, indien beschikbaar, country. Maximaal 20.000 regels en 20 MB per post, eventueel met gzip gecomprimeerd. Verzoeken ouder dan 7 dagen worden niet meegeteld."
+        ]
+      },
       "copyExample": "Een voorbeeldregel",
       "upload": {
         "title": "Of upload een logbestand",
@@ -18705,16 +18844,39 @@
     "subscriptionCanceled": "Uw abonnement is geannuleerd.",
     "needCustomPlan": "Een op maat gemaakt abonnement nodig?",
     "customPlanDescription": "Voor grote bedrijven en bureaus die AI-zichtbaarheid op schaal beheren. Vanaf ${price}/maand.",
+    "customPlanPoints": [
+      "1 merk en 3.000 Prompts om mee te beginnen, meer via contract",
+      "Elke antwoord-engine, Claude via contract",
+      "Onbeperkte contentbriefings, kansen en site-audits",
+      "SSO / SAML, prioriteitsondersteuning en een SLA",
+      "Facturatie op rekening en API-toegang",
+      "Uw eigen AI-sleutels: OpenAI, Anthropic, Google, Azure of OpenRouter"
+    ],
+    "customPlanPointsChat": [
+      "Chat en agents",
+      "Volledig automatisch, met agents die zelfstandig publiceren"
+    ],
     "planCards": {
       "expandable": "+ add-ons",
       "expandableHint": "Growth kan op elk moment meer hiervan toevoegen, via Instellingen › Facturatie: extra tracking, extra merken en opwaarderingen van AI-gebruik.",
       "starter": {
         "tagline": "Voor kleine teams die beginnen met het monitoren en optimaliseren van AI-zichtbaarheid.",
-        "engines": "ChatGPT- & Gemini-tracking"
+        "engines": "ChatGPT- & Gemini-tracking",
+        "extras": ["MCP- en API-toegang"],
+        "extrasChat": ["Chat en agents"]
       },
       "growth": {
         "tagline": "Voor groeiende teams die AI-zichtbaarheid willen monitoren en content willen optimaliseren voor AI-zoekopdrachten.",
-        "engines": "Tracking voor ChatGPT, Gemini, Google AI Mode en Google AI Overviews"
+        "engines": "Tracking voor ChatGPT, Gemini, Google AI Mode en Google AI Overviews",
+        "extras": [
+          "Tracking voor meerdere regio's",
+          "White-label rapporten en exports",
+          "Looker Studio"
+        ],
+        "extrasChat": [
+          "Chat en agents",
+          "Volledig automatisch, met agents die zelfstandig publiceren"
+        ]
       },
       "brands": "{count, plural, one {# merk} other {# merken}}",
       "unlimitedBrands": "Onbeperkt aantal merken",

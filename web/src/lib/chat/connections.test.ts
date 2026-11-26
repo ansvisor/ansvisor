@@ -195,7 +195,7 @@ describe('connectionRecords', () => {
       account: 'feeds.acme.com, Uploaded file +1',
       connectedAt: '2026-10-03T00:00:00Z',
       settingsHref: '/dashboard/settings/integrations#product-catalog',
-      uses: ['/shopping'],
+      uses: ['/shopping', '/feed-advisor'],
     });
     expect(byKey(records, 'woocommerce')).toMatchObject({
       status: 'failing',

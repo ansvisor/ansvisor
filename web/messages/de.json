@@ -2971,105 +2971,220 @@
           "title": "KPIs festlegen",
           "summary": "Wählen Sie 3–5 Ziele. Wir erfassen sie für Sie.",
           "open": "KPIs öffnen",
-          "doneWhen": "1 KPI gespeichert"
+          "doneWhen": "1 KPI gespeichert",
+          "why": [
+            "KPIs machen aus Ihren Daten messbare Ziele.",
+            "Das Aktionszentrum zeigt jede Woche Ihre Fortschritte im Vergleich dazu."
+          ],
+          "how": [
+            "KPIs öffnen",
+            "Wählen Sie 3–5 aus, wie KI-Sichtbarkeit oder Zitierungen",
+            "Legen Sie jeweils ein Ziel fest und speichern Sie"
+          ]
         },
         "competitors": {
           "title": "Fügen Sie mindestens 3 Mitbewerber hinzu",
           "summary": "Funktioniert am besten mit 5–20 Mitbewerbern.",
           "open": "Mitbewerber hinzufügen",
-          "doneWhen": "3 Mitbewerber"
+          "doneWhen": "3 Mitbewerber",
+          "why": [
+            "Jede KI-Antwort wird mit Ihren Mitbewerbern verglichen.",
+            "5–20 Mitbewerber liefern das klarste Bild."
+          ],
+          "how": [
+            "Mitbewerber öffnen",
+            "Fügen Sie die Marken hinzu, mit denen Käufer Sie vergleichen",
+            "Streben Sie 5–20 an"
+          ]
         },
         "topics": {
           "title": "Fügen Sie mindestens 3 Themen hinzu",
           "summary": "Wählen Sie aus Themenvorschlägen.",
           "open": "Themenvorschläge öffnen",
-          "doneWhen": "3 Themen"
+          "doneWhen": "3 Themen",
+          "why": [
+            "Themen gruppieren Ihre Prompts und zeigen, wo Sie führen oder zurückliegen.",
+            "Vorschläge stammen von Ihrer Website und Ihrem Markt."
+          ],
+          "how": [
+            "Themen öffnen",
+            "Wählen Sie 3 Themen aus, die zu Ihrem Angebot passen",
+            "Fügen Sie sie hinzu"
+          ]
         },
         "prompts": {
           "title": "Fügen Sie 3 Prompts pro Thema hinzu",
           "summary": "Wählen Sie aus Prompt-Vorschlägen.",
           "open": "Prompt-Vorschläge öffnen",
-          "doneWhen": "3 Prompts in jedem Thema"
+          "doneWhen": "3 Prompts in jedem Thema",
+          "why": [
+            "Prompts sind die Fragen, die Käufer der KI stellen.",
+            "3 pro Thema reichen aus, um einen Trend zu erkennen."
+          ],
+          "how": [
+            "Prompt-Vorschläge öffnen",
+            "Wählen Sie 3 Prompts für jedes Thema aus",
+            "Fügen Sie sie hinzu. Erste Antworten treffen innerhalb weniger Stunden ein"
+          ]
         },
         "gsc": {
           "title": "Google Search Console verbinden",
           "summary": "Dringend empfohlen.",
           "name": "Google Search Console",
           "open": "Verbinden",
-          "doneWhen": "Verbunden"
+          "doneWhen": "Verbunden",
+          "why": [
+            "Wir beginnen innerhalb von 24 Stunden mit der Analyse Ihrer Daten.",
+            "Prompt- und Inhalte-Vorschläge stammen aus echten Suchanfragen.",
+            "Zeigt, ob Ihre Arbeit Klicks bringt."
+          ],
+          "how": [
+            "Klicken Sie auf Verbinden",
+            "Melden Sie sich mit Google an und wählen Sie Ihre Property aus",
+            "Nur-Lese-Zugriff erlauben"
+          ]
         },
         "ga": {
           "title": "Google Analytics verbinden",
           "summary": "Sehen Sie, welche KI-Besuche Interaktionen und Conversions erzielen.",
           "name": "Google Analytics",
           "open": "Verbinden",
-          "doneWhen": "Verbunden"
+          "doneWhen": "Verbunden",
+          "why": [
+            "Zeigt, welche KI-Besuche Interaktionen und Conversions erzielen.",
+            "Erforderlich für Traffic- und Conversion-Berichte."
+          ],
+          "how": [
+            "Klicken Sie auf Verbinden",
+            "Wählen Sie Ihre GA4-Property aus",
+            "Nur-Lese-Zugriff erlauben"
+          ]
         },
         "snippet": {
           "title": "KI-Traffic-Snippet hinzufügen",
           "summary": "Eine Zeile im Head-Bereich Ihrer Website.",
           "open": "Code abrufen",
-          "doneWhen": "Erster Besuch erkannt"
+          "doneWhen": "Erster Besuch erkannt",
+          "why": [
+            "Zählt Besuche von ChatGPT, Gemini, Perplexity und weiteren.",
+            "Funktioniert ohne Google Analytics."
+          ],
+          "how": [
+            "Kopieren Sie den Code",
+            "Fügen Sie ihn in den Head-Bereich Ihrer Website ein",
+            "Veröffentlichen Sie die Website. Wir erkennen den ersten Besuch"
+          ]
         },
         "visibility": {
           "title": "Sehen Sie, wo Sie bei der Sichtbarkeit stehen",
           "summary": "Ihr Anteil an KI-Antworten im Vergleich zu Mitbewerbern.",
           "open": "Sichtbarkeit öffnen",
-          "doneWhen": "Seite geöffnet"
+          "doneWhen": "Seite geöffnet",
+          "why": [
+            "Ihr Anteil an KI-Antworten im Vergleich zu Mitbewerbern.",
+            "Der Ausgangspunkt für jedes Ziel."
+          ],
+          "how": [
+            "Öffnen Sie Sichtbarkeit",
+            "Prüfen Sie Ihren Rang und den Spitzenreiter",
+            "Ermitteln Sie Ihre schwächste Plattform"
+          ]
         },
         "answers": {
           "title": "Lesen Sie Ihre ersten KI-Antworten",
           "summary": "Antworten und Folge-Suchanfragen pro Prompt.",
           "open": "Prompts öffnen",
-          "doneWhen": "Seite geöffnet"
+          "doneWhen": "Seite geöffnet",
+          "why": ["Sehen Sie genau, was die KI Ihrer Zielgruppe mitteilt."],
+          "how": [
+            "Öffnen Sie Prompts",
+            "Öffnen Sie einen Prompt",
+            "Lesen Sie die Antwort und die zugehörigen Folge-Suchanfragen"
+          ]
         },
         "data_prompts": {
           "title": "Wertvolle Prompt-Vorschläge tracken",
           "summary": "Erstellt aus Ihren Daten der Search Console und Analytics.",
           "open": "Prompt-Vorschläge öffnen",
-          "doneWhen": "5 vorgeschlagene Prompts getrackt"
+          "doneWhen": "5 vorgeschlagene Prompts getrackt",
+          "why": [
+            "Erstellt aus den Suchanfragen und Seiten, die Ihnen Besucher bringen.",
+            "Damit Sie tracken, was für den Umsatz zählt."
+          ],
+          "how": [
+            "Prompt-Vorschläge öffnen",
+            "Filter: Aus Ihren Daten",
+            "Tracken Sie passende Prompts, 5 oder mehr"
+          ]
         },
         "mentions": {
           "title": "Prüfen, was die KI über Sie sagt",
           "summary": "Erwähnungen und Tonalität.",
           "open": "Erwähnungen öffnen",
-          "doneWhen": "Seite geöffnet"
+          "doneWhen": "Seite geöffnet",
+          "why": ["Wie oft die KI Sie nennt und in welchem Ton."],
+          "how": ["Erwähnungen öffnen", "Prüfen Sie Ihren Anteil und das Sentiment"]
         },
         "citations": {
           "title": "Sehen, wen die KI zitiert",
           "summary": "Die Seiten und Websites, die von der KI als Quellen genutzt werden.",
           "open": "Zitierungen öffnen",
-          "doneWhen": "Seite geöffnet"
+          "doneWhen": "Seite geöffnet",
+          "why": ["Die Quellen, denen die KI vertraut. Wo Sie gelistet sein sollten."],
+          "how": ["Zitierungen öffnen", "Sehen, welche Websites die KI am häufigsten zitiert"]
         },
         "traffic": {
           "title": "Besuche über KI ansehen",
           "summary": "Welche Plattformen Besucher senden und auf welche Seiten.",
           "open": "KI-Traffic öffnen",
-          "doneWhen": "Seite geöffnet"
+          "doneWhen": "Seite geöffnet",
+          "why": ["Welche KI-Plattformen Besucher senden und auf welche Seiten."],
+          "how": ["KI-Traffic öffnen", "Ihre Top-Seiten prüfen"]
         },
         "pick_content": {
           "title": "Inhalte aus Vorschlägen auswählen",
           "summary": "Wählen Sie 1–3 Vorschläge aus.",
           "open": "Inhalte öffnen",
-          "doneWhen": "1 Vorschlag ausgewählt"
+          "doneWhen": "1 Vorschlag ausgewählt",
+          "why": ["Vorschläge basieren auf Ihren Prompts und Suchanfragen."],
+          "how": [
+            "Inhalte öffnen",
+            "Wählen Sie 1–3 Vorschläge aus: prüfen Sie sie, erstellen Sie ein Briefing oder senden Sie sie an das Aktionszentrum"
+          ]
         },
         "create_content": {
           "title": "Erstellen Sie Ihre ersten Inhalte",
           "summary": "Beginnen Sie mit der neuen Seite, die Ihr Content-Plan an erster Stelle führt.",
           "open": "Plan öffnen",
-          "doneWhen": "Eine neue Seite als fertig oder veröffentlicht markiert oder an Ihr CMS gesendet"
+          "doneWhen": "Eine neue Seite als fertig oder veröffentlicht markiert oder an Ihr CMS gesendet",
+          "why": ["Inhalte sind der wichtigste Weg, um in mehr Antworten zu erscheinen."],
+          "how": [
+            "Plan öffnen: Die oberste neue Seite öffnet sich in Start",
+            "Wählen Sie, wer sie verfasst: Sie, der Content Agent oder Ihr Team",
+            "Als fertig markieren, dann veröffentlichen"
+          ]
         },
         "optimize_page": {
           "title": "Eine Seite optimieren",
           "summary": "Verbessern Sie die Seite, die Ihr Content-Plan an erster Stelle zur Optimierung führt.",
           "open": "Plan öffnen",
-          "doneWhen": "Eine optimierte Seite als fertig oder veröffentlicht markiert oder ein Audit für eine Seite durchgeführt"
+          "doneWhen": "Eine optimierte Seite als fertig oder veröffentlicht markiert oder ein Audit für eine Seite durchgeführt",
+          "why": [
+            "Kleine Korrekturen an Seiten, die die KI bereits liest, bringen schnelle Erfolge."
+          ],
+          "how": [
+            "Öffnen Sie den Plan: Die wichtigste zu optimierende Seite wird in Start geöffnet",
+            "Verbessern Sie sie im Editor mit ihren Regeln und Quellen",
+            "Als fertig markieren und dann veröffentlichen"
+          ]
         },
         "ready": {
           "title": "Sie sind startklar",
           "summary": "Hier werden nun KI-Aktionen angezeigt.",
           "open": "Nächste Schritte ansehen",
-          "doneWhen": "Automatisch"
+          "doneWhen": "Automatisch",
+          "why": ["Ab jetzt wandelt die KI Ihre Signale hier in Aktionen um."],
+          "how": ["Prüfen Sie das Aktionszentrum wöchentlich"]
         }
       },
       "panel": {
@@ -4404,6 +4519,7 @@
       "name": "Katalogquellen lesen",
       "step": "Katalog lesen"
     },
+    "catalogFeedGaps": {},
     "contentPlan": {
       "name": "Inhalte-Plan lesen",
       "step": "Inhalte-Plan lesen"
@@ -14825,7 +14941,34 @@
           "cost": "Keine Kosten auf einer Cloudflare- oder Vercel-Rechnung: nur die Betriebskosten Ihres eigenen Log-Shippers."
         }
       },
-      "steps": {},
+      "steps": {
+        "cloudflare_worker": [
+          "Öffnen Sie in Cloudflare Workers & Pages und erstellen Sie einen Worker.",
+          "Ersetzen Sie dessen Code durch den unten stehenden Worker-Code und stellen Sie ihn bereit.",
+          "Fügen Sie in den Einstellungen des Workers unter Settings › Variables and Secrets eine Variable vom Typ Secret mit dem unten stehenden Namen und Wert hinzu.",
+          "Fügen Sie eine Route für Ihre Website hinzu, z. B. example.com/*, damit der Worker deren Anfragen sieht."
+        ],
+        "cloudflare_logpush": [
+          "Öffnen Sie in Cloudflare Analytics & Logs › Logpush und erstellen Sie einen Job für den Datensatz HTTP requests.",
+          "Wählen Sie HTTP destination und fügen Sie das unten stehende Ziel ein.",
+          "Wählen Sie die Felder und den Filter aus den unten stehenden Job-Einstellungen aus oder erstellen Sie den Job mit diesen Angaben über die API."
+        ],
+        "vercel_drain": [
+          "Öffnen Sie in Vercel Team Settings › Drains und fügen Sie einen Logs-Drain für das Projekt Ihrer Website hinzu.",
+          "Wählen Sie Custom endpoint und fügen Sie die unten stehende Endpunkt-URL ein.",
+          "Legen Sie das Format auf JSON fest und fügen Sie den unten stehenden benutzerdefinierten Header hinzu."
+        ],
+        "fastly_log_stream": [
+          "Öffnen Sie in Fastly Ihren Dienst und fügen Sie einen HTTPS-Logging-Endpunkt hinzu.",
+          "Geben Sie die unten stehende Endpunkt-URL an, verwenden Sie POST, setzen Sie Content-Type auf application/json und fügen Sie den unten stehenden benutzerdefinierten Header hinzu (Authorization mit dem Bearer-Wert).",
+          "Wählen Sie JSON log entries mit Newline delimited als Ausgabe und einem benutzerdefinierten Logzeilenformat. Fügen Sie das unten stehende Format ein und aktivieren Sie anschließend die Dienstkonfiguration. Ansvisor beantwortet automatisch Fastlys Domain-Control-Challenge für seinen API-Endpunkt; Sie müssen keinen DNS-Eintrag hinzufügen."
+        ],
+        "log_webhook": [
+          "Fügen Sie in Ihrem Log-Shipper (Vector, Fluent Bit, Logstash oder Ihrem eigenen Skript) eine HTTP-Ausgabe hinzu, die per POST an den unten stehenden Endpunkt sendet.",
+          "Fügen Sie den unten stehenden Header mit dem Secret hinzu.",
+          "Senden Sie JSON-Lines, eine Anfrage pro Zeile, mit den Feldern aus dem Beispiel: user_agent, ip, url (oder host und path), status, time (RFC 3339 oder Sekunden bzw. Millisekunden seit 1970) und, falls vorhanden, country. Bis zu 20.000 Zeilen und 20 MB pro POST, bei Bedarf gzip-komprimiert. Anfragen, die älter als 7 Tage sind, werden nicht gezählt."
+        ]
+      },
       "copyExample": "Eine Beispielzeile",
       "upload": {
         "title": "Oder Logdatei hochladen",
@@ -18705,16 +18848,39 @@
     "subscriptionCanceled": "Ihr Abonnement wurde gekündigt.",
     "needCustomPlan": "Benötigen Sie einen individuellen Tarif?",
     "customPlanDescription": "Für große Unternehmen und Agenturen, die KI-Sichtbarkeit im großen Maßstab verwalten. Ab ${price}/Monat.",
+    "customPlanPoints": [
+      "1 Marke und 3.000 Prompts zu Beginn, mehr per Vertrag",
+      "Alle Antwort-Engines, Claude per Vertrag",
+      "Unbegrenzte Content-Briefings, Chancen und Website-Audits",
+      "SSO / SAML, Prioritäts-Support und ein SLA",
+      "Rechnungszahlung und API-Zugang",
+      "Ihre eigenen KI-Schlüssel: OpenAI, Anthropic, Google, Azure oder OpenRouter"
+    ],
+    "customPlanPointsChat": [
+      "Chat und Agenten",
+      "Vollautomatisch, mit Agenten, die selbstständig veröffentlichen"
+    ],
     "planCards": {
       "expandable": "+ Add-ons",
       "expandableHint": "Growth kann jederzeit mehr davon hinzufügen, unter Einstellungen › Abrechnung: zusätzliches Tracking, zusätzliche Marken und Aufladungen der KI-Nutzung.",
       "starter": {
         "tagline": "Für kleine Teams, die mit dem Monitoring und der Optimierung der KI-Sichtbarkeit beginnen.",
-        "engines": "Tracking für ChatGPT & Gemini"
+        "engines": "Tracking für ChatGPT & Gemini",
+        "extras": ["MCP- & API-Zugriff"],
+        "extrasChat": ["Chat und Agenten"]
       },
       "growth": {
         "tagline": "Für wachsende Teams, die die KI-Sichtbarkeit überwachen und Inhalte für die KI-Suche optimieren möchten.",
-        "engines": "Tracking für ChatGPT, Gemini, Google AI Mode und Google AI Overviews"
+        "engines": "Tracking für ChatGPT, Gemini, Google AI Mode und Google AI Overviews",
+        "extras": [
+          "Tracking für mehrere Regionen",
+          "White-Label-Berichte & Exporte",
+          "Looker Studio"
+        ],
+        "extrasChat": [
+          "Chat und Agenten",
+          "Vollautomatisch, mit Agenten, die eigenständig veröffentlichen"
+        ]
       },
       "brands": "{count, plural, one {# Marke} other {# Marken}}",
       "unlimitedBrands": "Unbegrenzte Marken",

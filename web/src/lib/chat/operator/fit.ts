@@ -123,6 +123,7 @@ export const UNMAPPED_SKILLS: Readonly<Record<string, UnmappedReason>> = Object.
   'ad-drafts': 'ads',
   'paid-overlap': 'ads',
   shopping: 'no_clear_fit',
+  'feed-advisor': 'no_clear_fit',
   translate: 'no_clear_fit',
   start: 'playbook',
   analyze: 'playbook',
