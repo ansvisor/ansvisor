@@ -4131,7 +4131,10 @@
         "actions": "Aktionen",
         "scorecard": "Scorecard",
         "kpis": "KPIs",
-        "label": "Verlaufsansichten"
+        "label": "Verlaufsansichten",
+        "actionsHint": "Jede laufende oder abgeschlossene Aktion einzeln: was sie erreichen sollte und was seitdem gemessen wurde.",
+        "scorecardHint": "Was jede Art von Aktion insgesamt erreicht hat: wie viele abgeschlossen wurden, ihre Erfolgsquote und die mediane Veränderung.",
+        "kpisHint": "Die Ziele Ihrer Marke und wie nah Sie jedem davon sind."
       },
       "scorecard": {
         "note": "Was jede Art von Aktion bei dieser Marke bewirkt hat, ausschließlich basierend auf ihren eigenen Aktionen. Ergebnisse sind die bisherigen Messwerte; jedes Ergebnis ist einen Monat nach Abschluss der Aktion endgültig. Die Median-Veränderung bezieht sich auf die Hauptmetrik jeder Aktion.",
@@ -6216,7 +6219,6 @@
       "home": "Startseite",
       "inbox": "Posteingang",
       "inboxLabel": "Posteingang · {needsYou, plural, one {# erfordert Ihre Aufmerksamkeit} other {# erfordern Ihre Aufmerksamkeit}}",
-      "inboxLabelNeedsYou": "Posteingang · {count, plural, one {# Element} other {# Elemente}} · {needsYou, plural, one {# erfordert Sie} other {# erfordern Sie}}",
       "skills": "Skills",
       "activity": "Aktivität",
       "capabilities": "Was Chat tun kann",
@@ -6666,10 +6668,7 @@
       "landsWithSuggestions": "Ergebnisse Ihrer Agenten und tägliche Vorschläge landen hier.",
       "nothingNeedsYou": "Nichts erfordert Ihre Aufmerksamkeit.",
       "summary": {
-        "needsYou": "{count, plural, one {# erfordert Ihre Aufmerksamkeit} other {# erfordern Ihre Aufmerksamkeit}}",
-        "running": "{count} aktiv",
-        "doneToday": "{count} heute erledigt",
-        "suggestions": "{count, plural, one {# Vorschlag} other {# Vorschläge}} diese Woche"
+        "needsYou": "{count, plural, one {# erfordert Ihre Aufmerksamkeit} other {# erfordern Ihre Aufmerksamkeit}}"
       },
       "empty": "Nichts erfordert Ihre Aufmerksamkeit. Ergebnisse Ihrer Agenten landen hier.",
       "tabs": {
@@ -15609,6 +15608,51 @@
       },
       "manage": "Verwalten",
       "connect": "Verbinden",
+      "adminConnects": "Ein Admin stellt diese Verbindung her",
+      "accountStatus": {
+        "active": "Verbunden",
+        "error": "Erfordert Aufmerksamkeit",
+        "disconnected": "Getrennt"
+      },
+      "sync": {
+        "syncedAt": "Zahlen abgerufen {when}",
+        "pending": "Erster Abruf innerhalb eines Tages: die letzten 90 Tage",
+        "error": {
+          "key_refused": "ChatGPT Ads hat den Schlüssel abgelehnt. Fügen Sie einen neuen ein.",
+          "key_missing": "Der Schlüssel ist nicht mehr vorhanden. Verbinden Sie das Konto erneut.",
+          "signin_gone": "Die Google-Ads-Anmeldung besteht nicht mehr. Verbinden Sie Google Ads erneut.",
+          "upstream": "Die Werbeplattform hat nicht geantwortet. Ansvisor versucht es innerhalb eines Tages erneut.",
+          "failed": "Die Zahlen konnten nicht abgerufen werden. Ansvisor versucht es innerhalb eines Tages erneut."
+        }
+      },
+      "chatgpt": {
+        "connect": "Verbinden",
+        "addAnother": "Konto hinzufügen",
+        "dialogTitle": "ChatGPT Ads verbinden",
+        "dialogLine": "Fügen Sie einen Ads-API-Schlüssel aus dem ChatGPT Ads Manager ein. Jeder Schlüssel gilt für ein Werbekonto, fügen Sie also pro Konto einen Schlüssel hinzu.",
+        "keyLabel": "Ads-API-Schlüssel",
+        "keyNote": "Ansvisor prüft den Schlüssel bei ChatGPT Ads und speichert ihn dann verschlüsselt. Er wird nur lesend verwendet.",
+        "cancel": "Abbrechen",
+        "save": "Verbinden",
+        "checking": "Wird geprüft…",
+        "connectedToast": "{name} verbunden.",
+        "accountLine": "ChatGPT-Ads-Konto · {currency}",
+        "accountLineNoCurrency": "ChatGPT-Ads-Konto",
+        "billing": "ChatGPT Ads Manager",
+        "error": {
+          "invalid_key": "ChatGPT Ads hat diesen Schlüssel nicht akzeptiert. Prüfen Sie ihn und versuchen Sie es erneut.",
+          "upstream": "ChatGPT Ads hat nicht geantwortet. Versuchen Sie es in einer Minute erneut.",
+          "other": "Verbindung nicht möglich. Versuchen Sie es erneut."
+        }
+      },
+      "account": {
+        "disconnect": "Trennen",
+        "disconnectTitle": "{name} trennen?",
+        "disconnectLine": "Ansvisor löscht alles, was es für dieses Konto speichert: den Schlüssel, falls vorhanden, und die abgerufenen Zahlen. Ihre Anzeigen laufen in {billing} weiter.",
+        "disconnectedToast": "{name} getrennt.",
+        "disconnectFailed": "Trennen nicht möglich. Versuchen Sie es erneut.",
+        "cancel": "Abbrechen"
+      },
       "platforms": {
         "chatgpt": {
           "name": "ChatGPT Ads",
@@ -18263,24 +18307,139 @@
       }
     },
     "notifications": "Benachrichtigungen",
-    "notificationsDescription": "Jede Marke kann zwei E-Mails senden: den Daily Pulse nach ihren Tracking-Läufen und die wöchentliche KI-Traffic-Zusammenfassung jeden Montag. Beide gehen an die Daily-Pulse-Empfänger der Marke.",
-    "pulseSection": "Daily Pulse",
-    "pulseSectionDescription": "Eine kurze Zusammenfassung pro Marke nach jedem Tracking-Lauf, mit Highlights und Warnungen. Legen Sie fest, wie oft sie kommt und wer sie erhält.",
-    "pulseFrequencyLabel": "Wie oft der Daily Pulse von {brand} kommt",
+    "yourEmails": {
+      "title": "Ihre E-Mails",
+      "description": "Wählen Sie, welche E-Mails Ansvisor Ihnen sendet und wie oft. Diese Einstellungen gelten nur für Sie: Jedes Teammitglied legt seine eigenen fest.",
+      "carriedOver": "Das sind die E-Mails, die Sie aktuell erhalten. Speichern Sie, um sie als Ihre eigene Auswahl zu übernehmen.",
+      "for": "Für",
+      "scopeAll": "Alle meine Marken ({count})",
+      "deliveryHint": "Marken-E-Mails kommen einzeln pro Marke oder gesammelt in einer E-Mail:",
+      "delivery_per_brand": "Eine E-Mail pro Marke",
+      "delivery_combined": "Alle Marken in einer E-Mail (demnächst verfügbar)",
+      "brandOnly": "Nur für {brand} festlegen",
+      "useAll": "Meine Auswahl „Alle meine Marken“ verwenden",
+      "notableNote": "Zuerst Ihr erster Pulse, danach nur, wenn etwas Auffälliges passiert.",
+      "comingSoon": "Demnächst verfügbar",
+      "comingSoonHint": "E-Mails mit dem Hinweis „Demnächst verfügbar“ behalten die gespeicherte Auswahl und starten, sobald sie bereit sind.",
+      "admins": "Admins",
+      "groups": {
+        "visibility": "Markensichtbarkeit",
+        "traffic": "KI-Traffic",
+        "actions": "Aktionszentrum",
+        "agents": "Agents und Chat",
+        "audit": "Website-Audit",
+        "content": "Inhalte",
+        "account": "Konto"
+      },
+      "kinds": {
+        "daily_pulse": {
+          "name": "Daily Pulse",
+          "description": "Wie jede Marke in KI-Antworten aufgetreten ist: Sichtbarkeitswert, Erwähnungen, Zitierungen, Highlights und Warnungen."
+        },
+        "traffic_digest": {
+          "name": "Wöchentliche Zusammenfassung",
+          "description": "Die KI-Besuche der letzten Woche in einer Zeile, mit den drei wichtigsten Änderungen. Montags."
+        },
+        "critical_action": {
+          "name": "Neue kritische Aktion",
+          "description": "Eine neue Aktion mit kritischer Priorität für Ihre Marken."
+        },
+        "due_actions": {
+          "name": "Überfällig und heute fällig",
+          "description": "Ihnen zugewiesene Aktionen und Aufgaben, die fällig oder überfällig sind."
+        },
+        "weekly_actions": {
+          "name": "Wöchentliche Aktionsübersicht",
+          "description": "Was erledigt wurde, was offen ist und was als Nächstes ansteht. Montags."
+        },
+        "run_finished": {
+          "name": "Lauf abgeschlossen",
+          "description": "Ein von Ihnen gestarteter Agent-Lauf ist abgeschlossen, inklusive dessen, was er getan hat."
+        },
+        "audit_finished": {
+          "name": "Audit abgeschlossen",
+          "description": "Ein Bulk- oder geplantes Audit ist abgeschlossen, mit dem Ergebnis."
+        },
+        "score_dropped": {
+          "name": "Wert gesunken",
+          "description": "Der Wert einer Seite ist seit dem letzten Audit um 5 Punkte oder mehr gefallen."
+        },
+        "drafts_review": {
+          "name": "Entwürfe warten auf Ihre Prüfung",
+          "description": "Für Ihre Marken erstellte Entwürfe, die Sie prüfen müssen, bevor sie live gehen."
+        },
+        "ai_usage": {
+          "name": "KI-Nutzung",
+          "description": "Bei 80 % und 100 % des monatlichen KI-Limits."
+        }
+      },
+      "links": {
+        "approvals": {
+          "name": "Wartet auf Ihre Freigabe",
+          "description": "Ein Agent oder ein Chat-Lauf braucht Ihr OK, bevor er etwas ändert oder veröffentlicht. Einstellbar über „Benachrichtigen, wenn ein Agent mich braucht“.",
+          "link": "Chat-Einstellungen"
+        },
+        "scheduled": {
+          "name": "Geplante Jobs",
+          "description": "Jeder Job sendet E-Mails gemäß seinen eigenen Einstellungen.",
+          "link": "Jobs öffnen"
+        },
+        "billing": {
+          "name": "Abrechnung und Sicherheit",
+          "description": "Rechnungen, Zahlungsprobleme und Anmeldewarnungen. Werden immer gesendet.",
+          "locked": "Immer aktiv"
+        }
+      },
+      "options": {
+        "pulse": {
+          "daily": "Täglich",
+          "weekly": "Wöchentlich",
+          "notable": "Nur bei Auffälligkeiten",
+          "off": "Aus"
+        },
+        "instant": {
+          "instant": "Sofort",
+          "daily": "Tägliche Zusammenfassung",
+          "off": "Aus"
+        },
+        "digest": {
+          "daily": "Tägliche Zusammenfassung",
+          "weekly": "Wöchentliche Zusammenfassung",
+          "off": "Aus"
+        },
+        "weekly": {
+          "weekly": "Jeden Montag",
+          "off": "Aus"
+        },
+        "onoff": {
+          "on": "An",
+          "off": "Aus"
+        }
+      },
+      "save": "Änderungen speichern",
+      "saved": "Ihre E-Mail-Einstellungen wurden gespeichert",
+      "saveFailed": "Ihre E-Mail-Einstellungen konnten nicht gespeichert werden. Bitte versuchen Sie es erneut.",
+      "loadFailed": "Ihre E-Mail-Einstellungen konnten nicht geladen werden.",
+      "turnOffAll": "Alle optionalen E-Mails deaktivieren",
+      "turnedOff": "Alle optionalen E-Mails sind auf Aus gesetzt. Speichern Sie die Änderungen, um dies beizubehalten."
+    },
+    "outsideEmails": {
+      "title": "An Personen außerhalb des Workspace senden",
+      "description": "Kunden oder Manager ohne Ansvisor-Platz können die Zusammenfassungen einer Marke ebenfalls erhalten. Freigaben oder Konto-E-Mails erhalten sie nie.",
+      "sends": "Daily Pulse · Wöchentliche Zusammenfassung zu KI-Traffic",
+      "recipients": "Empfänger",
+      "placeholder": "kunde@example.com, chef@example.com",
+      "hint": "Durch Kommas getrennt. Teammitglieder, die ihre eigenen E-Mail-Einstellungen nicht gespeichert haben, erhalten die E-Mails dieser Marke weiterhin wie bisher: alle, solange diese Liste leer ist, sonst nur die aufgeführten.",
+      "frequency": "Daily Pulse",
+      "frequencyNote": "Dies legt auch den Slack-Kanal und die Webhooks der Marke fest sowie die Teammitglieder, die ihre eigenen Einstellungen nicht gespeichert haben.",
+      "digest": "Auch die wöchentliche Zusammenfassung zu KI-Traffic senden",
+      "digestPulseOff": "Die wöchentliche Zusammenfassung wird nicht gesendet, solange dieser Daily Pulse deaktiviert ist."
+    },
     "pulseFrequency_daily": "Täglich",
     "pulseFrequency_weekly": "Wöchentlich",
     "pulseFrequency_notable": "Nur bei Besonderheiten",
-    "pulseFrequency_notableNote": "Ihr erster Pulse, danach nur, wenn etwas Bemerkenswertes passiert.",
     "pulseFrequency_off": "Aus",
-    "pulseRecipients": "Empfänger",
-    "pulseRecipientsPlaceholder": "alex@example.com, sam@example.com",
-    "pulseRecipientsHint": "Kommagetrennte E-Mail-Adressen. Leer lassen, um an jedes Mitglied der Organisation zu senden.",
     "pulseRecipientsInvalid": "Keine gültige E-Mail-Adresse: {emails}. Vor dem Speichern korrigieren oder entfernen.",
-    "trafficDigest": "Wöchentliche KI-Traffic-Übersicht",
-    "trafficDigestDescription": "Jeden Montag: die KI-Besuche der letzten Woche in einer Zusammenfassungszeile, mit den drei größten Änderungen. Sie geht an die Daily-Pulse-Empfänger jeder Marke und wird gespeichert, sobald Sie das Häkchen setzen oder entfernen.",
-    "trafficDigestTo": "An {emails}",
-    "trafficDigestToEveryone": "An alle Mitglieder der Organisation",
-    "trafficDigestPulseOff": "Wird nicht gesendet, solange Daily Pulse deaktiviert ist. Schalten Sie Pulse wieder ein, um die Übersicht zu erhalten.",
     "pulseSaved": "Benachrichtigungseinstellungen gespeichert",
     "pulseSaveFailed": "Benachrichtigungseinstellungen konnten nicht gespeichert werden. Bitte versuchen Sie es erneut.",
     "pulseLoadFailed": "Benachrichtigungseinstellungen konnten nicht geladen werden.",
@@ -18305,7 +18464,6 @@
       "loading": "Sprachen werden geladen…",
       "moreSoon": "Weitere Sprachen folgen in Kürze.",
       "preview": "Mitarbeitende und Test-Builds sehen auch Sprachen, für die es noch keine Übersetzung gibt. Fehlender Text wird auf Englisch angezeigt.",
-      "testLanguage": "{language} · Test",
       "saved": "Sprache gespeichert",
       "saveFailed": "Ihre Sprache konnte nicht gespeichert werden. Bitte versuchen Sie es erneut.",
       "suggest": {

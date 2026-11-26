@@ -4119,7 +4119,10 @@
         "actions": "Aksiyonlar",
         "scorecard": "Skor kartı",
         "kpis": "KPI'lar",
-        "label": "Geçmiş görünümleri"
+        "label": "Geçmiş görünümleri",
+        "actionsHint": "Devam eden veya kapanmış her aksiyon tek tek: neyi hedeflediği ve o zamandan beri neyin ölçüldüğü.",
+        "scorecardHint": "Her aksiyon türünün genel olarak neyi başardığı: kaç tanesinin tamamlandığı, başarı oranı ve medyan değişim.",
+        "kpisHint": "Markanızın hedefleri ve her birine ne kadar yaklaşıldığı."
       },
       "scorecard": {
         "note": "Yalnızca kendi aksiyonlarından yola çıkarak, her aksiyon türünün bu markada sağladığı etki. Sonuçlar şu ana kadarki verilerdir; her biri ilgili aksiyon kapandıktan bir ay sonra kesinleşir. Medyan değişim, her aksiyonun ana metriğine dayanır.",
@@ -6204,7 +6207,6 @@
       "home": "Ana Sayfa",
       "inbox": "Gelen Kutusu",
       "inboxLabel": "Gelen Kutusu · {needsYou, plural, one {# işlem bekliyor} other {# işlem bekliyor}}",
-      "inboxLabelNeedsYou": "Gelen Kutusu · {count, plural, one {# öge} other {# öge}} · {needsYou, plural, one {# işlem bekliyor} other {# işlem bekliyor}}",
       "skills": "Yetenekler",
       "activity": "Aktivite",
       "capabilities": "Sohbet neler yapabilir",
@@ -6654,10 +6656,7 @@
       "landsWithSuggestions": "Ajanlarınızdan gelen sonuçlar ve günlük öneriler buraya düşer.",
       "nothingNeedsYou": "İlgilenmeniz gereken bir şey yok.",
       "summary": {
-        "needsYou": "{count, plural, one {# öğe ilginizi bekliyor} other {# öğe ilginizi bekliyor}}",
-        "running": "{count} çalışıyor",
-        "doneToday": "Bugün {count} tamamlandı",
-        "suggestions": "Bu hafta {count, plural, one {# öneri} other {# öneri}}"
+        "needsYou": "{count, plural, one {# öğe ilginizi bekliyor} other {# öğe ilginizi bekliyor}}"
       },
       "empty": "İlgilenmeniz gereken bir şey yok. Ajanlarınızın sonuçları burada görünür.",
       "tabs": {
@@ -15597,6 +15596,51 @@
       },
       "manage": "Yönet",
       "connect": "Bağla",
+      "adminConnects": "Bunu bir Admin bağlar",
+      "accountStatus": {
+        "active": "Bağlı",
+        "error": "Dikkat gerekiyor",
+        "disconnected": "Bağlantı kesildi"
+      },
+      "sync": {
+        "syncedAt": "Rakamlar okundu: {when}",
+        "pending": "İlk okuma bir gün içinde: son 90 gün",
+        "error": {
+          "key_refused": "ChatGPT Ads anahtarı reddetti. Yeni bir anahtar yapıştırın.",
+          "key_missing": "Anahtar artık yok. Hesabı yeniden bağlayın.",
+          "signin_gone": "Google Ads oturumu artık yok. Google Ads'i yeniden bağlayın.",
+          "upstream": "Reklam platformu yanıt vermedi. Ansvisor bir gün içinde yeniden dener.",
+          "failed": "Rakamlar okunamadı. Ansvisor bir gün içinde yeniden dener."
+        }
+      },
+      "chatgpt": {
+        "connect": "Bağla",
+        "addAnother": "Hesap ekle",
+        "dialogTitle": "ChatGPT Ads'i bağla",
+        "dialogLine": "ChatGPT Ads Manager'dan bir Ads API anahtarı yapıştırın. Her anahtar tek bir reklam hesabına erişir, bu yüzden hesap başına bir anahtar ekleyin.",
+        "keyLabel": "Ads API anahtarı",
+        "keyNote": "Ansvisor anahtarı ChatGPT Ads ile doğrular, ardından şifreli olarak saklar. Yalnızca okuma yapar.",
+        "cancel": "İptal",
+        "save": "Bağla",
+        "checking": "Kontrol ediliyor…",
+        "connectedToast": "{name} bağlandı.",
+        "accountLine": "ChatGPT Ads hesabı · {currency}",
+        "accountLineNoCurrency": "ChatGPT Ads hesabı",
+        "billing": "ChatGPT Ads Manager",
+        "error": {
+          "invalid_key": "ChatGPT Ads bu anahtarı kabul etmedi. Kontrol edip tekrar deneyin.",
+          "upstream": "ChatGPT Ads yanıt vermedi. Bir dakika sonra tekrar deneyin.",
+          "other": "Bağlanamadı. Tekrar deneyin."
+        }
+      },
+      "account": {
+        "disconnect": "Bağlantıyı kes",
+        "disconnectTitle": "{name} bağlantısı kesilsin mi?",
+        "disconnectLine": "Ansvisor bu hesap için sakladığı her şeyi siler: varsa anahtarını ve okuduğu rakamları. Reklamlarınız {billing} içinde çalışmaya devam eder.",
+        "disconnectedToast": "{name} bağlantısı kesildi.",
+        "disconnectFailed": "Bağlantı kesilemedi. Tekrar deneyin.",
+        "cancel": "İptal"
+      },
       "platforms": {
         "chatgpt": {
           "name": "ChatGPT Ads",
@@ -18251,24 +18295,139 @@
       }
     },
     "notifications": "Bildirimler",
-    "notificationsDescription": "Her marka iki e-posta gönderebilir: izleme çalışmalarından sonra Daily Pulse ve her Pazartesi AI Traffic haftalık özeti. İkisi de markanın Daily Pulse alıcılarına gider.",
-    "pulseSection": "Daily Pulse",
-    "pulseSectionDescription": "Her izleme çalışmasından sonra marka başına öne çıkanları ve uyarıları içeren kısa bir özet. Ne sıklıkla geleceğini ve kimlerin alacağını seçin.",
-    "pulseFrequencyLabel": "{brand} markasının Daily Pulse sıklığı",
+    "yourEmails": {
+      "title": "E-postalarınız",
+      "description": "Ansvisor'ın size hangi e-postaları ne sıklıkla göndereceğini seçin. Bunlar yalnızca size aittir: ekipteki herkes kendi tercihini belirler.",
+      "carriedOver": "Bunlar bugün aldığınız e-postalar. Kendi tercihleriniz olarak korumak için kaydedin.",
+      "for": "Kapsam",
+      "scopeAll": "Tüm markalarım ({count})",
+      "deliveryHint": "Marka e-postaları marka başına ayrı ayrı ya da tek bir e-postada birlikte gelir:",
+      "delivery_per_brand": "Marka başına bir e-posta",
+      "delivery_combined": "Tüm markalar tek e-postada (çok yakında)",
+      "brandOnly": "Yalnızca {brand} için ayarla",
+      "useAll": "Tüm markalarım seçimimi kullan",
+      "notableNote": "İlk özetiniz, sonrasında yalnızca dikkate değer bir şey olduğunda.",
+      "comingSoon": "Çok yakında",
+      "comingSoonHint": "Çok yakında olarak işaretlenen e-postalar kaydettiğiniz seçimi korur ve hazır olduklarında gönderilmeye başlar.",
+      "admins": "Adminler",
+      "groups": {
+        "visibility": "Marka Görünürlüğü",
+        "traffic": "AI Trafiği",
+        "actions": "Aksiyon Merkezi",
+        "agents": "Agent'lar ve Chat",
+        "audit": "Site Denetimi",
+        "content": "İçerik",
+        "account": "Hesap"
+      },
+      "kinds": {
+        "daily_pulse": {
+          "name": "Günlük Özet",
+          "description": "Her markanın AI yanıtlarında nasıl göründüğü: Görünürlük skoru, bahsedilmeler, atıflar, öne çıkanlar ve uyarılar."
+        },
+        "traffic_digest": {
+          "name": "Haftalık özet",
+          "description": "Geçen haftanın AI ziyaretleri tek satırda, en önemli üç değişiklikle birlikte. Pazartesi günleri."
+        },
+        "critical_action": {
+          "name": "Yeni kritik aksiyon",
+          "description": "Markalarınız için Kritik öncelikli yeni bir aksiyon."
+        },
+        "due_actions": {
+          "name": "Gecikenler ve bugün bitenler",
+          "description": "Size atanan, süresi gelen veya geciken aksiyonlar ve görevler."
+        },
+        "weekly_actions": {
+          "name": "Haftalık aksiyon özeti",
+          "description": "Neler yapıldı, neler açık ve sırada ne var. Pazartesi günleri."
+        },
+        "run_finished": {
+          "name": "Çalıştırma tamamlandı",
+          "description": "Başlattığınız bir agent çalıştırması, yaptıklarıyla birlikte tamamlandı."
+        },
+        "audit_finished": {
+          "name": "Denetim tamamlandı",
+          "description": "Toplu veya zamanlanmış bir denetim skoruyla birlikte tamamlandı."
+        },
+        "score_dropped": {
+          "name": "Skor düştü",
+          "description": "Bir sayfanın skoru son denetimden bu yana 5 puan veya daha fazla düştü."
+        },
+        "drafts_review": {
+          "name": "İncelemenizi bekleyen taslaklar",
+          "description": "Markalarınız için hazırlanan ve yayına girmeden önce incelemenizi gerektiren taslaklar."
+        },
+        "ai_usage": {
+          "name": "AI kullanımı",
+          "description": "Aylık AI limitinin %80'ine ve %100'üne ulaşıldığında."
+        }
+      },
+      "links": {
+        "approvals": {
+          "name": "Onayınızı bekliyor",
+          "description": "Bir agent veya Chat çalıştırması bir şeyi değiştirmeden ya da yayınlamadan önce onayınıza ihtiyaç duyuyor. Bunu Bir agent'a ihtiyacım olduğunda bana bildir ile ayarlayın.",
+          "link": "Chat ayarları"
+        },
+        "scheduled": {
+          "name": "Zamanlanmış işler",
+          "description": "x",
+          "link": "İşleri aç"
+        },
+        "billing": {
+          "name": "Faturalama ve güvenlik",
+          "description": "Faturalar, ödeme sorunları ve oturum açma uyarıları. Her zaman gönderilir.",
+          "locked": "Her zaman açık"
+        }
+      },
+      "options": {
+        "pulse": {
+          "daily": "Günlük",
+          "weekly": "Haftalık",
+          "notable": "Yalnızca önemli olduğunda",
+          "off": "Kapalı"
+        },
+        "instant": {
+          "instant": "Hemen",
+          "daily": "Günlük özet",
+          "off": "Kapalı"
+        },
+        "digest": {
+          "daily": "Günlük özet",
+          "weekly": "Haftalık özet",
+          "off": "Kapalı"
+        },
+        "weekly": {
+          "weekly": "Her Pazartesi",
+          "off": "Kapalı"
+        },
+        "onoff": {
+          "on": "Açık",
+          "off": "Kapalı"
+        }
+      },
+      "save": "Değişiklikleri kaydet",
+      "saved": "E-posta tercihleriniz kaydedildi",
+      "saveFailed": "E-posta tercihleriniz kaydedilemedi. Lütfen tekrar deneyin.",
+      "loadFailed": "E-posta tercihleriniz yüklenemedi.",
+      "turnOffAll": "Tüm isteğe bağlı e-postaları kapat",
+      "turnedOff": "Tüm isteğe bağlı e-postalar Kapalı olarak ayarlandı. Kalıcı olması için değişiklikleri kaydedin."
+    },
+    "outsideEmails": {
+      "title": "Çalışma alanı dışındaki kişilere gönder",
+      "description": "Ansvisor koltuğu olmayan bir müşteri veya yönetici de bir markanın özetlerini alabilir. Onaylar ya da hesap e-postaları asla gönderilmez.",
+      "sends": "Daily Pulse · AI Trafik haftalık özeti",
+      "recipients": "Alıcılar",
+      "placeholder": "musteri@example.com, patron@example.com",
+      "hint": "Virgülle ayırın. Kendi e-posta tercihlerini kaydetmemiş ekip arkadaşları bu markanın e-postalarını eskisi gibi almaya devam eder: bu liste boşken hepsi, doluyken yalnızca listedekiler.",
+      "frequency": "Daily Pulse",
+      "frequencyNote": "Bu ayar ayrıca markanın Slack kanalını, webhook'larını ve kendi tercihlerini kaydetmemiş ekip arkadaşlarını da belirler.",
+      "digest": "AI Trafik haftalık özetini de gönder",
+      "digestPulseOff": "Bu Daily Pulse kapalıyken haftalık özet gönderilmez."
+    },
     "pulseFrequency_daily": "Günlük",
     "pulseFrequency_weekly": "Haftalık",
     "pulseFrequency_notable": "Yalnızca önemli durumlarda",
-    "pulseFrequency_notableNote": "İlk özetiniz, ardından yalnızca önemli bir durum olduğunda.",
     "pulseFrequency_off": "Kapalı",
-    "pulseRecipients": "Alıcılar",
-    "pulseRecipientsPlaceholder": "alex@example.com, sam@example.com",
-    "pulseRecipientsHint": "Virgülle ayrılmış e-posta adresleri. Tüm organizasyon üyelerine göndermek için boş bırakın.",
     "pulseRecipientsInvalid": "Geçerli bir e-posta adresi değil: {emails}. Kaydetmeden önce düzeltin veya kaldırın.",
-    "trafficDigest": "Haftalık AI Trafik özeti",
-    "trafficDigestDescription": "Her Pazartesi: geçen haftanın AI ziyaretleri tek satırlık bir özet ve en önemli üç değişiklikle. Her markanın Daily Pulse alıcılarına gider ve işaretlediğiniz veya işaretini kaldırdığınız anda kaydedilir.",
-    "trafficDigestTo": "Alıcılar: {emails}",
-    "trafficDigestToEveryone": "Kuruluşun tüm üyelerine",
-    "trafficDigestPulseOff": "Daily Pulse kapalıyken gönderilmez. Tekrar almak için Daily Pulse'ı yeniden açın.",
     "pulseSaved": "Bildirim ayarları kaydedildi",
     "pulseSaveFailed": "Bildirim ayarları kaydedilemedi. Lütfen tekrar deneyin.",
     "pulseLoadFailed": "Bildirim ayarları yüklenemedi.",
@@ -18293,7 +18452,6 @@
       "loading": "Diller yükleniyor…",
       "moreSoon": "Daha fazla dil yolda.",
       "preview": "Personel ve test sürümleri henüz çevirisi olmayan dilleri de görebilir. Metnin eksik olduğu yerlerde İngilizce gösterilir.",
-      "testLanguage": "{language} · test",
       "saved": "Dil kaydedildi",
       "saveFailed": "Diliniz kaydedilemedi. Lütfen tekrar deneyin.",
       "suggest": {

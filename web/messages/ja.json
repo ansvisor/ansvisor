@@ -4120,7 +4120,10 @@
         "actions": "アクション",
         "scorecard": "スコアカード",
         "kpis": "KPI",
-        "label": "履歴ビュー"
+        "label": "履歴ビュー",
+        "actionsHint": "進行中または完了した各アクションを1件ずつ表示します。目的と、その後に計測された結果を確認できます。",
+        "scorecardHint": "アクションの種類ごとの全体的な成果です。完了数、成功率、変化の中央値を表示します。",
+        "kpisHint": "ブランドの目標と、それぞれの達成度です。"
       },
       "scorecard": {
         "note": "各アクションタイプがこのブランドでどのような結果をもたらしたかを示します（自社のアクションのみ）。結果は現時点の数値です。各アクションが終了してから1か月後に確定します。変化の中央値は各アクションの主要指標に基づきます。",
@@ -6205,7 +6208,6 @@
       "home": "ホーム",
       "inbox": "受信トレイ",
       "inboxLabel": "{needsYou, plural, other {受信トレイ · #件の要対応}}",
-      "inboxLabelNeedsYou": "受信トレイ · {count, plural, other {#件のアイテム}} · {needsYou, plural, other {#件要対応}}",
       "skills": "スキル",
       "activity": "アクティビティ",
       "capabilities": "Chatでできること",
@@ -6655,10 +6657,7 @@
       "landsWithSuggestions": "エージェントの結果と日々の提案がここに届きます。",
       "nothingNeedsYou": "対応が必要な項目はありません。",
       "summary": {
-        "needsYou": "{count, plural, other {#件の対応が必要です}}",
-        "running": "{count}件実行中",
-        "doneToday": "本日完了：{count}件",
-        "suggestions": "今週の提案：{count, plural, other {#件}}"
+        "needsYou": "{count, plural, other {#件の対応が必要です}}"
       },
       "empty": "対応が必要な項目はありません。エージェントの結果がここに届きます。",
       "tabs": {
@@ -15598,6 +15597,51 @@
       },
       "manage": "管理",
       "connect": "連携",
+      "adminConnects": "管理者が接続します",
+      "accountStatus": {
+        "active": "接続済み",
+        "error": "要対応",
+        "disconnected": "接続解除済み"
+      },
+      "sync": {
+        "syncedAt": "数値の取得日時: {when}",
+        "pending": "1日以内に初回取得: 過去90日分",
+        "error": {
+          "key_refused": "ChatGPT Adsがキーを拒否しました。新しいキーを貼り付けてください。",
+          "key_missing": "キーが見つかりません。アカウントを再接続してください。",
+          "signin_gone": "Google Adsのサインインが無効になりました。Google Adsを再接続してください。",
+          "upstream": "広告プラットフォームから応答がありませんでした。Ansvisorが1日以内に再試行します。",
+          "failed": "数値を取得できませんでした。Ansvisorが1日以内に再試行します。"
+        }
+      },
+      "chatgpt": {
+        "connect": "接続",
+        "addAnother": "アカウントを追加",
+        "dialogTitle": "ChatGPT Adsを接続",
+        "dialogLine": "ChatGPT Ads ManagerのAds APIキーを貼り付けてください。各キーで接続できる広告アカウントは1つのため、アカウントごとにキーを追加してください。",
+        "keyLabel": "Ads APIキー",
+        "keyNote": "AnsvisorはChatGPT Adsでキーを確認し、暗号化して保存します。読み取りのみ行います。",
+        "cancel": "キャンセル",
+        "save": "接続",
+        "checking": "確認中…",
+        "connectedToast": "{name}を接続しました。",
+        "accountLine": "ChatGPT Adsアカウント · {currency}",
+        "accountLineNoCurrency": "ChatGPT Adsアカウント",
+        "billing": "ChatGPT Ads Manager",
+        "error": {
+          "invalid_key": "ChatGPT Adsがこのキーを受け付けませんでした。確認してもう一度お試しください。",
+          "upstream": "ChatGPT Adsから応答がありませんでした。しばらくしてからもう一度お試しください。",
+          "other": "接続できませんでした。もう一度お試しください。"
+        }
+      },
+      "account": {
+        "disconnect": "接続解除",
+        "disconnectTitle": "{name}の接続を解除しますか?",
+        "disconnectLine": "Ansvisorは、このアカウントについて保持しているキー（ある場合）と取得した数値を削除します。広告は{billing}で引き続き配信されます。",
+        "disconnectedToast": "{name}の接続を解除しました。",
+        "disconnectFailed": "接続を解除できませんでした。もう一度お試しください。",
+        "cancel": "キャンセル"
+      },
       "platforms": {
         "chatgpt": {
           "name": "ChatGPT Ads",
@@ -18252,24 +18296,139 @@
       }
     },
     "notifications": "通知",
-    "notificationsDescription": "各ブランドは2種類のメールを送信できます。トラッキング実行後のDaily Pulseと、毎週月曜日のAIトラフィック週間ダイジェストです。どちらもブランドのDaily Pulse受信者に送信されます。",
-    "pulseSection": "Daily Pulse",
-    "pulseSectionDescription": "トラッキング実行ごとに、ブランド別のハイライトと警告をまとめた短いダイジェストが届きます。頻度と受信者を選択してください。",
-    "pulseFrequencyLabel": "{brand}のDaily Pulseの頻度",
+    "yourEmails": {
+      "title": "自分のメール",
+      "description": "Ansvisorから送信されるメールの種類と頻度を選択します。この設定は自分専用で、チームの各メンバーが個別に設定します。",
+      "carriedOver": "現在受信しているメールです。保存すると、自分の設定として保持されます。",
+      "for": "対象",
+      "scopeAll": "すべてのブランド（{count}）",
+      "deliveryHint": "ブランドのメールは、ブランドごとに1通ずつ、またはまとめて1通で届きます。",
+      "delivery_per_brand": "ブランドごとに1通",
+      "delivery_combined": "すべてのブランドを1通にまとめる（近日公開）",
+      "brandOnly": "{brand}のみに設定",
+      "useAll": "「すべてのブランド」の設定を使用",
+      "notableNote": "最初のパルスをお届けし、その後は注目すべき出来事があったときのみお送りします。",
+      "comingSoon": "近日公開",
+      "comingSoonHint": "「近日公開」のメールは、保存した設定が維持され、準備ができ次第開始されます。",
+      "admins": "管理者",
+      "groups": {
+        "visibility": "ブランドの可視性",
+        "traffic": "AIトラフィック",
+        "actions": "アクションセンター",
+        "agents": "エージェントとチャット",
+        "audit": "サイト監査",
+        "content": "コンテンツ",
+        "account": "アカウント"
+      },
+      "kinds": {
+        "daily_pulse": {
+          "name": "デイリーパルス",
+          "description": "各ブランドがAIの回答にどのように表示されたか：可視性スコア、言及、引用、ハイライト、警告。"
+        },
+        "traffic_digest": {
+          "name": "週次ダイジェスト",
+          "description": "先週のAIからの訪問を1行でまとめ、上位3件の変化をお知らせします。毎週月曜日。"
+        },
+        "critical_action": {
+          "name": "新しい重要アクション",
+          "description": "ブランドに対して優先度「重要」の新しいアクションが追加されました。"
+        },
+        "due_actions": {
+          "name": "期限超過・本日期限",
+          "description": "あなたに割り当てられたアクションやタスクのうち、期限が来ているもの、または遅れているもの。"
+        },
+        "weekly_actions": {
+          "name": "週次アクションサマリー",
+          "description": "完了した内容、未完了の内容、次の予定。毎週月曜日。"
+        },
+        "run_finished": {
+          "name": "実行完了",
+          "description": "開始したエージェントの実行が完了しました。実行内容も含まれます。"
+        },
+        "audit_finished": {
+          "name": "監査完了",
+          "description": "一括または定期の監査が完了しました。スコアも含まれます。"
+        },
+        "score_dropped": {
+          "name": "スコア低下",
+          "description": "前回の監査から、ページのスコアが5ポイント以上下がりました。"
+        },
+        "drafts_review": {
+          "name": "レビュー待ちのドラフト",
+          "description": "公開前にレビューが必要な、ブランド用に作成されたドラフト。"
+        },
+        "ai_usage": {
+          "name": "AI使用量",
+          "description": "月間AI上限の80%と100%に達したとき。"
+        }
+      },
+      "links": {
+        "approvals": {
+          "name": "承認待ち",
+          "description": "エージェントまたはチャットの実行が、変更や公開を行う前にあなたの承認を求めています。「エージェントが私を必要とするときに通知」で設定できます。",
+          "link": "チャット設定"
+        },
+        "scheduled": {
+          "name": "スケジュールジョブ",
+          "description": "各ジョブは、ジョブで設定した内容に従ってメールを送信します。",
+          "link": "ジョブを開く"
+        },
+        "billing": {
+          "name": "請求とセキュリティ",
+          "description": "請求書、お支払いの問題、サインインのアラート。常に送信されます。",
+          "locked": "常にオン"
+        }
+      },
+      "options": {
+        "pulse": {
+          "daily": "毎日",
+          "weekly": "毎週",
+          "notable": "注目すべき場合のみ",
+          "off": "オフ"
+        },
+        "instant": {
+          "instant": "すぐに",
+          "daily": "日次サマリー",
+          "off": "オフ"
+        },
+        "digest": {
+          "daily": "日次サマリー",
+          "weekly": "週次サマリー",
+          "off": "オフ"
+        },
+        "weekly": {
+          "weekly": "毎週月曜日",
+          "off": "オフ"
+        },
+        "onoff": {
+          "on": "オン",
+          "off": "オフ"
+        }
+      },
+      "save": "変更を保存",
+      "saved": "メールの設定を保存しました",
+      "saveFailed": "メールの設定を保存できませんでした。もう一度お試しください。",
+      "loadFailed": "メールの設定を読み込めませんでした。",
+      "turnOffAll": "任意のメールをすべてオフにする",
+      "turnedOff": "任意のメールはすべてオフに設定されています。保持するには変更を保存してください。"
+    },
+    "outsideEmails": {
+      "title": "ワークスペース外の人に送信",
+      "description": "Ansvisorのシートを持たないクライアントやマネージャーにも、ブランドのサマリーを送信できます。承認メールやアカウント関連のメールは送信されません。",
+      "sends": "Daily Pulse · AI Trafficの週次ダイジェスト",
+      "recipients": "受信者",
+      "placeholder": "client@example.com, boss@example.com",
+      "hint": "カンマ区切り。自分のメール設定を保存していないチームメイトには、これまでどおりこのブランドのメールが送信されます。このリストが空の間は全員に、空でない場合はリスト内の人のみに送信されます。",
+      "frequency": "Daily Pulse",
+      "frequencyNote": "これは、ブランドのSlackチャンネルとWebhook、および自分の設定を保存していないチームメイトにも適用されます。",
+      "digest": "AI Trafficの週次ダイジェストも送信する",
+      "digestPulseOff": "このDaily Pulseがオフの間は、週次ダイジェストは送信されません。"
+    },
     "pulseFrequency_daily": "毎日",
     "pulseFrequency_weekly": "毎週",
     "pulseFrequency_notable": "注目すべき変更時のみ",
-    "pulseFrequency_notableNote": "初回のPulse以降は、注目すべき動きがあった場合のみ送信されます。",
     "pulseFrequency_off": "オフ",
-    "pulseRecipients": "宛先",
-    "pulseRecipientsPlaceholder": "alex@example.com, sam@example.com",
-    "pulseRecipientsHint": "カンマ区切りのメールアドレス。組織の全メンバーに送信する場合は空欄にしてください。",
     "pulseRecipientsInvalid": "無効なメールアドレスです: {emails}。修正または削除してから保存してください。",
-    "trafficDigest": "AI Traffic 週次ダイジェスト",
-    "trafficDigestDescription": "毎週月曜日に、先週のAI経由の訪問数を1行にまとめ、上位3件の変化とともにお届けします。各ブランドのDaily Pulse受信者に送信され、チェックのオン・オフを切り替えるとすぐに保存されます。",
-    "trafficDigestTo": "宛先：{emails}",
-    "trafficDigestToEveryone": "組織のメンバー全員に送信",
-    "trafficDigestPulseOff": "Daily Pulseがオフの間は送信されません。再度受信するにはPulseをオンにしてください。",
     "pulseSaved": "通知設定を保存しました",
     "pulseSaveFailed": "通知設定を保存できませんでした。もう一度お試しください。",
     "pulseLoadFailed": "通知設定を読み込めませんでした。",
@@ -18294,7 +18453,6 @@
       "loading": "言語を読み込んでいます…",
       "moreSoon": "今後、対応言語を追加予定です。",
       "preview": "スタッフとテストビルドでは、まだ翻訳されていない言語も表示されます。テキストがない部分には英語が表示されます。",
-      "testLanguage": "{language}・テスト",
       "saved": "言語を保存しました",
       "saveFailed": "言語を保存できませんでした。もう一度お試しください。",
       "suggest": {
