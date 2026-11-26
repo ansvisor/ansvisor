@@ -204,11 +204,11 @@
         "home page"
       ],
       "plan": "all",
-      "updated": "2026-11-17",
+      "updated": "2026-11-26",
       "sections": [
         {
           "heading": null,
-          "text": "The **Action Center** is where Ansvisor turns what changed in AI search into a ranked list of work. Open it from **Action Center**, first under **Execution** in the main menu, after the **Analytics** group: it opens on its **Today** tab, and its tabs are listed under it too. When you sign in, Ansvisor opens on **Prompts › Tracked Prompts**, whatever the plan, or on **Today** when Prompts is off your menu. Everything in it is per brand: switch brands to see another brand's work."
+          "text": "The **Action Center** is where Ansvisor turns what changed in AI search into a ranked list of work. Open it from **Action Center**, first under **Execution** in the main menu, after the **Analytics** group: it opens on its **Today** tab, and its tabs are listed under it too. When you sign in, Ansvisor opens on **Brand Visibility › Overview** once your brands have answers, on **Prompts › Tracked Prompts** before that, or on **Today** when neither is on your menu. Everything in it is per brand: switch brands to see another brand's work."
         },
         {
           "heading": "The tabs",
@@ -707,11 +707,11 @@
         "my day"
       ],
       "plan": "all",
-      "updated": "2026-11-20",
+      "updated": "2026-11-26",
       "sections": [
         {
           "heading": null,
-          "text": "**Today** is the first tab of the **Action Center**: what changed since your last visit, what to do today and what is waiting for you, on one page per brand. Open it from **Action Center**, first under **Execution** in the main menu. When you sign in, Ansvisor opens on **Prompts › Tracked Prompts**, whatever the plan; Today is one click away. When Prompts is off your menu, Ansvisor opens here instead."
+          "text": "**Today** is the first tab of the **Action Center**: what changed since your last visit, what to do today and what is waiting for you, on one page per brand. Open it from **Action Center**, first under **Execution** in the main menu. When you sign in, Ansvisor opens on **Brand Visibility › Overview** once your brands have answers, and on **Prompts › Tracked Prompts** before that; Today is one click away. When neither is on your menu, Ansvisor opens here instead."
         },
         {
           "heading": "The tabs",
