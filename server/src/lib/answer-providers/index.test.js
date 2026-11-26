@@ -12,6 +12,7 @@ vi.mock('../cloro-countries.js', () => ({
     'chatgpt-web': 'chatgpt',
     'chatgpt-shopping': 'chatgpt',
     'copilot-web': 'bing_aimode',
+    'gemini-web': 'gemini',
   },
 }));
 
@@ -65,7 +66,26 @@ describe('answer providers', () => {
       anakin.webhookUrl({ ANAKIN_WEBHOOK_URL: 'https://api.example/anakin/callback' }),
     ).toBeNull();
     expect(anakin.webhookUrl({})).toBeNull();
-    expect(await anakin.supportedCountries()).toEqual(new Map());
+    expect([...(await anakin.supportedCountries()).keys()]).toEqual(['gemini']);
+  });
+
+  it("lists the countries Anakin's Gemini answers from, and no other platform's", async () => {
+    const lists = await answerProvider('anakin').supportedCountries();
+    const gemini = lists.get('gemini');
+    expect(gemini.size).toBe(57);
+    expect(['US', 'TR', 'GB', 'UK', 'DE', 'ZA'].every((code) => gemini.has(code))).toBe(true);
+    // Iceland falls back to the US on Gemini: left out, so it is skipped.
+    expect(gemini.has('IS')).toBe(false);
+    expect(lists.has('chatgpt')).toBe(false);
+  });
+
+  it('skips a country outside the list for Gemini on Anakin, and asks the rest', async () => {
+    const { supportsCountry } = await vi.importActual('../cloro-countries.js');
+    const lists = await supportedCountries({ PLATFORM_PROVIDER: 'anakin' });
+    expect(supportsCountry(lists, 'gemini-web', 'IS')).toBe(false);
+    expect(supportsCountry(lists, 'gemini-web', 'TR')).toBe(true);
+    // A platform with no list is asked everywhere.
+    expect(supportsCountry(lists, 'chatgpt-web', 'IS')).toBe(true);
   });
 
   it('falls back to Cloro on an unknown name, warning once', () => {
@@ -95,7 +115,7 @@ describe('answer providers', () => {
       new Map([['chatgpt', new Set(['US'])]]),
     );
     loadSupportedCountries.mockClear();
-    expect(await answerProvider('anakin').supportedCountries()).toEqual(new Map());
+    expect([...(await answerProvider('anakin').supportedCountries()).keys()]).toEqual(['gemini']);
     expect(loadSupportedCountries).not.toHaveBeenCalled();
   });
 
@@ -161,7 +181,8 @@ describe('per-platform providers', () => {
         ['bing_aimode', new Set(['US', 'DE'])],
       ]),
     );
-    // ChatGPT is on Anakin (no lists), Bing on Cloro: only Bing's list stays.
-    expect([...(await supportedCountries(split)).keys()]).toEqual(['bing_aimode']);
+    // ChatGPT is on Anakin (no list), Bing on Cloro: Bing's list stays, with
+    // Anakin's own Gemini list; Cloro's ChatGPT list doesn't.
+    expect([...(await supportedCountries(split)).keys()]).toEqual(['gemini', 'bing_aimode']);
   });
 });

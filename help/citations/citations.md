@@ -4,8 +4,8 @@ route: /dashboard/citations
 keywords: [citations, cited sources, cited URLs, source types, domains, top sources, export citations, third-party sources]
 synonyms: [which sites AI cites, AI sources, links in AI answers, references in AI answers, cited pages, citations page]
 plan: all
-updated: 2026-11-06
-last_checked: 2026-11-06
+updated: 2026-11-23
+last_checked: 2026-11-23
 owner: Cihan
 app_version: 0.3.0
 approved: true
@@ -33,14 +33,14 @@ Three cards sit at the top of the tab:
 
 ## Top Sources and the source choice
 
-The **Top Sources** card has four tabs: **Domains**, **URLs**, **Competitor Gaps** and **Source Types**.
+The **Top Sources** card has four tabs: **Domains**, **URLs**, **Competitor Gaps** and **Source Types**. It opens on **URLs**.
 
 Above the Domains and URLs tables, four buttons choose which sources they list:
 
-- **Brand** (the default): your brand's own domains.
+- **Brand**: your brand's own domains. The **Citations** card on Overview opens the page here.
 - **Competitors**: the domains of the competitors you track.
 - **Third-Party**: every other site.
-- **All**: every source.
+- **All** (the default): every source.
 
 The choice doesn't change **Total Citations**, **Avg citations per result**, **Competitor Gaps** or **Source Types**.
 
@@ -92,7 +92,7 @@ The **Source Types** tab shows the cited domains in a donut chart, with each typ
 
 ## How to use the tab
 
-- **See which of your pages AI cites**: keep **Brand**, the default, and open the **URLs** tab. It lists your own pages that AI cites, on which platforms and how often. Open a page to see the prompts it's cited for.
+- **See which of your pages AI cites**: pick **Brand** and stay on the **URLs** tab. It lists your own pages that AI cites, on which platforms and how often. Open a page to see the prompts it's cited for.
 - **Find the third-party sources AI trusts**: choose **Third-Party**. The top of the Domains and URLs lists are the sites AI leans on most for your prompts: places to be mentioned or cited.
 - **Watch your competitors' pages**: choose **Competitors** to see which competitor domains and pages AI cites in your answers.
 - **Find outreach targets**: the **Competitor Gaps** tab lists the third-party sites AI cites when it names a competitor and not you.

@@ -50,6 +50,10 @@
  * it is connected: Optional, as for /traffic. What isn't set up is "Not
  * measured", with the step that sets it up.
  *
+ * Then /feed-advisor, the Shopping Feed Advisor's: what the brand's product
+ * feed misses for AI shopping answers, read from its catalog, so the catalog
+ * is Required, as for /shopping. Its fixes go to the Action Center with
+ * create_action, each on a card.
  * Then /tech-fix, the Crawler & Technical Fixer's: what keeps AI crawlers out
  * of the site, from Site Audit's own results, so it uses no connection. Its
  * fixes go to the Action Center with create_action, each on a card, for a
@@ -139,6 +143,8 @@ export const ANSVISOR_SKILLS: readonly AgentSkill[] = [
   { id: 'seasonal', uses: [optional('google_search_console')] },
   { id: 'traffic', uses: [optional('google_analytics')] },
   { id: 'ai-revenue', uses: [optional('google_analytics')] },
+  // The Shopping Feed Advisor's: it reads the brand's catalog, so it needs one, as /shopping does.
+  { id: 'feed-advisor', uses: [required(CATALOG_CONNECTION)] },
   // The Crawler & Technical Fixer's: Site Audit's own results, no connection.
   { id: 'tech-fix', uses: [] },
   // Ads Phase 0 PR 15, only with Ads on: Ansvisor's own Ads reads, and drafts saved in it.

@@ -9,8 +9,10 @@ import {
   pollScraperResult,
   submitPromptTask,
   submitScraperTask,
+  GEMINI_COUNTRIES,
   UNAVAILABLE_PLATFORMS,
 } from '../anakin-scraper.js';
+import { CLORO_COUNTRY_MODELS } from '../cloro-countries.js';
 
 export const name = 'anakin';
 
@@ -28,13 +30,14 @@ export function unavailablePlatforms() {
 }
 
 /**
- * The countries each platform answers from on Anakin: none listed (Anakin
- * publishes no list per platform yet), so no country is skipped. An empty
- * map reads as "nothing to check against" (cloro-countries.js,
- * supportsCountry); Cloro's lists never apply to Anakin's platforms.
+ * The countries each platform answers from on Anakin, keyed as Cloro's
+ * lists are (CLORO_COUNTRY_MODELS): Gemini's, which falls back to the US
+ * outside its list (GEMINI_COUNTRIES; `UK` read as `GB`, as some brands
+ * store it). The other platforms have no list, so no country is skipped for
+ * them (supportsCountry reads a missing list as "nothing to check against").
  */
 export async function supportedCountries() {
-  return new Map();
+  return new Map([[CLORO_COUNTRY_MODELS['gemini-web'], new Set([...GEMINI_COUNTRIES, 'UK'])]]);
 }
 
 /**

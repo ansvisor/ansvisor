@@ -112,7 +112,8 @@ vi.mock('@/lib/supabase/admin', () => ({
   },
 }));
 
-const { getCatalogSourcesFor, listCatalogProductsFor } = await import('./catalog');
+const { getCatalogFeedGapsFor, getCatalogSourcesFor, listCatalogProductsFor } =
+  await import('./catalog');
 const { GET: productsRoute } = await import('@/app/api/mcp/catalog/products/route');
 
 const auth: McpAuthContext = {
@@ -414,6 +415,44 @@ describe('listCatalogProductsFor', () => {
   it("answers null for another organization's brand, without reading it", async () => {
     brandAllowed.mockResolvedValue(false);
     expect(await listCatalogProductsFor(auth, { brandId: 'brand-2' })).toBeNull();
+    expect(filters).toEqual([]);
+    expect(read.readCatalogProducts).not.toHaveBeenCalled();
+  });
+});
+
+describe('getCatalogFeedGapsFor', () => {
+  it("reads the brand's whole live catalog and gives its gaps, the most readiness lost first", async () => {
+    read.readCatalogProducts.mockResolvedValue([
+      product('a', { hasGtin: false }),
+      product('b', { hasGtin: false, image: null }),
+      product('c'),
+    ]);
+    tables.catalog_products = [{ id: 'a' }, { id: 'b' }, { id: 'c' }];
+    const gaps = await getCatalogFeedGapsFor(auth, 'brand-1');
+    // The whole catalog (ids null), through the service role, once the brand is the person's.
+    expect(brandAllowed).toHaveBeenCalledWith(auth, 'brand-1');
+    expect(read.readCatalogProducts).toHaveBeenCalledWith(expect.anything(), 'brand-1', null);
+    expectBrandScoped('brand-1');
+    expect(gaps).toMatchObject({ products: 3, capped: false, complete: 1 });
+    expect(gaps?.gaps.map((gap) => [gap.check, gap.missing, gap.impact])).toEqual([
+      ['gtin', 2, 40],
+      ['image', 1, 15],
+    ]);
+  });
+
+  it('says when the catalog has more live products than one read takes', async () => {
+    read.readCatalogProducts.mockResolvedValue([product('a')]);
+    tables.catalog_products = [{ id: 'a' }];
+    counts.catalog_products = 2500;
+    expect(await getCatalogFeedGapsFor(auth, 'brand-1')).toMatchObject({
+      products: 1,
+      capped: true,
+    });
+  });
+
+  it("answers null for another organization's brand, without reading it", async () => {
+    brandAllowed.mockResolvedValue(false);
+    expect(await getCatalogFeedGapsFor(auth, 'brand-2')).toBeNull();
     expect(filters).toEqual([]);
     expect(read.readCatalogProducts).not.toHaveBeenCalled();
   });

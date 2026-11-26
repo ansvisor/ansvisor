@@ -127,7 +127,7 @@ export function AdsView() {
   const { readable, trial, demo, thresholds } = useAdsAccess();
   const { requiredPlanFor } = useFeatureGate();
   const Icon = TAB_ICONS[tab];
-  const periodOff = tab !== 'ov' && tab !== 'op';
+  const periodOff = tab !== 'ov' && tab !== 'op' && tab !== 'cmp';
 
   // What Chat's side panel sees of Opportunities' list, which keeps its own filter.
   const [listView, setListView] = useState<ChatPageView | null>(null);
@@ -246,7 +246,7 @@ export function AdsView() {
             onChatView={setListView}
           />
         ) : readable && tab === 'cmp' ? (
-          <AdsCampaigns />
+          <AdsCampaigns period={period} onOpenTab={openTab} />
         ) : readable && tab === 'con' ? (
           <AdsConnections />
         ) : readable ? (

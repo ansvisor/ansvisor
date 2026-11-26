@@ -449,10 +449,10 @@ describe('AgentForm: new agent', () => {
     await render();
     const skills = all('[data-skill]').map((b) => b.getAttribute('data-skill'));
     // The fourteen and /chatgpt-profile after /facts (ChatGPT Business Hub plan, PR 7), then the
-    // seven, /plan, the packs' three (/content-plan, /seasonal, /traffic), /ai-revenue, /tech-fix and
+    // seven, /plan, the packs' three (/content-plan, /seasonal, /traffic), /ai-revenue, /feed-advisor, /tech-fix and
     // Ads' two (Ads Phase 0 PR 15), each offered here while its flag is on. Never /operator: the AEO
     // Operator's own form opens from its ready-to-use agent or ?skill=operator (PR 6).
-    expect(skills).toHaveLength(33);
+    expect(skills).toHaveLength(34);
     expect(skills).not.toContain('operator');
     expect(skills.slice(15, 22)).toEqual([
       'questions',
@@ -485,7 +485,7 @@ describe('AgentForm: new agent', () => {
       offSkills: ['chatgpt-profile', 'earn-or-pay', 'ad-drafts', 'operator'],
     });
     const skills = all('[data-skill]').map((b) => b.getAttribute('data-skill'));
-    expect(skills).toHaveLength(30);
+    expect(skills).toHaveLength(31);
     expect(skills).not.toContain('operator');
     expect(skills).not.toContain('chatgpt-profile');
     expect(skills).not.toContain('ad-drafts');

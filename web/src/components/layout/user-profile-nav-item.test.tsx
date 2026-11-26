@@ -217,11 +217,18 @@ describe('UserProfileNavItem', () => {
     }
   });
 
-  it('signs out', async () => {
-    await render('analyst');
-    const items = await openMenu();
-    await act(async () => items.at(-1)!.click());
-    expect(signOut).toHaveBeenCalled();
-    expect(push).toHaveBeenCalledWith('/sign-in');
+  it('signs out, then loads the sign-in page afresh, never back to the page left', async () => {
+    const assign = vi.fn();
+    vi.stubGlobal('location', { ...window.location, assign });
+    try {
+      await render('analyst');
+      const items = await openMenu();
+      await act(async () => items.at(-1)!.click());
+      expect(signOut).toHaveBeenCalled();
+      expect(assign).toHaveBeenCalledWith('/sign-in');
+      expect(push).not.toHaveBeenCalledWith('/sign-in');
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });

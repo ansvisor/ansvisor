@@ -222,6 +222,11 @@ const ANSVISOR_SKILLS: Record<string, { title: string; description: string }> = 
     description:
       'Which pages and AI assistants bring you customers, sign-ups, forms, orders and revenue, and what to set up where nothing is measured yet.',
   },
+  'feed-advisor': {
+    title: 'Shopping feed gaps',
+    description:
+      'A weekly list of what your product feed is missing for AI shopping answers, ordered by impact, with the fix for each. Fixes go to the Action Center only on your approval.',
+  },
   'tech-fix': {
     title: 'Crawler and technical fixes',
     description:
@@ -554,7 +559,7 @@ describe("Ads' skills (Ads Phase 0 PR 15)", () => {
   });
 });
 
-describe("the packs' skills: /content-plan, /seasonal, /traffic and /tech-fix (AGENTS plan §8)", () => {
+describe("the packs' skills: /content-plan, /seasonal, /traffic, /feed-advisor and /tech-fix (AGENTS plan §8)", () => {
   /** Each skill, its agent, and the only writes it may ask for. */
   const PACKS = [
     {
@@ -568,6 +573,8 @@ describe("the packs' skills: /content-plan, /seasonal, /traffic and /tech-fix (A
       writes: ['add_prompts', 'create_action'],
     },
     { skill: 'traffic', agent: 'ai-traffic-signups', writes: ['create_action'] },
+    // The Shopping Feed Advisor's (AGENTS plan §8): the feed's gaps, its fixes sent on a card.
+    { skill: 'feed-advisor', agent: 'shopping-feed-advisor', writes: ['create_action'] },
     // The Crawler & Technical Fixer's (AGENTS plan §8): its fixes on a card, and an audit
     // only where there is none, on its own card.
     {

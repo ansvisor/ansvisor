@@ -25,6 +25,7 @@ import {
   usableAccounts,
   useAccountForBrand,
 } from '../lib/brand-integrations.js';
+import { adsEnabled } from '../lib/ads-flag.js';
 import { runGscSync } from '../lib/gsc-sync.js';
 import { runGaSync } from '../lib/ga-sync.js';
 import { detectPageOpportunitiesInWindow } from '../lib/page-opportunities.js';
@@ -36,6 +37,7 @@ const router = Router();
 const GSC = 'google-search-console';
 const GA = 'google-analytics';
 const GMC = 'google-merchant-center';
+const GOOGLE_ADS = 'google-ads';
 const WRITE_ROLES = ['admin', 'manager'];
 
 async function getProfile(userId) {
@@ -105,7 +107,8 @@ async function workspaceActiveConnection(organizationId, provider, entityId) {
  */
 function resolveProvider(req, res) {
   const { provider } = req.params;
-  if (!isKnownProvider(provider)) {
+  // Google Ads exists only with Ads (ADS_ENABLED), as every /api/ads path does.
+  if (!isKnownProvider(provider) || (provider === GOOGLE_ADS && !adsEnabled())) {
     res.status(404).json({ error: 'Unknown integration provider.' });
     return null;
   }

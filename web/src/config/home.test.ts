@@ -1,12 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import { DASHBOARD_HOME, homeFor, isDashboardHomeItem, withJobId } from './home';
+import { DASHBOARD_HOME, RESULTS_HOME, homeFor, isDashboardHomeItem, withJobId } from './home';
 import { PROMPTS_SECTIONS } from '@/lib/prompts-routes';
 import { ACTION_CENTER_TODAY } from '@/lib/action-center/tabs';
 
 /**
- * Where everyone lands (the owner's decision of 2026-11-17): Prompts ›
- * Tracked Prompts, whatever the plan, role, demo or install; Action Center ›
- * Today, on every menu, for someone whose menu leaves Prompts off.
+ * Where everyone lands: Brand Visibility's Overview once the workspace has
+ * answers (the owner's decision of 2026-11-26), Prompts › Tracked Prompts
+ * before them (2026-11-17), whatever the plan, role, demo or install;
+ * Action Center › Today, on every menu, for someone whose menu leaves both
+ * off.
  */
 
 describe('the dashboard home', () => {
@@ -37,6 +39,16 @@ describe('homeFor', () => {
     expect(ACTION_CENTER_TODAY).toBe('/dashboard/action-center/today');
     expect(homeFor(['prompts'])).toBe(ACTION_CENTER_TODAY);
     expect(homeFor(new Set(['mentions', 'prompts']))).toBe(ACTION_CENTER_TODAY);
+  });
+
+  it('is Brand Visibility’s Overview once the workspace has answers', () => {
+    expect(RESULTS_HOME).toBe('/dashboard/insights');
+    expect(homeFor([], { hasResults: true })).toBe(RESULTS_HOME);
+    expect(homeFor(['prompts'], { hasResults: true })).toBe(RESULTS_HOME);
+    // Overview off the menu: the next home, as without answers.
+    expect(homeFor(['insights'], { hasResults: true })).toBe(DASHBOARD_HOME);
+    expect(homeFor(['insights', 'prompts'], { hasResults: true })).toBe(ACTION_CENTER_TODAY);
+    expect(homeFor([], { hasResults: false })).toBe(DASHBOARD_HOME);
   });
 
   it('marks the menu item of whichever home it is', () => {

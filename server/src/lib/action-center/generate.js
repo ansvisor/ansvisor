@@ -24,7 +24,12 @@
  *    one execution cycle;
  *  - closing frees the definition's slot. Once the rest window has passed, a
  *    still firing condition opens a NEW action beside the old one, with its
- *    own baseline, tasks and outcome.
+ *    own baseline, tasks and outcome;
+ *  - a STALE action (stale.js: still New, nobody's event for staleAfterDays)
+ *    gives way: when its definition still matches tonight, it is dismissed
+ *    as `replaced` and a new action opens from tonight's signals, the old
+ *    one's still-open signals included (00563). Nobody
+ *    was executing against it, so nothing is taken from anyone.
  *
  * Two questions, answered in that order (#818 phase 6). *What did we find?*
  * writes a candidate for every definition that matched, every night, whether
@@ -123,6 +128,46 @@ async function linkSignals(actionId, signals, linkedAt) {
   if (error) throw new Error(error.message);
   for (const signal of signals) signal.action_id = actionId;
   return signals.length;
+}
+
+/**
+ * Whether an active action gives way to a new one of its kind: stale
+ * (stale.js marks only an action still New that nobody had an event on for
+ * staleAfterDays, and clears the mark when someone acts) and still New.
+ */
+export function isReplaceable(action) {
+  return action.status === 'new' && Boolean(action.stale_at);
+}
+
+/**
+ * Dismisses a stale action as replaced. Only while it is still New and
+ * stale: someone who acted on it since keeps it, and the replacement waits.
+ * True when it was closed.
+ */
+async function retireStale(actionId, nowIso) {
+  const { data, error } = await supabaseAdmin
+    .from('actions')
+    .update({
+      status: 'dismissed',
+      dismiss_reason: 'replaced',
+      completed_at: null,
+      updated_at: nowIso,
+    })
+    .eq('id', actionId)
+    .eq('status', 'new')
+    .not('stale_at', 'is', null)
+    .select('id');
+  if (error) throw new Error(error.message);
+  return (data ?? []).length > 0;
+}
+
+/** Puts back a stale action whose replacement could not be opened. */
+async function restoreStale(actionId) {
+  const { error } = await supabaseAdmin
+    .from('actions')
+    .update({ status: 'new', dismiss_reason: null })
+    .eq('id', actionId);
+  if (error) logger.warn({ actionId, err: error.message }, '[actions] stale action not restored');
 }
 
 function startOfUtcDay(now) {
@@ -313,7 +358,9 @@ export async function generateActionsForBrand(brandId, { now = new Date(), sourc
   // has no bearing on what happens tonight beyond the rest window below.
   const { data: activeRows, error: actionsErr } = await supabaseAdmin
     .from('actions')
-    .select('id, dedup_key, status, created_at, kind, category, impact, payload, baseline')
+    .select(
+      'id, dedup_key, status, created_at, stale_at, kind, category, impact, payload, baseline',
+    )
     .eq('brand_id', brandId)
     .not('status', 'in', '("completed","dismissed")')
     .limit(1000);
@@ -406,7 +453,9 @@ export async function generateActionsForBrand(brandId, { now = new Date(), sourc
     if (matched.length === 0) continue;
 
     const current = active.get(definition.id);
-    if (current) {
+    // Stale and untouched: tonight's signals go to the action replacing it.
+    const replacing = current && isReplaceable(current) ? current : null;
+    if (current && !replacing) {
       // An active action keeps the scope it was created with. Signals that
       // arrived since are linked as evidence — they are why this action
       // exists — but `payload` is the work package someone may already be
@@ -433,7 +482,8 @@ export async function generateActionsForBrand(brandId, { now = new Date(), sourc
     // already accounted for. The queue therefore cannot drift out of step
     // with what is actually true tonight — and a newcomer stays in it on the
     // nights after it was linked, not only the first.
-    const unclaimed = matched.filter((signal) => !inScope.has(signal.id));
+    // A replacement covers everything that still fires, its old scope too.
+    const unclaimed = replacing ? matched : matched.filter((signal) => !inScope.has(signal.id));
     if (unclaimed.length === 0) continue;
 
     const impact = unclaimed
@@ -493,14 +543,15 @@ export async function generateActionsForBrand(brandId, { now = new Date(), sourc
     // Whether it can be promoted tonight is a separate question from whether
     // it is real, and it is asked after the queue is written — so a finding
     // that cannot be acted on now is still recorded as found.
-    if (current) continue;
+    if (current && !replacing) continue;
 
     if (!isEligible(definition, available)) {
       ineligible += 1;
       continue;
     }
 
-    const closedAt = lastClosedAt.get(definition.id) ?? 0;
+    // The rest window is for a cycle someone closed; a replacement has none.
+    const closedAt = replacing ? 0 : (lastClosedAt.get(definition.id) ?? 0);
     if (closedAt && now.getTime() - closedAt < noise.restAfterCloseDays * DAY_MS) {
       resting += 1;
       continue;
@@ -517,6 +568,7 @@ export async function generateActionsForBrand(brandId, { now = new Date(), sourc
       // What the queue's order reads, beside the time waited.
       priorityScore: priority.score,
       firstSeenAt,
+      replaces: replacing?.id ?? null,
     });
   }
 
@@ -540,8 +592,24 @@ export async function generateActionsForBrand(brandId, { now = new Date(), sourc
   const ordered = orderByPriority(ready, now);
   const opening = ordered.slice(0, room);
 
+  const replaced = new Set();
+  let opened = 0;
   for (const candidate of opening) {
-    const actionId = await openCycle({ brandId, available, now, ...candidate });
+    // The stale action steps aside first: one active action per kind.
+    if (candidate.replaces && !(await retireStale(candidate.replaces, nowIso))) continue;
+    let actionId;
+    try {
+      actionId = await openCycle({ brandId, available, now, ...candidate });
+    } catch (err) {
+      if (candidate.replaces) await restoreStale(candidate.replaces);
+      throw err;
+    }
+    opened += 1;
+    if (candidate.replaces) {
+      replaced.add(candidate.replaces);
+      await logEvent(candidate.replaces, 'replaced', { by: actionId });
+      await logEvent(actionId, 'replaces', { action: candidate.replaces });
+    }
     const { error } = await supabaseAdmin
       .from('action_candidates')
       .update({
@@ -560,6 +628,8 @@ export async function generateActionsForBrand(brandId, { now = new Date(), sourc
   // that cannot be written is logged, never a reason to fail the night.
   let rescored = 0;
   for (const row of activeRows ?? []) {
+    // Replaced tonight: closed, no longer ranked.
+    if (replaced.has(row.id)) continue;
     // Including the signals linked to it tonight: the rows in hand say so.
     const evidence = (openSignals ?? []).filter((signal) => signal.action_id === row.id);
     const priority = scorePriority({ action: row, signals: evidence, prompts: demand, track }, now);
@@ -578,14 +648,15 @@ export async function generateActionsForBrand(brandId, { now = new Date(), sourc
   }
 
   const summary = {
-    created: opening.length,
+    created: opened,
+    replaced: replaced.size,
     rescored,
     refreshed,
     resting,
     ineligible,
     capped: ordered.length - opening.length,
     queued,
-    waiting: (waitingRows ?? []).length - gone.length + queued - opening.length,
+    waiting: (waitingRows ?? []).length - gone.length + queued - opened,
     stale: gone.length,
   };
   logger.info({ brandId, ...summary }, '[actions] generated');

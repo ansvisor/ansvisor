@@ -61,6 +61,7 @@ start a message with its `/name`.
 | [`seasonal`](./seasonal) | Seasonal prompts |
 | [`traffic`](./traffic) | AI traffic and sign-ups |
 | [`ai-revenue`](./ai-revenue) | Customers and revenue from AI |
+| [`feed-advisor`](./feed-advisor) | Shopping feed gaps |
 | [`tech-fix`](./tech-fix) | Crawler and technical fixes |
 | [`earn-or-pay`](./earn-or-pay) | Earn or pay |
 | [`ad-drafts`](./ad-drafts) | Ad drafts |

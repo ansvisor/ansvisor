@@ -1,15 +1,15 @@
 ---
 title: Ads Opportunities: the decision for each buying-intent prompt
 route: /dashboard/ads
-keywords: [ads opportunities, earn, pay, earn + pay, decision, change decision, back to the recommendation, thresholds, who ai picks, google searches, ad channels, opportunity drawer, what ai answers today, send to action center, do both, export for google ads editor, export this prompt, /earn-or-pay]
+keywords: [ads opportunities, earn, pay, earn + pay, your google ads on it, google ad spend per prompt, search terms, decision, change decision, back to the recommendation, thresholds, who ai picks, google searches, ad channels, opportunity drawer, what ai answers today, send to action center, do both, export for google ads editor, export this prompt, /earn-or-pay]
 synonyms: [earn or pay, buying prompts list, override decision, which prompts to pay for, ads csv, google ads editor file, fix the answer]
 plan: all
-updated: 2026-11-16
-last_checked: 2026-11-16
+updated: 2026-11-22
+last_checked: 2026-11-22
 owner: Cihan
 app_version: 0.3.0
 approved: false
-sources: [web/messages/en.json, web/src/app/[locale]/(dashboard)/dashboard/ads/_opportunities.tsx, web/src/app/[locale]/(dashboard)/dashboard/ads/_opportunity-drawer.tsx, web/src/app/[locale]/(dashboard)/dashboard/ads/_earn-card.tsx, web/src/app/[locale]/(dashboard)/dashboard/ads/_do-both.tsx, web/src/app/[locale]/(dashboard)/dashboard/ads/_export.tsx, web/src/app/[locale]/(dashboard)/dashboard/ads/_thresholds.tsx, server/src/lib/ads/decision.js, server/src/lib/ads/opportunities.js, server/src/lib/ads/export.js, skills/earn-or-pay/SKILL.md]
+sources: [web/messages/en.json, web/src/app/[locale]/(dashboard)/dashboard/ads/_opportunities.tsx, web/src/app/[locale]/(dashboard)/dashboard/ads/_opportunity-drawer.tsx, web/src/app/[locale]/(dashboard)/dashboard/ads/_earn-card.tsx, web/src/app/[locale]/(dashboard)/dashboard/ads/_do-both.tsx, web/src/app/[locale]/(dashboard)/dashboard/ads/_export.tsx, web/src/app/[locale]/(dashboard)/dashboard/ads/_thresholds.tsx, server/src/lib/ads/decision.js, server/src/lib/ads/opportunities.js, server/src/lib/ads/paid.js, server/src/lib/ads/paid-match.js, server/src/lib/ads/export.js, skills/earn-or-pay/SKILL.md]
 ---
 **Opportunities**, a tab of **Ads**, lists your brand's buying-intent prompts for the period, the most searched first. Each has a decision: **Earn** the AI answer with content, **Pay** for an ad beside it, or **Earn + pay**. A decision is a recommendation, and **Open** on a row shows why and what to do.
 
@@ -29,7 +29,9 @@ Ads reads who AI picks, whether it cites your pages, and the prompt's Google sea
 - No competitor leads, and AI picks you or cites your pages: **Earn**, to keep it.
 - No one leads and AI cites none of your pages: **Earn**, or **Earn + pay** with enough searches.
 
-Who pays on a prompt isn't measured yet, so decisions read AI answers and Google searches only, and the rule doesn't pick **Pay** by itself. A prompt tracked only on engines that carry no ads gets **Earn**, and its drawer says why.
+Whether a competitor pays on a prompt isn't measured yet, so the rule doesn't pick **Pay** by itself. A prompt tracked only on engines that carry no ads gets **Earn**, and its drawer says why.
+
+With a Google Ads account connected and read, the reasons also say **You pay for ads on it** where you paid for Google search terms that match the prompt.
 
 ## Filter and change a decision
 
@@ -52,6 +54,10 @@ Each field shows its default; leave it empty to keep that. **Save** updates the 
 **Open** on a row opens its drawer. At the top are the prompt, its decision and the reasons for it, one a line. **What AI answers today** shows the latest answer on each platform in the period, with where AI names you, the competitors it names and the sites it cites. Sponsored ads in the answer aren't captured yet, so none are shown.
 
 **Fan-out queries** are the searches AI ran for the prompt, and **Keyword seeds** its main search terms. The **Earn** and **Pay** cards come next. Close the drawer with **✕**, Esc or a click outside it.
+
+## Your Google ads on it
+
+This drawer section shows once a Google Ads account is read. It shows what you paid in the period for the Google search terms that match the prompt, the clicks, and the costliest terms. Otherwise it says nothing matched. A term matches by its words and counts for one prompt only. ChatGPT Ads spend isn't matched, because ChatGPT Ads don't say which question an ad showed on.
 
 ## Earn: send the fix to the Action Center
 
