@@ -4519,7 +4519,10 @@
       "name": "Consulter les sources du catalogue",
       "step": "Consulter le Catalogue"
     },
-    "catalogFeedGaps": {},
+    "catalogFeedGaps": {
+      "name": "Lire les lacunes du flux",
+      "step": "Lire Produits · Lacunes du flux"
+    },
     "contentPlan": {
       "name": "Consulter le plan de Contenu",
       "step": "Consulter le plan de Contenu"
@@ -7797,7 +7800,9 @@
         "signal": "Signal créé",
         "kpi": "KPI modifié",
         "watch_rule": "Règle de surveillance",
-        "brand_added": "Marque ajoutée"
+        "brand_added": "Marque ajoutée",
+        "page_published": "Page publiée",
+        "catalog_synced": "Catalogue synchronisé"
       },
       "daily": "Chaque jour à {time}",
       "weekdays": "Du lundi au vendredi à {time}",
@@ -7812,13 +7817,17 @@
       "kpiAny": "Un KPI",
       "watchRule": "Règle de surveillance",
       "brandAdded": "Lorsqu'une marque est ajoutée",
+      "pagePublished": "Lorsqu'une page est publiée",
+      "catalogSynced": "Lorsque le catalogue est synchronisé",
       "manualOnly": "Manuel uniquement",
       "more": "+{count}",
       "firesWhen": {
         "signal": "Se déclenche lorsque le Centre d'actions détecte un signal correspondant",
         "kpi": "Se déclenche lorsque le KPI franchit le seuil",
         "watch_rule": "Se déclenche lorsque sa règle de surveillance se déclenche",
-        "brand_added": "Se déclenche une fois pour chaque marque ajoutée à l'espace de travail"
+        "brand_added": "Se déclenche une fois pour chaque marque ajoutée à l'espace de travail",
+        "page_published": "Se déclenche une fois pour chaque page mise en ligne dans le CMS de la marque",
+        "catalog_synced": "Se déclenche une fois pour chaque synchronisation du catalogue qui modifie des produits"
       },
       "timeZone": "Heure : {zone}",
       "off": "Désactivé · ne se déclenche pas",
@@ -7918,6 +7927,8 @@
         "trigger": "Déclencheur",
         "signal": "Signal",
         "slot": "Prévu pour",
+        "page": "Page publiée",
+        "catalog": "Source du catalogue synchronisée",
         "earlier": "Déclenchements antérieurs",
         "action": "Action"
       },
@@ -7959,6 +7970,8 @@
       "kpi": "KPI modifié",
       "watch_rule": "Règle de surveillance",
       "brand_added": "Marque ajoutée",
+      "page_published": "Page publiée",
+      "catalog_synced": "Catalogue synchronisé",
       "manual": "Manuel",
       "action": "Exécuter l'agent depuis une action",
       "agent": "Appelé par un autre agent"
@@ -8034,6 +8047,7 @@
       "seasonal": "Prompts saisonniers",
       "traffic": "Trafic IA et inscriptions",
       "ai-revenue": "Clients et chiffre d'affaires issus de l'IA",
+      "feed-advisor": "Lacunes du flux Shopping",
       "earn-or-pay": "Gagner ou payer",
       "ad-drafts": "Brouillons d'annonces",
       "paid-overlap": "Chevauchement payant",
@@ -8103,7 +8117,9 @@
           "signal": "Signal créé",
           "kpi": "KPI modifié",
           "watch_rule": "Règle de surveillance",
-          "brand_added": "Lorsqu'une marque est ajoutée"
+          "brand_added": "Lorsqu'une marque est ajoutée",
+          "page_published": "Lorsqu'une page est publiée",
+          "catalog_synced": "Lorsque le catalogue est synchronisé"
         },
         "notes": {
           "manual": "Exécuter depuis le Chat ou une action",
@@ -8111,7 +8127,9 @@
           "signal": "Un nouveau signal du Centre d'actions",
           "kpi": "Un KPI franchit un seuil",
           "watch_rule": "QUAND · POUR · ALORS",
-          "brand_added": "Une fois par nouvelle marque · requiert Toutes les marques"
+          "brand_added": "Une fois par nouvelle marque · requiert Toutes les marques",
+          "page_published": "Une fois par page mise en ligne dans votre CMS",
+          "catalog_synced": "Une fois par synchronisation qui modifie des produits"
         },
         "watchRuleNone": "Défini sur une règle de surveillance : son action ALORS exécute l'agent",
         "list": "Déclencheurs",
@@ -8175,6 +8193,8 @@
         },
         "watchRuleWhen": "Sa règle de surveillance se déclenche",
         "brandAddedWhen": "une marque est ajoutée à l'espace de travail, une fois par marque",
+        "pagePublishedWhen": "une page est mise en ligne dans le CMS de la marque, une fois par page",
+        "catalogSyncedWhen": "une synchronisation du catalogue produits de la marque modifie des produits, une fois par synchronisation",
         "runAgent": "Exécuter l'agent"
       },
       "scope": {

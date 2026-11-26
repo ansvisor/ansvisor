@@ -4490,7 +4490,10 @@
       "name": "카탈로그 소스 읽기",
       "step": "카탈로그 읽기"
     },
-    "catalogFeedGaps": {},
+    "catalogFeedGaps": {
+      "name": "피드 누락 항목 읽기",
+      "step": "제품 · 피드 누락 항목 읽기"
+    },
     "contentPlan": {
       "name": "콘텐츠 계획 읽기",
       "step": "콘텐츠 계획 읽기"
@@ -7768,7 +7771,9 @@
         "signal": "시그널 생성됨",
         "kpi": "KPI 변경됨",
         "watch_rule": "감시 규칙",
-        "brand_added": "브랜드 추가됨"
+        "brand_added": "브랜드 추가됨",
+        "page_published": "페이지 게시됨",
+        "catalog_synced": "카탈로그 동기화됨"
       },
       "daily": "매일 {time}",
       "weekdays": "주중 {time}",
@@ -7783,13 +7788,17 @@
       "kpiAny": "KPI",
       "watchRule": "감시 규칙",
       "brandAdded": "브랜드가 추가될 때",
+      "pagePublished": "페이지가 게시될 때",
+      "catalogSynced": "카탈로그가 동기화될 때",
       "manualOnly": "수동 전용",
       "more": "+{count}",
       "firesWhen": {
         "signal": "Action Center에서 일치하는 시그널을 찾을 때 실행됩니다",
         "kpi": "KPI가 임계값을 넘을 때 실행됩니다",
         "watch_rule": "해당 감시 규칙이 실행될 때 실행됩니다",
-        "brand_added": "워크스페이스에 브랜드가 추가될 때마다 한 번씩 실행됩니다"
+        "brand_added": "워크스페이스에 브랜드가 추가될 때마다 한 번씩 실행됩니다",
+        "page_published": "브랜드의 CMS에서 페이지가 라이브될 때마다 한 번 실행됩니다",
+        "catalog_synced": "제품이 변경되는 카탈로그 동기화마다 한 번 실행됩니다"
       },
       "timeZone": "{zone} 시간",
       "off": "꺼짐 · 실행되지 않음",
@@ -7889,6 +7898,8 @@
         "trigger": "트리거",
         "signal": "시그널",
         "slot": "예정 시각",
+        "page": "페이지 게시됨",
+        "catalog": "카탈로그 소스 동기화됨",
         "earlier": "이전 실행",
         "action": "조치"
       },
@@ -7930,6 +7941,8 @@
       "kpi": "KPI 변경됨",
       "watch_rule": "모니터링 규칙",
       "brand_added": "브랜드 추가됨",
+      "page_published": "페이지 게시됨",
+      "catalog_synced": "카탈로그 동기화됨",
       "manual": "수동",
       "action": "작업에서 에이전트 실행",
       "agent": "다른 에이전트에 의해 호출됨"
@@ -8005,6 +8018,7 @@
       "seasonal": "시즌별 Prompts",
       "traffic": "AI 트래픽 및 가입",
       "ai-revenue": "AI 유입 고객 및 수익",
+      "feed-advisor": "쇼핑 피드 누락 항목",
       "earn-or-pay": "수익 또는 지출",
       "ad-drafts": "광고 초안",
       "paid-overlap": "유료 중복",
@@ -8074,7 +8088,9 @@
           "signal": "신호 생성 시",
           "kpi": "KPI 변경 시",
           "watch_rule": "모니터링 규칙",
-          "brand_added": "브랜드 추가 시"
+          "brand_added": "브랜드 추가 시",
+          "page_published": "페이지가 게시될 때",
+          "catalog_synced": "카탈로그가 동기화될 때"
         },
         "notes": {
           "manual": "채팅 또는 액션에서 실행",
@@ -8082,7 +8098,9 @@
           "signal": "새로운 액션 센터 신호",
           "kpi": "KPI가 임계값을 넘어설 때",
           "watch_rule": "조건(WHEN) · 대상(FOR) · 실행(THEN)",
-          "brand_added": "새 브랜드당 1회 · 모든 브랜드 필요"
+          "brand_added": "새 브랜드당 1회 · 모든 브랜드 필요",
+          "page_published": "CMS에서 라이브되는 페이지마다 한 번",
+          "catalog_synced": "제품이 변경되는 동기화마다 한 번"
         },
         "watchRuleNone": "모니터링 규칙에서 설정: THEN 조건에서 에이전트를 실행합니다",
         "list": "트리거",
@@ -8146,6 +8164,8 @@
         },
         "watchRuleWhen": "모니터링 규칙이 실행될 때",
         "brandAddedWhen": "워크스페이스에 브랜드가 추가될 때(브랜드당 1회)",
+        "pagePublishedWhen": "브랜드의 CMS에서 페이지가 라이브될 때, 페이지마다 한 번",
+        "catalogSyncedWhen": "브랜드의 제품 카탈로그 동기화로 제품이 변경될 때, 동기화마다 한 번",
         "runAgent": "에이전트 실행"
       },
       "scope": {

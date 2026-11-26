@@ -4507,7 +4507,10 @@
       "name": "Katalog kaynaklarını oku",
       "step": "Kataloğu Oku"
     },
-    "catalogFeedGaps": {},
+    "catalogFeedGaps": {
+      "name": "Feed boşluklarını oku",
+      "step": "Ürünler · Feed boşluklarını oku"
+    },
     "contentPlan": {
       "name": "İçerik planını oku",
       "step": "İçerik planını Oku"
@@ -7785,7 +7788,9 @@
         "signal": "Sinyal oluşturuldu",
         "kpi": "KPI değişti",
         "watch_rule": "İzleme kuralı",
-        "brand_added": "Marka eklendi"
+        "brand_added": "Marka eklendi",
+        "page_published": "Sayfa yayınlandı",
+        "catalog_synced": "Katalog senkronize edildi"
       },
       "daily": "Her gün {time}",
       "weekdays": "Hafta içi {time}",
@@ -7800,13 +7805,17 @@
       "kpiAny": "Bir KPI",
       "watchRule": "İzleme kuralı",
       "brandAdded": "Bir marka eklendiğinde",
+      "pagePublished": "Bir sayfa yayınlandığında",
+      "catalogSynced": "Katalog senkronize olduğunda",
       "manualOnly": "Yalnızca manuel",
       "more": "+{count}",
       "firesWhen": {
         "signal": "Aksiyon Merkezi eşleşen bir sinyal bulduğunda tetiklenir",
         "kpi": "KPI eşiği aştığında tetiklenir",
         "watch_rule": "İzleme kuralı tetiklendiğinde tetiklenir",
-        "brand_added": "Çalışma alanına eklenen her marka için bir kez tetiklenir"
+        "brand_added": "Çalışma alanına eklenen her marka için bir kez tetiklenir",
+        "page_published": "Markanın CMS'inde yayına giren her sayfa için bir kez tetiklenir",
+        "catalog_synced": "Ürünleri değiştiren her katalog senkronizasyonu için bir kez tetiklenir"
       },
       "timeZone": "{zone} saati",
       "off": "Kapalı · tetiklenmez",
@@ -7906,6 +7915,8 @@
         "trigger": "Tetikleyici",
         "signal": "Sinyal",
         "slot": "Planlanan zaman",
+        "page": "Sayfa yayınlandı",
+        "catalog": "Katalog kaynağı senkronize edildi",
         "earlier": "Önceki tetiklenmeler",
         "action": "Aksiyon"
       },
@@ -7947,6 +7958,8 @@
       "kpi": "KPI değişti",
       "watch_rule": "İzleme kuralı",
       "brand_added": "Marka eklendi",
+      "page_published": "Sayfa yayınlandı",
+      "catalog_synced": "Katalog senkronize edildi",
       "manual": "Manuel",
       "action": "Ajanı bir aksiyondan çalıştır",
       "agent": "Başka bir ajan tarafından çağrıldı"
@@ -8022,6 +8035,7 @@
       "seasonal": "Mevsimsel Prompts",
       "traffic": "AI trafiği ve kayıtlar",
       "ai-revenue": "AI kaynaklı müşteriler ve gelir",
+      "feed-advisor": "Alışveriş feed boşlukları",
       "earn-or-pay": "Kazan ya da öde",
       "ad-drafts": "Reklam taslakları",
       "paid-overlap": "Ücretli çakışma",
@@ -8091,7 +8105,9 @@
           "signal": "Sinyal oluşturulduğunda",
           "kpi": "KPI değiştiğinde",
           "watch_rule": "İzleme kuralı",
-          "brand_added": "Bir marka eklendiğinde"
+          "brand_added": "Bir marka eklendiğinde",
+          "page_published": "Bir sayfa yayınlandığında",
+          "catalog_synced": "Katalog senkronize olduğunda"
         },
         "notes": {
           "manual": "Sohbetten veya bir aksiyondan çalıştırın",
@@ -8099,7 +8115,9 @@
           "signal": "Yeni bir Aksiyon Merkezi sinyali",
           "kpi": "Bir KPI eşiği aştığında",
           "watch_rule": "ŞU DURUMDA · ŞUNUN İÇİN · ŞUNU YAP",
-          "brand_added": "Yeni marka başına bir kez · Tüm markalar gerekir"
+          "brand_added": "Yeni marka başına bir kez · Tüm markalar gerekir",
+          "page_published": "CMS'inizde yayına giren her sayfa için bir kez",
+          "catalog_synced": "Ürünleri değiştiren her senkronizasyon için bir kez"
         },
         "watchRuleNone": "Bir izleme kuralında ayarlayın: ŞUNU YAP adımı ajanı çalıştırır",
         "list": "Tetikleyiciler",
@@ -8163,6 +8181,8 @@
         },
         "watchRuleWhen": "İzleme kuralı tetiklendiğinde",
         "brandAddedWhen": "çalışma alanına bir marka eklendiğinde, marka başına bir kez",
+        "pagePublishedWhen": "markanın CMS'inde bir sayfa yayına girdiğinde, sayfa başına bir kez",
+        "catalogSyncedWhen": "markanın ürün kataloğunun senkronizasyonu ürünleri değiştirdiğinde, senkronizasyon başına bir kez",
         "runAgent": "Ajanı çalıştır"
       },
       "scope": {

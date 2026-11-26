@@ -4515,7 +4515,10 @@
       "name": "Leggi le fonti del catalogo",
       "step": "Leggi Catalogo"
     },
-    "catalogFeedGaps": {},
+    "catalogFeedGaps": {
+      "name": "Leggi le lacune del feed",
+      "step": "Leggi Prodotti · Lacune del feed"
+    },
     "contentPlan": {
       "name": "Leggi il piano dei Contenuti",
       "step": "Leggi piano Contenuti"
@@ -7793,7 +7796,9 @@
         "signal": "Segnale creato",
         "kpi": "KPI modificato",
         "watch_rule": "Regola di monitoraggio",
-        "brand_added": "Brand aggiunto"
+        "brand_added": "Brand aggiunto",
+        "page_published": "Pagina pubblicata",
+        "catalog_synced": "Catalogo sincronizzato"
       },
       "daily": "Ogni giorno alle {time}",
       "weekdays": "Giorni feriali alle {time}",
@@ -7808,13 +7813,17 @@
       "kpiAny": "Un KPI",
       "watchRule": "Regola di monitoraggio",
       "brandAdded": "Quando viene aggiunto un brand",
+      "pagePublished": "Quando una pagina viene pubblicata",
+      "catalogSynced": "Quando il catalogo si sincronizza",
       "manualOnly": "Solo manuale",
       "more": "+{count}",
       "firesWhen": {
         "signal": "Si attiva quando Centro azioni rileva un segnale corrispondente",
         "kpi": "Si attiva quando il KPI supera la soglia",
         "watch_rule": "Si attiva quando viene attivata la relativa regola di monitoraggio",
-        "brand_added": "Si attiva una volta per ogni brand aggiunto all'area di lavoro"
+        "brand_added": "Si attiva una volta per ogni brand aggiunto all'area di lavoro",
+        "page_published": "Si attiva una volta per ogni pagina che va online nel CMS del brand",
+        "catalog_synced": "Si attiva una volta per ogni sincronizzazione del catalogo che modifica dei prodotti"
       },
       "timeZone": "Ora: {zone}",
       "off": "Disattivato · non si attiva",
@@ -7914,6 +7923,8 @@
         "trigger": "Trigger",
         "signal": "Segnale",
         "slot": "Programmato per",
+        "page": "Pagina pubblicata",
+        "catalog": "Fonte del catalogo sincronizzata",
         "earlier": "Attivazioni precedenti",
         "action": "Azione"
       },
@@ -7955,6 +7966,8 @@
       "kpi": "KPI modificato",
       "watch_rule": "Regola di monitoraggio",
       "brand_added": "Brand aggiunto",
+      "page_published": "Pagina pubblicata",
+      "catalog_synced": "Catalogo sincronizzato",
       "manual": "Manuale",
       "action": "Esegui agente da un'azione",
       "agent": "Chiamato da un altro agente"
@@ -8030,6 +8043,7 @@
       "seasonal": "Prompt stagionali",
       "traffic": "Traffico IA e iscrizioni",
       "ai-revenue": "Clienti ed entrate dall'IA",
+      "feed-advisor": "Lacune del feed Shopping",
       "earn-or-pay": "Guadagna o paga",
       "ad-drafts": "Bozze di annunci",
       "paid-overlap": "Sovrapposizione a pagamento",
@@ -8099,7 +8113,9 @@
           "signal": "Segnale creato",
           "kpi": "KPI modificato",
           "watch_rule": "Regola di monitoraggio",
-          "brand_added": "Quando viene aggiunto un brand"
+          "brand_added": "Quando viene aggiunto un brand",
+          "page_published": "Quando una pagina viene pubblicata",
+          "catalog_synced": "Quando il catalogo si sincronizza"
         },
         "notes": {
           "manual": "Esegui dalla Chat o da un'azione",
@@ -8107,7 +8123,9 @@
           "signal": "Un nuovo segnale del Centro azioni",
           "kpi": "Un KPI supera una soglia",
           "watch_rule": "QUANDO · PER · ALLORA",
-          "brand_added": "Una volta per ogni nuovo brand · richiede Tutti i brand"
+          "brand_added": "Una volta per ogni nuovo brand · richiede Tutti i brand",
+          "page_published": "Una volta per ogni pagina online nel tuo CMS",
+          "catalog_synced": "Una volta per ogni sincronizzazione che modifica dei prodotti"
         },
         "watchRuleNone": "Imposta su una regola di monitoraggio: la condizione ALLORA esegue l'agente",
         "list": "Trigger",
@@ -8171,6 +8189,8 @@
         },
         "watchRuleWhen": "La relativa regola di monitoraggio si attiva",
         "brandAddedWhen": "un brand viene aggiunto allo spazio di lavoro, una volta per brand",
+        "pagePublishedWhen": "una pagina va online nel CMS del brand, una volta per pagina",
+        "catalogSyncedWhen": "una sincronizzazione del catalogo prodotti del brand modifica dei prodotti, una volta per sincronizzazione",
         "runAgent": "Esegui agente"
       },
       "scope": {

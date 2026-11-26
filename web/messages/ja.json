@@ -4508,7 +4508,10 @@
       "name": "カタログソースを読み込み",
       "step": "カタログを読み込み"
     },
-    "catalogFeedGaps": {},
+    "catalogFeedGaps": {
+      "name": "フィードのギャップを読み取る",
+      "step": "商品・フィードのギャップを読み取り"
+    },
     "contentPlan": {
       "name": "コンテンツプランを読み込み",
       "step": "コンテンツプランを読み込み"
@@ -7786,7 +7789,9 @@
         "signal": "シグナル作成時",
         "kpi": "KPI変更時",
         "watch_rule": "監視ルール",
-        "brand_added": "ブランド追加時"
+        "brand_added": "ブランド追加時",
+        "page_published": "ページ公開",
+        "catalog_synced": "カタログ同期完了"
       },
       "daily": "毎日 {time}",
       "weekdays": "平日 {time}",
@@ -7801,13 +7806,17 @@
       "kpiAny": "KPI",
       "watchRule": "監視ルール",
       "brandAdded": "ブランドが追加されたとき",
+      "pagePublished": "ページが公開されたとき",
+      "catalogSynced": "カタログが同期されたとき",
       "manualOnly": "手動のみ",
       "more": "+{count}",
       "firesWhen": {
         "signal": "アクションセンターで一致するシグナルが見つかったときに実行されます",
         "kpi": "KPIがしきい値を超えたときに実行されます",
         "watch_rule": "監視ルールがトリガーされたときに実行されます",
-        "brand_added": "ワークスペースにブランドが追加されるたびに1回実行されます"
+        "brand_added": "ワークスペースにブランドが追加されるたびに1回実行されます",
+        "page_published": "ブランドのCMSで公開されたページごとに1回実行されます",
+        "catalog_synced": "商品に変更があったカタログ同期ごとに1回実行されます"
       },
       "timeZone": "{zone}時間",
       "off": "オフ · 実行されません",
@@ -7907,6 +7916,8 @@
         "trigger": "トリガー",
         "signal": "シグナル",
         "slot": "予定日時",
+        "page": "ページ公開",
+        "catalog": "カタログソース同期完了",
         "earlier": "過去のトリガー",
         "action": "アクション"
       },
@@ -7948,6 +7959,8 @@
       "kpi": "KPI変更",
       "watch_rule": "監視ルール",
       "brand_added": "ブランド追加",
+      "page_published": "ページ公開",
+      "catalog_synced": "カタログ同期完了",
       "manual": "手動",
       "action": "アクションからエージェントを実行",
       "agent": "別のエージェントから呼び出し"
@@ -8023,6 +8036,7 @@
       "seasonal": "季節性の高いPrompt",
       "traffic": "AIトラフィックと登録数",
       "ai-revenue": "AI経由の顧客と収益",
+      "feed-advisor": "ショッピングフィードのギャップ",
       "earn-or-pay": "獲得または支払い",
       "ad-drafts": "広告の下書き",
       "paid-overlap": "有料広告の重複",
@@ -8092,7 +8106,9 @@
           "signal": "シグナル作成時",
           "kpi": "KPI変更時",
           "watch_rule": "監視ルール",
-          "brand_added": "ブランド追加時"
+          "brand_added": "ブランド追加時",
+          "page_published": "ページが公開されたとき",
+          "catalog_synced": "カタログが同期されたとき"
         },
         "notes": {
           "manual": "チャットまたはアクションから実行",
@@ -8100,7 +8116,9 @@
           "signal": "アクションセンターの新規シグナル",
           "kpi": "KPIがしきい値を超えたとき",
           "watch_rule": "WHEN · FOR · THEN",
-          "brand_added": "新しいブランドごとに1回 · すべてのブランドが必要"
+          "brand_added": "新しいブランドごとに1回 · すべてのブランドが必要",
+          "page_published": "CMSで公開されたページごとに1回",
+          "catalog_synced": "商品に変更があった同期ごとに1回"
         },
         "watchRuleNone": "監視ルールで設定：そのTHENでエージェントを実行します",
         "list": "トリガー",
@@ -8164,6 +8182,8 @@
         },
         "watchRuleWhen": "監視ルールが発火したとき",
         "brandAddedWhen": "ワークスペースにブランドが追加されたとき（ブランドごとに1回）",
+        "pagePublishedWhen": "ブランドのCMSでページが公開されたとき(ページごとに1回)",
+        "catalogSyncedWhen": "ブランドの商品カタログの同期で商品が変更されたとき(同期ごとに1回)",
         "runAgent": "エージェントを実行"
       },
       "scope": {
