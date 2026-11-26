@@ -22,13 +22,13 @@ import {
 } from '@/lib/ads/api';
 import { useBrandStore } from '@/stores/use-brand-store';
 import { ChatGptAdsAccounts } from './_chatgpt-ads';
+import { GoogleAdsAccounts } from './_google-ads';
 
 /** Where Google Analytics is connected and managed, as Chat's Connections opens it. */
 const INTEGRATIONS_GA = '/dashboard/settings/integrations#google-analytics';
-const SOON = ['google'] as const;
 // Microsoft waits for its API access (owner, 2026-11-21), so it comes later too.
 const LATER: AdsLaterPlatform[] = ['microsoft', 'meta', 'linkedin'];
-type PlatformId = 'chatgpt' | (typeof SOON)[number] | AdsLaterPlatform | 'analytics';
+type PlatformId = 'chatgpt' | 'google' | AdsLaterPlatform | 'analytics';
 
 function Platform({ id, children }: { id: PlatformId; children: ReactNode }) {
   const t = useTranslations('ads.connections.platforms');
@@ -138,8 +138,9 @@ function useAdsAccounts(brandId: string | null) {
 
 /**
  * Ads' Connections (ADS-01 §3.5, mockup `#con`): ChatGPT Ads connects with
- * the customer's own Ads API key (Phase 1, C2); Google Ads comes soon;
- * Microsoft Advertising, Meta and LinkedIn later, with Notify me; Google
+ * the customer's own Ads API key (Phase 1, C2), Google Ads through the
+ * brand's Google Ads sign-in (G2); Microsoft Advertising, Meta and LinkedIn
+ * later, with Notify me; Google
  * Analytics is the app's own, connected anywhere means connected here. Each
  * platform keeps its own billing: said, never shown.
  */
@@ -157,11 +158,14 @@ export function AdsConnections() {
             <ChatGptAdsAccounts brandId={brandId} accounts={accounts} onChange={setAccounts} />
           ))}
       </Platform>
-      {SOON.map((id) => (
-        <Platform key={id} id={id}>
-          <Badge variant="outline">{t('soon')}</Badge>
-        </Platform>
-      ))}
+      <Platform id="google">
+        {brandId &&
+          (accounts === undefined ? (
+            <Skeleton className="h-7 w-full" />
+          ) : (
+            <GoogleAdsAccounts brandId={brandId} accounts={accounts} onChange={setAccounts} />
+          ))}
+      </Platform>
       {LATER.map((id) => (
         <Platform key={id} id={id}>
           <span className="text-sm text-muted-foreground">{t('later')}</span>
