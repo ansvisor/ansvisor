@@ -87,19 +87,25 @@ export function AdsOverview({
   const quiet = (text: string) => <span className="text-xl text-muted-foreground">{text}</span>;
   const cost = o.cost;
   const several = (cost?.spend.length ?? 0) > 1;
+  // Accounts read, nothing spent in the period: no cost to divide, whatever the signups.
+  const noSpend = cost !== null && cost !== undefined && cost.spend.length === 0;
   const costValue = !cost
     ? notMeasured
     : cost.perSignup
       ? spendAmount(cost.perSignup)
       : several
         ? quiet(t('costCurrencies'))
-        : // Signups unread (conversions off) is Not measured; none counted is no signups yet.
-          quiet(t(o.signups === null ? 'notMeasured' : 'costNoSignups'));
+        : noSpend
+          ? quiet(t('costNoSpend'))
+          : // Signups unread (conversions off) is Not measured; none counted is no signups yet.
+            quiet(t(o.signups === null ? 'notMeasured' : 'costNoSignups'));
   const costNote = !cost
     ? t('costNote')
     : cost.perSignup
       ? t('costOf', { spend: spendText(cost.spend), count: o.signups ?? 0 })
-      : t(several ? 'costCurrenciesNote' : 'costSpend', { spend: spendText(cost.spend) });
+      : noSpend
+        ? t('costNoSpendNote')
+        : t(several ? 'costCurrenciesNote' : 'costSpend', { spend: spendText(cost.spend) });
 
   return (
     <div data-slot="ads-overview" className="space-y-3">
