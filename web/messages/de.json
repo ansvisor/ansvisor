@@ -15427,6 +15427,8 @@
       "costOf": "{spend} Werbeausgaben ÷ {count, plural, one {# KI-unterstützte Registrierung} other {# KI-unterstützte Registrierungen}}",
       "costSpend": "{spend} Werbeausgaben in diesem Zeitraum",
       "costNoSignups": "Noch keine Registrierungen",
+      "costNoSpend": "Keine Werbeausgaben",
+      "costNoSpendNote": "Die verbundenen Werbekonten haben in diesem Zeitraum nichts ausgegeben",
       "costCurrencies": "Mehrere Währungen",
       "costCurrenciesNote": "{spend} Werbeausgaben: Beträge in verschiedenen Währungen werden nicht zusammengerechnet, daher gibt es keine einheitlichen Kosten pro Registrierung",
       "signups": "{count, plural, one {# KI-unterstützte Registrierung} other {# KI-unterstützte Registrierungen}} in diesem Zeitraum",

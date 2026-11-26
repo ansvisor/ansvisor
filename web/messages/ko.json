@@ -15398,6 +15398,8 @@
       "costOf": "광고 지출 {spend} ÷ {count, plural, other {AI 지원 가입 #건}}",
       "costSpend": "해당 기간 광고 지출 {spend}",
       "costNoSignups": "아직 가입자 없음",
+      "costNoSpend": "광고비 없음",
+      "costNoSpendNote": "연결된 광고 계정이 이 기간에 지출하지 않았습니다",
       "costCurrencies": "여러 통화",
       "costCurrenciesNote": "광고 지출 {spend}: 통화가 서로 다른 금액은 합산되지 않아 가입당 단일 비용이 제공되지 않습니다",
       "signups": "이 기간 동안 {count, plural, other {#건의 AI 지원 가입}}",

@@ -15425,6 +15425,8 @@
       "costOf": "{spend} em anúncios ÷ {count, plural, one {# cadastro assistido por IA} other {# cadastros assistidos por IA}}",
       "costSpend": "{spend} em anúncios neste período",
       "costNoSignups": "Nenhum cadastro ainda",
+      "costNoSpend": "Sem gasto com anúncios",
+      "costNoSpendNote": "As contas de anúncios conectadas não gastaram nada neste período",
       "costCurrencies": "Várias moedas",
       "costCurrenciesNote": "{spend} em anúncios: valores em moedas diferentes não são somados, portanto não há um custo único por cadastro",
       "signups": "{count, plural, one {# cadastro auxiliado por IA} other {# cadastros auxiliados por IA}} neste período",

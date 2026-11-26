@@ -15416,6 +15416,8 @@
       "costOf": "広告費{spend} ÷ {count, plural, other {#件のAI経由の登録}}",
       "costSpend": "この期間の広告費: {spend}",
       "costNoSignups": "登録はまだありません",
+      "costNoSpend": "広告費なし",
+      "costNoSpendNote": "接続された広告アカウントはこの期間に支出がありませんでした",
       "costCurrencies": "複数の通貨",
       "costCurrenciesNote": "広告費{spend}: 異なる通貨の金額は合算されないため、単一の登録単価は算出されません",
       "signups": "この期間に{count, plural, other {# 件のAIアシストによる登録}}",

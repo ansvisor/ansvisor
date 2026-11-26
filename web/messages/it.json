@@ -15423,6 +15423,8 @@
       "costOf": "{spend} spesa pubblicitaria ÷ {count, plural, one {# registrazione assistita da IA} other {# registrazioni assistite da IA}}",
       "costSpend": "{spend} spesa pubblicitaria in questo periodo",
       "costNoSignups": "Ancora nessuna registrazione",
+      "costNoSpend": "Nessuna spesa pubblicitaria",
+      "costNoSpendNote": "Gli account pubblicitari collegati non hanno speso nulla in questo periodo",
       "costCurrencies": "Diverse valute",
       "costCurrenciesNote": "{spend} spesa pubblicitaria: gli importi in valute diverse non vengono sommati, quindi non è presente un costo per registrazione unico",
       "signups": "{count, plural, one {# iscrizione assistita da IA} other {# iscrizioni assistite da IA}} in questo periodo",

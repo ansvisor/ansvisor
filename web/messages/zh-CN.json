@@ -15374,6 +15374,8 @@
       "costOf": "{spend} 广告支出 ÷ {count, plural, other {# 个 AI 辅助注册}}",
       "costSpend": "在此期间广告支出为 {spend}",
       "costNoSignups": "暂无注册",
+      "costNoSpend": "无广告支出",
+      "costNoSpendNote": "已连接的广告账户在此期间没有支出",
       "costCurrencies": "多种货币",
       "costCurrenciesNote": "{spend} 广告支出：不同币种的金额不会累计相加，因此没有单一的每次注册成本",
       "signups": "在此期间有 {count, plural, other {# 次 AI 辅助注册}}",

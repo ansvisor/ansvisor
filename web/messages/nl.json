@@ -15423,6 +15423,8 @@
       "costOf": "{spend} advertentie-uitgaven ÷ {count, plural, one {# AI-ondersteunde aanmelding} other {# AI-ondersteunde aanmeldingen}}",
       "costSpend": "{spend} advertentie-uitgaven in deze periode",
       "costNoSignups": "Nog geen aanmeldingen",
+      "costNoSpend": "Geen advertentie-uitgaven",
+      "costNoSpendNote": "De gekoppelde advertentieaccounts hebben in deze periode niets uitgegeven",
       "costCurrencies": "Meerdere valuta's",
       "costCurrenciesNote": "{spend} advertentie-uitgaven: bedragen in verschillende valuta's worden niet opgeteld, dus er zijn geen eenduidige kosten per aanmelding",
       "signups": "{count, plural, one {# AI-ondersteunde aanmelding} other {# AI-ondersteunde aanmeldingen}} in deze periode",

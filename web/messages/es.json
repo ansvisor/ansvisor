@@ -15421,6 +15421,8 @@
       "costOf": "{spend} de gasto publicitario ÷ {count, plural, one {# registro asistido por IA} other {# registros asistidos por IA}}",
       "costSpend": "{spend} de gasto publicitario en este periodo",
       "costNoSignups": "Sin registros todavía",
+      "costNoSpend": "Sin gasto publicitario",
+      "costNoSpendNote": "Las cuentas publicitarias conectadas no gastaron nada en este periodo",
       "costCurrencies": "Varias monedas",
       "costCurrenciesNote": "{spend} de gasto publicitario: los importes en diferentes monedas no se suman, por lo que no hay un coste por registro único",
       "signups": "{count, plural, one {# registro asistido por IA} other {# registros asistidos por IA}} en este periodo",

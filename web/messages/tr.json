@@ -15415,6 +15415,8 @@
       "costOf": "{spend} reklam harcaması ÷ {count, plural, other {# yapay zeka destekli kayıt}}",
       "costSpend": "Bu dönemde {spend} reklam harcaması",
       "costNoSignups": "Henüz kayıt yok",
+      "costNoSpend": "Reklam harcaması yok",
+      "costNoSpendNote": "Bağlı reklam hesapları bu dönemde harcama yapmadı",
       "costCurrencies": "Birden fazla para birimi",
       "costCurrenciesNote": "{spend} reklam harcaması: farklı para birimlerindeki tutarlar toplanmaz, bu nedenle kayıt başına tek bir maliyet yoktur",
       "signups": "Bu dönemde {count, plural, one {# AI destekli kayıt} other {# AI destekli kayıt}}",
