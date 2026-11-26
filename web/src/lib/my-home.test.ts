@@ -6,7 +6,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
  */
 
 const menu = vi.hoisted(() => ({ hidden: [] as string[] }));
-vi.mock('@/lib/actions/menu-access', () => ({ getMyMenu: async () => menu }));
+const getMyMenu = vi.hoisted(() => vi.fn(async () => menu));
+vi.mock('@/lib/actions/menu-access', () => ({ getMyMenu }));
 
 const results = vi.hoisted(() => ({
   rows: [] as { id: string }[],
@@ -33,6 +34,7 @@ vi.mock('@/lib/supabase/server', () => ({
 const { readMyHome } = await import('./my-home');
 
 beforeEach(() => {
+  getMyMenu.mockReset().mockImplementation(async () => menu);
   menu.hidden = [];
   results.rows = [];
   results.error = null;
@@ -56,6 +58,16 @@ describe('readMyHome', () => {
     results.rows = [{ id: 'r1' }];
     expect(await readMyHome({ firstRun: true })).toBe('/dashboard/prompts/tracked');
     expect(results.reads).toBe(0);
+  });
+
+  it('is Action Center › Today with Prompts off the menu and no answers yet', async () => {
+    menu.hidden = ['prompts', 'content'];
+    expect(await readMyHome()).toBe('/dashboard/action-center/today');
+  });
+
+  it('is the default home when there is no menu to read', async () => {
+    getMyMenu.mockRejectedValue(new Error('No organization'));
+    expect(await readMyHome()).toBe('/dashboard/prompts/tracked');
   });
 
   it('never opens a page off the person’s menu', async () => {
