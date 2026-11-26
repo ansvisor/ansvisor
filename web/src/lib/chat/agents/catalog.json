@@ -472,6 +472,7 @@
       "roles": [],
       "skills": [
         "earn-or-pay",
+        "paid-overlap",
         "ad-drafts"
       ],
       "triggers": [

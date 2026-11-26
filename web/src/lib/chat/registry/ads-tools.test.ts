@@ -31,7 +31,7 @@ const fetchMock = vi.fn();
 vi.stubGlobal('fetch', fetchMock);
 
 const { ADS_READS, ADS_WRITES } = await import('./ads-tools');
-const { getAdsOpportunitiesFor } = await import('@/lib/mcp/ads-reads');
+const { getAdsOpportunitiesFor, getAdsPaidOverlapFor } = await import('@/lib/mcp/ads-reads');
 const { saveAdDrafts } = await import('@/lib/actions/ads-drafts');
 
 const BRAND = '11111111-1111-4111-8111-111111111111';
@@ -61,6 +61,7 @@ describe("Ads' rows", () => {
     const rows = [...ADS_READS, ...ADS_WRITES];
     expect(rows.map((t) => [t.name, t.class, t.mcpTool, t.planGate])).toEqual([
       ['get_ads_opportunities', 'read', null, null],
+      ['get_ads_paid_overlap', 'read', null, null],
       ['save_ad_drafts', 'write', null, { feature: 'ads_read' }],
     ]);
     for (const t of rows) {
@@ -133,6 +134,79 @@ describe('get_ads_opportunities', () => {
         ['is', 'gone_at', null],
       ]),
     );
+  });
+});
+
+describe('get_ads_paid_overlap', () => {
+  const usd = (amount: number) => ({ currencyCode: 'USD', amount });
+  const paid = (amount: number) => ({
+    channel: 'google',
+    spend: [usd(amount)],
+    clicks: 3,
+    impressions: 30,
+    conversions: 1,
+    termCount: 2,
+    terms: [{ term: 'ferry tickets', currencyCode: 'USD', amount, clicks: 3 }],
+  });
+  const overview = (spend: unknown) => ({
+    period: '30d',
+    total: 4,
+    paidMeasured: spend !== null,
+    bar: { earned: 1, earnedPaid: 2, paidOnly: 1, neither: 0 },
+    spend,
+  });
+
+  it('says spend is not measured, with no number, until a Google account is read', async () => {
+    answer(200, overview(null));
+    answer(200, { period: '30d', rows: [row(1)], total: 1, locked: 0 });
+    const read = await getAdsPaidOverlapFor(auth, { brandId: BRAND });
+    expect(fetchMock.mock.calls.map((c) => c[0])).toEqual([
+      expect.stringContaining(`/api/ads/overview?brandId=${BRAND}&period=30d`),
+      expect.stringContaining(`/api/ads/opportunities?brandId=${BRAND}&period=30d`),
+    ]);
+    expect(read).toMatchObject({ period: '30d', measured: false });
+    expect(read).toHaveProperty('note', expect.stringContaining('Never guess'));
+    expect(read).not.toHaveProperty('spend');
+    expect(read).not.toHaveProperty('overlap');
+  });
+
+  it('gives the totals and the overlap and paid-only prompts the plan shows, the costliest first', async () => {
+    const spend = { overlap: [usd(30)], matched: [usd(42)], unmatched: [usd(5)] };
+    answer(200, overview(spend));
+    answer(200, {
+      period: '30d',
+      rows: [
+        { ...row(1), weCited: true, leader: 'us', leaderName: null, paid: paid(10) },
+        { ...row(2), weCited: true, leader: 'c1', leaderName: 'Kestrel', paid: paid(20) },
+        { ...row(3), weCited: false, leader: 'c1', leaderName: 'Kestrel', paid: paid(12) },
+        { ...row(4), weCited: true, paid: null },
+      ],
+      total: 6,
+      locked: 2,
+    });
+    const tool = ADS_READS[1];
+    const read = (await tool.run(auth as never, tool.inputSchema.parse({ brand_id: BRAND }))) as {
+      overlap: { promptId: string; leaderName: string | null }[];
+      paidOnly: { promptId: string }[];
+    };
+    expect(read).toMatchObject({ measured: true, spend, total: 4 });
+    expect(read.overlap.map((p) => [p.promptId, p.leaderName])).toEqual([
+      ['p2', 'Kestrel'],
+      ['p1', 'you'],
+    ]);
+    expect(read.paidOnly.map((p) => p.promptId)).toEqual(['p3']);
+    expect(read.overlap[0]).toMatchObject({ spend: [usd(20)], clicks: 3, termCount: 2 });
+    expect(read).toHaveProperty('lockedNote', expect.stringContaining('2 more prompts'));
+    expect(read).toHaveProperty('chatgptNote', expect.stringContaining("isn't matched"));
+  });
+
+  it("reads nothing of a brand outside the person's scope, and the server's refusal is null", async () => {
+    data.brandAllowed.mockResolvedValueOnce(false);
+    expect(await getAdsPaidOverlapFor(auth, { brandId: BRAND })).toBeNull();
+    expect(fetchMock).not.toHaveBeenCalled();
+    answer(404, { code: 'not_found' });
+    answer(404, { code: 'not_found' });
+    expect(await getAdsPaidOverlapFor(auth, { brandId: BRAND })).toBeNull();
   });
 });
 

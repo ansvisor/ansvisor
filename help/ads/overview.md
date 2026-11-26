@@ -1,15 +1,15 @@
 ---
 title: Ads Overview: buying-intent prompts and the earn-or-pay bar
 route: /dashboard/ads
-keywords: [ads overview, buying-intent prompts, covered prompts, earn or pay bar, earned, earned + paid, paid only, neither, open prompts, google ad spend, overlap, ai-assisted signups, cost per ai-assisted signup, not analysed]
+keywords: [ads overview, buying-intent prompts, covered prompts, earn or pay bar, earned, earned + paid, paid only, neither, open prompts, google ad spend, overlap, /paid-overlap, ai-assisted signups, cost per ai-assisted signup, not analysed]
 synonyms: [ads summary, ads kpis, earned vs paid, buying prompts, cost per signup]
 plan: all
-updated: 2026-11-22
-last_checked: 2026-11-22
+updated: 2026-11-23
+last_checked: 2026-11-23
 owner: Cihan
 app_version: 0.3.0
 approved: false
-sources: [web/messages/en.json, web/src/app/[locale]/(dashboard)/dashboard/ads/_overview.tsx, server/src/lib/ads/overview.js, server/src/lib/ads/paid.js, server/src/lib/ads/intent.js, server/src/config/ads.js]
+sources: [web/messages/en.json, web/src/app/[locale]/(dashboard)/dashboard/ads/_overview.tsx, server/src/lib/ads/overview.js, server/src/lib/ads/paid.js, server/src/lib/ads/intent.js, server/src/config/ads.js, skills/paid-overlap/SKILL.md]
 ---
 The **Overview** tab of **Ads** sums up your brand's buying-intent prompts for the period you pick beside the tabs: **7d**, **30d** (the default) or **90d**. It shows how many you cover in AI answers and how many are still open.
 
@@ -58,3 +58,7 @@ The button under the bar counts the open prompts, such as **See 4 open prompts**
 ## On Starter and in the free trial
 
 You see the whole **Overview**. Under the bar, a line says how many more prompts in **Opportunities** are included from the Growth plan.
+
+## Ask Chat: /paid-overlap
+
+**Paid overlap** (**/paid-overlap**) in Chat explains the Google spend lines: the costliest prompts where you pay and AI already cites you, the ones you pay for without being cited, and one next step for each. It uses only the amounts Ads matched, never adds currencies and never estimates savings. Bids and campaigns stay yours to change in Google Ads.

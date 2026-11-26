@@ -64,8 +64,9 @@ start a message with its `/name`.
 | [`feed-advisor`](./feed-advisor) | Shopping feed gaps |
 | [`earn-or-pay`](./earn-or-pay) | Earn or pay |
 | [`ad-drafts`](./ad-drafts) | Ad drafts |
+| [`paid-overlap`](./paid-overlap) | Paid overlap |
 
-`chatgpt-profile` waits on `BUSINESS_HUB_ENABLED`, and `earn-or-pay` and `ad-drafts` on `ADS_ENABLED`: Chat offers each only on an install where its variable is `true`.
+`chatgpt-profile` waits on `BUSINESS_HUB_ENABLED`, and `earn-or-pay`, `ad-drafts` and `paid-overlap` on `ADS_ENABLED`: Chat offers each only on an install where its variable is `true`.
 
 ### Agent-only skills
 

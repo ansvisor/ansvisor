@@ -28,7 +28,8 @@ const { SKILL_LIBRARY } = await import('./library');
 // The library this install offers: the ChatGPT profile check waits on BUSINESS_HUB_ENABLED,
 // Ads' skills on ADS_ENABLED and the AEO Operator's on CHAT_OPERATOR (flagged.ts).
 const OFFERED = SKILL_LIBRARY.filter(
-  (s) => !['chatgpt-profile', 'earn-or-pay', 'ad-drafts', 'operator'].includes(s.name),
+  (s) =>
+    !['chatgpt-profile', 'earn-or-pay', 'ad-drafts', 'paid-overlap', 'operator'].includes(s.name),
 );
 const { SHORTCUT_IDS } = await import('../shortcuts');
 

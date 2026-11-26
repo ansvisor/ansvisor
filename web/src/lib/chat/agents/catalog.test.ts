@@ -404,10 +404,10 @@ describe('the Paid Opportunity agent (Ads Phase 0 PR 18)', () => {
   const viewer = { siteType: null, workAreas: [] };
   afterEach(() => vi.unstubAllEnvs());
 
-  it('reads earn or pay, then drafts ads, on Mondays as AI Ads Watch would, asking before changes', () => {
+  it('reads earn or pay and the paid overlap, then drafts ads, on Mondays as AI Ads Watch would, asking before changes', () => {
     expect(paid).toMatchObject({
       goal: 'visibility',
-      skills: ['earn-or-pay', 'ad-drafts'],
+      skills: ['earn-or-pay', 'paid-overlap', 'ad-drafts'],
       triggers: [{ kind: 'schedule', repeat: 'MO', time: '09:00' }],
       mode: 'auto',
       connections: [],

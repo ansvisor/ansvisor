@@ -177,7 +177,7 @@ describe('Ready to use', () => {
     expect(ids()).not.toContain('paid-opportunity');
     await render('manager', {}, [], AGENT_PRESETS);
     expect(card('paid-opportunity').querySelector('[data-slot="agent-formula"]')?.textContent).toBe(
-      '/earn-or-pay/ad-draftsAuto, ask before changes',
+      '/earn-or-pay/paid-overlap/ad-draftsAuto, ask before changes',
     );
   });
 
