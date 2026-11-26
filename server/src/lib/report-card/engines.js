@@ -49,7 +49,8 @@ async function pool(jobs, limit) {
 }
 
 /** Whether an error is Google showing no AI Overview for the question: no answer to count. */
-const noOverview = (err) => /did not return an AI Overview/i.test(String(err?.message ?? ''));
+const noOverview = (err) =>
+  /did not return an AI Overview|Gemini did not answer from/i.test(String(err?.message ?? ''));
 
 /**
  * The answers: one row per question and engine asked, with the answer's
@@ -89,7 +90,10 @@ export async function askEngines(
         const { taskId } = await submit(question.text, engine, country);
         try {
           const left = Math.max(deadline - clock(), 0);
-          const answer = await poll(taskId, engine, { maxWaitMs: Math.min(maxWaitMs, left) });
+          const answer = await poll(taskId, engine, {
+            maxWaitMs: Math.min(maxWaitMs, left),
+            region: country,
+          });
           return {
             question: index,
             engine,

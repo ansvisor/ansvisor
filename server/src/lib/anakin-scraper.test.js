@@ -11,6 +11,7 @@ const {
   pollScraperResult,
   rateLimiter,
   submitPromptTask,
+  wrongCountry,
 } = await import('./anakin-scraper.js');
 
 /**
@@ -225,6 +226,49 @@ describe('pollScraperResult', () => {
     const failed = expect(done).rejects.toThrow('timed out after 25s');
     await vi.advanceTimersByTimeAsync(30_000);
     await failed;
+  });
+});
+
+describe('Gemini answering from another country', () => {
+  const gemini = (country, extra = {}) =>
+    job({ answer_text_markdown: 'Acme leads.', citations: [], country, ...extra });
+
+  it('says where it answered from when that is not the asked country', () => {
+    expect(wrongCountry({ country: 'us' }, 'IS')).toEqual({ asked: 'IS', got: 'US' });
+    expect(wrongCountry({ country: 'tr' }, 'TR')).toBeNull();
+    // A US state is asked from the US: a US answer is right.
+    expect(wrongCountry({ country: 'us' }, 'US-TX')).toBeNull();
+    expect(wrongCountry({ country: 'gb' }, 'UK')).toBeNull();
+    // No region is the US; no country back says nothing.
+    expect(wrongCountry({ country: 'us' }, null)).toBeNull();
+    expect(wrongCountry({}, 'IS')).toBeNull();
+    expect(wrongCountry({ country: '' }, 'IS')).toBeNull();
+  });
+
+  it('stores no Gemini answer that came from elsewhere, and keeps one that did not', () => {
+    expect(() =>
+      parseScraperResponse(gemini('us', { detected_location: 'Oklahoma, USA' }), 'gemini-web', {
+        region: 'MD',
+      }),
+    ).toThrow('Gemini did not answer from MD: it answered from US');
+    expect(parseScraperResponse(gemini('md'), 'gemini-web', { region: 'MD' }).text).toBe(
+      'Acme leads.',
+    );
+    // Without the asked place (an older caller), nothing is checked.
+    expect(parseScraperResponse(gemini('us'), 'gemini-web').text).toBe('Acme leads.');
+  });
+
+  it('checks Gemini only', () => {
+    expect(parseScraperResponse(gemini('us'), 'chatgpt-web', { region: 'MD' }).text).toBe(
+      'Acme leads.',
+    );
+  });
+
+  it('is checked while polling, with the region the run asked', async () => {
+    fetchMock.mockResolvedValueOnce(reply(200, gemini('us')));
+    await expect(pollScraperResult('job-1', 'gemini-web', { region: 'KE' })).rejects.toThrow(
+      'Gemini did not answer from KE',
+    );
   });
 });
 
