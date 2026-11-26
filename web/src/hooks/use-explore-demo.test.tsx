@@ -37,6 +37,8 @@ const getBrandById = vi.hoisted(() => vi.fn());
 vi.mock('@/lib/actions/brand', () => ({ getBrandById }));
 const toastError = vi.hoisted(() => vi.fn());
 vi.mock('sonner', () => ({ toast: { error: toastError } }));
+const track = vi.hoisted(() => vi.fn());
+vi.mock('@/lib/analytics', () => ({ track }));
 
 const { useExploreDemo, usePreloadDemo } = await import('./use-explore-demo');
 const { DemoSetupDialog } = await import('@/components/demo/demo-setup-dialog');
@@ -97,6 +99,7 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.useRealTimers();
+  window.history.replaceState(null, '', '/');
   act(() => root.unmount());
   container.remove();
 });
@@ -238,6 +241,45 @@ describe('useExploreDemo while the demo is still being prepared', () => {
     await clickExplore();
     expect(dialogText()).toBeUndefined();
     expect(router.push).toHaveBeenCalledWith('/dashboard');
+  });
+});
+
+describe('useExploreDemo when the start page does not open', () => {
+  const dialogText = () => document.body.querySelector('[data-slot="dialog-content"]')?.textContent;
+  const buttonNamed = (name: string) =>
+    [...document.body.querySelectorAll('button')].find((b) => b.textContent === name);
+
+  beforeEach(() => {
+    demoClient.prepareDemoBrand.mockResolvedValue({ ok: true, brandId: 'demo', version: 3 });
+    getBrandById.mockResolvedValue(brand('demo', { isDemo: true }));
+  });
+
+  it('says so, with Open the demo, when the dashboard sends the person back to onboarding', async () => {
+    window.history.replaceState(null, '', '/dashboard/onboarding');
+    const assign = vi.fn();
+    vi.stubGlobal('location', { ...window.location, pathname: '/dashboard/onboarding', assign });
+    try {
+      await clickExplore();
+      expect(router.push).toHaveBeenCalledWith('/dashboard');
+      await vi.waitFor(() =>
+        expect(dialogText()).toContain("The demo is ready, but its page didn't open."),
+      );
+      expect(container.querySelector('button')!.dataset.opening).toBe('false');
+      expect(track).toHaveBeenCalledWith('demo_open_stuck', { reason: 'bounced' });
+      await act(async () => buttonNamed('Open the demo')!.click());
+      expect(assign).toHaveBeenCalledWith('/dashboard');
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('closes the screen and the spinner once the page opened elsewhere', async () => {
+    await clickExplore();
+    await vi.waitFor(() =>
+      expect(container.querySelector('button')!.dataset.opening).toBe('false'),
+    );
+    expect(dialogText()).toBeUndefined();
+    expect(track).not.toHaveBeenCalled();
   });
 });
 

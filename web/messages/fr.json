@@ -622,6 +622,8 @@
       "slow": "Cela prend plus de temps que d'habitude.",
       "ready": "Prêt. Ouverture des Prompts…",
       "failed": "Impossible de préparer la démo. Vérifiez votre connexion et réessayez.",
+      "stuck": "La démo est prête, mais sa page ne s'est pas ouverte. Ouvrez-la à nouveau, ou fermez et réessayez plus tard.",
+      "open": "Ouvrir la démo",
       "retry": "Réessayer",
       "close": "Fermer"
     }

@@ -622,6 +622,8 @@
       "slow": "This is taking longer than usual.",
       "ready": "Ready. Opening Prompts…",
       "failed": "Couldn't prepare the demo. Check your connection and try again.",
+      "stuck": "The demo is ready, but its page didn't open. Open it again, or close this and try later.",
+      "open": "Open the demo",
       "retry": "Try again",
       "close": "Close"
     }
