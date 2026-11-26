@@ -69060,6 +69060,13 @@ comment on table public.notification_sends is
 -- event, with the noise rules every event trigger has (cooldown, daily
 -- limit, AI limit). The run acts as the agent's owner, as every triggered
 -- run does (CHAT-21 §H item 38). Schema only: nothing is backfilled.
+--
+-- DEPLOY THE WEB FIRST, THEN APPLY THIS. The claims' primary key gains
+-- `ref` below. The web before this PR claims a brand added with
+-- "on conflict (agent_id, kind, brand_id)", which no longer matches a
+-- constraint once this is in: its brand_added fires would fail until the
+-- new web is live. The new web claims on the primary key, whichever it is
+-- (agent-triggers.ts claimOnce), so it works before and after this file.
 
 -- ─── The kinds ──────────────────────────────────────────────────────────────
 

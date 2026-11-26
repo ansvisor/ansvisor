@@ -904,6 +904,11 @@ async function claimOnce(
   now: Date,
   ref = '',
 ): Promise<boolean> {
+  // On the table's primary key, whichever it is: (agent, kind, brand) before
+  // 00558, (agent, kind, brand, ref) after. A brand added sends no ref (its
+  // default '' after 00558), so this build claims it either side of the
+  // migration: deploy it first, then apply 00558. The page and catalog
+  // kinds only exist once 00558 is in.
   const { data, error } = await supabaseAdmin
     .from('chat_agent_trigger_claims')
     .upsert(
@@ -911,11 +916,11 @@ async function claimOnce(
         agent_id: agentId,
         kind,
         brand_id: brandId,
-        ref,
+        ...(kind === 'brand_added' ? {} : { ref }),
         trigger_id: triggerId,
         claimed_at: now.toISOString(),
       },
-      { onConflict: 'agent_id,kind,brand_id,ref', ignoreDuplicates: true },
+      { ignoreDuplicates: true },
     )
     .select('agent_id');
   if (error) throw new Error(`Could not claim the fire: ${error.message}`);

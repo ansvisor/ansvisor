@@ -1,6 +1,7 @@
 // @vitest-environment node
 import { Children, isValidElement, type ReactElement } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { AGENT_PRESETS } from '@/lib/chat/agents/catalog';
 
 /**
  * Agent Center's pages (CHAT-21 §B, §C, §D), out of Chat at /dashboard/agents:
@@ -171,7 +172,9 @@ describe('New agent and Edit (W2-15)', () => {
       props: { preset: { id: string } | null };
     };
     expect(page.props.preset?.id).toBe('weekly-report');
-    for (const id of ['localization', 'nope']) {
+    // A Soon one from the catalog, so making one ready never breaks this.
+    const soon = AGENT_PRESETS.find((preset) => preset.status === 'soon')!.id;
+    for (const id of [soon, 'nope']) {
       const other = (await NewAgentPage(search(undefined, id))) as { props: { preset: unknown } };
       expect(other.props.preset).toBeNull();
     }
