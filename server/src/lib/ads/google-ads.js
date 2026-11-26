@@ -159,7 +159,11 @@ export async function campaignDays(connection, customerId, range) {
 
 /**
  * The search terms that showed the customer's ads, per campaign and day,
- * shaped as ads_search_term_daily rows without the account id.
+ * shaped as ads_search_term_daily rows without the account id. Google
+ * returns search_term_view once per ad group, so a term shown by two ad
+ * groups of a campaign on one day comes twice: those rows are added up, one
+ * per campaign, term and day (the table's key), or spend would be undercounted
+ * and the upsert would touch one row twice.
  */
 export async function searchTermDays(connection, customerId, range) {
   const id = checkedCustomer(customerId);
@@ -169,22 +173,30 @@ export async function searchTermDays(connection, customerId, range) {
     id,
     `SELECT campaign.id, search_term_view.search_term, segments.date, metrics.impressions, metrics.clicks, metrics.cost_micros, metrics.conversions FROM search_term_view WHERE segments.date BETWEEN '${since}' AND '${until}'`,
   );
-  return rows
-    .map((row) => ({
-      row,
-      term: row.searchTermView?.searchTerm ?? row.search_term_view?.search_term,
-    }))
-    .filter(({ row, term }) => row.campaign?.id && row.segments?.date && term)
-    .map(({ row, term }) => {
-      const m = row.metrics ?? {};
-      return {
-        campaign_id: String(row.campaign.id),
-        search_term: String(term).slice(0, 1000),
-        day: row.segments.date,
-        impressions: int(m.impressions),
-        clicks: int(m.clicks),
-        cost_micros: int(m.costMicros ?? m.cost_micros),
-        conversions: decimal(m.conversions),
-      };
-    });
+  const byKey = new Map();
+  for (const row of rows) {
+    const term = row.searchTermView?.searchTerm ?? row.search_term_view?.search_term;
+    if (!row.campaign?.id || !row.segments?.date || !term) continue;
+    const m = row.metrics ?? {};
+    const day = {
+      campaign_id: String(row.campaign.id),
+      search_term: String(term).slice(0, 1000),
+      day: row.segments.date,
+      impressions: int(m.impressions),
+      clicks: int(m.clicks),
+      cost_micros: int(m.costMicros ?? m.cost_micros),
+      conversions: decimal(m.conversions),
+    };
+    const key = `${day.campaign_id}|${day.search_term}|${day.day}`;
+    const seen = byKey.get(key);
+    if (!seen) {
+      byKey.set(key, day);
+      continue;
+    }
+    seen.impressions += day.impressions;
+    seen.clicks += day.clicks;
+    seen.cost_micros += day.cost_micros;
+    seen.conversions = Math.round((seen.conversions + day.conversions) * 100) / 100;
+  }
+  return [...byKey.values()];
 }
