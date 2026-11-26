@@ -1169,6 +1169,11 @@
         "ai traffic",
         "sign-ups",
         "/traffic",
+        "shopping feed advisor",
+        "feed gaps",
+        "product feed",
+        "gtin",
+        "/feed-advisor",
         "when a brand is added",
         "brand added",
         "new brand trigger",
@@ -1212,7 +1217,10 @@
         "holiday prompts",
         "black friday",
         "ai traffic report",
-        "ai visitors who sign up"
+        "ai visitors who sign up",
+        "what is my feed missing",
+        "missing gtin",
+        "feed fixes"
       ],
       "plan": "all",
       "updated": "2026-11-21",
@@ -1260,6 +1268,10 @@
         {
           "heading": "AI Traffic → Signups",
           "text": "**AI Traffic → Signups** runs every Monday at 09:00 on **Auto, ask before changes**. It is made for the **Growth** work area. It reports the visits AI assistants sent to your site last week, by assistant and by landing page, against the week before. With Google Analytics connected, it adds the key events, such as sign-ups, and the sessions that came from AI. Without it, sign-ups show as **Not measured**. Sign-ups by assistant or by page, and the prompt behind a visit, aren't measured, and the report says so. Sending a page to the Action Center is a card you approve. Google Analytics is optional. In Chat, the same skill is **/traffic**."
+        },
+        {
+          "heading": "Shopping Feed Advisor",
+          "text": "**Shopping Feed Advisor** runs every Monday at 09:00 on **Auto, ask before changes**. It is made for e-commerce brands and needs a product catalog: connect one in **Settings › Integrations › Catalog**. Each run checks every live product in your catalog for what AI shopping answers need: a GTIN, a photo, a price, stock, a full description that says early on what the product is, a category and a brand. It lists the gaps by impact, the readiness points your catalog loses on each, and gives example products and a fix for each gap. It never changes your store or feed. Sending a fix to the Action Center is a card you approve. In Chat, the same skill is **/feed-advisor**."
         },
         {
           "heading": "Agency Client Reporter",

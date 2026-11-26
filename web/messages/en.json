@@ -4376,6 +4376,7 @@
     "shoppingCards": { "name": "Read shopping cards", "step": "Read Products · Cards" },
     "catalogProducts": { "name": "Read catalog products", "step": "Read Products" },
     "catalogSources": { "name": "Read catalog sources", "step": "Read Catalog" },
+    "catalogFeedGaps": { "name": "Read feed gaps", "step": "Read Products · Feed gaps" },
     "contentPlan": { "name": "Read the Content plan", "step": "Read Content plan" },
     "contentOpportunity": { "name": "Read a content opportunity", "step": "Read opportunity" },
     "contentImpact": { "name": "Read a live page's impact", "step": "Read Live page" },
@@ -7660,6 +7661,7 @@
       "seasonal": "Seasonal prompts",
       "traffic": "AI traffic and sign-ups",
       "ai-revenue": "Customers and revenue from AI",
+      "feed-advisor": "Shopping feed gaps",
       "earn-or-pay": "Earn or pay",
       "ad-drafts": "Ad drafts",
       "operator": "AEO Operator"
