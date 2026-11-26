@@ -123,7 +123,11 @@ beforeEach(() => {
   taskIds = 0;
   db.stampedRuns = [{ id: 'yesterday' }];
   db.pendingRows = [];
-  cloroSubmit.mockReset();
+  cloroSubmit.mockReset().mockImplementation(async ({ scraperId }) => ({
+    taskId: `cloro-${++taskIds}`,
+    scraperId,
+    legacy: false,
+  }));
   loadSupportedCountries.mockClear();
   anakinSubmit.mockReset().mockImplementation(async ({ scraperId }) => ({
     taskId: `job-${++taskIds}`,
@@ -173,5 +177,37 @@ describe('processTrackingJob on Anakin', () => {
       ['chatgpt-web', 'US'],
       ['copilot-web', 'US'],
     ]);
+  });
+
+  it('keeps Bing AI Mode on Cloro with PLATFORM_PROVIDER_OVERRIDES, each on its own webhook', async () => {
+    vi.stubEnv('PLATFORM_PROVIDER_OVERRIDES', 'copilot-web=cloro');
+    db.pendingPolls = [pending('job-1', 'cloro-2'), []];
+    const run = processTrackingJob({ brandId: 'b1', source: 'manual', job: { progress() {} } });
+    for (let i = 0; i < 10; i++) await vi.advanceTimersByTimeAsync(15_000);
+    await run;
+
+    expect(anakinSubmit.mock.calls.map(([task]) => [task.scraperId, task.webhookUrl])).toEqual([
+      ['chatgpt-web', 'https://api.example/anakin/callback'],
+    ]);
+    expect(cloroSubmit.mock.calls.map(([task]) => [task.scraperId, task.webhookUrl])).toEqual([
+      ['copilot-web', 'https://api.example/cloro/callback'],
+    ]);
+    // Each row names its provider, so each webhook takes only its own (00562).
+    expect(db.pendingRows.map((row) => [row.task_id, row.provider])).toEqual([
+      ['job-1', 'anakin'],
+      ['cloro-2', 'cloro'],
+    ]);
+  });
+
+  it("polls every task when one of the run's providers has no webhook", async () => {
+    vi.stubEnv('PLATFORM_PROVIDER_OVERRIDES', 'copilot-web=cloro');
+    vi.stubEnv('CLORO_WEBHOOK_URL', '');
+    const run = processTrackingJob({ brandId: 'b1', source: 'manual', job: { progress() {} } });
+    for (let i = 0; i < 10; i++) await vi.advanceTimersByTimeAsync(15_000);
+    await run.catch(() => {});
+
+    expect(anakinSubmit.mock.calls.map(([task]) => task.webhookUrl)).toEqual([null]);
+    expect(cloroSubmit.mock.calls.map(([task]) => task.webhookUrl)).toEqual([null]);
+    expect(db.pendingRows).toEqual([]);
   });
 });
