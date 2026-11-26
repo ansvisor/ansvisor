@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { v5 as uuidv5 } from 'uuid';
 import supabaseAdmin from '../../config/supabase.js';
 import { chunkIds } from '../chunked-in.js';
 
@@ -16,7 +17,7 @@ import { chunkIds } from '../chunked-in.js';
  *   (`removed_at`). One that comes back is live again. A product removed
  *   over 90 days ago is deleted by the daily run, its variants with it
  *   (purge.js).
- * - A changed product's images and categories are written again.
+ * - An image keeps its id while its variant, position and URL stay the same.
  *
  * Values are clipped to the columns' limits, and an address that isn't
  * http(s) is left out, so one odd product doesn't fail the sync.
@@ -164,16 +165,13 @@ export function keptWithin(products, kept, room) {
   };
 }
 
-async function readAll(db, table, columns, brandId, source) {
+async function readAll(db, table, columns, filter) {
   const rows = [];
   for (let start = 0; ; start += PAGE) {
-    const { data, error } = await db
-      .from(table)
-      .select(columns)
-      .eq('brand_id', brandId)
-      .eq('source', source)
-      .order('id')
-      .range(start, start + PAGE - 1);
+    const { data, error } = await filter(db.from(table).select(columns)).range(
+      start,
+      start + PAGE - 1,
+    );
     if (error) throw new Error(`${table} read: ${error.message}`);
     rows.push(...(data ?? []));
     if (!data || data.length < PAGE) return rows;
@@ -211,14 +209,91 @@ async function markRemoved(db, table, ids, at) {
   }
 }
 
-async function replaceIn(db, table, productIds, rows) {
-  for (const chunk of chunkIds(productIds)) {
-    const { error } = await db.from(table).delete().in('product_id', chunk);
-    if (error) throw new Error(`${table} clear: ${error.message}`);
+// Shopping paths use row id to break ties between two variants' first images.
+// Keep the existing row when the image still occupies the same slot.
+async function syncImages(db, existingProductIds, images) {
+  const key = (row) => JSON.stringify([row.product_id, row.variant_id, row.position, row.url]);
+  const missing = new Map(images.map((row) => [key(row), row]));
+  const removed = [];
+  for (const ids of chunkIds(existingProductIds)) {
+    const rows = await readAll(
+      db,
+      'catalog_images',
+      'id, product_id, variant_id, position, url',
+      (query) => query.in('product_id', ids).order('id'),
+    );
+    for (const row of rows) {
+      if (!missing.delete(key(row))) removed.push(row.id);
+    }
   }
-  for (const chunk of chunks(rows)) {
-    const { error } = await db.from(table).insert(chunk);
-    if (error) throw new Error(`${table} write: ${error.message}`);
+  for (const ids of chunkIds(removed)) {
+    const { error } = await db.from('catalog_images').delete().in('id', ids);
+    if (error) throw new Error(`catalog_images clear: ${error.message}`);
+  }
+  for (const batch of chunks([...missing.values()])) {
+    // Two syncs that observe a missing slot can safely insert the same image.
+    const rows = batch.map((row) => ({ ...row, id: uuidv5(key(row), uuidv5.URL) }));
+    const { error } = await db
+      .from('catalog_images')
+      .upsert(rows, { onConflict: 'id', ignoreDuplicates: true });
+    if (error) throw new Error(`catalog_images write: ${error.message}`);
+  }
+}
+
+async function syncCategories(db, brandId, existingProductIds, categories) {
+  const key = (productId, name) => JSON.stringify([productId, name]);
+  const missing = new Map(categories.map((c) => [key(c.product_id, c.name), c]));
+  const categoryIds = new Map();
+  const removed = new Map();
+  for (const ids of chunkIds(existingProductIds)) {
+    const links = await readAll(
+      db,
+      'catalog_product_categories',
+      'product_id, category_id, category:catalog_categories(name)',
+      (query) => query.in('product_id', ids).order('product_id').order('category_id'),
+    );
+    for (const { product_id, category_id, category } of links) {
+      categoryIds.set(category.name, category_id);
+      if (!missing.delete(key(product_id, category.name))) {
+        const products = removed.get(category_id) ?? [];
+        products.push(product_id);
+        removed.set(category_id, products);
+      }
+    }
+  }
+  for (const [categoryId, productIds] of removed) {
+    for (const ids of chunkIds(productIds)) {
+      const { error } = await db
+        .from('catalog_product_categories')
+        .delete()
+        .eq('category_id', categoryId)
+        .in('product_id', ids);
+      if (error) throw new Error(`catalog_product_categories clear: ${error.message}`);
+    }
+  }
+  const added = [...missing.values()];
+  const newNames = [...new Set(added.map((c) => c.name))].filter((name) => !categoryIds.has(name));
+  for (const names of chunks(newNames)) {
+    const { data, error } = await db
+      .from('catalog_categories')
+      .upsert(
+        names.map((name) => ({ brand_id: brandId, name })),
+        { onConflict: 'brand_id,name' },
+      )
+      .select('id, name');
+    if (error) throw new Error(`catalog_categories write: ${error.message}`);
+    for (const row of data) categoryIds.set(row.name, row.id);
+  }
+  for (const batch of chunks(added)) {
+    const rows = batch.map(({ product_id, name }) => ({
+      brand_id: brandId,
+      product_id,
+      category_id: categoryIds.get(name),
+    }));
+    const { error } = await db
+      .from('catalog_product_categories')
+      .upsert(rows, { onConflict: 'product_id,category_id', ignoreDuplicates: true });
+    if (error) throw new Error(`catalog_product_categories write: ${error.message}`);
   }
 }
 
@@ -246,12 +321,12 @@ export async function syncCatalog(
   };
 
   // Products: write the new, the changed and the returned, within the plan's cap.
+  const forSource = (query) => query.eq('brand_id', brandId).eq('source', source).order('id');
   const keptProducts = await readAll(
     db,
     'catalog_products',
     'id, external_id, content_hash, removed_at',
-    brandId,
-    source,
+    forSource,
   );
   const { products, overLimit } = keptWithin(records.products, keptProducts, room);
   if (overLimit) counts.overLimit = overLimit;
@@ -299,12 +374,10 @@ export async function syncCatalog(
     db,
     'catalog_variants',
     'id, external_id, content_hash, removed_at',
-    brandId,
-    source,
+    forSource,
   );
   const variantBy = new Map(keptVariants.map((row) => [row.external_id, row]));
   const variantWrites = [];
-  const touched = new Set(productWrites.map((p) => p.external_id));
   for (const variant of variants) {
     const content_hash = hashOf(variant);
     const kept = variantBy.get(variant.external_id);
@@ -313,7 +386,6 @@ export async function syncCatalog(
       continue;
     }
     counts.variants[kept ? 'changed' : 'added']++;
-    touched.add(variant.product_external_id);
     const { product_external_id, images: _images, ...columns } = variant;
     variantWrites.push({
       brand_id: brandId,
@@ -341,50 +413,25 @@ export async function syncCatalog(
     at,
   );
 
-  // A touched product's images and categories, written again.
-  const touchedIds = [...touched].map((key) => productIds.get(key)).filter(Boolean);
-  if (touchedIds.length) {
-    const images = variants
-      .filter((v) => touched.has(v.product_external_id))
-      .flatMap((v) =>
-        v.images.map((url, position) => ({
-          brand_id: brandId,
-          product_id: productIds.get(v.product_external_id),
-          variant_id: variantIds.get(v.external_id) ?? null,
-          url,
-          position,
-        })),
-      );
-    await replaceIn(db, 'catalog_images', touchedIds, images);
-
-    const names = [
-      ...new Set(
-        products
-          .filter((p) => touched.has(p.external_id))
-          .flatMap((p) => p.product_types ?? (p.product_type ? [p.product_type] : [])),
-      ),
-    ];
-    const categoryIds = new Map();
-    for (const chunk of chunks(names.map((name) => ({ brand_id: brandId, name })))) {
-      const { data, error } = await db
-        .from('catalog_categories')
-        .upsert(chunk, { onConflict: 'brand_id,name' })
-        .select('id, name');
-      if (error) throw new Error(`catalog_categories write: ${error.message}`);
-      for (const row of data ?? []) categoryIds.set(row.name, row.id);
-    }
-    const links = products
-      .filter((p) => touched.has(p.external_id))
-      .flatMap((p) =>
-        (p.product_types ?? (p.product_type ? [p.product_type] : [])).map((name) => ({
-          brand_id: brandId,
-          product_id: productIds.get(p.external_id),
-          category_id: categoryIds.get(name),
-        })),
-      )
-      .filter((link) => link.product_id && link.category_id);
-    await replaceIn(db, 'catalog_product_categories', touchedIds, links);
-  }
-
+  // The parent hashes can already be saved after an interrupted sync. Compare the
+  // actual associations so an identical retry repairs any missing or stale rows.
+  const existingIds = products.map((p) => productBy.get(p.external_id)?.id).filter(Boolean);
+  const images = variants.flatMap((v) =>
+    v.images.map((url, position) => ({
+      brand_id: brandId,
+      product_id: productIds.get(v.product_external_id),
+      variant_id: variantIds.get(v.external_id),
+      url,
+      position,
+    })),
+  );
+  await syncImages(db, existingIds, images);
+  const categories = products.flatMap((p) =>
+    (p.product_types ?? (p.product_type ? [p.product_type] : [])).map((name) => ({
+      product_id: productIds.get(p.external_id),
+      name,
+    })),
+  );
+  await syncCategories(db, brandId, existingIds, categories);
   return counts;
 }

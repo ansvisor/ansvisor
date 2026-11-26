@@ -54,6 +54,8 @@ export function fakeDb({ maxRows = Infinity } = {}) {
   const writes = [];
   const uniqueKey = (table, row) => {
     if (table === 'catalog_categories') return `${row.brand_id}|${row.name}`;
+    if (table === 'catalog_product_categories') return `${row.product_id}|${row.category_id}`;
+    if (table === 'catalog_images') return row.id;
     if (table === 'catalog_order_items') return `${row.order_id}|${row.external_line_id}`;
     if (table === 'catalog_source_credentials') return row.source_id;
     if (table === 'catalog_category_pages') return `${row.brand_id}|${row.category}`;
@@ -75,6 +77,7 @@ export function fakeDb({ maxRows = Infinity } = {}) {
       op: 'select',
       payload: null,
       returning: null,
+      columns: '',
       one: null,
       count: null,
       order: [],
@@ -97,7 +100,16 @@ export function fakeDb({ maxRows = Infinity } = {}) {
         // A count only, as `select(…, { count: 'exact', head: true })` asks.
         if (state.count === 'head') return { data: null, count: found.length, error: null };
         const [start, end] = state.range ?? [0, found.length];
-        const data = found.slice(start, end + 1).slice(0, state.one ? undefined : maxRows);
+        let data = found.slice(start, end + 1).slice(0, state.one ? undefined : maxRows);
+        if (
+          table === 'catalog_product_categories' &&
+          state.columns.includes('category:catalog_categories(name)')
+        ) {
+          const names = new Map(
+            rows('catalog_categories').map((category) => [category.id, category.name]),
+          );
+          data = data.map((link) => ({ ...link, category: { name: names.get(link.category_id) } }));
+        }
         if (state.one) return { data: data[0] ?? null, error: null };
         return { data, error: null };
       }
@@ -133,6 +145,7 @@ export function fakeDb({ maxRows = Infinity } = {}) {
       }
       if (state.op === 'delete') {
         const deleted = all.filter(match);
+        for (const row of deleted) keyed(table).delete(uniqueKey(table, row));
         tables.set(
           table,
           all.filter((row) => !match(row)),
@@ -151,7 +164,8 @@ export function fakeDb({ maxRows = Infinity } = {}) {
     const builder = {
       // After a write, the rows it wrote, as PostgREST returns them. A
       // `{ head: true }` select asks for the count only.
-      select: (_columns, options) => {
+      select: (columns = '', options) => {
+        state.columns = columns;
         if (state.op !== 'select') state.returning = true;
         if (options?.head) state.count = 'head';
         return builder;

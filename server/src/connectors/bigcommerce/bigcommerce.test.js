@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { afterEach, expect, it, vi } from 'vitest';
 import { syncSource } from '../../lib/catalog/sources.js';
+import { buildShoppingPath } from '../../lib/shopping-path.js';
 import { ConnectError } from '../errors.js';
 import { connectorFor, storeConnectors } from '../index.js';
 import { runSync, startFakeApi } from '../testing.js';
@@ -118,6 +119,25 @@ it('syncs both pages and updates only the variant whose price changes', async ()
     variants: { unchanged: 3, changed: 0 },
   });
   expect({ variants, products, categories, images }).toEqual(before);
+  // The shopping path selects a single image when the variants have different thumbnails.
+  const { fake } = result;
+  fake.rows('brands')[0].site_type = 'ecommerce';
+  fake.rows('content_drafts').push({
+    id: 'guide',
+    brand_id: 'brand-1',
+    title: 'How to choose a Le Parfait jar',
+    page_type: 'buying_guide',
+    shopping_path: null,
+  });
+  const db = { ...fake.db, rpc: async () => ({ data: [], error: null }) };
+  const jarImage = async () => {
+    const path = await buildShoppingPath({ draftId: 'guide', brandId: 'brand-1' }, { db });
+    return path.products.find((card) => card.id === jar.id)?.image;
+  };
+  const firstImage = await jarImage();
+  expect(['https://images.example/jar-1.jpg', 'https://images.example/jar-grey.jpg']).toContain(
+    firstImage,
+  );
   data.products[0].data[0].variants[0].price = 12.345;
   data.products[0].data[0].variants[0].sale_price = 9.875;
   expect((await repeat()).counts).toMatchObject({
@@ -125,6 +145,8 @@ it('syncs both pages and updates only the variant whose price changes', async ()
     variants: { changed: 1, unchanged: 2, added: 0, removed: 0 },
   });
   expect(variants.find((v) => v.id === beige.id)).toMatchObject({ price: 12.35, sale_price: 9.88 });
+  expect(fake.rows('catalog_images')).toEqual(before.images);
+  expect(await jarImage()).toBe(firstImage);
 });
 
 it('finishes both product pages after a rate-limited read', async () => {

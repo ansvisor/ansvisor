@@ -80,9 +80,9 @@
                   "option_display_name": "Color"
                 }
               ],
-              "inventory_level": 0,
+              "inventory_level": 2,
               "purchasing_disabled": false,
-              "image_url": ""
+              "image_url": "https://images.example/jar-grey.jpg"
             }
           ],
           "images": [
