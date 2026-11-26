@@ -15,7 +15,8 @@ const network = vi.fn<(url: string, init?: RequestInit) => Promise<Response>>(
   async () => new Response('{}'),
 );
 vi.stubGlobal('fetch', network);
-const { AdsApiError, createAdsDrafts, sendAdsEarn } = await import('./api');
+const { AdsApiError, connectChatGptAds, createAdsDrafts, disconnectAdsAccount, sendAdsEarn } =
+  await import('./api');
 
 describe('the Ads writes of the drawer', () => {
   it('go to the two Ads routes only, each with its own key', async () => {
@@ -45,5 +46,27 @@ describe('the Ads writes of the drawer', () => {
     expect(err).toBeInstanceOf(AdsApiError);
     const { status, code, body } = err as InstanceType<typeof AdsApiError>;
     expect([status, code, body.why]).toEqual([409, 'facts_needed', 'off']);
+  });
+});
+
+describe('ad accounts (Phase 1, C2)', () => {
+  it('send the key once in a body, and remove an account with no body', async () => {
+    network.mockClear();
+    network.mockResolvedValueOnce(new Response(JSON.stringify({ account: { id: 'a1' } })));
+    network.mockResolvedValueOnce(new Response(JSON.stringify({ id: 'a1' })));
+    expect(await connectChatGptAds('b1', 'sk-ads')).toEqual({ id: 'a1' });
+    expect(await disconnectAdsAccount('b1', 'a1')).toEqual({ id: 'a1' });
+    const [[connectUrl, connect], [removeUrl, remove]] = network.mock.calls;
+    expect([connectUrl, connect?.method, JSON.parse(String(connect?.body))]).toEqual([
+      '/api/aeo/api/ads/accounts/chatgpt',
+      'POST',
+      { brandId: 'b1', apiKey: 'sk-ads' },
+    ]);
+    expect([removeUrl, remove?.method, remove?.body]).toEqual([
+      '/api/aeo/api/ads/accounts/a1?brandId=b1',
+      'DELETE',
+      undefined,
+    ]);
+    expect(remove?.headers).not.toHaveProperty('Content-Type');
   });
 });

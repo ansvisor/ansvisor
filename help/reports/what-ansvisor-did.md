@@ -4,14 +4,16 @@ route: /dashboard/reports/impact
 keywords: [what ansvisor did for you, impact, shipped changes, results, improved, pending, not measurable, checkpoints, control prompts, export csv]
 synonyms: [did it work, results of my changes, impact report, proof of results, what changed after publishing]
 plan: all
-updated: 2026-11-01
+updated: 2026-11-21
 last_checked: 2026-11-01
 owner: Cihan
 app_version: 0.3.0
 approved: true
-sources: [web/messages/en.json, web/src/components/reports/impact-report.tsx]
+sources: [web/messages/en.json, web/src/components/reports/impact-report.tsx, web/src/lib/actions/impact-report.ts]
 ---
 **What Ansvisor did for you** lists the changes you shipped in a month, such as a page published to your CMS, and what each one did in AI answers. Open it from **Reports** with **What Ansvisor did for you**, and go back with **Back to Reports**. It shows the brand you have open.
+
+The button appears once the brand has shipped its first change: a page your CMS confirmed after **Send to CMS**, or an agent's first go-live. Until then the page says it fills in after that first change.
 
 ## What shipped means
 

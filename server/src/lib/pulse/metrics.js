@@ -1,7 +1,7 @@
 import supabaseAdmin from '../../config/supabase.js';
 import { computeAiVisibilityScore } from '../../config/visibility-score.js';
 import { chunkIds, selectInChunks } from '../chunked-in.js';
-import { UNAVAILABLE_PLATFORMS } from '../cloro-scraper.js';
+import { unavailablePlatforms } from '../answer-providers/index.js';
 import { logger } from '../logger.js';
 import { readAllRpcRows } from '../rpc-pages.js';
 import { resolve } from '../../config/action-engine.js';
@@ -73,14 +73,15 @@ const TRACKED_PLATFORMS = [
 ];
 
 /**
- * The platforms the outage guard watches: the tracked ones but those Cloro
- * cannot deliver (UNAVAILABLE_PLATFORMS). A paused platform's volume falls to
- * none by design, so counting it would read the pause as an outage and hold
- * back the drop and lost-citation warnings for every brand.
+ * The platforms the outage guard watches: the tracked ones but those the
+ * answer provider cannot deliver (unavailablePlatforms). A paused platform's
+ * volume falls to none by design, so counting it would read the pause as an
+ * outage and hold back the drop and lost-citation warnings for every brand.
  */
-const OUTAGE_WATCHED_PLATFORMS = TRACKED_PLATFORMS.filter(
-  (platform) => !UNAVAILABLE_PLATFORMS.includes(platform),
-);
+function outageWatchedPlatforms() {
+  const paused = unavailablePlatforms();
+  return TRACKED_PLATFORMS.filter((platform) => !paused.includes(platform));
+}
 
 function round1(n) {
   return Math.round(n * 10) / 10;
@@ -413,7 +414,7 @@ export async function degradedPlatforms(now) {
   const dayAgo = new Date(now.getTime() - DAY_MS).toISOString();
   const weekAgo = new Date(now.getTime() - 8 * DAY_MS).toISOString();
   const degraded = [];
-  for (const platform of OUTAGE_WATCHED_PLATFORMS) {
+  for (const platform of outageWatchedPlatforms()) {
     const [{ count: today }, { count: baseline }] = await Promise.all([
       supabaseAdmin
         .from('prompt_results')

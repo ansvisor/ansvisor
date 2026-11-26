@@ -14,17 +14,21 @@ import { Link } from '@/i18n/navigation';
 import {
   AdsApiError,
   notifyAdsPlatform,
+  readAdsAccounts,
   readAdsAnalytics,
+  type AdsAccount,
   type AdsAnalytics,
   type AdsLaterPlatform,
 } from '@/lib/ads/api';
 import { useBrandStore } from '@/stores/use-brand-store';
+import { ChatGptAdsAccounts } from './_chatgpt-ads';
 
 /** Where Google Analytics is connected and managed, as Chat's Connections opens it. */
 const INTEGRATIONS_GA = '/dashboard/settings/integrations#google-analytics';
-const SOON = ['chatgpt', 'google', 'microsoft'] as const;
-const LATER: AdsLaterPlatform[] = ['meta', 'linkedin'];
-type PlatformId = (typeof SOON)[number] | AdsLaterPlatform | 'analytics';
+const SOON = ['google'] as const;
+// Microsoft waits for its API access (owner, 2026-11-21), so it comes later too.
+const LATER: AdsLaterPlatform[] = ['microsoft', 'meta', 'linkedin'];
+type PlatformId = 'chatgpt' | (typeof SOON)[number] | AdsLaterPlatform | 'analytics';
 
 function Platform({ id, children }: { id: PlatformId; children: ReactNode }) {
   const t = useTranslations('ads.connections.platforms');
@@ -113,17 +117,46 @@ function Analytics({ brandId }: { brandId: string }) {
 }
 
 /**
- * Ads' Connections (ADS-01 §3.5, mockup `#con`): no ad account connects in
- * this preview. ChatGPT Ads, Google Ads and Microsoft Advertising come soon,
- * Meta and LinkedIn later, with Notify me; Google Analytics is the app's
- * own, connected anywhere means connected here. Each platform keeps its own
- * billing: said, never shown.
+ * The brand's ad accounts, read once for the platforms' cards: undefined
+ * while it reads, null when it failed. A card's change is kept as given.
+ */
+function useAdsAccounts(brandId: string | null) {
+  const [read, setRead] = useState<{ brandId: string; accounts: AdsAccount[] | null }>();
+  useEffect(() => {
+    if (!brandId) return;
+    let live = true;
+    const done = (accounts: AdsAccount[] | null) => live && setRead({ brandId, accounts });
+    readAdsAccounts(brandId).then(done, () => done(null));
+    return () => {
+      live = false;
+    };
+  }, [brandId]);
+  const accounts = brandId && read?.brandId === brandId ? read.accounts : undefined;
+  const change = (next: AdsAccount[]) => brandId && setRead({ brandId, accounts: next });
+  return [accounts, change] as const;
+}
+
+/**
+ * Ads' Connections (ADS-01 §3.5, mockup `#con`): ChatGPT Ads connects with
+ * the customer's own Ads API key (Phase 1, C2); Google Ads comes soon;
+ * Microsoft Advertising, Meta and LinkedIn later, with Notify me; Google
+ * Analytics is the app's own, connected anywhere means connected here. Each
+ * platform keeps its own billing: said, never shown.
  */
 export function AdsConnections() {
   const t = useTranslations('ads.connections');
   const brandId = useBrandStore((s) => s.activeBrandId);
+  const [accounts, setAccounts] = useAdsAccounts(brandId);
   return (
     <div data-slot="ads-connections" className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+      <Platform id="chatgpt">
+        {brandId &&
+          (accounts === undefined ? (
+            <Skeleton className="h-7 w-full" />
+          ) : (
+            <ChatGptAdsAccounts brandId={brandId} accounts={accounts} onChange={setAccounts} />
+          ))}
+      </Platform>
       {SOON.map((id) => (
         <Platform key={id} id={id}>
           <Badge variant="outline">{t('soon')}</Badge>

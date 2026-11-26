@@ -16,7 +16,7 @@ import supabaseAdmin from '../../config/supabase.js';
 import { logger } from '../logger.js';
 import { sendEmail } from '../email.js';
 import { chatgptFanoutMode } from '../chatgpt-fanout.js';
-import { UNAVAILABLE_PLATFORMS } from '../cloro-scraper.js';
+import { unavailablePlatforms } from '../answer-providers/index.js';
 
 /** The page reads' statement timeout, and the share of it that warns. */
 export const READ_BUDGET_S = 8;
@@ -176,8 +176,8 @@ async function checkCloro(now) {
  *    When those days can't be read, ChatGPT alone goes unjudged that day.
  *  - `off` (the self-host default): nothing asks, so it isn't judged.
  *
- * A platform Cloro cannot deliver (UNAVAILABLE_PLATFORMS) runs nothing, so it
- * isn't judged either. Perplexity, the one FANOUT_EXPECTED name, is paused
+ * A platform the answer provider cannot deliver (unavailablePlatforms) runs
+ * nothing, so it isn't judged either. Perplexity, the one FANOUT_EXPECTED name, is paused
  * since 2026-11-06: until it comes back, only ChatGPT's sample and the drop
  * rule below can flag anything. Copilot left the list when it moved to Bing
  * AI Mode, which shares no searches.
@@ -274,7 +274,7 @@ async function checkFanout(now, mode = chatgptFanoutMode()) {
  * was then.
  */
 function fanoutExpectation(p) {
-  if (UNAVAILABLE_PLATFORMS.includes(p.platform)) return 'never';
+  if (unavailablePlatforms().includes(p.platform)) return 'never';
   if (p.platform === CHATGPT && p.chatgptFanout) {
     return { all: 'day', sample: 'week', off: 'never' }[p.chatgptFanout] ?? null;
   }

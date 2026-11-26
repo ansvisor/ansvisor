@@ -71,7 +71,13 @@ vi.mock('./_opportunities', async () => {
 // Connections' reads and Notify me.
 const toast = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn() }));
 vi.mock('sonner', () => ({ toast }));
-const api = vi.hoisted(() => ({ notifyAdsPlatform: vi.fn(), readAdsAnalytics: vi.fn() }));
+const api = vi.hoisted(() => ({
+  notifyAdsPlatform: vi.fn(),
+  readAdsAnalytics: vi.fn(),
+  readAdsAccounts: vi.fn(),
+  connectChatGptAds: vi.fn(),
+  disconnectAdsAccount: vi.fn(),
+}));
 vi.mock('@/lib/ads/api', async (original) => ({
   ...(await original<typeof import('@/lib/ads/api')>()),
   ...api,
@@ -90,6 +96,7 @@ const { PlanProvider } = await import('@/components/providers/plan-provider');
 const { useBrandStore } = await import('@/stores/use-brand-store');
 const { ChatPageSetterContext } = await import('@/components/chat/panel/chat-panel-context');
 const { UpgradeDialogContext } = await import('@/components/providers/upgrade-gate');
+const { RoleProvider } = await import('@/components/providers/role-provider');
 const { AdsApiError } = await import('@/lib/ads/api');
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT =
@@ -104,6 +111,7 @@ beforeEach(() => {
   analytics.track.mockClear();
   for (const fn of [...Object.values(api), ...Object.values(toast), openUpgrade]) fn.mockReset();
   api.readAdsAnalytics.mockResolvedValue({ status: 'connected' });
+  api.readAdsAccounts.mockResolvedValue([]);
   setPage.mockClear();
   window.history.replaceState(null, '', '/dashboard/ads');
   useBrandStore.setState({ brands: [], activeBrandId: null });
@@ -124,7 +132,14 @@ async function render({
   status = 'active',
   cloud = true,
   locked = false,
-}: { plan?: PlanId; status?: string | null; cloud?: boolean; locked?: boolean } = {}) {
+  role = 'admin',
+}: {
+  plan?: PlanId;
+  status?: string | null;
+  cloud?: boolean;
+  locked?: boolean;
+  role?: 'admin' | 'manager' | 'analyst';
+} = {}) {
   vi.stubEnv('NEXT_PUBLIC_IS_CLOUD', cloud ? 'true' : '');
   const dialog = { isLocked: locked, reason: 'ended' as const, adminName: null, openUpgrade };
   await act(async () => {
@@ -132,9 +147,11 @@ async function render({
       <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
         <PlanProvider planId={plan} subscriptionStatus={status}>
           <UpgradeDialogContext.Provider value={dialog}>
-            <ChatPageSetterContext.Provider value={setPage}>
-              <AdsView />
-            </ChatPageSetterContext.Provider>
+            <RoleProvider role={role}>
+              <ChatPageSetterContext.Provider value={setPage}>
+                <AdsView />
+              </ChatPageSetterContext.Provider>
+            </RoleProvider>
           </UpgradeDialogContext.Provider>
         </PlanProvider>
       </NextIntlClientProvider>,
@@ -504,13 +521,148 @@ describe('AdsView', () => {
       useBrandStore.setState({ activeBrandId: 'b1' });
     });
 
-    it('shows ChatGPT, Google and Microsoft coming soon with nothing to click, each billing on its own', async () => {
+    it('shows Google coming soon with nothing to click, billing on its own', async () => {
       await render();
-      for (const id of ['chatgpt', 'google', 'microsoft']) {
-        expect(card(id).textContent).toMatch(/Billing stays in .+Coming soon$/);
-        expect(card(id).querySelectorAll('a, button')).toHaveLength(0);
-      }
+      expect(card('google').textContent).toMatch(/Billing stays in Google Ads\.Coming soon$/);
+      expect(card('google').querySelectorAll('a, button')).toHaveLength(0);
+    });
+
+    describe('ChatGPT Ads (Phase 1, C2)', () => {
+      const account = {
+        id: 'a1',
+        platform: 'chatgpt',
+        externalId: 'acct_1',
+        name: 'Acme ChatGPT',
+        currencyCode: 'USD',
+        timeZone: null,
+        status: 'active',
+        lastError: null,
+        lastSyncedAt: null,
+        syncedThrough: null,
+        createdAt: '2026-11-22T00:00:00Z',
+      };
+      const dialog = () => document.querySelector<HTMLElement>('[role="dialog"]');
+      const keyField = () => document.querySelector<HTMLInputElement>('#chatgpt-ads-key')!;
+      const type = async (value: string) => {
+        const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!;
+        await act(async () => {
+          setter.call(keyField(), value);
+          keyField().dispatchEvent(new Event('input', { bubbles: true }));
+        });
+      };
+      const save = () =>
+        document.querySelector<HTMLButtonElement>('[data-action="conn.chatgpt.save"]')!;
+
+      it("reads the brand's accounts and lets an Admin paste a key, never shown back", async () => {
+        await render();
+        expect(api.readAdsAccounts).toHaveBeenCalledWith('b1');
+        expect(card('chatgpt').textContent).toContain('Not connected');
+        await act(async () => action('conn.chatgpt.connect', card('chatgpt'))!.click());
+        expect(dialog()?.textContent).toContain('Each key reaches one ad account');
+        expect(keyField().type).toBe('password');
+        expect(save().disabled).toBe(true);
+        api.connectChatGptAds.mockResolvedValueOnce(account);
+        await type('  sk-ads-secret  ');
+        await act(async () => save().click());
+        expect(api.connectChatGptAds).toHaveBeenCalledWith('b1', 'sk-ads-secret');
+        expect(toast.success).toHaveBeenCalledWith('Connected Acme ChatGPT.');
+        expect(card('chatgpt').textContent).toContain('Acme ChatGPT');
+        expect(card('chatgpt').textContent).toContain('ChatGPT Ads account · USD');
+        expect(card('chatgpt').textContent).not.toContain('sk-ads-secret');
+        expect(action('conn.chatgpt.connect', card('chatgpt'))?.textContent).toBe('Add account');
+      });
+
+      it('says why a key was refused and keeps the dialog open', async () => {
+        await render();
+        await act(async () => action('conn.chatgpt.connect', card('chatgpt'))!.click());
+        api.connectChatGptAds.mockRejectedValueOnce(
+          new AdsApiError('x', 422, { code: 'invalid_key' }),
+        );
+        await type('sk-bad');
+        await act(async () => save().click());
+        expect(dialog()?.querySelector('[role="alert"]')?.textContent).toBe(
+          "ChatGPT Ads didn't accept this key. Check it and try again.",
+        );
+        api.connectChatGptAds.mockRejectedValueOnce(
+          new AdsApiError('x', 502, { code: 'upstream' }),
+        );
+        await act(async () => save().click());
+        expect(dialog()?.querySelector('[role="alert"]')?.textContent).toBe(
+          "ChatGPT Ads didn't answer. Try again in a minute.",
+        );
+      });
+
+      it('opens the plan dialog on the demo brand or Starter', async () => {
+        await render();
+        await act(async () => action('conn.chatgpt.connect', card('chatgpt'))!.click());
+        api.connectChatGptAds.mockRejectedValueOnce(
+          new AdsApiError('x', 402, { code: 'demo_brand' }),
+        );
+        await type('sk-ads');
+        await act(async () => save().click());
+        expect(openUpgrade).toHaveBeenCalledTimes(1);
+        expect(dialog()).toBeNull();
+      });
+
+      it('lets an Admin disconnect an account, after asking', async () => {
+        api.readAdsAccounts.mockResolvedValueOnce([account]);
+        await render();
+        expect(card('chatgpt').textContent).toContain(
+          'Acme ChatGPTChatGPT Ads account · USDFirst read within a day: the last 90 daysConnected',
+        );
+        await act(async () => action('conn.chatgpt.disconnect', card('chatgpt'))!.click());
+        expect(dialog()?.textContent).toContain('Disconnect Acme ChatGPT?');
+        api.disconnectAdsAccount.mockResolvedValueOnce({ id: 'a1' });
+        await act(async () =>
+          document
+            .querySelector<HTMLElement>('[data-action="conn.chatgpt.disconnectConfirm"]')!
+            .click(),
+        );
+        expect(api.disconnectAdsAccount).toHaveBeenCalledWith('b1', 'a1');
+        expect(card('chatgpt').textContent).toContain('Not connected');
+        expect(toast.success).toHaveBeenCalledWith('Disconnected Acme ChatGPT.');
+      });
+
+      it('shows each account’s daily read: still to come, when it last read, or why it failed', async () => {
+        api.readAdsAccounts.mockResolvedValueOnce([
+          account,
+          { ...account, id: 'a2', name: 'Read', lastSyncedAt: '2026-11-22T05:20:00Z' },
+          { ...account, id: 'a3', name: 'Refused', status: 'error', lastError: 'key_refused' },
+          { ...account, id: 'a4', name: 'Odd', status: 'error', lastError: 'something new' },
+        ]);
+        await render();
+        const lines = [...card('chatgpt').querySelectorAll('[data-slot="ads-sync"]')].map(
+          (el) => el.textContent,
+        );
+        expect(lines[0]).toBe('First read within a day: the last 90 days');
+        expect(lines[1]).toMatch(/^Numbers read Nov 22, 2026/);
+        expect(lines[2]).toBe('ChatGPT Ads refused the key. Paste a new one.');
+        expect(lines[3]).toBe("Couldn't read the numbers. Ansvisor tries again within a day.");
+      });
+
+      it('shows other roles what is connected, with nothing to change', async () => {
+        api.readAdsAccounts.mockResolvedValueOnce([account]);
+        await render({ role: 'manager' });
+        expect(card('chatgpt').textContent).toContain('Acme ChatGPT');
+        expect(card('chatgpt').querySelectorAll('button')).toHaveLength(0);
+        api.readAdsAccounts.mockResolvedValueOnce([]);
+        await act(async () => useBrandStore.setState({ activeBrandId: 'b2' }));
+        expect(card('chatgpt').textContent).toContain('An Admin connects this');
+        api.readAdsAccounts.mockRejectedValueOnce(new Error('offline'));
+        await act(async () => useBrandStore.setState({ activeBrandId: 'b3' }));
+        expect(card('chatgpt').textContent).toContain("Couldn't check");
+      });
+    });
+
+    it('shows Microsoft Advertising coming later, with Notify me', async () => {
+      await render();
+      api.notifyAdsPlatform.mockResolvedValueOnce({ platform: 'microsoft', logged: true });
       expect(card('microsoft').textContent).toContain('Microsoft Advertising');
+      expect(card('microsoft').textContent).toContain('Coming later');
+      expect(card('microsoft').textContent).not.toContain('Coming soon');
+      await act(async () => action('conn.notify', card('microsoft'))!.click());
+      expect(api.notifyAdsPlatform).toHaveBeenCalledWith('b1', 'microsoft');
+      expect(card('microsoft').textContent).toContain("We'll tell you");
     });
 
     it('logs Notify me once for Meta or LinkedIn, then says "We\'ll tell you"', async () => {
@@ -561,6 +713,8 @@ describe('AdsView', () => {
       await render();
       const controls = [...slot('connections')!.querySelectorAll('a, button')];
       expect(controls.map((c) => c.getAttribute('data-action'))).toEqual([
+        'conn.chatgpt.connect',
+        'conn.notify',
         'conn.notify',
         'conn.notify',
         'conn.manage',

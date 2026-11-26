@@ -15,7 +15,10 @@ import { BRAND, ORG, OTHER_ORG, PEOPLE } from './testing/chat-fixtures';
 vi.mock('@/lib/supabase/admin', async () => ({
   supabaseAdmin: (await import('./testing/fake-supabase')).createFakeSupabase(),
 }));
-vi.mock('./engine', () => ({ stopChatRun: vi.fn(async () => ({ ok: true })) }));
+vi.mock('./engine', async (real) => ({
+  stopChatRun: vi.fn(async () => ({ ok: true })),
+  titleOf: (await real<typeof import('./engine')>()).titleOf,
+}));
 
 const { supabaseAdmin } = await import('@/lib/supabase/admin');
 const db = supabaseAdmin as unknown as FakeSupabase;
@@ -383,6 +386,160 @@ describe('deleteChat and restoreChat', () => {
   it("doesn't delete another workspace's chat", async () => {
     db.tables.chat_conversations = [chat(1, { organization_id: OTHER_ORG })];
     expect(await chats.deleteChat(ME, CHAT(1))).toEqual({ ok: false, reason: 'not_found' });
+  });
+});
+
+describe('askAgainChatId', () => {
+  const message = 'What’s new in Ansvisor and how can it help me?';
+  it("finds the person's own newest chat named by the question, for the brand", async () => {
+    const asked = { title: message, brand_id: BRAND };
+    const late = '2026-10-30T10:00:00.000Z';
+    db.tables.chat_conversations = [
+      chat(1, asked),
+      chat(2, asked),
+      chat(3, { ...asked, last_message_at: late, archived_at: late }),
+      chat(4, { ...asked, last_message_at: late, deleted_at: late }),
+      chat(5, { ...asked, last_message_at: late, user_id: TEAMMATE.userId, shared_at: late }),
+      chat(6, { ...asked, last_message_at: late, title: 'My updates' }),
+      chat(7, { ...asked, last_message_at: late, organization_id: OTHER_ORG }),
+      chat(8, {
+        ...asked,
+        last_message_at: late,
+        brand_id: '99999999-0000-4000-8000-000000000000',
+      }),
+    ];
+    expect(await chats.askAgainChatId(reader, ME, { message, brandId: BRAND })).toBe(CHAT(2));
+    expect(await chats.askAgainChatId(reader, ME, { message: 'Something else' })).toBeNull();
+  });
+
+  it('finds a renamed chat by the question asked in it, only among their own', async () => {
+    const late = '2026-10-30T10:00:00.000Z';
+    db.tables.chat_conversations = [
+      chat(1, { title: 'My updates', brand_id: BRAND }),
+      chat(2, { title: 'Weekly news', brand_id: BRAND, last_message_at: late }),
+      chat(3, {
+        title: 'Theirs',
+        user_id: TEAMMATE.userId,
+        shared_at: late,
+        last_message_at: late,
+      }),
+      chat(4, { title: 'Gone', deleted_at: late, last_message_at: late }),
+    ];
+    const asked = (n: number, conversation: number, role = 'user') => ({
+      id: `m${n}`,
+      conversation_id: CHAT(conversation),
+      role,
+      content_md: message,
+      created_at: late,
+    });
+    db.tables.chat_messages = [asked(1, 1), asked(2, 3), asked(3, 4), asked(4, 2, 'assistant')];
+    expect(await chats.askAgainChatId(reader, ME, { message, brandId: BRAND })).toBe(CHAT(1));
+    db.tables.chat_messages.push(asked(5, 2));
+    expect(await chats.askAgainChatId(reader, ME, { message, brandId: BRAND })).toBe(CHAT(2));
+  });
+});
+
+describe('latestPanelChatId', () => {
+  it("finds the person's own newest panel chat on that page and brand, nothing else", async () => {
+    const page = '/dashboard/content/drafts/abc';
+    const panel = { origin: 'panel', origin_page: page, brand_id: BRAND };
+    db.tables.chat_conversations = [
+      chat(1, panel),
+      chat(2, panel),
+      chat(3, {
+        ...panel,
+        last_message_at: '2026-10-30T10:00:00.000Z',
+        archived_at: '2026-10-30T11:00:00.000Z',
+      }),
+      chat(4, {
+        ...panel,
+        last_message_at: '2026-10-30T10:00:00.000Z',
+        deleted_at: '2026-10-30T11:00:00.000Z',
+      }),
+      chat(5, {
+        ...panel,
+        last_message_at: '2026-10-30T10:00:00.000Z',
+        user_id: TEAMMATE.userId,
+        shared_at: '2026-10-12T00:00:00.000Z',
+      }),
+      chat(6, {
+        ...panel,
+        last_message_at: '2026-10-30T10:00:00.000Z',
+        origin_page: '/dashboard/content/drafts/xyz',
+      }),
+      chat(7, { ...panel, last_message_at: '2026-10-30T10:00:00.000Z', origin: 'page' }),
+      chat(8, {
+        ...panel,
+        last_message_at: '2026-10-30T10:00:00.000Z',
+        brand_id: '99999999-0000-4000-8000-000000000000',
+      }),
+      chat(9, {
+        ...panel,
+        last_message_at: '2026-10-30T10:00:00.000Z',
+        organization_id: OTHER_ORG,
+      }),
+    ];
+    expect(await chats.latestPanelChatId(reader, ME, { page, brandId: BRAND })).toBe(CHAT(2));
+    expect(await chats.latestPanelChatId(reader, ME, { page: '/dashboard/mentions' })).toBeNull();
+  });
+
+  it('takes an app path only', () => {
+    expect(chats.panelChatQuery.safeParse({ page: '/dashboard/mentions' }).success).toBe(true);
+    expect(chats.panelChatQuery.safeParse({ page: 'https://x.com/dashboard' }).success).toBe(false);
+  });
+});
+
+describe('deleteChats and restoreChats', () => {
+  it("deletes only the person's own chats in their workspace, stopping running agents first", async () => {
+    db.tables.chat_conversations = [
+      chat(1),
+      chat(2, { user_id: TEAMMATE.userId, shared_at: '2026-10-12T00:00:00.000Z' }),
+      chat(3, { organization_id: OTHER_ORG }),
+      chat(4, { deleted_at: '2026-10-30T10:00:00.000Z' }),
+      chat(5),
+    ];
+    db.tables.chat_runs = [run(1, 5, { status: 'running', finished_at: null })];
+    const ids = await chats.deleteChats(ME, [CHAT(1), CHAT(2), CHAT(3), CHAT(4), CHAT(5), CHAT(1)]);
+    expect(ids.sort()).toEqual([CHAT(1), CHAT(5)]);
+    expect(stopChatRun).toHaveBeenCalledWith(ME, RUN(1));
+    expect(db.tables.chat_conversations.map((c) => c.deleted_at !== null)).toEqual([
+      true,
+      false,
+      false,
+      true,
+      true,
+    ]);
+  });
+
+  it('lets an Admin clear only their own chats, never a shared one', async () => {
+    db.tables.chat_conversations = [
+      chat(1, { user_id: TEAMMATE.userId, shared_at: '2026-10-12T00:00:00.000Z' }),
+    ];
+    expect(await chats.deleteChats(ADMIN, [CHAT(1)])).toEqual([]);
+    expect(db.tables.chat_conversations[0].deleted_at).toBeNull();
+  });
+
+  it("brings back the person's own chats within the Undo minute, nothing older or theirs", async () => {
+    const now = Date.parse('2026-10-30T12:00:00.000Z');
+    const recent = new Date(now - 5_000).toISOString();
+    db.tables.chat_conversations = [
+      chat(1, { deleted_at: recent }),
+      chat(2, { deleted_at: new Date(now - chats.DELETED_CHAT_UNDO_MS - 1).toISOString() }),
+      chat(3, { user_id: TEAMMATE.userId, deleted_at: recent }),
+    ];
+    expect(await chats.restoreChats(ME, [CHAT(1), CHAT(2), CHAT(3)], now)).toEqual([CHAT(1)]);
+    expect(db.tables.chat_conversations.map((c) => c.deleted_at === null)).toEqual([
+      true,
+      false,
+      false,
+    ]);
+  });
+
+  it('takes 1–200 ids', () => {
+    expect(chats.bulkInput.safeParse({ action: 'delete', ids: [] }).success).toBe(false);
+    expect(chats.bulkInput.safeParse({ action: 'delete', ids: [CHAT(1)] }).success).toBe(true);
+    const many = Array.from({ length: 201 }, (_, i) => CHAT(i));
+    expect(chats.bulkInput.safeParse({ action: 'restore', ids: many }).success).toBe(false);
   });
 });
 
