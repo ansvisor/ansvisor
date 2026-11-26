@@ -12,18 +12,29 @@ vi.mock('@/lib/actions/menu-access', () => ({ getMyMenu }));
 const results = vi.hoisted(() => ({
   rows: [] as { id: string }[],
   error: null as { message: string } | null,
+  brands: [{ id: 'b1' }, { id: 'b2' }] as { id: string }[],
   reads: 0,
+  brandIds: null as string[] | null,
 }));
 vi.mock('@/lib/supabase/server', () => ({
   createClient: async () => ({
     from: (table: string) => {
+      if (table === 'brands') {
+        return { select: async () => ({ data: results.brands, error: null }) };
+      }
       expect(table).toBe('prompt_results');
       return {
         select: () => ({
-          limit: async (n: number) => {
-            expect(n).toBe(1);
-            results.reads += 1;
-            return { data: results.rows, error: results.error };
+          in: (column: string, ids: string[]) => {
+            expect(column).toBe('brand_id');
+            results.brandIds = ids;
+            return {
+              limit: async (n: number) => {
+                expect(n).toBe(1);
+                results.reads += 1;
+                return { data: results.rows, error: results.error };
+              },
+            };
           },
         }),
       };
@@ -39,12 +50,22 @@ beforeEach(() => {
   results.rows = [];
   results.error = null;
   results.reads = 0;
+  results.brands = [{ id: 'b1' }, { id: 'b2' }];
+  results.brandIds = null;
 });
 
 describe('readMyHome', () => {
   it('opens Brand Visibility’s Overview once the workspace has an answer', async () => {
     results.rows = [{ id: 'r1' }];
     expect(await readMyHome()).toBe('/dashboard/insights');
+    // Read by the person's brands: the brand index, never a scan of every answer.
+    expect(results.brandIds).toEqual(['b1', 'b2']);
+  });
+
+  it('opens Tracked Prompts for a workspace with no brand, without reading answers', async () => {
+    results.brands = [];
+    expect(await readMyHome()).toBe('/dashboard/prompts/tracked');
+    expect(results.reads).toBe(0);
   });
 
   it('opens Tracked Prompts before the first answer, or when the read fails', async () => {
