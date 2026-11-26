@@ -11,7 +11,7 @@ vi.mock('../logger.js', () => ({
 const categoryPageFor = vi.hoisted(() => vi.fn());
 vi.mock('./category-play.js', () => ({ categoryPageFor: (...a) => categoryPageFor(...a) }));
 
-import { generateActionsForBrand } from './generate.js';
+import { generateActionsForBrand, isReplaceable } from './generate.js';
 import { ENGINE_THRESHOLDS } from '../../config/action-engine.js';
 
 const { maxNewActionsPerDay } = ENGINE_THRESHOLDS.noise;
@@ -38,6 +38,8 @@ function mockDb({
   promptVolumes = [],
   failActionUpdates = false,
   brand = null,
+  // Someone acted on the stale action before tonight's pass replaced it.
+  staleKept = false,
 } = {}) {
   // `log` keeps the order of the writes across tables.
   const writes = { inserted: [], updated: [], upserted: [], log: [] };
@@ -90,6 +92,9 @@ function mockDb({
       if (state.op === 'insert') return { data: { id: `new-${table}` }, error: null };
       if (state.op === 'upsert') return { data: null, error: null };
       if (state.op === 'update') {
+        if (table === 'actions' && state.payload.dismiss_reason === 'replaced') {
+          return { data: staleKept ? [] : [{ id: 'stale' }], error: null };
+        }
         const failed =
           failActionUpdates && table === 'actions' && 'priority_score' in state.payload;
         return { data: null, error: failed ? { message: 'column does not exist' } : null };
@@ -357,6 +362,7 @@ describe('generateActionsForBrand', () => {
 
     expect(summary).toEqual({
       created: 0,
+      replaced: 0,
       rescored: 0,
       refreshed: 0,
       resting: 0,
@@ -375,6 +381,122 @@ describe('generateActionsForBrand', () => {
  * tested here is the part it still owns — whether a brand may have this
  * definition at all, and how many it may have in one day.
  */
+describe('a stale action', () => {
+  const stale = (over = {}) => ({
+    id: 'a1',
+    dedup_key: 'recover_visibility',
+    status: 'new',
+    created_at: daysAgo(45),
+    stale_at: daysAgo(10),
+    baseline: { signals: [{ id: 's1' }] },
+    ...over,
+  });
+  const events = (writes) =>
+    writes.inserted
+      .filter((w) => w.table === 'action_events')
+      .map((w) => [w.rows[0].action_id, w.rows[0].event, w.rows[0].data]);
+
+  it('is replaced by a new action of its kind, its still-open signals included', async () => {
+    const writes = mockDb({
+      signals: [signal({ id: 's1', action_id: 'a1' }), signal({ id: 's2' })],
+      activeActions: [stale()],
+    });
+
+    const summary = await generateActionsForBrand(BRAND, { now: NOW });
+
+    expect(summary).toMatchObject({ created: 1, replaced: 1, refreshed: 0 });
+    const retired = writes.updated.find(
+      (w) => w.table === 'actions' && w.patch.dismiss_reason === 'replaced',
+    );
+    expect(retired.patch).toMatchObject({ status: 'dismissed', completed_at: null });
+    const opened = writes.inserted.find((w) => w.table === 'actions');
+    expect(opened).toBeDefined();
+    // Both signals: the old scope and the newcomer.
+    const links = writes.upserted.filter((w) => w.table === 'action_signals');
+    expect(links.flatMap((w) => w.rows.map((r) => r.signal_id)).sort()).toEqual(['s1', 's2']);
+    expect(events(writes)).toEqual(
+      expect.arrayContaining([
+        ['a1', 'replaced', { by: 'new-actions' }],
+        ['new-actions', 'replaces', { action: 'a1' }],
+      ]),
+    );
+    // Its evidence went to the new action, not onto the old one.
+    expect(events(writes).some(([id, event]) => id === 'a1' && event === 'signals_linked')).toBe(
+      false,
+    );
+  });
+
+  it('closes before the new one opens: one active action per kind', async () => {
+    const writes = mockDb({ signals: [signal({ id: 's2' })], activeActions: [stale()] });
+
+    await generateActionsForBrand(BRAND, { now: NOW });
+
+    const retiredAt = writes.log.indexOf('update actions');
+    const linkedAt = writes.log.indexOf('upsert action_signals');
+    expect(retiredAt).toBeGreaterThanOrEqual(0);
+    expect(retiredAt).toBeLessThan(linkedAt);
+  });
+
+  it('is replaced even when the kind closed a cycle recently: nobody closed this one', async () => {
+    mockDb({
+      signals: [signal({ id: 's2' })],
+      activeActions: [stale()],
+      closedActions: [
+        { dedup_key: 'recover_visibility', completed_at: daysAgo(3), updated_at: daysAgo(3) },
+      ],
+    });
+
+    const summary = await generateActionsForBrand(BRAND, { now: NOW });
+
+    expect(summary).toMatchObject({ created: 1, replaced: 1, resting: 0 });
+  });
+
+  it('is kept when someone is working on it', async () => {
+    const writes = mockDb({
+      signals: [signal({ id: 's2' })],
+      activeActions: [stale({ status: 'in_progress' })],
+    });
+
+    const summary = await generateActionsForBrand(BRAND, { now: NOW });
+
+    expect(summary).toMatchObject({ created: 0, replaced: 0, refreshed: 1 });
+    expect(writes.inserted.find((w) => w.table === 'actions')).toBeUndefined();
+  });
+
+  it('is kept when it is not stale', async () => {
+    const writes = mockDb({
+      signals: [signal({ id: 's2' })],
+      activeActions: [stale({ stale_at: null })],
+    });
+
+    const summary = await generateActionsForBrand(BRAND, { now: NOW });
+
+    expect(summary).toMatchObject({ created: 0, replaced: 0, refreshed: 1 });
+    expect(writes.updated.some((w) => w.patch.dismiss_reason === 'replaced')).toBe(false);
+  });
+
+  it('opens nothing when someone acted on it before the pass closed it', async () => {
+    const writes = mockDb({
+      signals: [signal({ id: 's2' })],
+      activeActions: [stale()],
+      staleKept: true,
+    });
+
+    const summary = await generateActionsForBrand(BRAND, { now: NOW });
+
+    expect(summary).toMatchObject({ created: 0, replaced: 0 });
+    expect(writes.inserted.find((w) => w.table === 'actions')).toBeUndefined();
+  });
+});
+
+describe('isReplaceable', () => {
+  it('takes a stale action still New, and nothing else', () => {
+    expect(isReplaceable({ status: 'new', stale_at: daysAgo(1) })).toBe(true);
+    expect(isReplaceable({ status: 'new', stale_at: null })).toBe(false);
+    expect(isReplaceable({ status: 'on_hold', stale_at: daysAgo(1) })).toBe(false);
+  });
+});
+
 describe('eligibility', () => {
   it('does not raise a definition the brand has no data for', async () => {
     const writes = mockDb({ signals: [signal({ kind: 'page_opportunity', impact: 'medium' })] });

@@ -182,8 +182,10 @@ export function UserProfileNavItem({
   const signOut = async () => {
     onClick?.();
     await createClient().auth.signOut();
-    router.push('/sign-in');
-    router.refresh();
+    // A full load, not router.push + refresh: refreshing the page left
+    // behind, now signed out, sent it to /sign-in?next=<that page>, and the
+    // next sign-in opened it instead of the home.
+    window.location.assign('/sign-in');
   };
 
   // Settings' sections, by the rules the Settings page lists them with.

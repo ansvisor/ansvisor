@@ -410,6 +410,9 @@ export function parseRows(text) {
       skipped += 1;
       continue;
     }
+    // Replaced after going stale (00563): nobody closed it, so it says
+    // nothing about the detector. An older export may still hold one.
+    if (row.dismissReason === 'replaced') continue;
     const current = num(row.current);
     const change = num(row.change);
     const { strength, from } = strengthOf(row.kind, current, change);

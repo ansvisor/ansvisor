@@ -35,7 +35,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-const handlers = { onRetry: vi.fn(), onClose: vi.fn() };
+const handlers = { onRetry: vi.fn(), onClose: vi.fn(), onOpen: vi.fn() };
 
 async function show(setup: DemoSetupState | null) {
   await act(async () =>
@@ -111,5 +111,19 @@ describe('DemoSetupDialog', () => {
   it('shows nothing without a setup', async () => {
     await show(null);
     expect(document.body.querySelector('[data-step]')).toBeNull();
+  });
+
+  it('says a ready demo whose page did not open, with Open the demo and Close', async () => {
+    await show({ ...asked(60_000), answeredAt: Date.now() - 50_000, stuck: true });
+    expect(row('reports').dataset.state).toBe('done');
+    expect(document.body.querySelector('[role="alert"]')?.textContent).toBe(
+      "The demo is ready, but its page didn't open. Open it again, or close this and try later.",
+    );
+    expect(document.body.textContent).not.toContain('Ready. Opening Prompts…');
+    const open = [...document.body.querySelectorAll('button')].find(
+      (b) => b.textContent === 'Open the demo',
+    )!;
+    await act(async () => open.click());
+    expect(handlers.onOpen).toHaveBeenCalledTimes(1);
   });
 });

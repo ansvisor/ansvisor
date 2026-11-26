@@ -213,13 +213,18 @@ export function HistoryDrawer({
 
           <section>
             <p className="text-xs font-medium text-muted-foreground">{t('drawer.result')}</p>
-            {item.status === 'dismissed' && item.dismissReason && (
-              <p className="mt-1 text-xs">
-                {t('drawer.dismissedBecause', {
-                  reason: tDismiss(`${item.dismissReason}.label`),
-                })}
-              </p>
+            {item.status === 'dismissed' && item.dismissReason === 'replaced' && (
+              <p className="mt-1 text-xs">{t('drawer.replaced')}</p>
             )}
+            {item.status === 'dismissed' &&
+              item.dismissReason &&
+              item.dismissReason !== 'replaced' && (
+                <p className="mt-1 text-xs">
+                  {t('drawer.dismissedBecause', {
+                    reason: tDismiss(`${item.dismissReason}.label`),
+                  })}
+                </p>
+              )}
             {!!item.readings?.length && (
               <p className="mt-1 text-xs">
                 {t('drawer.readings', {

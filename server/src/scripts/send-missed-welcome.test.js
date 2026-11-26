@@ -399,7 +399,9 @@ describe('--send', () => {
     expect(result).toEqual({
       owed: 6,
       oldClaims: 0,
+      stuck: 0,
       sent: 1,
+      posthogSent: 0,
       refused: 2,
       unknown: 2,
       skipped: 1,
@@ -530,5 +532,104 @@ describe('--send', () => {
     );
     expect(admin.listUsers).not.toHaveBeenCalled();
     expect(admin.updateUserById).not.toHaveBeenCalled();
+  });
+});
+
+describe('--stuck-since', () => {
+  const NOW = Date.parse('2026-11-25T10:00:00Z');
+  const now = () => NOW;
+  // Claimed by its first page on 20 Nov, read back wrong (readback_mismatch): nothing sent.
+  const stuckPerson = person(10, {
+    created_at: '2026-11-20T09:00:00Z',
+    email_confirmed_at: '2026-11-20T09:01:00Z',
+    last_sign_in_at: '2026-11-20T09:01:00Z',
+    app_metadata: {
+      provider: 'google',
+      providers: ['google'],
+      signup_event_at: '2026-11-20T09:01:05.000Z',
+      signup_event_tries: 1,
+      signup_posthog_at: '2026-11-20T09:01:05.000Z',
+      signup_posthog_tries: 1,
+      signup_claim_id: 'c10',
+    },
+  });
+
+  it('reads the date, and refuses one that is not', () => {
+    expect(parseArgs(['--stuck-since', '2026-11-19T00:00:00Z']).stuckSince).toBe(
+      Date.parse('2026-11-19T00:00:00Z'),
+    );
+    expect(parseArgs([]).stuckSince).toBeNull();
+    expect(() => parseArgs(['--stuck-since', 'soon'])).toThrow("--stuck-since isn't a date");
+  });
+
+  it('leaves a stuck claim out without it', async () => {
+    const admin = authServer([...ACCOUNTS, stuckPerson]);
+    const result = await run(parseArgs([]), { admin, sleep, log, now });
+    expect(result.owed).toBe(2);
+    expect(output()).not.toContain('stuck');
+  });
+
+  it('sends the welcome and PostHog signed_up again for a claim written in the window, once', async () => {
+    const admin = authServer([...ACCOUNTS, stuckPerson]);
+    const fetchImpl = vi.fn(async () => ({ ok: true, status: 200 }));
+    const posthog = vi.fn(async (events) => events.length);
+    const opts = parseArgs(['--send', '--stuck-since', '2026-11-19T00:00:00Z']);
+
+    const result = await run(opts, {
+      admin,
+      apiKey: 're_test',
+      fetchImpl,
+      sleep,
+      log,
+      now,
+      posthog,
+    });
+
+    // u1 and u2 as before, and u10; u3's claim (15 Nov) is before the window.
+    expect(result).toMatchObject({ owed: 3, stuck: 1, sent: 3, posthogSent: 1 });
+    expect(fetchImpl.mock.calls.map(([, init]) => JSON.parse(init.body).email)).toContain(
+      'person10@example.com',
+    );
+    expect(posthog).toHaveBeenCalledWith([
+      {
+        event: 'signed_up',
+        distinctId: 'u10',
+        properties: { source: 'oauth', provider: 'google' },
+        timestamp: '2026-11-20T09:00:00Z',
+      },
+    ]);
+    const meta = admin.users.get('u10').app_metadata;
+    expect(meta.signup_event_tries).toBe(2);
+    expect(meta.signup_claim_id).not.toBe('c10');
+    expect(meta.signup_event_at).toBe(new Date(NOW).toISOString());
+    expect(meta.signup_posthog_at).toBe(new Date(NOW).toISOString());
+    expect(admin.users.get('u3').app_metadata).toEqual(ACCOUNTS[2].app_metadata);
+    expect(output()).toContain('(google, stuck claim): PostHog signed_up sent');
+    expect(output()).not.toMatch(PRIVATE);
+
+    // Claimed again by this run: a second run picks nobody.
+    lines = [];
+    const again = await run(opts, {
+      admin,
+      apiKey: 're_test',
+      fetchImpl,
+      sleep,
+      log,
+      now,
+      posthog,
+    });
+    expect(again).toMatchObject({ owed: 0, sent: 0, posthogSent: 0 });
+    expect(posthog).toHaveBeenCalledTimes(1);
+  });
+
+  it('sends no PostHog event, and keeps its claim as it was, without the key', async () => {
+    const admin = authServer([stuckPerson]);
+    const fetchImpl = vi.fn(async () => ({ ok: true, status: 200 }));
+    const opts = parseArgs(['--send', '--stuck-since', '2026-11-19T00:00:00Z']);
+
+    const result = await run(opts, { admin, apiKey: 're_test', fetchImpl, sleep, log, now });
+
+    expect(result).toMatchObject({ owed: 1, sent: 1, posthogSent: 0 });
+    expect(admin.users.get('u10').app_metadata.signup_posthog_at).toBe('2026-11-20T09:01:05.000Z');
   });
 });

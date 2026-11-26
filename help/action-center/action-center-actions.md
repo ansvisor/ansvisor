@@ -1,15 +1,15 @@
 ---
 title: Work with Action Center actions
 route: /dashboard/action-center/actions
-keywords: [actions, today, todays focus, agent work, i approve first, agent starts on its own, action status, assign action, dismiss action, export actions, top actions, run agent, run with chat, stale actions, still relevant, confidence, sort actions, recently updated, action number, find action by number, action code, previously, translated, your language, new since your last visit, closed this week, deleted actions, missing actions]
+keywords: [actions, today, todays focus, agent work, i approve first, agent starts on its own, action status, assign action, dismiss action, export actions, top actions, run agent, run with chat, stale actions, still relevant, replaced actions, no new actions, confidence, sort actions, recently updated, action number, find action by number, action code, previously, translated, your language, new since your last visit, closed this week, deleted actions, missing actions]
 synonyms: [recommendations, work items, to-dos, action list, let an agent do this, agent on an action, what should I do today, what to do first, who starts agent work, order actions, newest first, oldest first]
 plan: all
-updated: 2026-11-21
+updated: 2026-11-25
 last_checked: 2026-11-19
 owner: Cihan
 app_version: 0.3.0
 approved: true
-sources: [docs/guides/action-center.mdx]
+sources: [docs/guides/action-center.mdx, server/src/lib/action-center/generate.js]
 ---
 An action is one piece of work with an outcome, built from the evidence behind it. Ansvisor groups many signals into one action: six valuable pages with no AI traffic become one "Capture AI traffic" action with six linked signals, not six rows. New actions are added after the daily tracking run, on the **Actions** tab.
 
@@ -93,6 +93,10 @@ An action that has stayed **New** for 30 days, with no one assigning, editing, s
 If it still matters, click **Keep** in the open action, or **Still relevant** in the row menu. The hint and label go, its 30 days start again, and History says who kept it. Any other change to the action, or moving it out of New, clears the label too. If it no longer matters, click **Dismiss**.
 
 An open action whose signals have all resolved shows **Signal resolved, review** instead of a signal count. It stays open: check whether the work is done, then complete or dismiss it.
+
+## Replaced actions
+
+If a stale action's kind still finds something, the nightly run replaces it: it closes the old one and opens a new action of the same kind from the latest findings, the old one's open signals included. History shows the old one as **Replaced by a newer action**, not as dismissed by you. An action someone is working on, or kept with **Still relevant**, is never replaced.
 
 ## The top of an action
 

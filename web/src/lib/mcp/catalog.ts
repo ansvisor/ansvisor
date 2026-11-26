@@ -10,6 +10,7 @@ import {
   readForIds,
 } from '@/lib/shopping/catalog-read';
 import { readiness, type ReadinessCheck } from '@/lib/shopping/products';
+import { feedGaps, type FeedGaps } from '@/lib/shopping/feed-gaps';
 import { brandAllowed, planIncludes } from './data';
 
 /**
@@ -227,6 +228,33 @@ export async function listCatalogProductsFor(
     products,
     next_offset: offset + ids.length < total ? offset + ids.length : null,
   };
+}
+
+/**
+ * What the brand's product feed is missing for AI shopping answers, over its
+ * whole live catalog (up to PRODUCTS_TABLE_MAX products, as Product
+ * Visibility reads it): each readiness check, how many products miss it and
+ * a few of them, the most readiness lost first (feed-gaps.ts). Worked out
+ * from the catalog alone, so on every plan, as list_catalog_products' GTIN,
+ * price, stock and photo are. Null for a brand outside the key's
+ * organization or the person's brands.
+ */
+export async function getCatalogFeedGapsFor(
+  auth: McpAuthContext,
+  brandId: string,
+): Promise<FeedGaps | null> {
+  if (!(await brandAllowed(auth, brandId))) return null;
+  const [products, { count, error }] = await Promise.all([
+    readCatalogProducts(supabaseAdmin, brandId, null),
+    supabaseAdmin
+      .from('catalog_products')
+      .select('id', { count: 'exact', head: true })
+      .eq('brand_id', brandId)
+      .is('removed_at', null),
+  ]);
+  if (error) throw new Error(error.message);
+  // More live products than one read takes (PRODUCTS_TABLE_MAX): the counts cover those read.
+  return feedGaps(products, (count ?? 0) > products.length);
 }
 
 const noIssues = (): McpIssueCounts => ({ disapproved: 0, demoted: 0, not_impacted: 0 });

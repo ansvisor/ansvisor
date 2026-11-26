@@ -42,6 +42,17 @@ const improved = () => ['completed', 'improved'];
 const rejected = (reason = 'not_relevant') => ['dismissed', 'pending_measurement', reason];
 
 describe('parseRows', () => {
+  it('leaves out an action replaced after it went stale: nobody closed it', () => {
+    const { rows, skipped } = parseRows(
+      [
+        '{"action":"a1","kind":"k","current":1,"change":-2,"status":"dismissed","dismissReason":"replaced"}',
+        '{"action":"a2","kind":"k","current":1,"change":-2,"status":"dismissed","dismissReason":"not_now"}',
+      ].join('\n'),
+    );
+    expect(skipped).toBe(0);
+    expect(rows.map((row) => row.action)).toEqual(['a2']);
+  });
+
   it('reads baseline values, numbers given as text too, and counts lines that are not rows', () => {
     const { rows, skipped, withoutBaseline } = parseRows(
       [

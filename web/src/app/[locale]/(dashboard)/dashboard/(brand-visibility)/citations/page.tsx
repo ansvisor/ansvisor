@@ -989,7 +989,8 @@ export default function CitationsPage() {
         ? (cache.get<boolean>(hasCitationsKey) ?? null)
         : null;
 
-  const [sourceTab, setSourceTab] = useState<'domains' | 'urls' | 'gaps' | 'types'>('domains');
+  // The pages AI cites first: the URLs say more at a glance than their domains.
+  const [sourceTab, setSourceTab] = useState<'domains' | 'urls' | 'gaps' | 'types'>('urls');
   const [gaps, setGaps] = useState<CitationGaps | null>(null);
   const [gapsLoading, setGapsLoading] = useState(false);
   const [gapsFailed, setGapsFailed] = useState(false);
