@@ -315,7 +315,7 @@ export async function pollScraperResult(taskId, scraperId, opts = {}) {
         { taskId, scraperId, polls, credits: job.credits_used },
         'anakin task completed',
       );
-      return parseScraperResponse(job, scraperId);
+      return parseScraperResponse(job, scraperId, { region: opts.region });
     }
     if (job?.status === 'failed' || job?.status === 'EXECUTION_FAILED') {
       const reason = job.error?.message || job.error?.code || 'Unknown failure';
@@ -429,8 +429,28 @@ const FIXED_MODELS = {
  * @throws {Error} when the platform gave no answer (Google served no AI
  *   Overview, Naver no AI Briefing): nothing is stored for the task.
  */
-export function parseScraperResponse(job, scraperId) {
+/**
+ * Where Gemini answered from, when that isn't the asked country: `country`
+ * on its result (`detected_location` names the place). Null when they match,
+ * or when either is unknown (no region asked: the US; no country returned).
+ */
+export function wrongCountry(payload, region) {
+  const got = typeof payload?.country === 'string' ? payload.country.trim().toUpperCase() : '';
+  if (!/^[A-Z]{2}$/.test(got)) return null;
+  const asked = (parseLocation(region).country || 'US').toUpperCase();
+  const same = (code) => (code === 'UK' ? 'GB' : code);
+  return same(got) === same(asked) ? null : { asked, got };
+}
+
+export function parseScraperResponse(job, scraperId, { region } = {}) {
   const payload = answerPayload(job);
+  const wrong = scraperId === 'gemini-web' ? wrongCountry(payload, region) : null;
+  if (wrong) {
+    // Not refused by Anakin: Gemini answered from elsewhere (Anakin, 25 Nov
+    // 2026). Stored under the asked country it would be wrong data, so it is
+    // a missing answer instead, like a search with no AI Overview.
+    throw new Error(`Gemini did not answer from ${wrong.asked}: it answered from ${wrong.got}`);
+  }
   if (scraperId === 'google-aio' && !payload.overview_text && !payload.overview_markdown) {
     throw new Error('Google did not return an AI Overview for this query');
   }
