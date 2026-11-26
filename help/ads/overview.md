@@ -23,12 +23,13 @@ A prompt whose intent isn't analysed yet is never guessed. **Not analysed**, und
 
 **Covered** is the share of your buying-intent prompts where AI answers cite one of your pages, or you paid for matching Google search terms, during the period. Until a Google Ads account is connected and read, paid isn't measured, and the line under it says the count is earned only.
 
-## What isn't measured yet
+## Paid SoV and cost per signup
 
-Two cards say **Not measured** instead of a number:
+**Paid SoV** says **Not measured**: sponsored ads in AI answers aren't captured yet. **Who pays per prompt** opens the **Paid SoV** tab.
 
-- **Paid SoV**: sponsored ads in AI answers aren't captured yet. **Who pays per prompt** opens the **Paid SoV** tab.
-- **Cost per AI-assisted signup**: it needs a connected ad account. Under it, you see the period's AI-assisted signups, counted from conversions from AI visits. With those off, it says **AI-assisted signups: not measured**. Admins and Managers turn them on in **Brand Settings › Tracking**.
+**Cost per AI-assisted signup** is the period's ad spend on your Google Ads and ChatGPT Ads campaigns, divided by its AI-assisted signups. It says **Not measured** until an ad account is connected and read in **Connections**. With spend in several currencies, it says **Several currencies**: amounts aren't added across currencies. With no signups yet, it shows the spend alone; with no spend in the period, **No ad spend**.
+
+Under it, you see the period's AI-assisted signups, counted from conversions from AI visits. With those off, it says **AI-assisted signups: not measured**. Admins and Managers turn them on in **Brand Settings › Tracking**.
 
 ## The earn-or-pay bar
 

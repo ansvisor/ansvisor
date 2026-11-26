@@ -8,7 +8,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useFeatureGate } from '@/hooks/use-feature-gate';
 import { Link } from '@/i18n/navigation';
 import { readAdsOverview, type AdsOverview as Overview } from '@/lib/ads/api';
-import { spendText } from '@/lib/ads/spend';
+import { spendAmount, spendText } from '@/lib/ads/spend';
 import type { AdsPeriod, AdsTab } from '@/lib/ads/tabs';
 import { cn } from '@/lib/utils';
 import { useBrandStore } from '@/stores/use-brand-store';
@@ -41,7 +41,9 @@ function Kpi({ label, value, children }: { label: string; value: ReactNode; chil
  * Ads' Overview (ADS-01 §3.1, mockup): four KPIs, then the earn-or-pay bar,
  * read from the server over every buying-intent prompt for the period, on
  * every plan (§8). What isn't measured yet says so, never a number: paid
- * (sponsored ads in AI answers) and the cost per signup. Once a Google Ads
+ * (sponsored ads in AI answers), and the cost per signup until an ad account
+ * is read; then it's the period's ad spend ÷ its AI-assisted signups, in one
+ * currency only. Once a Google Ads
  * account is read, the bar's paid parts and what was paid on Google for the
  * prompts (overlap first) come from its search terms.
  */
@@ -82,6 +84,28 @@ export function AdsOverview({
   const notMeasured = <span className="text-xl text-muted-foreground">{t('notMeasured')}</span>;
   const covered = o.total - o.bar.neither;
   const parts = PARTS.filter(([part]) => o.bar[part] !== null);
+  const quiet = (text: string) => <span className="text-xl text-muted-foreground">{text}</span>;
+  const cost = o.cost;
+  const several = (cost?.spend.length ?? 0) > 1;
+  // Accounts read, nothing spent in the period: no cost to divide, whatever the signups.
+  const noSpend = cost !== null && cost !== undefined && cost.spend.length === 0;
+  const costValue = !cost
+    ? notMeasured
+    : cost.perSignup
+      ? spendAmount(cost.perSignup)
+      : several
+        ? quiet(t('costCurrencies'))
+        : noSpend
+          ? quiet(t('costNoSpend'))
+          : // Signups unread (conversions off) is Not measured; none counted is no signups yet.
+            quiet(t(o.signups === null ? 'notMeasured' : 'costNoSignups'));
+  const costNote = !cost
+    ? t('costNote')
+    : cost.perSignup
+      ? t('costOf', { spend: spendText(cost.spend), count: o.signups ?? 0 })
+      : noSpend
+        ? t('costNoSpendNote')
+        : t(several ? 'costCurrenciesNote' : 'costSpend', { spend: spendText(cost.spend) });
 
   return (
     <div data-slot="ads-overview" className="space-y-3">
@@ -110,8 +134,8 @@ export function AdsOverview({
             {t('openSov')}
           </button>
         </Kpi>
-        <Kpi label={t('cost')} value={notMeasured}>
-          <p>{t('costNote')}</p>
+        <Kpi label={t('cost')} value={costValue}>
+          <p data-slot="ads-cost-note">{costNote}</p>
           <p data-slot="ads-signups">
             {o.signups === null ? t('signupsNotMeasured') : t('signups', { count: o.signups })}
           </p>
