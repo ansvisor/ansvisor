@@ -1883,6 +1883,10 @@
         "title": "{targets} で好調なAIコンバージョン",
         "description": "これらのページは、サイト全体の平均を大きく上回る割合でAIトラフィックを主要イベントへと転換しています。"
       },
+      "paid_overlap": {
+        "title": "AIがすでにあなたを選出している{targets}でGoogle広告費が増加しています",
+        "description": "これらの購買意向のPromptの回答でAIがすでにあなたを選出していますが、その検索語句に対してGoogleに支払っている金額が直近30日より増加しています。"
+      },
       "bridge_link_gap": {
         "title": "{targets} からコンバージョンにつながるページへリンク",
         "description": "AIはこのページへ読者を誘導していますが、コンバージョンはほとんど発生していません。同じトピックでコンバージョンにつながっているページには、AIトラフィックがほとんどありません。"
@@ -3347,6 +3351,12 @@
         "description": "これらの情報源は、回答で自社ブランドについて言及される際に引用されており、自社ページへの参照元となる可能性があります。",
         "goal": "サードパーティでの言及を自社アセットへの引用・参照へと変えましょう。"
       },
+      "review_paid_overlap": {
+        "title": "AIがすでにあなたを選出している{targets}のGoogle広告を確認する",
+        "titleGeneric": "AIがすでにあなたを選出している箇所のGoogle広告を確認する",
+        "description": "これらの購買意向のPromptの回答でAIがすでにあなたを選出していますが、その検索語句に対するGoogle広告費が増加しています。出稿しなくても獲得できていたクリックに対しても費用を支払っている可能性があります。",
+        "goal": "広告によって追加のクリックが得られる箇所に予算を投入しつつ、AIの回答での選出を維持します。"
+      },
       "bridge_links": {
         "title": "{targets} をCVにつながるページにリンク",
         "titleGeneric": "AIが訪問したページをCVにつながるページにリンク",
@@ -3811,6 +3821,8 @@
       "prioritize_targets_target": "影響度に応じて{targets}の優先順位を設定する",
       "review_link_plan": "追加するリンクを確認する",
       "review_link_plan_target": "{targets}に追加するリンクを確認する",
+      "review_paid_overlap": "これらの検索語句のGoogle広告を確認する",
+      "review_paid_overlap_target": "{targets}のGoogle広告を確認する",
       "define_validation_baseline": "測定基準となるベースラインを記録する",
       "define_validation_baseline_target": "{targets} のベースラインを記録する",
       "create_content_brief": "コンテンツ構成案を作成する",
@@ -3922,6 +3934,7 @@
       "strengthen_entity_content": "プロフィールのとおりにブランドがページで説明されており、再取得時にも反映されている",
       "add_internal_links": "リンク元のページからリンクが設定され、再取得が完了したとき",
       "review_link_plan": "各リンクとアンカーテキストが承認または変更され、確認を行ったとき",
+      "review_paid_overlap": "各検索語句の広告について、Google Adsで維持、減額、または一時停止を行い、完了を確認したとき",
       "improve_cta_path": "ページ上のコールトゥアクション（CTA）が公開され、確認を行ったとき",
       "publish_content": "ページが指定のアドレスで公開され、取得時に応答が得られたとき",
       "fix_crawler_access": "robots.txtとページでAIクローラーへのアクセスが許可され、再取得が完了したとき",
@@ -4495,6 +4508,7 @@
       "name": "カタログソースを読み込み",
       "step": "カタログを読み込み"
     },
+    "catalogFeedGaps": {},
     "contentPlan": {
       "name": "コンテンツプランを読み込み",
       "step": "コンテンツプランを読み込み"
@@ -4808,6 +4822,10 @@
     "adsOpportunities": {
       "name": "広告の機会を確認",
       "step": "広告の機会を確認しました"
+    },
+    "adsPaidOverlap": {
+      "name": "有料広告の重複を確認",
+      "step": "有料広告の重複を確認中"
     },
     "adDrafts": {
       "name": "広告の下書きを保存",
@@ -8007,6 +8025,7 @@
       "ai-revenue": "AI経由の顧客と収益",
       "earn-or-pay": "獲得または支払い",
       "ad-drafts": "広告の下書き",
+      "paid-overlap": "有料広告の重複",
       "operator": "AEO Operator"
     },
     "form": {
@@ -8611,7 +8630,7 @@
       },
       "paid-opportunity": {
         "name": "有料機会",
-        "description": "コンテンツで獲得すべきか、広告費を投じるべき購買Promptを毎週提示し、競合他社が自社名で出稿を始めたなどの変化を通知して、Ansvisor内で広告を下書きします。"
+        "description": "毎週、コンテンツで獲得すべきか広告を出稿すべきかの購買意向Promptを提示し、競合他社がお客様のブランド名で出稿を始めたなどの変化を通知し、AIがすでに引用している箇所でGoogleに支払っている広告費を表示して、Ansvisor内で広告の下書きを作成します。"
       },
       "ai-ads-watch": {
         "name": "AI広告ウォッチ",
@@ -15398,7 +15417,14 @@
       "sov": "ペイドSoV",
       "sovNote": "AIの回答内のスポンサー広告はまだ取得されていません",
       "cost": "AI支援による登録あたりのコスト",
-      "costNote": "広告アカウントの連携が必要です",
+      "costNote": "「連携」で広告アカウントを接続して読み込む必要があります",
+      "costOf": "広告費{spend} ÷ {count, plural, other {#件のAI経由の登録}}",
+      "costSpend": "この期間の広告費: {spend}",
+      "costNoSignups": "登録はまだありません",
+      "costNoSpend": "広告費なし",
+      "costNoSpendNote": "接続された広告アカウントはこの期間に支出がありませんでした",
+      "costCurrencies": "複数の通貨",
+      "costCurrenciesNote": "広告費{spend}: 異なる通貨の金額は合算されないため、単一の登録単価は算出されません",
       "signups": "この期間に{count, plural, other {# 件のAIアシストによる登録}}",
       "signupsNotMeasured": "AI支援による登録：未測定",
       "barTitle": "獲得または支払い · {count, plural, other {# 件のPrompt}}",
@@ -15407,7 +15433,11 @@
       "earnedPaid": "獲得 + ペイド",
       "paidOnly": "ペイドのみ",
       "neither": "どちらでもない",
-      "paidNotMeasured": "ペイドはまだ測定されていないため、バーには獲得とどちらでもないのみが表示されます。",
+      "paidNotMeasured": "Google Adsアカウントを連携して読み込むまで有料広告は測定されないため、バーにはオーガニック獲得とどちらでもないもののみが表示されます。",
+      "spendOverlap": "AIがすでに引用しているPromptに対してGoogleに支払った金額: {amount}",
+      "spendMatched": "すべてのトラッキング中Prompt: {amount}",
+      "spendUnmatched": "トラッキング中のどのPromptにも一致しない検索語句: {amount}",
+      "spendNote": "Google Adsの検索語句に基づきます。ChatGPT Adsの費用は「キャンペーン」に計上されます（どの質問に広告が表示されたかは示されません）。",
       "openPrompts": "{count, plural, other {# 件のオープンなPrompt}}を見る",
       "locked": "「機会」のさらに{count, plural, other {# 件のPrompt}}は{plan}プランに含まれています。",
       "openSov": "Promptごとの支払い者"
@@ -15484,7 +15514,7 @@
         "volume_at_least": "月間{volume}件のGoogle検索（{threshold}以上）",
         "volume_below": "月間{volume}件のGoogle検索（{threshold}未満）",
         "volume_not_measured": "Google検索数はまだ計測されていません",
-        "paid_not_measured": "広告出稿状況はまだ計測されていません",
+        "paid_not_measured": "{wePay, select, false {競合他社が広告を出稿しているかはまだ測定されていません} other {誰が出稿しているかはまだ測定されていません}}",
         "no_ad_channel": "追跡対象のAIプラットフォームにリーチできる広告チャネルがありません"
       },
       "answers": "AIによる現在の回答",
@@ -15494,6 +15524,13 @@
       "cites": "引用: {domains}",
       "fanOuts": "fan-outクエリ",
       "keywords": "シードキーワード",
+      "paid": {
+        "title": "この項目に対するGoogle広告",
+        "spend": "この期間に{amount}（{clicks, plural, other {#回のクリック}}）",
+        "terms": "{count, plural, other {#件の検索語句が一致}}（費用の高い順）:",
+        "none": "この期間に一致するGoogle広告の支出はありませんでした。",
+        "note": "検索語句は単語に基づいてPromptと照合されます。ChatGPT Adsの費用は照合されません（どの質問に広告が表示されたかは示されません）。"
+      },
       "failed": "回答を読み込めませんでした。一度閉じてから再度開いてください。",
       "earn": {
         "title": "獲得 · 回答を改善",
@@ -15568,14 +15605,31 @@
         "channel": "チャネル",
         "status": "ステータス",
         "spend": "費用",
-        "signups": "AI経由の登録数",
-        "cost": "登録単価"
+        "clicks": "クリック数",
+        "cpc": "CPC",
+        "conversions": "コンバージョン数",
+        "costPerConversion": "コンバージョン単価"
       },
-      "empty": "広告アカウントを連携 · まもなく公開",
-      "emptyNote": "キャンペーンはここに一覧表示されます（初期は閲覧のみ）。",
+      "channels": {
+        "google": "Google Ads",
+        "chatgpt": "ChatGPT Ads"
+      },
+      "statuses": {
+        "active": "アクティブ",
+        "paused": "一時停止中",
+        "ended": "終了"
+      },
+      "empty": "広告アカウントがまだ連携されていません",
+      "emptyNote": "Google AdsまたはChatGPT Adsを連携すると、ここにキャンペーンが読み取り専用で表示されます。",
+      "openConnections": "連携設定を開く",
+      "failed": "キャンペーンを読み込めませんでした。しばらくしてからもう一度お試しください。",
+      "firstRead": "連携後、24時間以内に最初のデータが届きます。",
+      "noneInPeriod": "この期間に実施されたキャンペーンはありません。",
+      "attention": "{count, plural, other {#件の広告アカウントで対応が必要です。}}",
+      "currencyNote": "各キャンペーンは広告アカウントの通貨で表示されます。データは1日1回読み取られます。",
       "safety": {
         "title": "安全性",
-        "note": "エージェントではなくAnsvisorによって適用されます。現時点で広告アカウントに変更が反映されることはありません。",
+        "note": "エージェントではなくAnsvisorによって適用されます。現在、Ansvisorは広告アカウントの読み取りのみを行います。",
         "click": "有効化、一時停止、予算や入札単価の変更はすべて、どのモードでも担当者によるクリックと確認が必要です。",
         "agents": "エージェントが自動で費用を消化することはありません。エージェントが提案を行い、変更を実行できるのは人のみです。",
         "cap": "管理者がチャネルごとに月次上限を設定します。過去24時間の変更を含め、上限を超える変更はブロックされます。",
@@ -15583,7 +15637,6 @@
       }
     },
     "connections": {
-      "soon": "まもなく公開",
       "later": "今後対応予定",
       "notify": "通知を受け取る",
       "notified": "通知予定",
@@ -15597,48 +15650,76 @@
       },
       "manage": "管理",
       "connect": "連携",
-      "adminConnects": "管理者が接続します",
+      "adminConnects": "管理者が連携",
       "accountStatus": {
-        "active": "接続済み",
+        "active": "連携済み",
         "error": "要対応",
-        "disconnected": "接続解除済み"
+        "disconnected": "未連携"
       },
       "sync": {
-        "syncedAt": "数値の取得日時: {when}",
-        "pending": "1日以内に初回取得: 過去90日分",
+        "syncedAt": "{when}に読み取り完了",
+        "pending": "24時間以内に初回読み取り：過去90日分",
         "error": {
           "key_refused": "ChatGPT Adsがキーを拒否しました。新しいキーを貼り付けてください。",
-          "key_missing": "キーが見つかりません。アカウントを再接続してください。",
-          "signin_gone": "Google Adsのサインインが無効になりました。Google Adsを再接続してください。",
-          "upstream": "広告プラットフォームから応答がありませんでした。Ansvisorが1日以内に再試行します。",
-          "failed": "数値を取得できませんでした。Ansvisorが1日以内に再試行します。"
+          "key_missing": "キーが見つかりません。アカウントを再度連携してください。",
+          "signin_gone": "Google Adsのサインイン情報が無効になりました。Google Adsを再度連携してください。",
+          "upstream": "広告プラットフォームからの応答がありませんでした。Ansvisorが24時間以内に再試行します。",
+          "failed": "データを読み取れませんでした。Ansvisorが24時間以内に再試行します。"
         }
       },
       "chatgpt": {
-        "connect": "接続",
+        "connect": "連携",
         "addAnother": "アカウントを追加",
-        "dialogTitle": "ChatGPT Adsを接続",
-        "dialogLine": "ChatGPT Ads ManagerのAds APIキーを貼り付けてください。各キーで接続できる広告アカウントは1つのため、アカウントごとにキーを追加してください。",
+        "dialogTitle": "ChatGPT Adsを連携",
+        "dialogLine": "ChatGPT Ads ManagerのAds APIキーを貼り付けてください。1つのキーで連携できる広告アカウントは1つです。アカウントごとにキーを追加してください。",
         "keyLabel": "Ads APIキー",
-        "keyNote": "AnsvisorはChatGPT Adsでキーを確認し、暗号化して保存します。読み取りのみ行います。",
+        "keyNote": "AnsvisorはChatGPT Adsでキーを確認した後、暗号化して保存します。読み取りのみ行います。",
         "cancel": "キャンセル",
-        "save": "接続",
+        "save": "連携",
         "checking": "確認中…",
-        "connectedToast": "{name}を接続しました。",
+        "connectedToast": "{name}を連携しました。",
         "accountLine": "ChatGPT Adsアカウント · {currency}",
         "accountLineNoCurrency": "ChatGPT Adsアカウント",
         "billing": "ChatGPT Ads Manager",
         "error": {
-          "invalid_key": "ChatGPT Adsがこのキーを受け付けませんでした。確認してもう一度お試しください。",
-          "upstream": "ChatGPT Adsから応答がありませんでした。しばらくしてからもう一度お試しください。",
+          "invalid_key": "ChatGPT Adsがこのキーを受け付けませんでした。キーを確認して、もう一度お試しください。",
+          "upstream": "ChatGPT Adsからの応答がありませんでした。しばらくしてからもう一度お試しください。",
+          "other": "連携できませんでした。もう一度お試しください。"
+        }
+      },
+      "google": {
+        "name": "Google Ads",
+        "connect": "連携",
+        "addAnother": "アカウントを追加",
+        "billing": "Google Ads",
+        "pickTitle": "Google Adsアカウントを選択",
+        "pickLine": "これらは現在ログインしているGoogleアカウントでアクセスできるアカウントです。Ansvisorは選択されたアカウントの情報を読み取ります。キャンペーンや予算を変更することはありません。",
+        "noCustomers": "このGoogleアカウントにはアクセス可能なGoogle Adsアカウントがありません。広告を管理しているGoogleアカウントでログインしてください。",
+        "unnamed": "名前のないアカウント",
+        "more": "{count, plural, other {他 # 件のアカウントは表示されていません。}}",
+        "why": {
+          "connected": "接続済み",
+          "manager": "マネージャーアカウント",
+          "unavailable": "利用不可",
+          "test": "テストアカウント"
+        },
+        "cancel": "キャンセル",
+        "save": "{count, plural, =0 {接続} other {# 件のアカウントを接続}}",
+        "connectedToast": "{count, plural, other {# 件のGoogle Adsアカウントを接続しました。}}",
+        "error": {
+          "not_configured": "このサーバーではGoogle Adsがまだ設定されていません。",
+          "not_connected": "先にGoogle Adsにログインしてから、もう一度お試しください。",
+          "not_accessible": "このGoogleアカウントからはそのアカウントにアクセスできなくなりました。閉じて再度接続してください。",
+          "manager_account": "マネージャーアカウント自体にはキャンペーンがありません。配下のアカウントを選択してください。",
+          "upstream": "Google Adsから応答がありませんでした。少し待ってからもう一度お試しください。",
           "other": "接続できませんでした。もう一度お試しください。"
         }
       },
       "account": {
         "disconnect": "接続解除",
-        "disconnectTitle": "{name}の接続を解除しますか?",
-        "disconnectLine": "Ansvisorは、このアカウントについて保持しているキー（ある場合）と取得した数値を削除します。広告は{billing}で引き続き配信されます。",
-        "disconnectedToast": "{name}の接続を解除しました。",
+        "disconnectTitle": "{name} の接続を解除しますか？",
+        "disconnectLine": "Ansvisorはこのアカウント用に保持している情報（キーがある場合はそのキーと読み取った数値）を削除します。広告は{billing}で引き続き配信されます。",
+        "disconnectedToast": "{name} の接続を解除しました。",
         "disconnectFailed": "接続を解除できませんでした。もう一度お試しください。",
         "cancel": "キャンセル"
       },
