@@ -4515,7 +4515,10 @@
       "name": "Catalogusbronnen lezen",
       "step": "Catalogus lezen"
     },
-    "catalogFeedGaps": {},
+    "catalogFeedGaps": {
+      "name": "Feedlacunes lezen",
+      "step": "Producten · Feedlacunes lezen"
+    },
     "contentPlan": {
       "name": "Het contentplan lezen",
       "step": "Contentplan lezen"
@@ -7793,7 +7796,9 @@
         "signal": "Signaal aangemaakt",
         "kpi": "KPI gewijzigd",
         "watch_rule": "Waakregel",
-        "brand_added": "Merk toegevoegd"
+        "brand_added": "Merk toegevoegd",
+        "page_published": "Pagina gepubliceerd",
+        "catalog_synced": "Catalogus gesynchroniseerd"
       },
       "daily": "Elke dag om {time}",
       "weekdays": "Werkdagen om {time}",
@@ -7808,13 +7813,17 @@
       "kpiAny": "Een KPI",
       "watchRule": "Meldingsregel",
       "brandAdded": "Wanneer een merk wordt toegevoegd",
+      "pagePublished": "Wanneer een pagina wordt gepubliceerd",
+      "catalogSynced": "Wanneer de catalogus wordt gesynchroniseerd",
       "manualOnly": "Alleen handmatig",
       "more": "+{count}",
       "firesWhen": {
         "signal": "Wordt geactiveerd wanneer Action Center een passend signaal vindt",
         "kpi": "Wordt geactiveerd wanneer de KPI de drempelwaarde overschrijdt",
         "watch_rule": "Wordt geactiveerd wanneer de bijbehorende meldingsregel afgaat",
-        "brand_added": "Wordt eenmalig geactiveerd voor elk merk dat aan de workspace wordt toegevoegd"
+        "brand_added": "Wordt eenmalig geactiveerd voor elk merk dat aan de workspace wordt toegevoegd",
+        "page_published": "Wordt eenmaal geactiveerd voor elke pagina die live gaat in het CMS van het merk",
+        "catalog_synced": "Wordt eenmaal geactiveerd voor elke catalogussynchronisatie die producten wijzigt"
       },
       "timeZone": "{zone}-tijd",
       "off": "Uit · wordt niet geactiveerd",
@@ -7914,6 +7923,8 @@
         "trigger": "Trigger",
         "signal": "Signaal",
         "slot": "Gepland voor",
+        "page": "Pagina gepubliceerd",
+        "catalog": "Catalogusbron gesynchroniseerd",
         "earlier": "Eerdere activeringen",
         "action": "Actie"
       },
@@ -7955,6 +7966,8 @@
       "kpi": "KPI gewijzigd",
       "watch_rule": "Watch-regel",
       "brand_added": "Merk toegevoegd",
+      "page_published": "Pagina gepubliceerd",
+      "catalog_synced": "Catalogus gesynchroniseerd",
       "manual": "Handmatig",
       "action": "Agent uitvoeren vanuit een actie",
       "agent": "Aangeroepen door een andere agent"
@@ -8030,6 +8043,7 @@
       "seasonal": "Seizoensgebonden prompts",
       "traffic": "AI-verkeer en aanmeldingen",
       "ai-revenue": "Klanten en omzet via AI",
+      "feed-advisor": "Lacunes in shoppingfeed",
       "earn-or-pay": "Verdienen of betalen",
       "ad-drafts": "Advertentieconcepten",
       "paid-overlap": "Betaalde overlap",
@@ -8099,7 +8113,9 @@
           "signal": "Signaal aangemaakt",
           "kpi": "KPI gewijzigd",
           "watch_rule": "Bewakingsregel",
-          "brand_added": "Wanneer een merk wordt toegevoegd"
+          "brand_added": "Wanneer een merk wordt toegevoegd",
+          "page_published": "Wanneer een pagina wordt gepubliceerd",
+          "catalog_synced": "Wanneer de catalogus wordt gesynchroniseerd"
         },
         "notes": {
           "manual": "Uitvoeren via Chat of een actie",
@@ -8107,7 +8123,9 @@
           "signal": "Een nieuw Actiecentrum-signaal",
           "kpi": "Een KPI overschrijdt een drempelwaarde",
           "watch_rule": "WANNEER · VOOR · DAN",
-          "brand_added": "Eenmalig per nieuw merk · vereist Alle merken"
+          "brand_added": "Eenmalig per nieuw merk · vereist Alle merken",
+          "page_published": "Eén keer per pagina die live gaat in uw CMS",
+          "catalog_synced": "Eén keer per synchronisatie die producten wijzigt"
         },
         "watchRuleNone": "Ingesteld op een bewakingsregel: de bijbehorende DAN voert de agent uit",
         "list": "Triggers",
@@ -8171,6 +8189,8 @@
         },
         "watchRuleWhen": "De controleerregel wordt geactiveerd",
         "brandAddedWhen": "er een merk wordt toegevoegd aan de werkruimte, eenmaal per merk",
+        "pagePublishedWhen": "een pagina live gaat in het CMS van het merk, eenmaal per pagina",
+        "catalogSyncedWhen": "een synchronisatie van de productcatalogus van het merk producten wijzigt, eenmaal per synchronisatie",
         "runAgent": "Agent uitvoeren"
       },
       "scope": {

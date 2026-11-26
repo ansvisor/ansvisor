@@ -4519,7 +4519,10 @@
       "name": "Katalogquellen lesen",
       "step": "Katalog lesen"
     },
-    "catalogFeedGaps": {},
+    "catalogFeedGaps": {
+      "name": "Feed-Lücken lesen",
+      "step": "Produkte lesen · Feed-Lücken"
+    },
     "contentPlan": {
       "name": "Inhalte-Plan lesen",
       "step": "Inhalte-Plan lesen"
@@ -7797,7 +7800,9 @@
         "signal": "Signal erstellt",
         "kpi": "KPI geändert",
         "watch_rule": "Überwachungsregel",
-        "brand_added": "Marke hinzugefügt"
+        "brand_added": "Marke hinzugefügt",
+        "page_published": "Seite veröffentlicht",
+        "catalog_synced": "Katalog synchronisiert"
       },
       "daily": "Jeden Tag um {time}",
       "weekdays": "Werktags um {time}",
@@ -7812,13 +7817,17 @@
       "kpiAny": "Ein KPI",
       "watchRule": "Überwachungsregel",
       "brandAdded": "Wenn eine Marke hinzugefügt wird",
+      "pagePublished": "Wenn eine Seite veröffentlicht wird",
+      "catalogSynced": "Wenn der Katalog synchronisiert wird",
       "manualOnly": "Nur manuell",
       "more": "+{count}",
       "firesWhen": {
         "signal": "Wird ausgelöst, wenn das Aktionszentrum ein passendes Signal findet",
         "kpi": "Wird ausgelöst, wenn der KPI den Schwellenwert überschreitet",
         "watch_rule": "Wird ausgelöst, wenn die zugehörige Überwachungsregel ausgelöst wird",
-        "brand_added": "Wird einmal für jede zum Workspace hinzugefügte Marke ausgelöst"
+        "brand_added": "Wird einmal für jede zum Workspace hinzugefügte Marke ausgelöst",
+        "page_published": "Wird einmal für jede Seite ausgelöst, die im CMS der Marke live geht",
+        "catalog_synced": "Wird einmal für jede Katalogsynchronisierung ausgelöst, die Produkte ändert"
       },
       "timeZone": "{zone} Zeit",
       "off": "Aus · wird nicht ausgelöst",
@@ -7918,6 +7927,8 @@
         "trigger": "Auslöser",
         "signal": "Signal",
         "slot": "Geplant für",
+        "page": "Seite veröffentlicht",
+        "catalog": "Katalogquelle synchronisiert",
         "earlier": "Frühere Auslösungen",
         "action": "Aktion"
       },
@@ -7959,6 +7970,8 @@
       "kpi": "KPI geändert",
       "watch_rule": "Überwachungsregel",
       "brand_added": "Marke hinzugefügt",
+      "page_published": "Seite veröffentlicht",
+      "catalog_synced": "Katalog synchronisiert",
       "manual": "Manuell",
       "action": "Agent über eine Aktion ausführen",
       "agent": "Von einem anderen Agenten aufgerufen"
@@ -8034,6 +8047,7 @@
       "seasonal": "Saisonale Prompts",
       "traffic": "KI-Traffic und Registrierungen",
       "ai-revenue": "Kunden und Umsatz durch KI",
+      "feed-advisor": "Lücken im Shopping-Feed",
       "earn-or-pay": "Verdienen oder zahlen",
       "ad-drafts": "Anzeigenentwürfe",
       "paid-overlap": "Bezahlte Überschneidung",
@@ -8103,7 +8117,9 @@
           "signal": "Signal erstellt",
           "kpi": "KPI geändert",
           "watch_rule": "Beobachtungsregel",
-          "brand_added": "Wenn eine Marke hinzugefügt wird"
+          "brand_added": "Wenn eine Marke hinzugefügt wird",
+          "page_published": "Wenn eine Seite veröffentlicht wird",
+          "catalog_synced": "Wenn der Katalog synchronisiert wird"
         },
         "notes": {
           "manual": "Über Chat oder eine Aktion ausführen",
@@ -8111,7 +8127,9 @@
           "signal": "Ein neues Signal im Aktionszentrum",
           "kpi": "Ein KPI überschreitet einen Schwellenwert",
           "watch_rule": "WENN · FÜR · DANN",
-          "brand_added": "Einmalig pro neuer Marke · erfordert Alle Marken"
+          "brand_added": "Einmalig pro neuer Marke · erfordert Alle Marken",
+          "page_published": "Einmal pro Seite, die in Ihrem CMS live geht",
+          "catalog_synced": "Einmal pro Synchronisierung, die Produkte ändert"
         },
         "watchRuleNone": "In einer Beobachtungsregel festlegen: Ihr DANN führt den Agenten aus",
         "list": "Trigger",
@@ -8175,6 +8193,8 @@
         },
         "watchRuleWhen": "Die Überwachungsregel wird ausgelöst",
         "brandAddedWhen": "Eine Marke wird zum Workspace hinzugefügt, einmal pro Marke",
+        "pagePublishedWhen": "eine Seite im CMS der Marke live geht, einmal pro Seite",
+        "catalogSyncedWhen": "eine Synchronisierung des Produktkatalogs der Marke Produkte ändert, einmal pro Synchronisierung",
         "runAgent": "Agent ausführen"
       },
       "scope": {

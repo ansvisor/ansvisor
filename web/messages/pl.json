@@ -4509,7 +4509,10 @@
       "name": "Odczytaj źródła katalogu",
       "step": "Odczytaj Katalog"
     },
-    "catalogFeedGaps": {},
+    "catalogFeedGaps": {
+      "name": "Odczytaj luki w feedzie",
+      "step": "Odczytaj Produkty · Luki w feedzie"
+    },
     "contentPlan": {
       "name": "Odczytaj plan treści",
       "step": "Odczytaj plan treści"
@@ -7787,7 +7790,9 @@
         "signal": "Utworzono sygnał",
         "kpi": "Zmieniono KPI",
         "watch_rule": "Reguła monitorowania",
-        "brand_added": "Dodano markę"
+        "brand_added": "Dodano markę",
+        "page_published": "Strona opublikowana",
+        "catalog_synced": "Katalog zsynchronizowany"
       },
       "daily": "Codziennie o {time}",
       "weekdays": "W dni robocze o {time}",
@@ -7802,13 +7807,17 @@
       "kpiAny": "Wskaźnik KPI",
       "watchRule": "Reguła monitorowania",
       "brandAdded": "Po dodaniu marki",
+      "pagePublished": "Gdy strona zostanie opublikowana",
+      "catalogSynced": "Gdy katalog zostanie zsynchronizowany",
       "manualOnly": "Tylko ręcznie",
       "more": "+{count}",
       "firesWhen": {
         "signal": "Uruchamia się, gdy Centrum akcji znajdzie pasujący sygnał",
         "kpi": "Uruchamia się, gdy KPI przekroczy wartość progową",
         "watch_rule": "Uruchamia się, gdy zadziała powiązana reguła monitorowania",
-        "brand_added": "Uruchamia się jednorazowo dla każdej marki dodanej do obszaru roboczego"
+        "brand_added": "Uruchamia się jednorazowo dla każdej marki dodanej do obszaru roboczego",
+        "page_published": "Uruchamia się raz dla każdej strony, która trafia na żywo w CMS marki",
+        "catalog_synced": "Uruchamia się raz dla każdej synchronizacji katalogu, która zmienia produkty"
       },
       "timeZone": "Strefa czasowa: {zone}",
       "off": "Wył. · nie uruchamia się",
@@ -7908,6 +7917,8 @@
         "trigger": "Wyzwalacz",
         "signal": "Sygnał",
         "slot": "Zaplanowano na",
+        "page": "Strona opublikowana",
+        "catalog": "Źródło katalogu zsynchronizowane",
         "earlier": "Wcześniejsze uruchomienia",
         "action": "Działanie"
       },
@@ -7949,6 +7960,8 @@
       "kpi": "Zmiana KPI",
       "watch_rule": "Reguła monitorowania",
       "brand_added": "Dodano markę",
+      "page_published": "Strona opublikowana",
+      "catalog_synced": "Katalog zsynchronizowany",
       "manual": "Ręcznie",
       "action": "Uruchom agenta z akcji",
       "agent": "Wywołany przez innego agenta"
@@ -8024,6 +8037,7 @@
       "seasonal": "Prompty sezonowe",
       "traffic": "Ruch i rejestracje z AI",
       "ai-revenue": "Klienci i przychody z AI",
+      "feed-advisor": "Luki w feedzie produktowym",
       "earn-or-pay": "Zarabiaj lub płać",
       "ad-drafts": "Wersje robocze reklam",
       "paid-overlap": "Nakładanie się płatnych działań",
@@ -8093,7 +8107,9 @@
           "signal": "Utworzono sygnał",
           "kpi": "Zmieniono KPI",
           "watch_rule": "Reguła obserwacji",
-          "brand_added": "Po dodaniu marki"
+          "brand_added": "Po dodaniu marki",
+          "page_published": "Gdy strona zostanie opublikowana",
+          "catalog_synced": "Gdy katalog zostanie zsynchronizowany"
         },
         "notes": {
           "manual": "Uruchamiaj z poziomu czatu lub akcji",
@@ -8101,7 +8117,9 @@
           "signal": "Nowy sygnał w Centrum akcji",
           "kpi": "Wskaźnik KPI przekracza próg",
           "watch_rule": "KIEDY · DLA · WTEDY",
-          "brand_added": "Raz na nową markę · wymaga opcji Wszystkie marki"
+          "brand_added": "Raz na nową markę · wymaga opcji Wszystkie marki",
+          "page_published": "Raz dla każdej strony opublikowanej w Twoim CMS",
+          "catalog_synced": "Raz dla każdej synchronizacji, która zmienia produkty"
         },
         "watchRuleNone": "Ustaw w regule monitorowania: jej warunek WTEDY uruchamia agenta",
         "list": "Wyzwalacze",
@@ -8165,6 +8183,8 @@
         },
         "watchRuleWhen": "Gdy zadziała reguła monitorowania",
         "brandAddedWhen": "gdy marka zostanie dodana do przestrzeni roboczej, raz na markę",
+        "pagePublishedWhen": "strona zostaje opublikowana w CMS marki, raz dla każdej strony",
+        "catalogSyncedWhen": "synchronizacja katalogu produktów marki zmienia produkty, raz dla każdej synchronizacji",
         "runAgent": "Uruchom agenta"
       },
       "scope": {

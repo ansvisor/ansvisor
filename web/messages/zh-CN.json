@@ -4466,7 +4466,10 @@
       "name": "读取目录来源",
       "step": "读取目录"
     },
-    "catalogFeedGaps": {},
+    "catalogFeedGaps": {
+      "name": "读取 Feed 缺口",
+      "step": "读取 产品 · Feed 缺口"
+    },
     "contentPlan": {
       "name": "读取内容规划",
       "step": "读取内容规划"
@@ -7744,7 +7747,9 @@
         "signal": "信号已创建",
         "kpi": "KPI 已变动",
         "watch_rule": "监控规则",
-        "brand_added": "已添加品牌"
+        "brand_added": "已添加品牌",
+        "page_published": "页面已发布",
+        "catalog_synced": "目录已同步"
       },
       "daily": "每天 {time}",
       "weekdays": "工作日 {time}",
@@ -7759,13 +7764,17 @@
       "kpiAny": "某个 KPI",
       "watchRule": "监控规则",
       "brandAdded": "添加品牌时",
+      "pagePublished": "当页面发布时",
+      "catalogSynced": "当目录同步时",
       "manualOnly": "仅手动",
       "more": "+{count}",
       "firesWhen": {
         "signal": "当行动中心发现匹配信号时触发",
         "kpi": "当 KPI 达到阈值时触发",
         "watch_rule": "在监控规则触发时触发",
-        "brand_added": "在向工作区添加每个品牌时触发一次"
+        "brand_added": "在向工作区添加每个品牌时触发一次",
+        "page_published": "品牌 CMS 中每有一个页面上线,触发一次",
+        "catalog_synced": "每次目录同步导致产品变更时,触发一次"
       },
       "timeZone": "{zone}时间",
       "off": "已关闭 · 不会触发",
@@ -7865,6 +7874,8 @@
         "trigger": "触发器",
         "signal": "信号",
         "slot": "预定时间",
+        "page": "页面已发布",
+        "catalog": "目录源已同步",
         "earlier": "较早触发",
         "action": "操作"
       },
@@ -7906,6 +7917,8 @@
       "kpi": "KPI 已变更",
       "watch_rule": "监控规则",
       "brand_added": "已添加品牌",
+      "page_published": "页面已发布",
+      "catalog_synced": "目录已同步",
       "manual": "手动",
       "action": "通过操作运行 Agent",
       "agent": "由其他 Agent 调用"
@@ -7981,6 +7994,7 @@
       "seasonal": "季节性 Prompts",
       "traffic": "AI 流量与注册量",
       "ai-revenue": "来自 AI 的客户与收入",
+      "feed-advisor": "购物 Feed 缺口",
       "earn-or-pay": "赚取或付费",
       "ad-drafts": "广告草稿",
       "paid-overlap": "付费重叠",
@@ -8050,7 +8064,9 @@
           "signal": "信号已创建",
           "kpi": "KPI 已变更",
           "watch_rule": "监控规则",
-          "brand_added": "添加品牌时"
+          "brand_added": "添加品牌时",
+          "page_published": "当页面发布时",
+          "catalog_synced": "当目录同步时"
         },
         "notes": {
           "manual": "从 Chat 或操作中运行",
@@ -8058,7 +8074,9 @@
           "signal": "新的操作中心信号",
           "kpi": "KPI 超过阈值",
           "watch_rule": "当 · 适用于 · 则",
-          "brand_added": "每个新品牌一次 · 需要“所有品牌”"
+          "brand_added": "每个新品牌一次 · 需要“所有品牌”",
+          "page_published": "CMS 中每个页面上线时触发一次",
+          "catalog_synced": "每次导致产品变更的同步触发一次"
         },
         "watchRuleNone": "在监控规则中设置：其“则”条件将运行 Agent",
         "list": "触发器",
@@ -8122,6 +8140,8 @@
         },
         "watchRuleWhen": "其监控规则触发",
         "brandAddedWhen": "品牌添加到工作区时，每个品牌触发一次",
+        "pagePublishedWhen": "品牌 CMS 中有页面上线时,每个页面触发一次",
+        "catalogSyncedWhen": "品牌产品目录同步导致产品变更时,每次同步触发一次",
         "runAgent": "运行 Agent"
       },
       "scope": {
