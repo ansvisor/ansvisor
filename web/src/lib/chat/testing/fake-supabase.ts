@@ -44,6 +44,11 @@ interface RpcBuilder extends PromiseLike<Result> {
   range(from: number, to: number): RpcBuilder;
 }
 
+/** Primary keys other than `id`, for an upsert that names no onConflict. */
+const PRIMARY_KEYS: Record<string, string> = {
+  chat_agent_trigger_claims: 'agent_id,kind,brand_id,ref',
+};
+
 interface Builder extends PromiseLike<Result> {
   select(columns?: string, options?: { count?: 'exact'; head?: boolean }): Builder;
   insert(rows: Row | Row[]): Builder;
@@ -307,7 +312,10 @@ export function createFakeSupabase(): FakeSupabase {
           kind = 'upsert';
           payload = rowsIn;
           conflict = {
-            columns: (options?.onConflict ?? 'id').split(',').map((c) => c.trim()),
+            // No onConflict: the table's primary key, as PostgREST does.
+            columns: (options?.onConflict ?? PRIMARY_KEYS[table] ?? 'id')
+              .split(',')
+              .map((c) => c.trim()),
             ignore: options?.ignoreDuplicates ?? false,
           };
           return builder;

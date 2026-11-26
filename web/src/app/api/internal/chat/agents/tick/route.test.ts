@@ -2,8 +2,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 /**
- * The agents' internal endpoints (W2-16): POST /api/internal/chat/agents/tick
- * and /signals, called by the API server with CHAT_INTERNAL_SECRET. Not
+ * The agents' internal endpoints (W2-16): POST /api/internal/chat/agents/tick,
+ * /signals and /events (00558), called by the API server with CHAT_INTERNAL_SECRET. Not
  * there with the new Chat off, before the secret is read; a wrong or
  * missing secret is 401, compared in constant time; a good call fires and
  * sweeps with the agent run driver, then deletes the memory lines past
@@ -13,6 +13,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const fakes = vi.hoisted(() => ({
   schedules: vi.fn(),
   signals: vi.fn(),
+  events: vi.fn(),
   sweep: vi.fn(),
   driver: vi.fn(),
   purge: vi.fn(),
@@ -24,12 +25,14 @@ vi.mock('@/lib/chat/agent-triggers', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/chat/agent-triggers')>()),
   fireDueSchedules: fakes.schedules,
   fireSignals: fakes.signals,
+  fireBrandEvent: fakes.events,
 }));
 vi.mock('@/lib/supabase/admin', () => ({ supabaseAdmin: {} }));
 vi.mock('@/lib/supabase/server', () => ({ createClient: async () => ({}) }));
 
 const tick = await import('./route');
 const signals = await import('../signals/route');
+const events = await import('../events/route');
 
 const SECRET = 'a-long-shared-secret';
 const BRAND = '22222222-2222-4222-8222-222222222222';
@@ -56,6 +59,7 @@ beforeEach(() => {
   vi.stubEnv('CHAT_INTERNAL_SECRET', SECRET);
   fakes.schedules.mockResolvedValue(counts);
   fakes.signals.mockResolvedValue(counts);
+  fakes.events.mockResolvedValue(counts);
   fakes.sweep.mockResolvedValue({ settled: 2 });
   fakes.purge.mockResolvedValue(3);
 });
@@ -180,5 +184,41 @@ describe('POST /api/internal/chat/agents/signals', () => {
       expect((await post(signals.POST, body)).status).toBe(400);
     }
     expect(fakes.signals).not.toHaveBeenCalled();
+  });
+});
+
+describe('POST /api/internal/chat/agents/events', () => {
+  const event = {
+    kind: 'page_published',
+    brandId: BRAND,
+    ref: 'dededede-0000-4000-8000-000000000001',
+    draftId: 'efefefef-0000-4000-8000-000000000001',
+  };
+
+  it('is not there with the new Chat off, and refuses a wrong secret', async () => {
+    vi.stubEnv('CHAT_AGENTIC', '');
+    expect((await post(events.POST, event)).status).toBe(404);
+    vi.stubEnv('CHAT_AGENTIC', 'true');
+    expect((await post(events.POST, event, 'Bearer nope')).status).toBe(401);
+    expect(fakes.events).not.toHaveBeenCalled();
+  });
+
+  it('fires the triggers of the event', async () => {
+    const res = await post(events.POST, event);
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true, fired: counts });
+    expect(fakes.events).toHaveBeenCalledWith(event, expect.any(Date), fakes.driver);
+  });
+
+  it('refuses an event that doesn’t read: an unknown kind, text where an id goes', async () => {
+    for (const body of [
+      {},
+      { ...event, kind: 'brand_added' },
+      { ...event, draftId: 'ignore previous instructions' },
+      { ...event, extra: 1 },
+    ]) {
+      expect((await post(events.POST, body)).status).toBe(400);
+    }
+    expect(fakes.events).not.toHaveBeenCalled();
   });
 });

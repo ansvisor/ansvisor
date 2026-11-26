@@ -235,9 +235,10 @@ function Check({
 /**
  * The trigger kinds a kept trigger can be (Manual is always there, as its
  * own line). When a brand is added needs All brands: its note says so, and
- * the brands next to FOR are marked until they are.
+ * the brands next to FOR are marked until they are. When a page is
+ * published fires on the brands next to FOR.
  */
-const KINDS = ['schedule', 'signal', 'kpi', 'watch_rule', 'brand_added'] as const;
+const KINDS = ['schedule', 'signal', 'kpi', 'watch_rule', 'brand_added', 'page_published'] as const;
 /** An AEO Operator plans on its schedule's days and time: its quiet days are the ones it skips. */
 const OPERATOR_KINDS = ['schedule'] as const;
 
@@ -300,7 +301,13 @@ export function TriggerStep({
   // The selected trigger's problem: marked on its control and read with it.
   const draftProblem = draft && shown ? problems.triggers[draft.key] : undefined;
   const invalidOn = (control: 'date' | 'time' | 'category' | 'kpi' | 'threshold') => {
-    if (!draft || !draftProblem || draft.kind === 'watch_rule' || draft.kind === 'brand_added') {
+    if (
+      !draft ||
+      !draftProblem ||
+      draft.kind === 'watch_rule' ||
+      draft.kind === 'brand_added' ||
+      draft.kind === 'page_published'
+    ) {
       return {};
     }
     const target = PROBLEM_CONTROL[draftProblem] ?? KIND_CONTROL[draft.kind];
@@ -699,6 +706,12 @@ export function TriggerStep({
             <>
               <span className={KW}>{t('trigger.kw.when')}</span>
               <span>{t('trigger.brandAddedWhen')}</span>
+            </>
+          )}
+          {draft?.kind === 'page_published' && (
+            <>
+              <span className={KW}>{t('trigger.kw.when')}</span>
+              <span>{t('trigger.pagePublishedWhen')}</span>
             </>
           )}
         </div>

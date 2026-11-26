@@ -696,6 +696,8 @@ describe('a brand added (00482)', () => {
     });
     expect(runs()).toHaveLength(1);
     expect(claims()).toHaveLength(1);
+    // No ref: the claim works on the key before 00558 too (deploy, then migrate).
+    expect(Object.keys(claims()[0])).not.toContain('ref');
   });
 
   it('runs on a second new brand minutes later: the cooldown reads the brand’s own runs', async () => {
@@ -841,5 +843,121 @@ describe('a run’s evidence', () => {
         extra: 1,
       }),
     ).toEqual({ fires: [{ kind: 'signal', ref: 'x', at: 'y' }], earlier: [] });
+  });
+});
+
+describe('a page published (00558)', () => {
+  const PAGE_TRIGGER = 'dddddddd-0000-4000-8000-000000000005';
+  const SEND = 'abababab-0000-4000-8000-000000000001';
+  const SEND_2 = 'abababab-0000-4000-8000-000000000002';
+  const DRAFT = 'efefefef-0000-4000-8000-000000000001';
+  const T0 = new Date('2026-11-02T10:00:00Z');
+  const claims = () => db.tables.chat_agent_trigger_claims;
+  const published = (over: Partial<import('./agent-triggers').BrandEvent> = {}, when = T0) =>
+    triggers.fireBrandEvent(
+      { kind: 'page_published', brandId: BRAND, ref: SEND, draftId: DRAFT, ...over },
+      when,
+      null,
+    );
+
+  beforeEach(() => {
+    seedAgent();
+    db.tables.chat_agent_triggers.push({
+      id: PAGE_TRIGGER,
+      agent_id: AGENT,
+      kind: 'page_published',
+      config_json: {},
+      enabled: true,
+      last_fired_at: null,
+      cooldown_until: null,
+      created_at: '2026-10-01T00:00:00.000Z',
+    });
+    db.tables.chat_agent_trigger_claims = [];
+  });
+
+  it('queues one run on the brand, as the owner, with the page as its evidence', async () => {
+    expect(await published()).toEqual({ fired: 1, queued: 1, coalesced: 0, skipped: 0, failed: 0 });
+    expect(queuedRuns()).toEqual([
+      expect.objectContaining({
+        brand_id: BRAND,
+        trigger_kind: 'page_published',
+        trigger_id: PAGE_TRIGGER,
+        acting_user_id: PEOPLE.manager,
+        evidence_json: {
+          fires: [{ kind: 'page_published', ref: DRAFT, at: T0.toISOString() }],
+          earlier: [],
+        },
+      }),
+    ]);
+    expect(claims()).toEqual([
+      expect.objectContaining({
+        agent_id: AGENT,
+        kind: 'page_published',
+        brand_id: BRAND,
+        ref: SEND,
+      }),
+    ]);
+    expect(db.tables.chat_agent_triggers.at(-1)!.last_fired_at).toBe(T0.toISOString());
+  });
+
+  it('fires once per send: the same send again queues nothing, a new send a day later runs', async () => {
+    await published();
+    runs()[0].status = 'done';
+    expect((await published({}, new Date(T0.getTime() + 60 * 60_000))).fired).toBe(0);
+    expect(runs()).toHaveLength(1);
+    expect(
+      await published({ ref: SEND_2 }, new Date(T0.getTime() + 24 * 60 * 60_000)),
+    ).toMatchObject({ fired: 1, queued: 1 });
+    expect(claims().map((c) => c.ref)).toEqual([SEND, SEND_2]);
+  });
+
+  it('fires only on a brand in the agent’s scope, never on the demo brand or with Chat off', async () => {
+    expect((await published({ brandId: BRAND_2 })).fired).toBe(0);
+    db.tables.brands.find((b) => b.id === BRAND)!.is_demo = true;
+    expect((await published()).fired).toBe(0);
+    db.tables.brands.find((b) => b.id === BRAND)!.is_demo = false;
+    vi.stubEnv('CHAT_AGENTIC_ORGS', 'ffffffff-0000-4000-8000-000000000000');
+    expect((await published()).fired).toBe(0);
+    expect(runs()).toEqual([]);
+    expect(claims()).toEqual([]);
+  });
+
+  it('fires nothing in a read-only workspace, for a paused agent or a trigger turned off', async () => {
+    db.tables.organizations[0].subscription_status = 'canceled';
+    expect((await published()).fired).toBe(0);
+    db.tables.organizations[0].subscription_status = 'active';
+    db.tables.chat_agents[0].status = 'paused';
+    db.tables.chat_agents[0].paused_reason = 'manual';
+    expect((await published()).fired).toBe(0);
+    db.tables.chat_agents[0].status = 'active';
+    db.tables.chat_agents[0].paused_reason = null;
+    db.tables.chat_agent_triggers.at(-1)!.enabled = false;
+    expect((await published()).fired).toBe(0);
+    expect(claims()).toEqual([]);
+  });
+
+  it('keeps a fire past the plan’s event runs a day as skipped · daily_limit', async () => {
+    db.tables.organizations[0].subscription_status = 'trialing';
+    for (const [i, kind] of ['signal', 'page_published'].entries()) {
+      runs().push({
+        id: `today${i}`,
+        agent_id: AGENT,
+        brand_id: BRAND,
+        trigger_kind: kind,
+        status: 'done',
+        skipped_reason: null,
+        queued_at: new Date(T0.getTime() - (i + 2) * 60 * 60_000).toISOString(),
+        evidence_json: {},
+      });
+    }
+    expect(await published()).toMatchObject({ fired: 1, queued: 0, skipped: 1 });
+    expect(skipped('daily_limit')).toEqual([
+      expect.objectContaining({ brand_id: BRAND, trigger_kind: 'page_published' }),
+    ]);
+  });
+
+  it('reads only its own kind: When a brand is added never fires on a page', async () => {
+    db.tables.chat_agent_triggers.at(-1)!.kind = 'brand_added';
+    expect((await published()).fired).toBe(0);
   });
 });

@@ -173,6 +173,8 @@ export type TriggerDraft = { key: string; enabled: boolean; raw: Json | null } &
   | { kind: 'watch_rule' }
   /** When a brand is added (00482): no settings; the agent needs All brands. */
   | { kind: 'brand_added' }
+  /** When a page is published (00558): no settings; on the brands in scope. */
+  | { kind: 'page_published' }
 );
 
 export type TriggerKind = TriggerDraft['kind'];
@@ -369,6 +371,7 @@ export function newTriggerDraft(
         period: 'week',
       };
     case 'brand_added':
+    case 'page_published':
       return { key, kind, enabled: true, raw: null };
   }
 }
@@ -444,6 +447,8 @@ export function draftFromView(
       return { ...base, kind: 'watch_rule' };
     case 'brand_added':
       return { ...base, kind: 'brand_added' };
+    case 'page_published':
+      return { ...base, kind: 'page_published' };
   }
 }
 
@@ -509,6 +514,7 @@ export function triggerInputOf(
     case 'watch_rule':
       return null;
     case 'brand_added':
+    case 'page_published':
       return out({});
   }
 }
@@ -544,6 +550,7 @@ export function triggerError(draft: TriggerDraft, now: Date): string | null {
       case 'watch_rule':
         return 'watch_rule_required';
       case 'brand_added':
+      case 'page_published':
         break;
     }
   }

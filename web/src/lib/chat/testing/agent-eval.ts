@@ -99,7 +99,13 @@ export type OutputPromise =
   | 'plan_card';
 
 export type EvalGroup = 'agents' | 'skills';
-export type EvalTrigger = 'schedule' | 'signal' | 'kpi' | 'brand_added' | 'manual';
+export type EvalTrigger =
+  | 'schedule'
+  | 'signal'
+  | 'kpi'
+  | 'brand_added'
+  | 'page_published'
+  | 'manual';
 
 export interface AgentEvalScenario {
   id: string;

@@ -2321,6 +2321,7 @@ export type Database = {
           brand_id: string
           claimed_at: string
           kind: string
+          ref: string
           trigger_id: string | null
         }
         Insert: {
@@ -2328,6 +2329,7 @@ export type Database = {
           brand_id: string
           claimed_at?: string
           kind: string
+          ref?: string
           trigger_id?: string | null
         }
         Update: {
@@ -2335,6 +2337,7 @@ export type Database = {
           brand_id?: string
           claimed_at?: string
           kind?: string
+          ref?: string
           trigger_id?: string | null
         }
         Relationships: [

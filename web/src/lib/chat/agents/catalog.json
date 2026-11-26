@@ -329,13 +329,15 @@
       "skills": [
         "translate"
       ],
-      "triggers": [],
+      "triggers": [
+        {
+          "kind": "page_published"
+        }
+      ],
       "mode": "auto",
       "connections": [],
-      "status": "soon",
-      "needs": [
-        "publish_trigger"
-      ]
+      "status": "ready",
+      "needs": []
     },
     {
       "id": "aeo-operator",

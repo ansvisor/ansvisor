@@ -4,14 +4,14 @@
   "businessTypes": [],
   "industries": [],
   "roles": [],
-  "skills": [
-    "translate"
+  "skills": ["translate"],
+  "triggers": [
+    {
+      "kind": "page_published"
+    }
   ],
-  "triggers": [],
   "mode": "auto",
   "connections": [],
-  "status": "soon",
-  "needs": [
-    "publish_trigger"
-  ]
+  "status": "ready",
+  "needs": []
 }

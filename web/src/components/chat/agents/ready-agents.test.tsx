@@ -163,8 +163,8 @@ describe('Ready to use', () => {
     expect(shown[8].getAttribute('data-preset')).toBe('fanout-gap-filler');
     expect(shown[9].getAttribute('data-preset')).toBe('prompt-portfolio');
     expect(shown[10].getAttribute('data-preset')).toBe('onboarding-help');
-    expect(shown.slice(8, 26).every((c) => c.getAttribute('data-status') === 'ready')).toBe(true);
-    expect(shown.slice(26).every((c) => c.getAttribute('data-status') === 'soon')).toBe(true);
+    expect(shown.slice(8, 27).every((c) => c.getAttribute('data-status') === 'ready')).toBe(true);
+    expect(shown.slice(27).every((c) => c.getAttribute('data-status') === 'soon')).toBe(true);
     // Not the AEO Operator: the browser reads CHAT_OPERATOR off, and the page hands it in when on.
     expect(shown).toHaveLength(38);
     expect(ids()).not.toContain('aeo-operator');
@@ -206,8 +206,8 @@ describe('Ready to use', () => {
     expect(operator.querySelector('[data-action="agents.usePreset"]')?.getAttribute('href')).toBe(
       '/dashboard/agents/new?preset=aeo-operator',
     );
-    // Among the ready ones, after Onboarding & Help, as the catalog orders them.
-    expect(ids().indexOf('aeo-operator')).toBe(ids().indexOf('onboarding-help') + 1);
+    // Among the ready ones, after Onboarding & Help and Localization, as the catalog orders them.
+    expect(ids().indexOf('aeo-operator')).toBe(ids().indexOf('localization') + 1);
   });
 
   it('gives a ready card its line, skills, mode and triggers, and Use this agent into New agent', async () => {
@@ -232,7 +232,11 @@ describe('Ready to use', () => {
     expect(card('ready-to-publish').querySelector('[data-cell="trigger"]')?.textContent).toBe(
       'TriggerManual only',
     );
-    expect(action('agents.usePreset')).toHaveLength(26);
+    // Localization (00558): /translate on each page that goes live in the brand's CMS.
+    expect(card('localization').querySelector('[data-cell="trigger"]')?.textContent).toBe(
+      'TriggerWhen a page is published',
+    );
+    expect(action('agents.usePreset')).toHaveLength(27);
 
     // Fan-out Gap Filler: its skills on Mondays, in its mode.
     const added = card('fanout-gap-filler');
@@ -285,12 +289,12 @@ describe('Ready to use', () => {
 
   it('says what a Soon card waits for, and opens nothing from it', async () => {
     await render();
-    const localization = card('localization');
-    expect(localization.querySelector('[data-slot="preset-soon"]')?.textContent).toBe(
-      'SoonNeeds a page-published trigger',
+    const fixer = card('technical-fixer');
+    expect(fixer.querySelector('[data-slot="preset-soon"]')?.textContent).toBe(
+      'SoonNeeds fixes sent as pull requests',
     );
-    expect(localization.querySelector('a')).toBeNull();
-    expect(localization.querySelector('button')).toBeNull();
+    expect(fixer.querySelector('a')).toBeNull();
+    expect(fixer.querySelector('button')).toBeNull();
     // The AEO Operator isn't a Soon card any more: it is ready, and shown only while it is on.
     expect(container.querySelector('[data-preset="aeo-operator"]')).toBeNull();
     expect(container.textContent).not.toContain('Needs sub-agents');
