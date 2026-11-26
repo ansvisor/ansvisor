@@ -217,4 +217,40 @@ describe('searchTermDays', () => {
     ]);
     expect(executeGoogleAdsTool.mock.calls[0][2].query).toContain('FROM search_term_view');
   });
+
+  it('adds up one term shown by two ad groups of a campaign on one day', async () => {
+    const shown = (metrics) => ({
+      campaign: { id: '11' },
+      searchTermView: { searchTerm: 'best crm' },
+      segments: { date: '2026-11-03' },
+      metrics,
+    });
+    executeGoogleAdsTool.mockResolvedValueOnce({
+      results: [
+        shown({ impressions: '10', clicks: '2', costMicros: '1500000', conversions: 0.5 }),
+        shown({ impressions: '5', clicks: '1', costMicros: '700000', conversions: 1.25 }),
+        { ...shown({ clicks: '4' }), campaign: { id: '12' } },
+      ],
+    });
+    await expect(searchTermDays(connection, '7967533946', range)).resolves.toEqual([
+      {
+        campaign_id: '11',
+        search_term: 'best crm',
+        day: '2026-11-03',
+        impressions: 15,
+        clicks: 3,
+        cost_micros: 2200000,
+        conversions: 1.75,
+      },
+      {
+        campaign_id: '12',
+        search_term: 'best crm',
+        day: '2026-11-03',
+        impressions: 0,
+        clicks: 4,
+        cost_micros: 0,
+        conversions: 0,
+      },
+    ]);
+  });
 });
