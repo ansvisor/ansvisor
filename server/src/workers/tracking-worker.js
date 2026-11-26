@@ -209,7 +209,8 @@ export function scraperTasksFor(prompts, { platformsFor, locationsFor, chatgptFa
 export async function pollTrackingTask({ taskId, scraperId, legacy, meta }) {
   const provider = providerFor(scraperId);
   try {
-    return await provider.pollScraperResult(taskId, scraperId);
+    // The asked place: Gemini on Anakin may answer from another one.
+    return await provider.pollScraperResult(taskId, scraperId, { region: meta.region });
   } catch (err) {
     if (!(err?.taskFailed && provider.isLegacyChatgptTask({ scraperId, legacy }))) throw err;
     logger.warn(
@@ -222,7 +223,7 @@ export async function pollTrackingTask({ taskId, scraperId, legacy, meta }) {
       scraperId,
       region: meta.region,
     });
-    return provider.pollScraperResult(again.taskId, scraperId);
+    return provider.pollScraperResult(again.taskId, scraperId, { region: meta.region });
   }
 }
 

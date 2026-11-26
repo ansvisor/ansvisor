@@ -18,12 +18,14 @@ import { cleanKey, fetchAdAccount } from './chatgpt-ads.js';
  */
 
 /** What a caller sees of an account: never its key or sign-in. */
-const PUBLIC_COLUMNS =
+export const PUBLIC_COLUMNS =
   'id, platform, external_id, name, currency_code, time_zone, status, last_error, last_synced_at, synced_through, created_at';
 
 /** Why an account couldn't be connected or found: the route answers `code`. */
 export class AdsAccountError extends Error {
-  /** @param {'invalid_key' | 'not_configured' | 'not_found'} code */
+  /**
+   * @param {'invalid_key' | 'not_configured' | 'not_found' | 'not_connected' | 'not_accessible' | 'manager_account' | 'upstream'} code
+   */
   constructor(code, message) {
     super(message);
     this.name = 'AdsAccountError';

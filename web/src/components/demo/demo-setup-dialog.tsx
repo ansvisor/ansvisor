@@ -36,6 +36,8 @@ export interface DemoSetupState {
   /** When it answered, or null while it is awaited. */
   answeredAt: number | null;
   failed: boolean;
+  /** Ready, but the start page didn't open: said, with Open the demo. */
+  stuck?: boolean;
 }
 
 const REDUCED_MOTION = '(prefers-reduced-motion: reduce)';
@@ -82,16 +84,19 @@ function DemoTile({ working }: { working: boolean }) {
  * Content Agent's card shows its run — the steps done in green with a check,
  * the one under way with a sweep and the agent's dots, its count going up —
  * then the demo opens. Said as preparing, never as anything run for real:
- * the counts are the sample data's own. A failure says so, with Try again.
+ * the counts are the sample data's own. A failure says so, with Try again;
+ * a demo ready whose page didn't open says so, with Open the demo.
  */
 export function DemoSetupDialog({
   setup,
   onRetry,
   onClose,
+  onOpen,
 }: {
   setup: DemoSetupState | null;
   onRetry: () => void;
   onClose: () => void;
+  onOpen?: () => void;
 }) {
   return (
     <Dialog
@@ -101,7 +106,7 @@ export function DemoSetupDialog({
       }}
     >
       {/* Mounted while open: its clock starts with it. */}
-      {setup && <SetupContent setup={setup} onRetry={onRetry} onClose={onClose} />}
+      {setup && <SetupContent setup={setup} onRetry={onRetry} onClose={onClose} onOpen={onOpen} />}
     </Dialog>
   );
 }
@@ -110,10 +115,12 @@ function SetupContent({
   setup,
   onRetry,
   onClose,
+  onOpen,
 }: {
   setup: DemoSetupState;
   onRetry: () => void;
   onClose: () => void;
+  onOpen?: () => void;
 }) {
   const t = useTranslations('demo.setup');
   const reducedMotion = usePrefersReducedMotion();
@@ -123,10 +130,11 @@ function SetupContent({
   const position = setupPosition(elapsed, answered);
   const done = position >= DEMO_SETUP_STEPS.length;
   const failed = setup.failed;
-  const moving = !failed && !done;
+  const stuck = !failed && Boolean(setup.stuck);
+  const moving = !failed && !done && !stuck;
 
   return (
-    <DialogContent className="sm:max-w-md" showCloseButton={failed}>
+    <DialogContent className="sm:max-w-md" showCloseButton={failed || stuck}>
       <DialogHeader className="flex-row items-center gap-3">
         <DemoTile working={moving} />
         <div className="min-w-0 space-y-1">
@@ -184,7 +192,7 @@ function SetupContent({
             );
           })}
         </ol>
-        {!failed && (
+        {!failed && !stuck && (
           <p className="border-t pt-2.5 text-xs text-muted-foreground">
             {done ? (
               <span className="font-medium text-foreground">{t('ready')}</span>
@@ -196,6 +204,23 @@ function SetupContent({
           </p>
         )}
       </div>
+
+      {stuck && (
+        <>
+          <p
+            role="alert"
+            className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-200"
+          >
+            {t('stuck')}
+          </p>
+          <DialogFooter>
+            <Button variant="outline" onClick={onClose}>
+              {t('close')}
+            </Button>
+            {onOpen && <Button onClick={onOpen}>{t('open')}</Button>}
+          </DialogFooter>
+        </>
+      )}
 
       {failed && (
         <>

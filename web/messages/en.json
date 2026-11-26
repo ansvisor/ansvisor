@@ -622,6 +622,8 @@
       "slow": "This is taking longer than usual.",
       "ready": "Ready. Opening Prompts…",
       "failed": "Couldn't prepare the demo. Check your connection and try again.",
+      "stuck": "The demo is ready, but its page didn't open. Open it again, or close this and try later.",
+      "open": "Open the demo",
       "retry": "Try again",
       "close": "Close"
     }
@@ -2478,6 +2480,8 @@
           "task_review_withdrawn": "Ready for review taken back with Undo: {task}{title}",
           "cancelled": "Cancelled from Chat by {by} · undo",
           "reopened": "Action reopened — its condition is firing again",
+          "replaced": "Replaced by a newer action of the same kind: nobody had worked on this one for 30 days",
+          "replaces": "Opened in place of an older action of the same kind that nobody had worked on for 30 days",
           "signals_linked": "{count, plural, one {1 new signal} other {# new signals}} linked",
           "status_changed": "Status changed to {to}",
           "assigned": "Assignee changed",
@@ -4050,6 +4054,7 @@
         "whatHappened": "What happened?",
         "triggeredBy": "Consolidated from {count, plural, one {# signal} other {# signals}}",
         "dismissedBecause": "Dismissed: {reason}.",
+        "replaced": "Replaced by a newer action of the same kind: nobody had worked on this one for 30 days, so tonight's findings opened a new one.",
         "readings": "Read after it closed: {list}.",
         "reading": "day {day}, {outcome}",
         "finalOn": "The final reading is on day {day}.",
@@ -4371,6 +4376,7 @@
     "shoppingCards": { "name": "Read shopping cards", "step": "Read Products · Cards" },
     "catalogProducts": { "name": "Read catalog products", "step": "Read Products" },
     "catalogSources": { "name": "Read catalog sources", "step": "Read Catalog" },
+    "catalogFeedGaps": { "name": "Read feed gaps", "step": "Read Products · Feed gaps" },
     "contentPlan": { "name": "Read the Content plan", "step": "Read Content plan" },
     "contentOpportunity": { "name": "Read a content opportunity", "step": "Read opportunity" },
     "contentImpact": { "name": "Read a live page's impact", "step": "Read Live page" },
@@ -7660,6 +7666,7 @@
       "seasonal": "Seasonal prompts",
       "traffic": "AI traffic and sign-ups",
       "ai-revenue": "Customers and revenue from AI",
+      "feed-advisor": "Shopping feed gaps",
       "earn-or-pay": "Earn or pay",
       "ad-drafts": "Ad drafts",
       "operator": "AEO Operator"
@@ -15037,7 +15044,11 @@
       "earnedPaid": "Earned + paid",
       "paidOnly": "Paid only",
       "neither": "Neither",
-      "paidNotMeasured": "Paid isn't measured yet, so the bar shows only earned and neither.",
+      "paidNotMeasured": "Paid isn't measured until a Google Ads account is connected and read, so the bar shows only earned and neither.",
+      "spendOverlap": "Paid on Google for prompts AI already cites you for: {amount}",
+      "spendMatched": "On all your tracked prompts: {amount}",
+      "spendUnmatched": "On search terms that match no tracked prompt: {amount}",
+      "spendNote": "From your Google Ads search terms. ChatGPT Ads spend is on Campaigns: it doesn't say which question an ad showed on.",
       "openPrompts": "See {count, plural, one {# open prompt} other {# open prompts}}",
       "locked": "{count, plural, one {# more prompt} other {# more prompts}} in Opportunities {count, plural, one {is} other {are}} included from the {plan} plan.",
       "openSov": "Who pays per prompt"
@@ -15114,7 +15125,7 @@
         "volume_at_least": "{volume} Google searches a month, at least {threshold}",
         "volume_below": "{volume} Google searches a month, below {threshold}",
         "volume_not_measured": "Google searches aren't measured yet",
-        "paid_not_measured": "Who pays isn't measured yet",
+        "paid_not_measured": "{wePay, select, false {Whether competitors pay for ads isn't measured yet} other {Who pays isn't measured yet}}",
         "no_ad_channel": "No ad channel reaches the AI platforms it's tracked on"
       },
       "answers": "What AI answers today",
@@ -15124,6 +15135,13 @@
       "cites": "Cites: {domains}",
       "fanOuts": "Fan-out queries",
       "keywords": "Keyword seeds",
+      "paid": {
+        "title": "Your Google ads on it",
+        "spend": "{amount} for {clicks, plural, one {# click} other {# clicks}} in this period",
+        "terms": "{count, plural, one {# search term matched} other {# search terms matched}}, the costliest first:",
+        "none": "No Google ad spend matched it in this period.",
+        "note": "Search terms are matched to the prompt by their words. ChatGPT Ads spend isn't matched: it doesn't say which question an ad showed on."
+      },
       "failed": "The answers couldn't be read. Close this and open it again.",
       "earn": {
         "title": "Earn · fix the answer",
@@ -15198,14 +15216,31 @@
         "channel": "Channel",
         "status": "Status",
         "spend": "Spend",
-        "signups": "AI-assisted signups",
-        "cost": "Cost per signup"
+        "clicks": "Clicks",
+        "cpc": "CPC",
+        "conversions": "Conversions",
+        "costPerConversion": "Cost per conversion"
       },
-      "empty": "Connect an ad account · coming soon",
-      "emptyNote": "Your campaigns will be listed here, read-only to start.",
+      "channels": {
+        "google": "Google Ads",
+        "chatgpt": "ChatGPT Ads"
+      },
+      "statuses": {
+        "active": "Active",
+        "paused": "Paused",
+        "ended": "Ended"
+      },
+      "empty": "No ad account connected yet",
+      "emptyNote": "Connect Google Ads or ChatGPT Ads to see your campaigns here, read-only.",
+      "openConnections": "Open Connections",
+      "failed": "Couldn't load your campaigns. Try again in a moment.",
+      "firstRead": "Your first numbers arrive within a day of connecting.",
+      "noneInPeriod": "No campaign ran in this period.",
+      "attention": "{count, plural, one {# ad account needs attention.} other {# ad accounts need attention.}}",
+      "currencyNote": "Each campaign is shown in its ad account's currency. Numbers are read once a day.",
       "safety": {
         "title": "Safety",
-        "note": "Enforced by Ansvisor, not by an agent. Nothing reaches an ad account today.",
+        "note": "Enforced by Ansvisor, not by an agent. Today Ansvisor only reads your ad accounts.",
         "click": "Every enable, pause, budget or bid change needs a person's click and confirmation, in every mode.",
         "agents": "Agents never spend: an agent can suggest a change, and only a person can make it.",
         "cap": "Admins set a monthly cap for each channel. A change over the cap is blocked, counting the changes of the last 24 hours.",
@@ -15213,7 +15248,6 @@
       }
     },
     "connections": {
-      "soon": "Coming soon",
       "later": "Coming later",
       "notify": "Notify me",
       "notified": "We'll tell you",
@@ -15261,6 +15295,34 @@
         "error": {
           "invalid_key": "ChatGPT Ads didn't accept this key. Check it and try again.",
           "upstream": "ChatGPT Ads didn't answer. Try again in a minute.",
+          "other": "Couldn't connect. Try again."
+        }
+      },
+      "google": {
+        "name": "Google Ads",
+        "connect": "Connect",
+        "addAnother": "Add account",
+        "billing": "Google Ads",
+        "pickTitle": "Pick Google Ads accounts",
+        "pickLine": "These are the accounts your Google sign-in reaches. Ansvisor reads the ones you pick; it never changes a campaign or a budget.",
+        "noCustomers": "This Google sign-in reaches no Google Ads account. Sign in with the Google account that manages your ads.",
+        "unnamed": "Unnamed account",
+        "more": "{count, plural, one {# more account isn't listed.} other {# more accounts aren't listed.}}",
+        "why": {
+          "connected": "Connected",
+          "manager": "Manager account",
+          "unavailable": "Unavailable",
+          "test": "Test account"
+        },
+        "cancel": "Cancel",
+        "save": "{count, plural, =0 {Connect} one {Connect # account} other {Connect # accounts}}",
+        "connectedToast": "{count, plural, one {Connected # Google Ads account.} other {Connected # Google Ads accounts.}}",
+        "error": {
+          "not_configured": "Google Ads isn't set up on this server yet.",
+          "not_connected": "Sign in to Google Ads first, then try again.",
+          "not_accessible": "This Google sign-in no longer reaches that account. Close and connect again.",
+          "manager_account": "A manager account has no campaigns of its own. Pick the accounts under it.",
+          "upstream": "Google Ads didn't answer. Try again in a minute.",
           "other": "Couldn't connect. Try again."
         }
       },

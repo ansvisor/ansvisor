@@ -8,6 +8,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useFeatureGate } from '@/hooks/use-feature-gate';
 import { Link } from '@/i18n/navigation';
 import { readAdsOverview, type AdsOverview as Overview } from '@/lib/ads/api';
+import { spendText } from '@/lib/ads/spend';
 import type { AdsPeriod, AdsTab } from '@/lib/ads/tabs';
 import { cn } from '@/lib/utils';
 import { useBrandStore } from '@/stores/use-brand-store';
@@ -40,7 +41,9 @@ function Kpi({ label, value, children }: { label: string; value: ReactNode; chil
  * Ads' Overview (ADS-01 §3.1, mockup): four KPIs, then the earn-or-pay bar,
  * read from the server over every buying-intent prompt for the period, on
  * every plan (§8). What isn't measured yet says so, never a number: paid
- * (sponsored ads in AI answers) and the cost per signup (ad spend, Phase 1).
+ * (sponsored ads in AI answers) and the cost per signup. Once a Google Ads
+ * account is read, the bar's paid parts and what was paid on Google for the
+ * prompts (overlap first) come from its search terms.
  */
 export function AdsOverview({
   period,
@@ -144,6 +147,18 @@ export function AdsOverview({
           </ul>
           {!o.paidMeasured && (
             <p className="text-xs text-muted-foreground">{t('paidNotMeasured')}</p>
+          )}
+          {o.spend && (
+            <div data-slot="ads-spend" className="space-y-0.5 text-xs text-muted-foreground">
+              <p className="text-sm font-medium text-foreground">
+                {t('spendOverlap', { amount: spendText(o.spend.overlap) })}
+              </p>
+              <p>{t('spendMatched', { amount: spendText(o.spend.matched) })}</p>
+              {o.spend.unmatched.length > 0 && (
+                <p>{t('spendUnmatched', { amount: spendText(o.spend.unmatched) })}</p>
+              )}
+              <p>{t('spendNote')}</p>
+            </div>
           )}
           <Button size="sm" data-action="ads.openOpportunities" onClick={() => onOpenTab('op')}>
             {t('openPrompts', { count: o.bar.neither })}

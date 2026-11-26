@@ -4,14 +4,14 @@ route: /dashboard/action-center/today
 keywords: [today, action center, todays focus, since yesterday, waiting for you, finish setting up, where you stand, rank, primary rivals, visibility score, new area to track, waiting for a spot]
 synonyms: [start page, home page, daily summary, what to do today, my day]
 plan: all
-updated: 2026-11-20
+updated: 2026-11-26
 last_checked: 2026-11-17
 owner: Cihan
 app_version: 0.3.0
 approved: true
 sources: [docs/guides/action-center.mdx]
 ---
-**Today** is the first tab of the **Action Center**: what changed since your last visit, what to do today and what is waiting for you, on one page per brand. Open it from **Action Center**, first under **Execution** in the main menu. When you sign in, Ansvisor opens on **Prompts › Tracked Prompts**, whatever the plan; Today is one click away. When Prompts is off your menu, Ansvisor opens here instead.
+**Today** is the first tab of the **Action Center**: what changed since your last visit, what to do today and what is waiting for you, on one page per brand. Open it from **Action Center**, first under **Execution** in the main menu. When you sign in, Ansvisor opens on **Brand Visibility › Overview** once your brands have answers, and on **Prompts › Tracked Prompts** before that; Today is one click away. When neither is on your menu, Ansvisor opens here instead.
 
 ## The tabs
 
