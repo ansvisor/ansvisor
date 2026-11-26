@@ -4,7 +4,7 @@ route: /dashboard/prompts/tracked
 keywords: [locations, add location, remove location, locations view, countries, us states, cities]
 synonyms: [track in another country, regional tracking, geo tracking, stop tracking a location]
 plan: all
-updated: 2026-11-11
+updated: 2026-11-25
 last_checked: 2026-11-11
 owner: Cihan
 app_version: 0.3.0
@@ -37,7 +37,7 @@ If the choice would pass your plan's limit, the dialog says how many it needs an
 
 ## Which engines answer from a state or city
 
-**US states** are asked by every engine from the state itself. Google's engines asked a state country-wide until October 2026, so their answers from before then stay in the country's column.
+**US states** are asked by every engine from the state itself; Gemini may answer from the whole US instead. Google's engines asked a state country-wide until October 2026, so their answers from before then stay in the country's column.
 
 **Cities** are asked only by the engines that can answer from a city: Google AI Mode, Google AI Overview and the API models (OpenAI, Claude). ChatGPT, Gemini and Grok answer per country, so they skip a city and their answers stay in the country's column; track the country too to see them. A city column says **AI Mode · AIO · APIs**. A city counts as one location on your plan, like a country.
 

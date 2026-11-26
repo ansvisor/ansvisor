@@ -95,6 +95,30 @@ function pageRpc(fn: string) {
   return { data: [], error: null };
 }
 
+/** pageRpc as PostgREST answers it: chainable, with .order() and .range() slicing the rows. */
+function rpcCall(fn: string) {
+  let slice: [number, number] | null = null;
+  const builder = {
+    order: () => builder,
+    range: (from: number, to: number) => {
+      slice = [from, to];
+      return builder;
+    },
+    then<R1, R2 = never>(
+      resolve?: ((value: { data: unknown; error: null }) => R1 | PromiseLike<R1>) | null,
+      reject?: ((reason: unknown) => R2 | PromiseLike<R2>) | null,
+    ) {
+      const result: { data: unknown; error: null } = pageRpc(fn);
+      const data =
+        slice && Array.isArray(result.data)
+          ? result.data.slice(slice[0], slice[1] + 1)
+          : result.data;
+      return Promise.resolve({ ...result, data }).then(resolve, reject);
+    },
+  };
+  return builder;
+}
+
 /** The tables the service role read, one entry a query: how many scans a read took. */
 const scans = vi.hoisted(() => [] as string[]);
 
@@ -105,13 +129,13 @@ vi.mock('@/lib/supabase/admin', () => ({
       return table(TABLES[name] ?? []);
     },
     // The page's daily functions read their rollups by brand: the service role runs them too.
-    rpc: async (fn: string) => pageRpc(fn),
+    rpc: (fn: string) => rpcCall(fn),
   },
 }));
 vi.mock('@/lib/supabase/server', () => ({
   createClient: async () => ({
     from: (name: string) => table(TABLES[name] ?? []),
-    rpc: async (fn: string) => pageRpc(fn),
+    rpc: (fn: string) => rpcCall(fn),
   }),
 }));
 

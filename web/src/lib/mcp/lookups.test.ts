@@ -715,6 +715,26 @@ describe('cited domains and pages by their address', () => {
     );
   });
 
+  it('counts every cited domain past PostgREST’s 1000 rows, and every citation', async () => {
+    const many = Array.from({ length: 2345 }, (_, i) => ({
+      domain: `site-${String(i).padStart(4, '0')}.example`,
+      // Ties on purpose: a page ordered by count alone could repeat or skip one.
+      total_citations: 1 + (i % 3),
+      results_citing: 1,
+      models: ['gpt-5'],
+    }));
+    db.rpcs.citations_domains_daily = () => many;
+    db.maxRows = 1000;
+    try {
+      const page = await data.listCitationsFor(ALL, { ...window, limit: 50 });
+      expect(page!.totals.domains).toBe(2345);
+      const all = many.reduce((sum, d) => sum + d.total_citations, 0);
+      expect(page!.totals.citations).toBe(all);
+    } finally {
+      db.maxRows = undefined;
+    }
+  });
+
   it('finds a page by its address with or without its scheme, www and trailing slash', async () => {
     const found = await data.lookUpCitationsFor(ALL, {
       ...window,

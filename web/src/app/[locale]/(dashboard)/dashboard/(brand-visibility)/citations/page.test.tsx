@@ -109,6 +109,30 @@ afterEach(() => {
   window.history.replaceState(null, '', '/');
 });
 
+describe('CitationsPage: opened with no filters', () => {
+  it('opens on every source and the URLs tab, so the first screen has the pages AI cites', async () => {
+    getCitationsOverview.mockResolvedValue(overview(31));
+    window.history.replaceState(null, '', '/dashboard/citations');
+    await act(async () => {
+      root.render(
+        <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
+          <CitationsPage />
+        </NextIntlClientProvider>,
+      );
+    });
+    expect(getCitationsOverview).toHaveBeenCalledWith(
+      'b1',
+      expect.objectContaining({ sourceScope: 'all' }),
+    );
+    const selected = [...container.querySelectorAll('[role="tab"][aria-selected="true"]')].map(
+      (tab) => tab.textContent,
+    );
+    expect(selected.some((text) => text?.startsWith('URLs'))).toBe(true);
+    // The default stays out of the address; Brand is written when picked.
+    expect(window.location.search).not.toContain('scope=');
+  });
+});
+
 describe('CitationsPage: Unique Domains', () => {
   it('counts the domains in the selected scope, beside its URLs', async () => {
     getCitationsOverview.mockResolvedValue(overview(7));
@@ -229,7 +253,7 @@ describe('CitationsPage: a failed read', () => {
 // The owner's plan (2026-11-16, item 8): Chat's side panel sees the open tab and the page of
 // domains or URLs on screen, by their domain or address, with how many the table has.
 describe("CitationsPage: what Chat's side panel sees", () => {
-  it('tells the open tab and the rows on screen in the scope, by domain, then by address', async () => {
+  it('tells the open tab and the rows on screen in the scope, by address first, then by domain', async () => {
     getCitationsOverview.mockResolvedValue({
       ...overview(2),
       urlRows: [
@@ -269,22 +293,22 @@ describe("CitationsPage: what Chat's side panel sees", () => {
       );
     });
     expect(setPage.mock.lastCall![0].view).toEqual({
-      tab: 'domains',
-      rows: [
-        { ref: 'acme.example', label: 'acme.example' },
-        { ref: 'blog.acme.example', label: 'blog.acme.example' },
-      ],
-      total: 2,
-    });
-    const urls = [...container.querySelectorAll<HTMLElement>('[role="tab"]')].find((tab) =>
-      tab.textContent?.startsWith('URLs'),
-    )!;
-    await act(async () => urls.click());
-    expect(setPage.mock.lastCall![0].view).toEqual({
       tab: 'urls',
       rows: [
         { ref: 'https://acme.example/pricing', label: 'Pricing' },
         { ref: 'https://blog.acme.example/guide', label: 'https://blog.acme.example/guide' },
+      ],
+      total: 2,
+    });
+    const domains = [...container.querySelectorAll<HTMLElement>('[role="tab"]')].find((tab) =>
+      tab.textContent?.startsWith('Domains'),
+    )!;
+    await act(async () => domains.click());
+    expect(setPage.mock.lastCall![0].view).toEqual({
+      tab: 'domains',
+      rows: [
+        { ref: 'acme.example', label: 'acme.example' },
+        { ref: 'blog.acme.example', label: 'blog.acme.example' },
       ],
       total: 2,
     });

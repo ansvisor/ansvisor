@@ -327,6 +327,20 @@ describe('HistoryDrawer', () => {
     expect(under('Result')).toContain('Dismissed: The data behind it is wrong.');
   });
 
+  it('says a stale action was replaced by a newer one, never as turned down (00563)', async () => {
+    getActionSignals.mockResolvedValue([]);
+    render(
+      <HistoryDrawer
+        brandId="b1"
+        item={{ ...item, status: 'dismissed', dismissReason: 'replaced' }}
+        onOpenChange={() => {}}
+      />,
+    );
+    await act(async () => {});
+    expect(under('Result')).toContain('Replaced by a newer action of the same kind');
+    expect(under('Result')).not.toContain('Dismissed:');
+  });
+
   it('lists the readings after it closed, and when the final one comes (learning B1)', async () => {
     getActionSignals.mockResolvedValue([]);
     render(

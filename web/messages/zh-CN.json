@@ -622,6 +622,8 @@
       "slow": "加载时间比平时长。",
       "ready": "准备就绪。正在打开 Prompts…",
       "failed": "无法准备演示。请检查网络连接后重试。",
+      "stuck": "演示已准备好，但页面没有打开。请重新打开，或关闭后稍后再试。",
+      "open": "打开演示",
       "retry": "重试",
       "close": "关闭"
     }
@@ -2478,6 +2480,8 @@
           "task_review_withdrawn": "已撤回提交审核：{task}{title}",
           "cancelled": "由 {by} 从聊天中取消 · 撤销",
           "reopened": "操作已重新开启 — 触发条件再次满足",
+          "replaced": "已被同类型的较新行动取代：30 天内没有人处理这个行动",
+          "replaces": "代替一个 30 天内无人处理的同类型旧行动而开启",
           "signals_linked": "已关联 {count, plural, other {# 个新信号}}",
           "status_changed": "状态已更改为 {to}",
           "assigned": "负责人已更改",
@@ -4022,6 +4026,7 @@
         "whatHappened": "发生了什么？",
         "triggeredBy": "整合自 {count, plural, other {# 个信号}}",
         "dismissedBecause": "已忽略：{reason}。",
+        "replaced": "已被同类型的较新行动取代：30 天内没有人处理这个行动，因此新的发现开启了一个新行动。",
         "readings": "关闭后读取：{list}。",
         "reading": "第 {day} 天，{outcome}",
         "finalOn": "最终读取在第 {day} 天。",
@@ -4073,7 +4078,10 @@
         "actions": "操作",
         "scorecard": "记分卡",
         "kpis": "KPI",
-        "label": "历史视图"
+        "label": "历史视图",
+        "actionsHint": "逐项列出进行中或已结束的操作：目标是什么，此后测得了什么结果。",
+        "scorecardHint": "各类操作的整体成效：完成了多少、成功率以及变化中位数。",
+        "kpisHint": "您品牌的目标，以及每个目标的完成进度。"
       },
       "scorecard": {
         "note": "该品牌各类操作的效果（仅基于其自身操作）。结果为截至目前的读数；每项结果在操作结束一个月后确定。中位数变化基于每项操作的核心指标。",
@@ -6158,7 +6166,6 @@
       "home": "主页",
       "inbox": "收件箱",
       "inboxLabel": "收件箱 · {needsYou, plural, other {# 项待您处理}}",
-      "inboxLabelNeedsYou": "收件箱 · {count, plural, other {# 项}} · {needsYou, plural, other {# 项需要您处理}}",
       "skills": "技能",
       "activity": "活动",
       "capabilities": "Chat 功能说明",
@@ -6608,10 +6615,7 @@
       "landsWithSuggestions": "智能体生成的结果和每日建议将显示在这里。",
       "nothingNeedsYou": "暂无待处理事项。",
       "summary": {
-        "needsYou": "{count, plural, other {# 项待您处理}}",
-        "running": "{count} 项正在运行",
-        "doneToday": "今日已完成 {count} 项",
-        "suggestions": "本周有 {count, plural, other {# 条建议}}"
+        "needsYou": "{count, plural, other {# 项待您处理}}"
       },
       "empty": "暂无待处理事项。智能体生成的结果将显示在这里。",
       "tabs": {
@@ -15551,6 +15555,51 @@
       },
       "manage": "管理",
       "connect": "连接",
+      "adminConnects": "由管理员进行连接",
+      "accountStatus": {
+        "active": "已连接",
+        "error": "需要处理",
+        "disconnected": "已断开连接"
+      },
+      "sync": {
+        "syncedAt": "数据读取于 {when}",
+        "pending": "将在一天内首次读取：最近 90 天",
+        "error": {
+          "key_refused": "ChatGPT Ads 拒绝了该密钥。请粘贴新的密钥。",
+          "key_missing": "密钥已丢失。请重新连接该账户。",
+          "signin_gone": "Google Ads 登录已失效。请重新连接 Google Ads。",
+          "upstream": "广告平台未响应。Ansvisor 将在一天内重试。",
+          "failed": "无法读取数据。Ansvisor 将在一天内重试。"
+        }
+      },
+      "chatgpt": {
+        "connect": "连接",
+        "addAnother": "添加账户",
+        "dialogTitle": "连接 ChatGPT Ads",
+        "dialogLine": "请粘贴来自 ChatGPT Ads Manager 的 Ads API 密钥。每个密钥只能访问一个广告账户，因此每个账户请添加一个密钥。",
+        "keyLabel": "Ads API 密钥",
+        "keyNote": "Ansvisor 会通过 ChatGPT Ads 验证该密钥，然后加密存储。仅用于读取。",
+        "cancel": "取消",
+        "save": "连接",
+        "checking": "正在检查…",
+        "connectedToast": "已连接 {name}。",
+        "accountLine": "ChatGPT Ads 账户 · {currency}",
+        "accountLineNoCurrency": "ChatGPT Ads 账户",
+        "billing": "ChatGPT Ads Manager",
+        "error": {
+          "invalid_key": "ChatGPT Ads 不接受此密钥。请检查后重试。",
+          "upstream": "ChatGPT Ads 未响应。请稍后重试。",
+          "other": "无法连接。请重试。"
+        }
+      },
+      "account": {
+        "disconnect": "断开连接",
+        "disconnectTitle": "断开 {name} 的连接？",
+        "disconnectLine": "Ansvisor 会删除为该账户保存的内容：密钥（如有）以及已读取的数据。您的广告仍会在 {billing} 中继续投放。",
+        "disconnectedToast": "已断开 {name} 的连接。",
+        "disconnectFailed": "无法断开连接。请重试。",
+        "cancel": "取消"
+      },
       "platforms": {
         "chatgpt": {
           "name": "ChatGPT Ads",
@@ -18205,24 +18254,139 @@
       }
     },
     "notifications": "通知",
-    "notificationsDescription": "每个品牌可发送两类邮件：跟踪运行后的 Daily Pulse，以及每周一发送的 AI 流量周报。两者都会发送给该品牌的 Daily Pulse 收件人。",
-    "pulseSection": "Daily Pulse",
-    "pulseSectionDescription": "每次跟踪运行后按品牌生成的简短摘要，包含亮点和警告。可选择发送频率和接收人。",
-    "pulseFrequencyLabel": "{brand} 的 Daily Pulse 发送频率",
+    "yourEmails": {
+      "title": "您的电子邮件",
+      "description": "选择 Ansvisor 向您发送哪些电子邮件以及发送频率。这些设置仅属于您：团队中每个人都可自行设置。",
+      "carriedOver": "这些是您目前收到的电子邮件。保存即可将其作为您自己的选择。",
+      "for": "适用于",
+      "scopeAll": "我的所有品牌（{count}）",
+      "deliveryHint": "品牌邮件可按每个品牌单独发送，也可合并为一封邮件：",
+      "delivery_per_brand": "每个品牌一封邮件",
+      "delivery_combined": "所有品牌合并为一封邮件（即将推出）",
+      "brandOnly": "仅为 {brand} 设置",
+      "useAll": "使用我为“我的所有品牌”所做的选择",
+      "notableNote": "首封 Pulse 邮件，之后仅在发生值得关注的事件时发送。",
+      "comingSoon": "即将推出",
+      "comingSoonHint": "标有“即将推出”的邮件会保留您保存的选择，并在准备就绪后开始发送。",
+      "admins": "管理员",
+      "groups": {
+        "visibility": "品牌可见度",
+        "traffic": "AI 流量",
+        "actions": "行动中心",
+        "agents": "智能体与聊天",
+        "audit": "网站审核",
+        "content": "内容",
+        "account": "账户"
+      },
+      "kinds": {
+        "daily_pulse": {
+          "name": "每日 Pulse",
+          "description": "各品牌在 AI 回答中的表现：可见度得分、提及、引用、亮点和警告。"
+        },
+        "traffic_digest": {
+          "name": "每周摘要",
+          "description": "用一行概述上周的 AI 访问量，并列出变化最大的三项。每周一发送。"
+        },
+        "critical_action": {
+          "name": "新的关键行动",
+          "description": "为您的品牌新增了一项优先级为“关键”的行动。"
+        },
+        "due_actions": {
+          "name": "已逾期和今日到期",
+          "description": "分配给您且已到期或已逾期的行动和任务。"
+        },
+        "weekly_actions": {
+          "name": "每周行动摘要",
+          "description": "已完成的事项、未完成的事项以及后续安排。每周一发送。"
+        },
+        "run_finished": {
+          "name": "运行已完成",
+          "description": "您启动的智能体运行已完成，并附有其执行内容。"
+        },
+        "audit_finished": {
+          "name": "审核已完成",
+          "description": "批量或定时审核已完成，并附有得分。"
+        },
+        "score_dropped": {
+          "name": "得分下降",
+          "description": "某页面的得分较上次审核下降了 5 分或以上。"
+        },
+        "drafts_review": {
+          "name": "待您审阅的草稿",
+          "description": "为您的品牌生成的草稿，需要您审阅后才能上线。"
+        },
+        "ai_usage": {
+          "name": "AI 用量",
+          "description": "达到每月 AI 限额的 80% 和 100% 时发送。"
+        }
+      },
+      "links": {
+        "approvals": {
+          "name": "等待您的批准",
+          "description": "智能体或聊天运行在更改或发布任何内容之前需要您的确认。请通过“当智能体需要我时通知我”进行设置。",
+          "link": "聊天设置"
+        },
+        "scheduled": {
+          "name": "定时任务",
+          "description": "每个任务按其自身设置发送邮件。",
+          "link": "打开任务"
+        },
+        "billing": {
+          "name": "账单与安全",
+          "description": "发票、付款问题和登录提醒。始终发送。",
+          "locked": "始终开启"
+        }
+      },
+      "options": {
+        "pulse": {
+          "daily": "每天",
+          "weekly": "每周",
+          "notable": "仅在有重要变化时",
+          "off": "关闭"
+        },
+        "instant": {
+          "instant": "立即",
+          "daily": "每日摘要",
+          "off": "关闭"
+        },
+        "digest": {
+          "daily": "每日摘要",
+          "weekly": "每周摘要",
+          "off": "关闭"
+        },
+        "weekly": {
+          "weekly": "每周一",
+          "off": "关闭"
+        },
+        "onoff": {
+          "on": "开启",
+          "off": "关闭"
+        }
+      },
+      "save": "保存更改",
+      "saved": "您的邮件设置已保存",
+      "saveFailed": "无法保存您的邮件设置，请重试。",
+      "loadFailed": "无法加载您的邮件设置。",
+      "turnOffAll": "关闭所有可选邮件",
+      "turnedOff": "所有可选邮件均已设为关闭。请保存更改以生效。"
+    },
+    "outsideEmails": {
+      "title": "发送给工作区以外的人员",
+      "description": "没有 Ansvisor 席位的客户或经理也可以收到品牌摘要。他们不会收到审批或账户邮件。",
+      "sends": "每日 Pulse · AI Traffic 每周摘要",
+      "recipients": "收件人",
+      "placeholder": "client@example.com, boss@example.com",
+      "hint": "以逗号分隔。尚未保存自己邮件设置的团队成员仍会像以前一样收到该品牌的邮件：此列表为空时所有人都会收到，否则仅列表中的人会收到。",
+      "frequency": "每日 Pulse",
+      "frequencyNote": "这也会决定该品牌的 Slack 频道和 webhook，以及尚未保存自己设置的团队成员的接收方式。",
+      "digest": "同时发送 AI Traffic 每周摘要",
+      "digestPulseOff": "此每日 Pulse 关闭时，不会发送每周摘要。"
+    },
     "pulseFrequency_daily": "每天",
     "pulseFrequency_weekly": "每周",
     "pulseFrequency_notable": "仅在有值得关注的情况时",
-    "pulseFrequency_notableNote": "发送首次 Pulse，之后仅在发生值得关注的情况时发送。",
     "pulseFrequency_off": "关闭",
-    "pulseRecipients": "收件人",
-    "pulseRecipientsPlaceholder": "alex@example.com, sam@example.com",
-    "pulseRecipientsHint": "以逗号分隔的邮箱地址。留空则发送给组织的所有成员。",
     "pulseRecipientsInvalid": "无效的电子邮件地址：{emails}。请在保存前修改或删除。",
-    "trafficDigest": "AI 流量每周摘要",
-    "trafficDigestDescription": "每周一发送：用一行摘要概括上周的 AI 访问量，并列出变化最大的三项。会发送给每个品牌的 Daily Pulse 收件人，勾选或取消勾选后立即保存。",
-    "trafficDigestTo": "收件人：{emails}",
-    "trafficDigestToEveryone": "发送给组织的所有成员",
-    "trafficDigestPulseOff": "Daily Pulse 关闭期间不会发送。重新开启后即可恢复接收。",
     "pulseSaved": "通知设置已保存",
     "pulseSaveFailed": "无法保存通知设置。请重试。",
     "pulseLoadFailed": "无法加载通知设置。",
@@ -18247,7 +18411,6 @@
       "loading": "正在加载语言…",
       "moreSoon": "更多语言即将推出。",
       "preview": "员工和测试版本也可以看到尚无翻译的语言。缺失文本处将显示为英文。",
-      "testLanguage": "{language} · 测试",
       "saved": "语言已保存",
       "saveFailed": "无法保存您的语言，请重试。",
       "suggest": {

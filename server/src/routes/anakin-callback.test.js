@@ -198,6 +198,17 @@ describe('POST /anakin/callback', () => {
     expect(handleScraperResult).not.toHaveBeenCalled();
   });
 
+  it('stores no Gemini answer from another country than the one asked', async () => {
+    pending = { ...PENDING, scraper_id: 'gemini-web', region: 'MD' };
+    const fromUs = {
+      status: 'completed',
+      data: { data: { answer_text: 'Acme leads.', country: 'us' } },
+    };
+    await deliver(event({ jobId: 'job-1', result: fromUs }));
+    await settled();
+    expect(handleScraperResult).not.toHaveBeenCalled();
+  });
+
   it('drops the answer of a brand whose plan has ended', async () => {
     isBrandActiveCached.mockResolvedValue(false);
     isBrandActive.mockResolvedValue(false);
