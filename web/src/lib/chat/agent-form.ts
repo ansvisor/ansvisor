@@ -175,6 +175,8 @@ export type TriggerDraft = { key: string; enabled: boolean; raw: Json | null } &
   | { kind: 'brand_added' }
   /** When a page is published (00558): no settings; on the brands in scope. */
   | { kind: 'page_published' }
+  /** When the catalog syncs (00558): no settings; on the brands in scope. */
+  | { kind: 'catalog_synced' }
 );
 
 export type TriggerKind = TriggerDraft['kind'];
@@ -372,6 +374,7 @@ export function newTriggerDraft(
       };
     case 'brand_added':
     case 'page_published':
+    case 'catalog_synced':
       return { key, kind, enabled: true, raw: null };
   }
 }
@@ -449,6 +452,8 @@ export function draftFromView(
       return { ...base, kind: 'brand_added' };
     case 'page_published':
       return { ...base, kind: 'page_published' };
+    case 'catalog_synced':
+      return { ...base, kind: 'catalog_synced' };
   }
 }
 
@@ -515,6 +520,7 @@ export function triggerInputOf(
       return null;
     case 'brand_added':
     case 'page_published':
+    case 'catalog_synced':
       return out({});
   }
 }
@@ -551,6 +557,7 @@ export function triggerError(draft: TriggerDraft, now: Date): string | null {
         return 'watch_rule_required';
       case 'brand_added':
       case 'page_published':
+      case 'catalog_synced':
         break;
     }
   }

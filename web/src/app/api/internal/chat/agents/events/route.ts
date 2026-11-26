@@ -7,10 +7,11 @@ import { internalCallRefusal } from '@/lib/chat/internal-call';
 export const maxDuration = 300;
 
 /**
- * POST /api/internal/chat/agents/events `{ kind, brandId, ref, draftId }`
+ * POST /api/internal/chat/agents/events `{ kind, brandId, ref, draftId | sourceId }`
  *
  * The API server's hook after an event on a brand (00558): a page went live
- * in its CMS (page_published), with
+ * in its CMS (page_published), a catalog sync changed products
+ * (catalog_synced), with
  * `Authorization: Bearer ${CHAT_INTERNAL_SECRET}`. Fires the event's
  * triggers once per agent and event, with the noise rules, and starts what
  * the workspace has room for. No model is called.

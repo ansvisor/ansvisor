@@ -4,10 +4,12 @@
   "businessTypes": [],
   "industries": [],
   "roles": [],
-  "skills": [
-    "shopping"
+  "skills": ["shopping"],
+  "triggers": [
+    {
+      "kind": "catalog_synced"
+    }
   ],
-  "triggers": [],
   "mode": "auto",
   "connections": [
     {
@@ -15,8 +17,6 @@
       "required": true
     }
   ],
-  "status": "soon",
-  "needs": [
-    "catalog_trigger"
-  ]
+  "status": "ready",
+  "needs": []
 }

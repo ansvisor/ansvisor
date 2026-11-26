@@ -24,6 +24,9 @@
  *     notifyChatAgentsOfPagePublished tells the web's
  *     POST /api/internal/chat/agents/events, so When a page is published
  *     triggers fire (00558). Ids only, and never for a page an agent made.
+ *   - After a sync of a brand's catalog source changed its products
+ *     (catalog/sources.js), notifyChatAgentsOfCatalogSync tells the same
+ *     endpoint, so When the catalog syncs triggers fire (00558).
  *
  * Both send `Authorization: Bearer ${CHAT_INTERNAL_SECRET}` to the web app
  * at PUBLIC_APP_URL; without the secret, or with the new Chat off, nothing
@@ -279,6 +282,41 @@ export async function notifyChatAgentsOfPagePublished({ draftId, deliveryId }) {
     return res;
   } catch (err) {
     logger.error({ err, draftId }, '[chat-agents] could not tell the agents a page was published');
+    return null;
+  }
+}
+
+/**
+ * Tells the web a sync of one of a brand's catalog sources finished and
+ * changed its products (00558: When the catalog syncs): the source's id
+ * and the sync's time, once per sync on the web's side. Nothing for a
+ * workspace without the new Chat, or without the secret. Ids only. Never
+ * throws.
+ *
+ * @param {{ brandId: string, sourceId: string, syncedAt: string }} sync
+ */
+export async function notifyChatAgentsOfCatalogSync({ brandId, sourceId, syncedAt }) {
+  try {
+    if (!chatAgenticDeployed() || !process.env.CHAT_INTERNAL_SECRET) return null;
+    const { data: brand, error } = await supabaseAdmin
+      .from('brands')
+      .select('organization_id')
+      .eq('id', brandId)
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    if (!brand || !chatAgenticEnabled(brand.organization_id)) return null;
+    const res = await postToChatAgents('events', {
+      kind: 'catalog_synced',
+      brandId,
+      ref: `${sourceId}@${syncedAt}`,
+      sourceId,
+    });
+    if (res && res.status !== 200) {
+      logger.error({ status: res.status, brandId }, '[chat-agents] catalog-synced triggers failed');
+    }
+    return res;
+  } catch (err) {
+    logger.error({ err, brandId }, '[chat-agents] could not tell the agents a catalog synced');
     return null;
   }
 }

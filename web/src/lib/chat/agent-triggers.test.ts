@@ -853,7 +853,7 @@ describe('a page published (00558)', () => {
   const DRAFT = 'efefefef-0000-4000-8000-000000000001';
   const T0 = new Date('2026-11-02T10:00:00Z');
   const claims = () => db.tables.chat_agent_trigger_claims;
-  const published = (over: Partial<import('./agent-triggers').BrandEvent> = {}, when = T0) =>
+  const published = (over: { brandId?: string; ref?: string } = {}, when = T0) =>
     triggers.fireBrandEvent(
       { kind: 'page_published', brandId: BRAND, ref: SEND, draftId: DRAFT, ...over },
       when,
@@ -959,5 +959,62 @@ describe('a page published (00558)', () => {
   it('reads only its own kind: When a brand is added never fires on a page', async () => {
     db.tables.chat_agent_triggers.at(-1)!.kind = 'brand_added';
     expect((await published()).fired).toBe(0);
+  });
+});
+
+describe('a catalog synced (00558)', () => {
+  const CATALOG_TRIGGER = 'dddddddd-0000-4000-8000-000000000006';
+  const SOURCE = 'cacacaca-0000-4000-8000-000000000001';
+  const T0 = new Date('2026-11-02T10:00:00Z');
+  const ref = (at: Date) => `${SOURCE}@${at.toISOString()}`;
+  const claims = () => db.tables.chat_agent_trigger_claims;
+  const synced = (when = T0, brandId = BRAND) =>
+    triggers.fireBrandEvent(
+      { kind: 'catalog_synced', brandId, ref: ref(when), sourceId: SOURCE },
+      when,
+      null,
+    );
+
+  beforeEach(() => {
+    seedAgent({}, {});
+    db.tables.chat_agent_triggers.push({
+      id: CATALOG_TRIGGER,
+      agent_id: AGENT,
+      kind: 'catalog_synced',
+      config_json: {},
+      enabled: true,
+      last_fired_at: null,
+      cooldown_until: null,
+      created_at: '2026-10-01T00:00:00.000Z',
+    });
+    db.tables.chat_agent_trigger_claims = [];
+  });
+
+  it('queues one run on the brand with the catalog source as its evidence, once per sync', async () => {
+    expect(await synced()).toEqual({ fired: 1, queued: 1, coalesced: 0, skipped: 0, failed: 0 });
+    expect(queuedRuns()).toEqual([
+      expect.objectContaining({
+        brand_id: BRAND,
+        trigger_kind: 'catalog_synced',
+        trigger_id: CATALOG_TRIGGER,
+        evidence_json: {
+          fires: [{ kind: 'catalog_synced', ref: SOURCE, at: T0.toISOString() }],
+          earlier: [],
+        },
+      }),
+    ]);
+    // The same sync told twice: the claim is taken.
+    runs()[0].status = 'done';
+    expect((await synced()).fired).toBe(0);
+    expect(claims()).toEqual([
+      expect.objectContaining({ kind: 'catalog_synced', brand_id: BRAND, ref: ref(T0) }),
+    ]);
+  });
+
+  it('fires only on a brand in scope, and When a page is published never on a sync', async () => {
+    expect((await synced(T0, BRAND_2)).fired).toBe(0);
+    db.tables.chat_agent_triggers.at(-1)!.kind = 'page_published';
+    expect((await synced()).fired).toBe(0);
+    expect(runs()).toEqual([]);
   });
 });

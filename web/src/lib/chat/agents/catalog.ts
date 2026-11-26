@@ -166,8 +166,9 @@ const tags = <const T extends readonly string[]>(values: T) =>
  * A default trigger, as New agent's Trigger step offers it (W2-15): a
  * recurring schedule on the person's clock, a Signal created in Action
  * Center by its category, a KPI crossing a threshold, a brand added to
- * the workspace (00482; the agent then opens on All brands), or a page
- * published to a CMS (00558). None: Manual only.
+ * the workspace (00482; the agent then opens on All brands), a page
+ * published to a CMS or a catalog sync that changed products (00558).
+ * None: Manual only.
  */
 const presetTriggerSchema = z.discriminatedUnion('kind', [
   z.strictObject({
@@ -186,6 +187,7 @@ const presetTriggerSchema = z.discriminatedUnion('kind', [
   }),
   z.strictObject({ kind: z.literal('brand_added') }),
   z.strictObject({ kind: z.literal('page_published') }),
+  z.strictObject({ kind: z.literal('catalog_synced') }),
 ]);
 export type PresetTrigger = z.output<typeof presetTriggerSchema>;
 

@@ -236,9 +236,17 @@ function Check({
  * The trigger kinds a kept trigger can be (Manual is always there, as its
  * own line). When a brand is added needs All brands: its note says so, and
  * the brands next to FOR are marked until they are. When a page is
- * published fires on the brands next to FOR.
+ * published and When the catalog syncs fire on the brands next to FOR.
  */
-const KINDS = ['schedule', 'signal', 'kpi', 'watch_rule', 'brand_added', 'page_published'] as const;
+const KINDS = [
+  'schedule',
+  'signal',
+  'kpi',
+  'watch_rule',
+  'brand_added',
+  'page_published',
+  'catalog_synced',
+] as const;
 /** An AEO Operator plans on its schedule's days and time: its quiet days are the ones it skips. */
 const OPERATOR_KINDS = ['schedule'] as const;
 
@@ -306,7 +314,8 @@ export function TriggerStep({
       !draftProblem ||
       draft.kind === 'watch_rule' ||
       draft.kind === 'brand_added' ||
-      draft.kind === 'page_published'
+      draft.kind === 'page_published' ||
+      draft.kind === 'catalog_synced'
     ) {
       return {};
     }
@@ -712,6 +721,12 @@ export function TriggerStep({
             <>
               <span className={KW}>{t('trigger.kw.when')}</span>
               <span>{t('trigger.pagePublishedWhen')}</span>
+            </>
+          )}
+          {draft?.kind === 'catalog_synced' && (
+            <>
+              <span className={KW}>{t('trigger.kw.when')}</span>
+              <span>{t('trigger.catalogSyncedWhen')}</span>
             </>
           )}
         </div>

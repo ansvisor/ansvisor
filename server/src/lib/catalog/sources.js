@@ -8,6 +8,7 @@ import { PageFetchError } from '../safe-fetch.js';
 import { logger } from '../logger.js';
 import { PlanLimitError, getCatalogProductCap } from '../plan-guard.js';
 import { queueShoppingCheck } from '../shopping-check.js';
+import { notifyChatAgentsOfCatalogSync } from '../chat-agents.js';
 import { CredentialsKeyError, readCredentials } from './credentials.js';
 import { saveItemIssues } from './issues.js';
 import { brandSignIn, signInRequest as workspaceSignIn } from './sign-in.js';
@@ -292,16 +293,21 @@ async function record(db, id, at, outcome) {
  * and nothing is recorded. A store's calls stop after `readMs` (STORE_READ_MS).
  *
  * After a sync that read the catalog, the brand's pages' shopping links are
- * checked against it (shopping-check.js), behind the answer.
+ * checked against it (shopping-check.js), behind the answer. One that
+ * changed products (added, changed or removed) tells Chat's agents too
+ * (chat-agents.js, When the catalog syncs), behind the answer as well.
  *
  * @param {{ id: string, brand_id: string, kind: string, format: string, url?: string|null, account?: string|null }} source
- * @param {{ text?: string, db?: object, now?: Date, fetch?: Function, request?: Function, signInRequest?: Function, connectors?: object, readMs?: number, capOf?: Function, afterSync?: Function }} [options]
+ * @param {{ text?: string, db?: object, now?: Date, fetch?: Function, request?: Function, signInRequest?: Function, connectors?: object, readMs?: number, capOf?: Function, afterSync?: Function, onChanged?: Function }} [options]
  *   `fetch` (a feed's), `request` (a store's HTTP client), `signInRequest`
  *   (the workspace sign-in's, sign-in.js), `connectors`, `readMs`, `capOf`
- *   (the plan's product cap, by organization) and `afterSync` (the shopping
- *   check's queue) are the tests' stand-ins
+ *   (the plan's product cap, by organization), `afterSync` (the shopping
+ *   check's queue) and `onChanged` (Chat's agents) are the tests' stand-ins
  */
-export async function syncSource(source, { afterSync = queueShoppingCheck, ...options } = {}) {
+export async function syncSource(
+  source,
+  { afterSync = queueShoppingCheck, onChanged = notifyChatAgentsOfCatalogSync, ...options } = {},
+) {
   if (reading.has(source.id)) {
     return {
       status: 'failed',
@@ -316,7 +322,19 @@ export async function syncSource(source, { afterSync = queueShoppingCheck, ...op
     reading.delete(source.id);
   }
   if (outcome.status === 'ok') afterSync(source.brand_id, options.db ? { db: options.db } : {});
+  if (outcome.status === 'ok' && productsChanged(outcome.counts?.products)) {
+    void onChanged({
+      brandId: source.brand_id,
+      sourceId: source.id,
+      syncedAt: (options.now ?? new Date()).toISOString(),
+    });
+  }
   return outcome;
+}
+
+/** Whether a sync added, changed or removed a product (syncCatalog's counts). */
+function productsChanged(products) {
+  return Boolean(products && products.added + products.changed + products.removed > 0);
 }
 
 /** A store's HTTP client whose every call stops at one deadline, `ms` from now. */

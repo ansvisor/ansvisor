@@ -251,6 +251,16 @@ describe('triggers', () => {
     expect(triggerScopeProblem(agentTriggersSchema.parse([page]), {})).toBeNull();
   });
 
+  it('takes When the catalog syncs with no settings, on any scope (00558)', () => {
+    const synced = { kind: 'catalog_synced', config: {} };
+    expect(agentTriggersSchema.parse([synced])[0]).toEqual({ ...synced, enabled: true });
+    expect(
+      agentTriggersSchema.safeParse([{ kind: 'catalog_synced', config: { source_id: BRAND } }])
+        .success,
+    ).toBe(false);
+    expect(triggerScopeProblem(agentTriggersSchema.parse([synced]), {})).toBeNull();
+  });
+
   it('keeps a one-off schedule within the coming year', () => {
     const now = new Date('2026-10-29T12:00:00Z');
     const once = (at: string) =>

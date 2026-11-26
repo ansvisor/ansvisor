@@ -105,6 +105,7 @@ export type EvalTrigger =
   | 'kpi'
   | 'brand_added'
   | 'page_published'
+  | 'catalog_synced'
   | 'manual';
 
 export interface AgentEvalScenario {
