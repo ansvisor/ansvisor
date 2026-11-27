@@ -135,7 +135,7 @@ describe('DemoBanner', () => {
     await render();
     expect(bands()).toHaveLength(1);
     expect(band()?.textContent).toContain(
-      "You're exploring Brewline Coffee, a demo brand with sample data. Start tracking Acme Coffee with a 14-day free trial, or get 50% off your first month.",
+      "You're exploring Brewline Coffee, a demo brand with sample data. Start tracking Acme Coffee with a 7-day free trial, or get 50% off your first month.",
     );
     expect(band()?.textContent).not.toContain('then 50% off');
     expect([...band()!.querySelectorAll('strong')].map((b) => b.textContent)).toEqual([
@@ -154,7 +154,7 @@ describe('DemoBanner', () => {
   it('says it generally before the workspace has a brand of its own', async () => {
     await render({ ownBrand: false });
     expect(band()?.textContent).toContain(
-      "You're exploring Brewline Coffee, a demo brand with sample data. Start a 14-day free trial, or get 50% off your first month.",
+      "You're exploring Brewline Coffee, a demo brand with sample data. Start a 7-day free trial, or get 50% off your first month.",
     );
     await act(async () => {
       bandButton()!.click();
@@ -178,7 +178,7 @@ describe('DemoBanner', () => {
     vi.stubEnv('NEXT_PUBLIC_FIRST_MONTH_OFFER', 'off');
     await render();
     expect(band()?.textContent).toContain(
-      'sample data. Start tracking Acme Coffee with a 14-day free trial.',
+      'sample data. Start tracking Acme Coffee with a 7-day free trial.',
     );
     expect(band()?.textContent).not.toContain('50%');
     await render({ status: 'canceled', everSubscribed: true });

@@ -303,7 +303,7 @@ describe('useUpgradeGate on the demo brand', () => {
     await act(async () => {
       document.querySelector<HTMLButtonElement>('[data-choice="trial"]')!.click();
     });
-    expect(button('Start 14-day free trial')).toBeDefined();
+    expect(button('Start 7-day free trial')).toBeDefined();
   });
 
   it('gives a workspace whose plan ended Buy now, with no trial', async () => {
@@ -383,7 +383,7 @@ describe("useUpgradeGate on a brand that isn't tracked yet", () => {
     await act(async () => {
       document.querySelector<HTMLButtonElement>('[data-choice="trial"]')!.click();
     });
-    expect(button('Start 14-day free trial')).toBeDefined();
+    expect(button('Start 7-day free trial')).toBeDefined();
   });
 
   it('keeps what was clicked as the label', async () => {
@@ -401,7 +401,7 @@ describe("useUpgradeGate on a brand that isn't tracked yet", () => {
     await render({ active: false, status: null, everSubscribed: false, role: 'analyst' });
     await runAll();
     expect(dialog()?.textContent).toContain('Ask your admin to choose a plan.');
-    expect(button('Start 14-day free trial')).toBeUndefined();
+    expect(button('Start 7-day free trial')).toBeUndefined();
   });
 });
 
