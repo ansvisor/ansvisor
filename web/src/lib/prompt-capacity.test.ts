@@ -13,7 +13,7 @@ vi.mock('@/lib/supabase/admin', async () => ({
 
 const { supabaseAdmin } = await import('@/lib/supabase/admin');
 const db = supabaseAdmin as unknown as FakeSupabase;
-const { promptsToWait, waitOverCapacity } = await import('./prompt-capacity');
+const { promptsToWait, waitOverCapacity, waitOverSlots } = await import('./prompt-capacity');
 
 describe('promptsToWait', () => {
   const p = (id: string, regions: string[] | null = null) => ({ id, regions });
@@ -99,5 +99,66 @@ describe('waitOverCapacity', () => {
   it('throws on a failed read, for the caller to log', async () => {
     db.failures = { prompts: { message: 'down' } };
     await expect(waitOverCapacity(ORG, 2, NOW)).rejects.toThrow('down');
+  });
+});
+
+describe('waitOverSlots', () => {
+  const ORG = 'org1';
+  const NOW = new Date('2026-11-27T09:00:00Z');
+  const prompt = (
+    id: string,
+    created: string,
+    platforms: string[],
+    extra: Record<string, unknown> = {},
+  ) => ({
+    id,
+    prompt_set_id: 's1',
+    created_at: created,
+    is_active: true,
+    waiting_since: null,
+    regions: null,
+    models: [],
+    platforms,
+    waiting_platforms: [],
+    ...extra,
+  });
+
+  beforeEach(() => {
+    db.failures = {};
+    db.tables = {
+      brands: [{ id: 'b1', organization_id: ORG, is_demo: false }],
+      prompt_sets: [{ id: 's1', brand_id: 'b1' }],
+      prompts: [
+        prompt('old', '2026-10-01T00:00:00Z', ['chatgpt-web', 'claude-web']),
+        prompt('new', '2026-11-10T00:00:00Z', ['chatgpt-web', 'claude-web']),
+        prompt('grok', '2026-11-12T00:00:00Z', ['grok-web']),
+      ],
+    };
+  });
+
+  const row = (id: string) => db.tables.prompts.find((r) => r.id === id)!;
+
+  it('lets the newest wait on a platform past its slots, and a prompt with nothing left wait whole', async () => {
+    const slots = { 'chatgpt-web': 250, 'claude-web': 1 };
+    await expect(waitOverSlots(ORG, slots, NOW)).resolves.toBe(2);
+    expect(row('new')).toMatchObject({
+      platforms: ['chatgpt-web'],
+      waiting_platforms: ['claude-web'],
+      is_active: true,
+    });
+    expect(row('old')).toMatchObject({ platforms: ['chatgpt-web', 'claude-web'] });
+    // Grok has no slots: it waits, and the prompt has nothing else to run.
+    expect(row('grok')).toMatchObject({
+      platforms: [],
+      waiting_platforms: ['grok-web'],
+      is_active: false,
+      waiting_since: NOW.toISOString(),
+    });
+  });
+
+  it('changes nothing without per-platform slots or within them', async () => {
+    await expect(waitOverSlots(ORG, undefined, NOW)).resolves.toBe(0);
+    db.tables.prompts = db.tables.prompts.filter((r) => r.id !== 'grok');
+    await expect(waitOverSlots(ORG, { 'chatgpt-web': 250, 'claude-web': 2 }, NOW)).resolves.toBe(0);
   });
 });

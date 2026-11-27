@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 vi.mock('@/lib/supabase/server', () => ({ createClient: vi.fn() }));
 
 const { planFromOrgRow, usagePlanFromOrgRow } = await import('./plan-guard');
+const { promptPlatformsAllowed } = await import('./plan-row');
 
 /** The plan an organization's usage is shown against, while it's on one and once it has ended. */
 
@@ -77,6 +78,46 @@ describe('add-ons in the plan’s limits', () => {
     expect(limits(org)).toEqual([50, 1]);
     const { plan, ended } = usagePlanFromOrgRow(org);
     expect([plan.limits.maxPrompts, plan.limits.maxBrands, ended]).toEqual([250, 4, true]);
+  });
+
+  it('give Growth and Enterprise their tracking slots per platform (00564)', () => {
+    vi.stubEnv('NEXT_PUBLIC_IS_CLOUD', 'true');
+    const growth = planFromOrgRow({
+      plan: 'growth',
+      subscription_status: 'active',
+      add_on_slots: { 'chatgpt-web': 600, 'claude-web': 200, 'deepseek-web': 100, 'gemini-web': 0 },
+    });
+    expect(growth.slots).toEqual({
+      'chatgpt-web': 850,
+      'gemini-web': 250,
+      'google-aio': 250,
+      'google-aimode': 250,
+      'copilot-web': 250,
+      'claude-web': 200,
+    });
+    // The largest platform's slots are the prompt locations; a bought platform may be set.
+    expect(growth.limits.maxPrompts).toBe(850);
+    const allowed = promptPlatformsAllowed(growth)!;
+    expect(allowed.has('claude-web')).toBe(true);
+    expect(allowed.has('chatgpt-shopping')).toBe(true);
+    expect(allowed.has('grok-web')).toBe(false);
+    expect(allowed.has('deepseek-web')).toBe(false);
+
+    const enterprise = planFromOrgRow({
+      plan: 'enterprise',
+      subscription_status: 'active',
+      add_on_slots: { 'perplexity-web': 100 },
+    });
+    expect(enterprise.slots?.['perplexity-web']).toBe(100);
+    expect(enterprise.slots?.['chatgpt-web']).toBe(3000);
+
+    expect(
+      planFromOrgRow({ plan: 'starter', subscription_status: 'active' }).slots,
+    ).toBeUndefined();
+    expect(
+      planFromOrgRow({ plan: 'growth', subscription_status: 'active', add_on_slots: ['x'] })
+        .slots?.['chatgpt-web'],
+    ).toBe(250);
   });
 
   it('ignore what isn’t a whole count above 0, and a self-hosted install', () => {
