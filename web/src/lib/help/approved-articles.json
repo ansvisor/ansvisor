@@ -1169,6 +1169,12 @@
         "ai traffic",
         "sign-ups",
         "/traffic",
+        "crawler & technical fixer",
+        "technical fixer",
+        "ai crawlers",
+        "robots.txt",
+        "gptbot",
+        "/tech-fix",
         "shopping feed advisor",
         "feed gaps",
         "product feed",
@@ -1227,6 +1233,9 @@
         "black friday",
         "ai traffic report",
         "ai visitors who sign up",
+        "can chatgpt crawl my site",
+        "ai bots blocked",
+        "firewall blocks ai bots",
         "what is my feed missing",
         "missing gtin",
         "feed fixes"
@@ -1289,6 +1298,10 @@
         {
           "heading": "Shopping Feed Advisor",
           "text": "**Shopping Feed Advisor** runs every Monday at 09:00 on **Auto, ask before changes**. It is made for e-commerce brands and needs a product catalog: connect one in **Settings › Integrations › Catalog**. Each run checks every live product in your catalog for what AI shopping answers need: a GTIN, a photo, a price, stock, a full description that says early on what the product is, a category and a brand. It lists the gaps by impact, the readiness points your catalog loses on each, and gives example products and a fix for each gap. It never changes your store or feed. Sending a fix to the Action Center is a card you approve. In Chat, the same skill is **/feed-advisor**."
+        },
+        {
+          "heading": "Crawler & Technical Fixer",
+          "text": "**Crawler & Technical Fixer** runs when you click **Run now**, on **Ask me first**. It is made for AEO and developer roles. It reads each page's latest **Site Audit** and lists what keeps AI crawlers out: AI bots your robots.txt blocks, bots your CDN or firewall turns away, main text that only appears once JavaScript runs, and missing HTTPS or canonical tags. For each issue it writes the fix ready for your developer, such as the robots.txt lines to add. It never changes your site and doesn't open pull requests. Sending a fix to the Action Center is a card you approve. A page with no audit isn't checked; with no audit at all, it offers to audit your home page, which uses one of the month's audits. In Chat, the same skill is **/tech-fix**."
         },
         {
           "heading": "Agency Client Reporter",

@@ -101,6 +101,7 @@ describe('the preset files', () => {
       'shopping-readiness',
       'localization',
       'aeo-operator',
+      'technical-fixer',
       'agency-reporter',
       'paid-opportunity',
       'product-answer-pages',
@@ -118,7 +119,7 @@ describe('the preset files', () => {
       'unmet-needs-miner',
       'market-source-finder',
     ]);
-    expect(AGENT_PRESETS.filter((preset) => preset.status === 'soon')).toHaveLength(10);
+    expect(AGENT_PRESETS.filter((preset) => preset.status === 'soon')).toHaveLength(9);
   });
 
   it('have the business-type packs: three agents for each type, in the plan’s order', () => {
@@ -392,7 +393,7 @@ describe('a ready preset', () => {
 
   it('is found by its id; a soon one, or no id, is not', () => {
     expect(readyPreset('weekly-report')?.id).toBe('weekly-report');
-    expect(readyPreset('technical-fixer')).toBeNull();
+    expect(readyPreset('ticket-loop')).toBeNull();
     expect(readyPreset('nope')).toBeNull();
     expect(readyPreset(null)).toBeNull();
   });
@@ -505,7 +506,7 @@ describe('a soon preset', () => {
   });
 
   it('is refused as a file when it needs nothing, as a ready one that needs something is', () => {
-    const base = AGENT_PRESETS.find((preset) => preset.id === 'technical-fixer')!;
+    const base = AGENT_PRESETS.find((preset) => preset.id === 'ticket-loop')!;
     expect(() => buildPresetCatalog([{ file: 'x.json', json: { ...base, needs: [] } }])).toThrow(
       /needs/,
     );

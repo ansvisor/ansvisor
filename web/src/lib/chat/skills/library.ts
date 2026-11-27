@@ -91,6 +91,8 @@ export const SKILL_ORDER = [
   'ai-revenue',
   // AGENTS plan §8: the Shopping Feed Advisor's, what the feed misses for AI shopping answers.
   'feed-advisor',
+  // AGENTS plan §8: the Crawler & Technical Fixer's, what keeps AI crawlers out of the site.
+  'tech-fix',
   // Ads Phase 0 PR 15: only with Ads on (flagged.ts ADS_SKILLS).
   'earn-or-pay',
   'ad-drafts',
