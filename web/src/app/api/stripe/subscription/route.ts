@@ -69,9 +69,10 @@ function addOnsOf(org: { add_on_prompts?: unknown; add_on_brands?: unknown }) {
 }
 
 /**
- * Growth's add-on items through a plan change (00546): on Growth they move
- * to the new interval's prices in the same update; on any other plan they
- * end, their unused time credited. Null when one has no price on the new
+ * The add-on items through a plan change (00546): on Growth they move to
+ * the new interval's prices in the same update (tracking slots on
+ * Enterprise too, 00564); on any other plan they end, their unused time
+ * credited. Null when one has no price on the new
  * interval: the change doesn't go ahead.
  */
 async function addOnItemChanges(
@@ -81,9 +82,9 @@ async function addOnItemChanges(
   const { data, error } = await supabaseAdmin
     .from('add_on_products')
     .select(
-      'id, kind, billing, active, price_cents, currency, grant_prompts, grant_brands, stripe_price_id, stripe_lookup_key',
+      'id, kind, billing, active, price_cents, currency, grant_prompts, grant_brands, platform, grant_slots, stripe_price_id, stripe_lookup_key',
     )
-    .in('kind', ['tracking', 'brand']);
+    .in('kind', ['tracking', 'brand', 'slots']);
   if (error) throw new Error(error.message);
   const catalog = (data ?? []) as (PeriodRow & ResolvableRow)[];
   const plan = addOnsThroughPlanChange(sub.items.data as unknown as CartItem[], catalog, target);

@@ -1,5 +1,6 @@
 import type { AddOnItemLike, RecurringAddOnRow } from './add-on-sync';
-import { isAddOnPrice } from './add-ons';
+import { isAddOnPrice, type PriceLike } from './add-ons';
+import { slotPlatform, slotPlatformFromStripe } from '@/config/tracking-slots';
 
 /**
  * What changes on the plan's Stripe subscription when a Growth workspace
@@ -94,6 +95,80 @@ export function itemChanges(current: CurrentAddOns, target: AddOnTarget): ItemCh
   return changes;
 }
 
+// ─── Tracking slots (00564) ─────────────────────────────────────────────────
+
+/**
+ * The platform a slots item is for: its catalog row's, else its price's
+ * `platform` metadata (the platform id, or its Stripe form chatgpt_web).
+ */
+export function slotItemPlatform(
+  row: Pick<RecurringAddOnRow, 'platform'> | undefined,
+  price: PriceLike,
+): string | null {
+  if (row?.platform) return row.platform;
+  const named = price.metadata?.platform ?? '';
+  return (slotPlatform(named) ?? slotPlatformFromStripe(named))?.id ?? null;
+}
+
+/** The plans that keep tracking slots: Growth and Enterprise. */
+export const SLOT_ADD_ON_PLANS: readonly string[] = ['growth', 'enterprise'];
+
+/** The subscription's slot items, by platform, with their units (quantity). */
+export function currentSlotItems(
+  items: readonly CartItem[],
+  catalog: readonly RecurringAddOnRow[],
+): Map<string, { item: CartItem; units: number }> {
+  const slots = new Map<string, { item: CartItem; units: number }>();
+  for (const item of items) {
+    const price = item.price;
+    if (!price || typeof price === 'string' || !isAddOnPrice(price)) continue;
+    const row = rowOf(item, catalog);
+    if ((row?.kind ?? price.metadata?.addon) !== 'slots') continue;
+    const platform = slotItemPlatform(row, price);
+    if (!platform || slots.has(platform)) continue;
+    slots.set(platform, { item, units: item.quantity ?? 1 });
+  }
+  return slots;
+}
+
+/** A platform's slots as the cart wants them: its price on the plan's period and how many units. */
+export interface SlotTarget {
+  priceId: string;
+  units: number;
+}
+
+/**
+ * The item changes that take the slot items to `target` (units per
+ * platform; a platform left out or at 0 has none), each slot item kept
+ * carrying the volume discount coupon (none when null). The coupon sits on
+ * the slot items alone, never on the subscription, so a plan's coupon and
+ * the volume discount don't mix. Nothing when no platform's units change.
+ */
+export function slotItemChanges(
+  current: ReadonlyMap<string, { item: CartItem; units: number }>,
+  target: ReadonlyMap<string, SlotTarget>,
+  couponId: string | null,
+): Record<string, unknown>[] {
+  const want = new Map([...target].filter(([, t]) => t.units > 0));
+  const same =
+    want.size === current.size &&
+    [...want].every(([platform, t]) => current.get(platform)?.units === t.units);
+  if (same) return [];
+  const discounts = couponId ? [{ coupon: couponId }] : ('' as const);
+  const changes: Record<string, unknown>[] = [];
+  for (const [platform, { item }] of current) {
+    const t = want.get(platform);
+    if (!t) changes.push({ id: item.id, deleted: true });
+    else if (priceIdOf(item) !== t.priceId) {
+      changes.push({ id: item.id, price: t.priceId, quantity: t.units, discounts });
+    } else changes.push({ id: item.id, quantity: t.units, discounts });
+  }
+  for (const [platform, t] of want) {
+    if (!current.has(platform)) changes.push({ price: t.priceId, quantity: t.units, discounts });
+  }
+  return changes;
+}
+
 /** A catalog row as a plan change reads it: which tier or brand price, on which interval. */
 export type PeriodRow = RecurringAddOnRow & {
   id: string;
@@ -112,8 +187,11 @@ export interface PlanChangeAddOns {
 }
 
 /**
- * The Growth add-ons through a plan change: kept on Growth (on the new
- * interval's price, the same tier or the brand), ended on any other plan.
+ * The add-ons through a plan change: kept on Growth (on the new interval's
+ * price, the same tier or the brand), ended on any other plan. Tracking
+ * slots are kept on Growth and Enterprise (00564), on the same platform's
+ * price for the new interval; their item keeps its volume discount, whose
+ * rate is the same on either interval.
  */
 export function addOnsThroughPlanChange(
   items: readonly CartItem[],
@@ -125,11 +203,16 @@ export function addOnsThroughPlanChange(
     row.billing === 'monthly' ? 'month' : row.billing === 'yearly' ? 'year' : null;
   for (const item of items) {
     if (!isAddOnPrice(typeof item.price === 'string' ? null : item.price)) continue;
-    if (target.planId !== 'growth') {
+    const row = rowOf(item, catalog) as PeriodRow | undefined;
+    const kind =
+      row?.kind ??
+      (item.price as { metadata?: Record<string, string> | null } | null)?.metadata?.addon;
+    const keeps =
+      kind === 'slots' ? SLOT_ADD_ON_PLANS.includes(target.planId) : target.planId === 'growth';
+    if (!keeps) {
       result.removals.push(item.id);
       continue;
     }
-    const row = rowOf(item, catalog) as PeriodRow | undefined;
     const price = item.price as { recurring?: { interval?: string } | null } | null | undefined;
     // Already on the new interval (a staff price the catalog doesn't hold too).
     if (
@@ -142,6 +225,7 @@ export function addOnsThroughPlanChange(
           (r) =>
             r.kind === row.kind &&
             r.grant_prompts === row.grant_prompts &&
+            (r.platform ?? null) === (row.platform ?? null) &&
             r.active &&
             intervalOf(r) === target.interval,
         )

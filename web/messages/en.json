@@ -18320,7 +18320,38 @@
     },
     "planAddOns": {
       "title": "Add more to your plan",
-      "description": "Extra tracking, extra brands and AI usage top-ups for your Growth plan. Everything you pick is charged once, to the card on file.",
+      "slots": {
+        "title": "Buy extra tracking credits",
+        "description": "{plan} includes {included} slots on each standard platform. Choose extra slots on any platform; you can lower any of them, down to 0.",
+        "descriptionNone": "Choose extra slots on any platform; you can lower any of them, down to 0.",
+        "discount": {
+          "reached": "<b>{percent}% off</b> your extra tracking: {off} off {list} a {interval, select, year {year} other {month}}.",
+          "list": "Extra tracking: {list} a {interval, select, year {year} other {month}}.",
+          "next": "Add {more} more a {interval, select, year {year} other {month}} for <b>{percent}% off</b> the part above {from}.",
+          "top": "You reach the highest step.",
+          "drops": "This change lowers your discount from {from}% to {to}%, so the price per 100 slots goes up.",
+          "steps": "Volume discount steps",
+          "stepsLead": "Each step takes its rate off the part above it:",
+          "step": "{percent}% off above {from}/{interval, select, year {yr} other {mo}}",
+          "yours": "· yours",
+          "nextTag": "· next"
+        },
+        "unit": "<b>1 slot</b> = 1 prompt tracked in 1 location on that platform, every day.",
+        "columns": {
+          "platform": "Platform",
+          "included": "In your plan",
+          "extra": "Extra slots",
+          "price": "Price per 100 slots a {interval, select, year {year} other {month}}",
+          "cost": "Your {interval, select, year {yearly} other {monthly}} cost"
+        },
+        "unlimited": "No limit",
+        "fewer": "100 fewer {platform} slots",
+        "more": "100 more {platform} slots",
+        "extraOn": "Extra slots on {platform}",
+        "was": "was {slots}",
+        "undo": "Undo",
+        "footer": "Prices follow what each platform costs to track: some answers take more work (for example Perplexity). Yearly: 2 months free."
+      },
       "tracking": {
         "title": "Extra tracking",
         "description": "More prompt locations, tracked on your plan's engines every day. One tier at a time; change or remove it any time.",
@@ -18328,8 +18359,7 @@
         "none": "None",
         "tier": "+{units} prompt locations",
         "price": "{price}/{interval, select, year {yr} other {mo}}",
-        "contactSales": "Contact sales",
-        "yearly": "Yearly prices: 2 months free."
+        "contactSales": "Contact sales"
       },
       "brands": {
         "title": "Extra brands",
@@ -18337,7 +18367,7 @@
         "count": "{count} extra",
         "fewer": "One brand fewer",
         "more": "One brand more",
-        "note": "You can't go below the brands you have: remove one in Brands first."
+        "limit": "Your plan includes {base} brands. New limit <b>{limit}</b>."
       },
       "topUp": {
         "title": "AI usage top-up",
@@ -18346,10 +18376,12 @@
         "label": "AI usage top-ups",
         "none": "None",
         "option": "+{multiplier}x",
-        "adds": "{multiplier}× this month’s AI usage · +{briefs} briefs · +{opportunities} opportunities"
+        "usage": "{multiplier}x AI usage",
+        "adds": "{multiplier}× this month’s AI usage · +{briefs} briefs · +{opportunities} opportunities",
+        "alsoAdds": "Also adds +{briefs} briefs and +{opportunities} opportunities this month.",
+        "once": "{price} once"
       },
       "summary": "{prompts} prompt locations · {brands} brands",
-      "nothing": "Pick what to change above.",
       "review": "Review and pay",
       "reviewing": "Checking the price…",
       "dialog": {
@@ -18360,20 +18392,25 @@
         "brands": "{count, plural, =0 {No extra brands} one {# extra brand} other {# extra brands}}",
         "topUp": "AI usage top-up +{multiplier}x, one payment",
         "dueToday": "Due today",
-        "dueTodayNote": "The rest of this period for extra tracking and brands, and a top-up in full.",
+        "dueTodayNote": "The rest of this period for slots, extra tracking and brands, and a top-up in full.",
+        "slots": "{platform} slots",
+        "slotsValue": "{slots} (+{extra} added)",
+        "volumeDiscount": "Volume discount ({percent}%)",
+        "discountValue": "−{off} a {interval, select, year {year} other {month}}",
         "total": "From the next renewal",
         "totalValue": "{price} a {interval, select, year {year} other {month}}",
-        "credit": "A lower tier or fewer brands leaves a credit for your next invoices.",
+        "credit": "Fewer slots, a lower tier or fewer brands leave a credit for your next invoices.",
         "pay": "Pay {price}",
         "confirm": "Confirm",
         "cancel": "Cancel",
-        "processing": "Processing…"
+        "processing": "Processing…",
+        "slotsWaiting": "{platform}: the newest {count} prompt locations will wait for a slot. Nothing is deleted; add slots again to track them."
       },
       "done": "Your add-ons are updated. A top-up counts as soon as the payment is confirmed.",
       "states": {
         "not_admin": "Only admins change add-ons. Ask an admin of your workspace.",
         "starter": "Add-ons come with the Growth plan. Upgrade to Growth to add tracking, brands and AI usage.",
-        "enterprise": "Your contract sets your limits. Contact your account manager for more.",
+        "enterprise": "Your contract sets your other limits. Contact your account manager for more.",
         "trial": "Add-ons can be bought once your plan has started.",
         "no_plan": "Add-ons can be bought while your plan is active.",
         "ending": "Your plan is set to end. Keep your plan to change its add-ons."
@@ -18391,7 +18428,23 @@
         "payment_failed": "The payment didn't go through.",
         "failed": "Couldn't change your add-ons. Try again."
       },
-      "readFailed": "Couldn't read your add-ons. Try again later."
+      "readFailed": "Couldn't read your add-ons. Try again later.",
+      "perInterval": "{price}/{interval, select, year {yr} other {mo}}",
+      "cart": {
+        "title": "Your add-ons",
+        "onePayment": "One payment",
+        "plan": "{plan} plan",
+        "slots": "{platform} extra tracking",
+        "slotsCount": "{slots} slots",
+        "remove": "Remove {item}",
+        "discount": "Volume discount {percent}% on extra tracking, in the prices above.",
+        "discountDrops": "Your volume discount drops from {from}% to {to}%, so the prices above go up.",
+        "brands": "{count, plural, one {# brand} other {# brands}} · {price} each",
+        "topUp": "{multiplier}x AI usage · until {date}",
+        "total": "{interval, select, year {Yearly} other {Monthly}} total from the next renewal <b>{price}</b>",
+        "undoAll": "Undo all changes",
+        "dueToday": "Due today: the added items for the rest of this period, shown on Review and pay."
+      }
     },
     "cancelsOn": "Subscription ends on {date}",
     "changePlan": "Change Plan",
