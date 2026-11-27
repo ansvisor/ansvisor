@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { stripe, PRICE_IDS, priceIdFor } from '@/lib/stripe';
 import { TRIAL_DAYS, hasUsedTrial } from '@/lib/billing/trial';
+import { CHECKOUT_CANCELED_PARAM, CHECKOUT_CANCELED_VALUE } from '@/lib/billing/checkout-canceled';
 import {
   CHECKOUT_MODES,
   FIRST_MONTH_CODE,
@@ -182,7 +183,8 @@ export async function POST(req: NextRequest) {
       // A card either way: the trial too, so the plan starts on its own when it ends.
       payment_method_collection: 'always',
       success_url: `${appUrl}/api/stripe/success?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${appUrl}${returnTo === 'billing' ? '/dashboard/settings/billing' : '/dashboard/onboarding'}`,
+      // Marked, so the page says nothing was charged (CheckoutCanceledNote).
+      cancel_url: `${appUrl}${returnTo === 'billing' ? '/dashboard/settings/billing' : '/dashboard/onboarding'}?${CHECKOUT_CANCELED_PARAM}=${CHECKOUT_CANCELED_VALUE}`,
       // Stripe takes either a code applied here or its own code box, not both;
       // the trial takes neither.
       ...(promotionCodeId

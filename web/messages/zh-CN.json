@@ -553,6 +553,11 @@
     }
   },
   "planOffer": {
+    "checkoutCanceled": {
+      "title": "您的付款未完成，因此未产生任何扣款。",
+      "body": "准备好后，您可以随时重试。",
+      "bodyDemo": "准备好后，您可以随时重试，也可以先体验演示品牌，无需绑定银行卡。"
+    },
     "buyNow": "立即购买",
     "startTrial": "开启 {days} 天免费试用",
     "fullPlan": "首日起即可使用完整方案",

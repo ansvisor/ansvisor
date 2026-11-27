@@ -553,6 +553,11 @@
     }
   },
   "planOffer": {
+    "checkoutCanceled": {
+      "title": "Your payment wasn’t completed, so nothing was charged.",
+      "body": "You can try again whenever you’re ready.",
+      "bodyDemo": "You can try again whenever you’re ready, or explore the demo brand first, no card needed."
+    },
     "buyNow": "Buy now",
     "startTrial": "Start {days}-day free trial",
     "fullPlan": "Full plan from day one",

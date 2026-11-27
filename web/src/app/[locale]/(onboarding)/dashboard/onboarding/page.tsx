@@ -68,6 +68,7 @@ import {
   useStartChoice,
   useStartCheckout,
 } from '@/components/billing/plan-start';
+import { CheckoutCanceledNote } from '@/components/billing/checkout-canceled-note';
 import { setPersonProperties, track } from '@/lib/analytics';
 
 /**
@@ -2247,6 +2248,12 @@ export default function OnboardingPage() {
               demo={{ chosen: demoChosen, onChoose: () => setDemoChosen(true) }}
             />
           </div>
+
+          {!demoChosen && (
+            <div className="mb-4">
+              <CheckoutCanceledNote demo />
+            </div>
+          )}
 
           {demoChosen ? (
             // The demo, chosen above: its card in place of the plans. On the

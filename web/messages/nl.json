@@ -553,6 +553,11 @@
     }
   },
   "planOffer": {
+    "checkoutCanceled": {
+      "title": "Uw betaling is niet voltooid, dus er is niets in rekening gebracht.",
+      "body": "U kunt het opnieuw proberen wanneer u er klaar voor bent.",
+      "bodyDemo": "U kunt het opnieuw proberen wanneer u er klaar voor bent, of eerst het demomerk verkennen, zonder creditcard."
+    },
     "buyNow": "Nu kopen",
     "startTrial": "Start gratis proefperiode van {days} dagen",
     "fullPlan": "Volledig abonnement vanaf dag één",

@@ -553,6 +553,11 @@
     }
   },
   "planOffer": {
+    "checkoutCanceled": {
+      "title": "Votre paiement n’a pas été finalisé, aucun montant n’a donc été débité.",
+      "body": "Vous pouvez réessayer quand vous le souhaitez.",
+      "bodyDemo": "Vous pouvez réessayer quand vous le souhaitez, ou d’abord découvrir la marque de démonstration, sans carte bancaire."
+    },
     "buyNow": "Acheter maintenant",
     "startTrial": "Démarrer l'essai gratuit de {days} jours",
     "fullPlan": "Forfait complet dès le premier jour",
