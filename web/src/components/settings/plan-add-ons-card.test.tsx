@@ -321,6 +321,14 @@ describe('the add-ons card', () => {
     );
   });
 
+  it('shows Enterprise nothing while no slots are on sale', async () => {
+    await render({ state: 'enterprise', planId: 'enterprise', slots: null });
+    const text = container.textContent ?? '';
+    expect(text).not.toContain('Your add-ons');
+    expect(text).not.toContain('AI usage top-up');
+    expect(text).not.toContain('Review and pay');
+  });
+
   it('says when it can’t be read', async () => {
     await render(null);
     expect(container.textContent).toContain('Couldn’t read your add-ons.'.replace('’', "'"));
