@@ -4,8 +4,8 @@ import { z } from 'zod';
 import supabaseAdmin from '../config/supabase.js';
 import { MANAGER_ROLES, allowRole, assertBrandAccess, assertRole } from '../lib/access.js';
 import { resolveModel } from '../lib/ai-provider.js';
-import { decide, isDeciderConfigured } from '../lib/decider.js';
-import { classifyQueryIntents, normalizeIntentQuery } from '../lib/intent-extraction.js';
+import { normalizeIntentQuery } from '../lib/intent-extraction.js';
+import { classifyAndCache } from '../lib/fanout-intent-cache.js';
 import { promptsFromTopicsSchema } from '../lib/brand-setup-input.js';
 import { getLanguageName } from '../lib/languages.js';
 import {
@@ -625,9 +625,6 @@ Return the exact topic names as provided above.`,
 // globally per normalized query string in `fanout_query_intents`; only
 // cache-misses hit the LLM. Body: { queries: string[] }.
 const FANOUT_INTENT_MAX_QUERIES = 200;
-// Cache-lookup batch size — keeps each `.in('query', ...)` URL well under
-// PostgREST / proxy length limits even with long sub-queries.
-const FANOUT_INTENT_LOOKUP_CHUNK = 40;
 
 router.post('/fanout-intents', async (req, res) => {
   try {
@@ -640,37 +637,8 @@ router.post('/fanout-intents', async (req, res) => {
     );
     if (queries.length === 0) return res.json({ intents: {} });
 
-    // 1. Read the cache in bounded chunks — a single `.in('query', ...)` over
-    // up to 200 text values can blow past PostgREST's URL length limit. A read
-    // error must surface (500), not silently fall through to classifying every
-    // query via the LLM.
-    const intents = {};
-    for (let i = 0; i < queries.length; i += FANOUT_INTENT_LOOKUP_CHUNK) {
-      const chunk = queries.slice(i, i + FANOUT_INTENT_LOOKUP_CHUNK);
-      const { data: cached, error: cacheErr } = await supabaseAdmin
-        .from('fanout_query_intents')
-        .select('query, intent')
-        .in('query', chunk);
-      if (cacheErr) throw cacheErr;
-      for (const row of cached ?? []) intents[row.query] = row.intent;
-    }
-
-    // 2. Classify the misses (a decision model in batches, or the chat model
-    // a query at a time; #988), then persist them.
-    const misses = queries.filter((q) => !(q in intents));
-    const classified = await classifyQueryIntents(misses, {
-      chatModel: () => resolveModel(),
-      decideFn: decide,
-      deciderConfigured: isDeciderConfigured,
-    });
-    const fresh = Object.entries(classified).map(([query, intent]) => ({ query, intent }));
-    if (fresh.length > 0) {
-      Object.assign(intents, classified);
-      await supabaseAdmin
-        .from('fanout_query_intents')
-        .upsert(fresh, { onConflict: 'query', ignoreDuplicates: true });
-    }
-
+    // The cached intents, and the misses classified and kept (fanout-intent-cache.js).
+    const { intents } = await classifyAndCache(queries);
     return res.json({ intents });
   } catch (error) {
     req.log.error({ err: error }, 'fanout intents classification error');

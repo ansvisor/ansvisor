@@ -25,6 +25,7 @@ import {
 import { updateTargetUrlStats } from './target-url-stats.js';
 import { persistCitationRows } from './citation-rows.js';
 import { logger } from './logger.js';
+import { queueFanoutIntents } from './fanout-intent-cache.js';
 import { classifyMerchant } from './merchant-detection.js';
 import { catalogIndexFor, matchCard } from './catalog/card-match.js';
 
@@ -70,6 +71,9 @@ export async function handleScraperResult({
 
   // Best-effort: mark target URLs cited by this answer (00032).
   await updateTargetUrlStats(promptId, aiResponse.citations, new Date().toISOString());
+
+  // Its sub-queries' intents, classified in the background (Query Fan-out reads them).
+  queueFanoutIntents(aiResponse.search_queries);
 
   // Expand the citation array into rows (#732). Best-effort for the same
   // reason as the line above: the answer is already stored, and the jsonb
