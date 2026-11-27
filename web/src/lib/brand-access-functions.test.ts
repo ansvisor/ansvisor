@@ -129,6 +129,8 @@ const NO_BRAND_CHECK: Record<string, string> = {
   can_access_brand: 'The access rule itself (00388): whether the caller may see one brand.',
   org_brand_count:
     "The plan's brand count (maxBrands, 00390): the Account's total, no brand's name or figure (BRAND-ACCESS §9 Q3).",
+  org_platform_slot_usage:
+    "The plan's tracking slots used per platform (00564): the Account's totals per platform, no brand's name or figure, as org_brand_count.",
   user_brand_ids: 'The access rule as a list (00388): the ids of the brands the caller may see.',
   user_has_all_brands:
     'Whether the caller is an admin or has All brands (00390), for rows with no brand.',
