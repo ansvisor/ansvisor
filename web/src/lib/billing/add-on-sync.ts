@@ -3,7 +3,7 @@ import { supabaseAdmin } from '@/lib/supabase/admin';
 import { isSubscriptionActive } from '@/config/plans';
 import { isAddOnPrice, loadStripe, type PriceLike } from './add-ons';
 import { ORG_PLAN_COLUMNS, planFromOrgRow } from '@/lib/guards/plan-row';
-import { waitOverCapacity } from '@/lib/prompt-capacity';
+import { waitOverCapacity, waitOverSlots } from '@/lib/prompt-capacity';
 
 /**
  * Growth's recurring add-ons (00546) live as items on the plan's Stripe
@@ -126,4 +126,8 @@ async function trimToPlan(subscriptionId: string): Promise<void> {
   const waiting = await waitOverCapacity((org as { id: string }).id, plan.limits.maxPrompts);
   if (waiting)
     console.log(`[add-ons] ${waiting} prompt(s) past the plan's limit now wait for a spot`);
+  // Then each platform past its tracking slots (00564).
+  const slotWaits = await waitOverSlots((org as { id: string }).id, plan.slots);
+  if (slotWaits)
+    console.log(`[add-ons] ${slotWaits} prompt(s) now wait on a platform past its slots`);
 }

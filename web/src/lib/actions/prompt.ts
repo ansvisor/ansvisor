@@ -6,11 +6,16 @@ import { createClient } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
 import type { PromptSet, Prompt, AIPlatform, PromptVolume } from '@/types';
 import { ORG_PLAN_COLUMNS, getOrgPlan, planFromOrgRow } from '@/lib/guards/plan-guard';
+import { promptPlatformsAllowed } from '@/lib/guards/plan-row';
+import { freeSlots, stillWaiting } from '@/lib/prompt-slots';
+import { slotPlatform } from '@/config/tracking-slots';
+import { platformLabel } from '@/config/platform-labels';
 import { dbClient } from '@/lib/supabase/scoped';
 import { effectivePlanForBrand } from '@/lib/demo/demo-brand';
 import {
   activationDelta,
   getOrgLocationUsage,
+  getOrgSlotUsage,
   locationLimitMessage,
   placeNewPrompt,
   planBulkLocationChange,
@@ -59,9 +64,8 @@ import {
 const textKey = (text: string) => text.trim().toLowerCase().replace(/\s+/g, ' ');
 
 function filterByPlan(plan: Plan, platforms: string[], models: string[]) {
-  const allowedScrapers = plan.limits.allowedScrapers
-    ? new Set(plan.limits.allowedScrapers)
-    : new Set(ALL_SCRAPERS.map((s) => s.id));
+  // On a plan with tracking slots, a platform with none is left out (00564).
+  const allowedScrapers = promptPlatformsAllowed(plan) ?? new Set(ALL_SCRAPERS.map((s) => s.id));
   const allowedModels = plan.limits.allowedModels
     ? new Set(plan.limits.allowedModels)
     : new Set(ALL_MODELS.map((m) => m.id));
@@ -69,6 +73,22 @@ function filterByPlan(plan: Plan, platforms: string[], models: string[]) {
     platforms: platforms.filter((p) => allowedScrapers.has(p)),
     models: models.filter((m) => allowedModels.has(m)),
   };
+}
+
+/**
+ * After a change that adds tracking (a new or resumed prompt, more locations),
+ * the platforms past their tracking slots wait, newest first (00564). Logged,
+ * never thrown: the change itself is saved.
+ */
+async function settleOrgSlots(orgId: string, plan?: Plan): Promise<void> {
+  try {
+    // Loaded here: it opens the service-role client, which a page that only
+    // reads prompts never needs.
+    const { settleSlots } = await import('@/lib/prompt-capacity');
+    await settleSlots(orgId, (plan ?? (await getOrgPlan(orgId))).slots);
+  } catch (err) {
+    console.error('[slots] Settling tracking slots failed:', err);
+  }
 }
 
 /**
@@ -353,6 +373,7 @@ export async function savePromptSet(input: SavePromptSetInput): Promise<SaveProm
     });
   }
 
+  await settleOrgSlots(orgId, plan);
   const promptSet = mapPromptSetRow(set as Record<string, unknown>, insertedPrompts);
   const waiting = adding - fitting;
   return waiting > 0 ? { promptSet, waiting } : { promptSet };
@@ -382,6 +403,10 @@ export async function updatePrompt(
     brandId: string;
     organizationId: string;
     shoppingEnabled: boolean | null;
+    platforms: string[];
+    waiting: string[];
+    regions: string[];
+    active: boolean;
   } | null = null;
   if (
     updates.category !== undefined ||
@@ -390,7 +415,9 @@ export async function updatePrompt(
   ) {
     const { data: promptRow } = await supabase
       .from('prompts')
-      .select('prompt_sets!inner(brand_id, brands!inner(organization_id, shopping_mode_enabled))')
+      .select(
+        'platforms, waiting_platforms, regions, is_active, prompt_sets!inner(brand_id, brands!inner(organization_id, shopping_mode_enabled))',
+      )
       .eq('id', id)
       .single();
     const set = promptRow?.prompt_sets as unknown as {
@@ -402,6 +429,10 @@ export async function updatePrompt(
       brandId: set.brand_id,
       organizationId: set.brands.organization_id,
       shoppingEnabled: set.brands.shopping_mode_enabled,
+      platforms: (promptRow?.platforms as string[] | null) ?? [],
+      waiting: (promptRow?.waiting_platforms as string[] | null) ?? [],
+      regions: (promptRow?.regions as string[] | null) ?? [],
+      active: Boolean(promptRow?.is_active),
     };
   }
 
@@ -416,7 +447,25 @@ export async function updatePrompt(
     if (platforms.length === 0 && filtered.models.length === 0) {
       throw new Error('At least one platform or model must be selected.');
     }
-    if (updates.platforms !== undefined) payload.platforms = platforms;
+    if (updates.platforms !== undefined) {
+      // A platform added past its tracking slots is refused (00564); one
+      // that waited and is picked again runs, so it leaves the waiting list.
+      if (plan.slots && ctx.active) {
+        const added = platforms.filter((p) => slotPlatform(p) && !ctx!.platforms.includes(p));
+        if (added.length) {
+          const used = await getOrgSlotUsage(supabase, ctx.organizationId);
+          const need = promptLocationCount(ctx.regions);
+          const full = added.find((p) => freeSlots(plan.slots!, used, p) < need);
+          if (full) {
+            throw new Error(
+              `${platformLabel(full)} has no free tracking slots. Add slots in Settings › Billing, or remove ${platformLabel(full)} from another prompt.`,
+            );
+          }
+        }
+      }
+      payload.platforms = platforms;
+      payload.waiting_platforms = stillWaiting(ctx.waiting, platforms);
+    }
     if (updates.models !== undefined) payload.models = filtered.models;
   }
 
@@ -502,6 +551,7 @@ export async function updatePromptLocations(
     return { error: error?.message ?? 'Failed to update locations' };
   }
 
+  await settleOrgSlots(orgId);
   revalidatePath('/dashboard/brands');
   return { prompt: mapPromptRow(data as Record<string, unknown>) };
 }
@@ -613,6 +663,7 @@ export async function bulkUpdatePromptLocations(
   });
   if (error) return { error: error.message };
 
+  if (plan.delta > 0) await settleOrgSlots(rows[0].organizationId);
   revalidatePath('/dashboard/brands');
   return {
     updated: Number(written ?? 0),
@@ -855,6 +906,7 @@ export async function addPromptToSet(input: AddPromptInput): Promise<AddPromptTo
     return { error: error?.message ?? 'Failed to add prompt' };
   }
 
+  await settleOrgSlots(orgId, plan);
   revalidatePath('/dashboard/brands');
   await captureForSessionUser(supabase, 'prompt_tracked', {
     brand_id: ps.brand_id,
@@ -999,6 +1051,7 @@ export async function setPromptActive(
   await assertWritable();
   const supabase = await createClient();
 
+  let resumedOrg: string | undefined;
   if (isActive) {
     const { data: row, error } = await supabase
       .from('prompts')
@@ -1008,6 +1061,8 @@ export async function setPromptActive(
     if (error || !row) return { error: 'Prompt not found' };
     const refused = await resumeLimitError(supabase, [row as ResumeRow]);
     if (refused) return refused;
+    resumedOrg = (row.prompt_sets as unknown as { brands: { organization_id: string } } | null)
+      ?.brands?.organization_id;
   }
 
   const { data, error } = await supabase
@@ -1017,6 +1072,7 @@ export async function setPromptActive(
     .select()
     .single();
   if (error || !data) return { error: error?.message ?? 'Failed to update the prompt' };
+  if (resumedOrg) await settleOrgSlots(resumedOrg);
   return { prompt: mapPromptRow(data as Record<string, unknown>) };
 }
 
@@ -1174,6 +1230,8 @@ export async function importPrompts(
   const promptIds = imported.map((r) => r.id);
   // Only the tracked ones get a first run: a waiting prompt isn't tracked.
   const tracked = imported.filter((r) => !r.waiting).map((r) => r.id);
+  // Platforms past their tracking slots wait before the first run.
+  await settleOrgSlots(orgId);
   const { started } = await analyzeNewPrompts(brandId, tracked);
   revalidatePath('/dashboard/prompts');
   const waitingIdx = imported.filter((r) => r.waiting).map((r) => r.idx);

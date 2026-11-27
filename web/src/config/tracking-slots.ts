@@ -97,6 +97,7 @@ export function includedSlots(limits: {
 }): Record<string, number> {
   const own = limits.allowedScrapers ?? STANDARD_SLOT_PLATFORMS;
   const included: Record<string, number> = {};
-  for (const id of own) included[id] = limits.maxPrompts;
+  // ChatGPT Shopping runs beside ChatGPT and has no slots of its own.
+  for (const id of own) if (BY_ID.has(id)) included[id] = limits.maxPrompts;
   return included;
 }
