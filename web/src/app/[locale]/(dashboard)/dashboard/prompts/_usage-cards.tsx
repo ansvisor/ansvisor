@@ -1,6 +1,7 @@
 'use client';
 
-import { ADD_TRACKING_HREF } from '@/lib/billing/add-on-links';
+import { ADD_ONS_HREF, ADD_TRACKING_HREF } from '@/lib/billing/add-on-links';
+import { platformLabel } from '@/config/platform-labels';
 import { track } from '@/lib/analytics';
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { useFormatter, useNow, useTranslations } from 'next-intl';
@@ -10,7 +11,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { CONTACT_SALES_URL, PLANS, type PlanId } from '@/config/plans';
 import type { LocationQuota } from '@/lib/actions/prompt';
 import { getPromptUsage } from '@/lib/prompt-usage';
-import type { PromptUsageSummary } from '@/lib/prompt-usage-summary';
+import type { PromptUsageSummary, SlotMeter } from '@/lib/prompt-usage-summary';
 import { cn } from '@/lib/utils';
 
 /**
@@ -222,6 +223,13 @@ const TONE_BAR: Record<Tone, string> = {
   warning: 'bg-amber-500 dark:bg-amber-400',
   full: 'bg-red-500 dark:bg-red-400',
 };
+
+/** A platform's slots tone: amber from 90% used, red when full. */
+export function slotTone(meter: SlotMeter): Tone {
+  if (meter.limit === null) return 'normal';
+  if (meter.used >= meter.limit) return 'full';
+  return meter.used >= meter.limit * 0.9 ? 'warning' : 'normal';
+}
 
 export function PromptUsageCards({
   state,
@@ -455,6 +463,8 @@ export function PromptUsageCards({
         </div>
       </div>
 
+      {usage?.slots && usage.slots.length > 0 && <SlotMeters meters={usage.slots} format={n} />}
+
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t px-4 py-2.5 text-xs text-muted-foreground">
         <span>{t('footer')}</span>
         {state.status === 'error' ? (
@@ -479,6 +489,73 @@ export function PromptUsageCards({
         </button>
       </div>
     </section>
+  );
+}
+
+/**
+ * Tracking slots per platform (00564): each platform's slots in use against
+ * the plan's and the bought ones, amber near full and red when full, with
+ * the way to add more in Billing.
+ */
+function SlotMeters({
+  meters,
+  format,
+}: {
+  meters: SlotMeter[];
+  format: (value: number) => string;
+}) {
+  const t = useTranslations('prompts.usage.slots');
+  return (
+    <div className="border-t" data-slot="slot-meters">
+      <GroupHeader name={t('title')}>
+        <Link
+          href={ADD_ONS_HREF}
+          onClick={() => track('add_on_entry', { source: 'slot_meters' })}
+          className="ms-auto text-xs font-medium text-foreground underline-offset-2 hover:underline"
+        >
+          {t('add')}
+        </Link>
+      </GroupHeader>
+      <ul className="grid grid-cols-2 gap-x-6 gap-y-3 px-4 py-3 sm:grid-cols-3 lg:grid-cols-5">
+        {meters.map((meter) => {
+          const tone = slotTone(meter);
+          const label = platformLabel(meter.platform);
+          const percent =
+            meter.limit === null || meter.limit === 0
+              ? meter.used > 0
+                ? 100
+                : 0
+              : Math.min(100, (meter.used / meter.limit) * 100);
+          return (
+            <li key={meter.platform} className="min-w-0" data-platform={meter.platform}>
+              <div className="flex items-baseline justify-between gap-2 text-xs">
+                <span className="truncate font-medium">{label}</span>
+                <span className={cn('tabular-nums text-muted-foreground', TONE_TEXT[tone])}>
+                  {meter.limit === null
+                    ? t('unlimited', { used: format(meter.used) })
+                    : t('usage', { used: format(meter.used), limit: format(meter.limit) })}
+                </span>
+              </div>
+              {meter.limit !== null && (
+                <div
+                  className="mt-1 h-1 overflow-hidden rounded-full bg-muted"
+                  role="progressbar"
+                  aria-label={t('meter', { platform: label })}
+                  aria-valuemin={0}
+                  aria-valuemax={meter.limit}
+                  aria-valuenow={Math.min(meter.used, meter.limit)}
+                >
+                  <div
+                    className={cn('h-full rounded-full', TONE_BAR[tone])}
+                    style={{ width: `${percent}%` }}
+                  />
+                </div>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+    </div>
   );
 }
 

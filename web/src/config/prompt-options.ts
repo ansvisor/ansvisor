@@ -191,6 +191,32 @@ export const ALL_SCRAPERS = SCRAPER_GROUPS.flatMap((g) =>
 );
 
 /**
+ * The platforms sold only as tracking slots (00564), beyond the plans' own
+ * engines above. A prompt is offered one only where its workspace has slots
+ * for it (promptPlatformsAllowed); nothing else lists them, so every screen
+ * that reads ALL_SCRAPERS stays as it is.
+ */
+export const ADD_ON_SCRAPER_GROUP = {
+  provider: 'Tracking slots',
+  scrapers: [
+    { id: 'perplexity-web', label: ENGINE_NAMES['perplexity-web'], platform: 'perplexity' },
+    { id: 'claude-web', label: ENGINE_NAMES['claude-web'], platform: 'claude' },
+    { id: 'copilot-app', label: ENGINE_NAMES['copilot-app'], platform: 'copilot-app' },
+    { id: 'chatgpt-ads', label: ENGINE_NAMES['chatgpt-ads'], platform: 'chatgpt-ads' },
+    { id: 'meta-ai-web', label: ENGINE_NAMES['meta-ai-web'], platform: 'meta-ai' },
+    { id: 'naver-web', label: ENGINE_NAMES['naver-web'], platform: 'naver' },
+    { id: 'wenxin-web', label: ENGINE_NAMES['wenxin-web'], platform: 'wenxin' },
+  ],
+} as const;
+
+/** Every engine a prompt can be set to: the plans' own and the slot-only ones. */
+export const PROMPT_SCRAPER_GROUPS = [...SCRAPER_GROUPS, ADD_ON_SCRAPER_GROUP] as const;
+
+export const PROMPT_SCRAPERS = PROMPT_SCRAPER_GROUPS.flatMap((g) =>
+  g.scrapers.map((s) => ({ ...s, provider: g.provider })),
+);
+
+/**
  * Fallback window for `getPromptsPageData` when a caller passes no range at
  * all. The page always passes one; this only covers direct calls.
  */

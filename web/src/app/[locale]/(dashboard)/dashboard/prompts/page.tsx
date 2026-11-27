@@ -163,8 +163,8 @@ import { isNoPlan } from '@/lib/billing/no-plan';
 import {
   MODEL_GROUPS,
   ALL_MODELS,
-  SCRAPER_GROUPS,
-  ALL_SCRAPERS,
+  PROMPT_SCRAPER_GROUPS,
+  PROMPT_SCRAPERS,
   PROMPT_RANGE_PRESETS,
   DEFAULT_PROMPT_RANGE_PRESET,
   isPromptRangePreset,
@@ -233,6 +233,8 @@ import {
 } from './_location-matrix';
 import { AddLocationsDialog, type AddLocationsPreset } from './_add-locations-dialog';
 import { BulkTagsDialog, type BulkTagsPreset } from './_bulk-tags-dialog';
+import { BulkPlatformsDialog, type BulkPlatformsPreset } from './_bulk-platforms-dialog';
+import type { SlotMeter } from '@/lib/prompt-usage-summary';
 import type { PromptTableViews } from '@/lib/actions/prompt-table-views';
 import type { ImprovingAction } from '@/lib/improve-outcome';
 import {
@@ -505,7 +507,7 @@ function PromptFormFields({
   models: string[];
   setScrapers: React.Dispatch<React.SetStateAction<string[]>>;
   setModels: React.Dispatch<React.SetStateAction<string[]>>;
-  visibleScrapers: typeof ALL_SCRAPERS;
+  visibleScrapers: typeof PROMPT_SCRAPERS;
   visibleModels: typeof ALL_MODELS;
   saving: boolean;
   autoFocus?: boolean;
@@ -571,7 +573,7 @@ function PromptFormFields({
             </span>
           </SelectTrigger>
           <SelectContent>
-            {SCRAPER_GROUPS.map((group) => {
+            {PROMPT_SCRAPER_GROUPS.map((group) => {
               const groupScrapers = group.scrapers.filter((s) =>
                 visibleScrapers.some((vs) => vs.id === s.id),
               );
@@ -618,7 +620,7 @@ function PromptFormFields({
         {(models.length > 0 || scrapers.length > 0) && (
           <div className="mt-1.5 flex flex-wrap gap-1">
             {scrapers.map((id) => {
-              const s = ALL_SCRAPERS.find((as_) => as_.id === id);
+              const s = PROMPT_SCRAPERS.find((as_) => as_.id === id);
               return (
                 <Badge key={id} variant="outline" className="gap-1 text-xs">
                   {s?.label ?? id}
@@ -2346,6 +2348,7 @@ export default function PromptsPage() {
               )}
               {firstRun && allPrompts.length > 0 && <FirstRunEmptyState run={firstRun} />}
               <AllPromptsTab
+                slots={usage?.slots}
                 loading={loading}
                 failed={loadFailed}
                 onRetry={() => void loadData()}
@@ -3201,6 +3204,7 @@ function AllPromptsTab({
   onEditPrompt,
   onChanged,
   onChatView,
+  slots,
 }: {
   loading: boolean;
   /** The last read failed: say so and offer to read again, never "No prompts yet". */
@@ -3257,6 +3261,11 @@ function AllPromptsTab({
    * tracking a waiting one or resuming a paused one past the limit. Undefined
    * keeps the refusal's toast (flag off, members, a plan that ended).
    */
+  /**
+   * Tracking slots per platform (00564), from the usage cards: the bulk bar
+   * offers Platforms only where the plan has them.
+   */
+  slots?: SlotMeter[];
   onSwap?: (prompt: Prompt) => void;
   /** Opens the Add Prompt dialog; undefined when the user can't write (member role). */
   onAddPrompt?: () => void;
@@ -3800,6 +3809,13 @@ function AllPromptsTab({
     open: boolean;
     preset: BulkTagsPreset | null;
   }>({ open: false, preset: null });
+  // Add or remove platforms on the selected prompts (00564), where the plan
+  // has tracking slots.
+  const [bulkPlatforms, setBulkPlatforms] = useState<{
+    open: boolean;
+    preset: BulkPlatformsPreset | null;
+  }>({ open: false, preset: null });
+  const { visibleScrapers: platformChoices } = useAllowedEngines(false);
   // A Locations view cell opens the panel on its location (PROMPT-015b).
   const [panelRegion, setPanelRegion] = useState<string | null>(null);
   const openPositionsPanel = useCallback(
@@ -4462,6 +4478,20 @@ function AllPromptsTab({
             onRemoveTags={guard(() => setBulkTags({ open: true, preset: { mode: 'remove' } }), {
               action: tActions('removeTags'),
             })}
+            onAddPlatforms={
+              slots
+                ? guard(() => setBulkPlatforms({ open: true, preset: { mode: 'add' } }), {
+                    action: tActions('changePlatforms'),
+                  })
+                : undefined
+            }
+            onRemovePlatforms={
+              slots
+                ? guard(() => setBulkPlatforms({ open: true, preset: { mode: 'remove' } }), {
+                    action: tActions('changePlatforms'),
+                  })
+                : undefined
+            }
             onDelete={guard(() => setConfirmDelete(selectedPrompts), {
               action: tActions('deletePrompts'),
             })}
@@ -4952,6 +4982,18 @@ function AllPromptsTab({
             preset={bulkTags.preset}
             onDone={onChanged}
           />
+          {slots && (
+            <BulkPlatformsDialog
+              open={bulkPlatforms.open}
+              onOpenChange={(open) => setBulkPlatforms((prev) => ({ ...prev, open }))}
+              prompts={filtered}
+              selectedIds={selectedIds}
+              preset={bulkPlatforms.preset}
+              platforms={platformChoices}
+              slots={slots}
+              onDone={onChanged}
+            />
+          )}
         </>
       )}
       <PromptPositionsSheet

@@ -277,6 +277,7 @@
       "label": "Your brand isn't tracked yet"
     },
     "actions": {
+      "changePlatforms": "Changing platforms needs a plan",
       "addPrompts": "Adding prompts needs a plan",
       "removeLocations": "Removing locations needs a plan",
       "editPrompts": "Editing prompts needs a plan",
@@ -15394,6 +15395,31 @@
     }
   },
   "prompts": {
+    "bulkPlatforms": {
+      "bulkButton": "Platforms",
+      "bulkAdd": "Add platforms",
+      "bulkRemove": "Remove platforms",
+      "modes": "Add or remove",
+      "modeAdd": "Add",
+      "modeRemove": "Remove",
+      "platforms": "Platforms",
+      "title": "Add platforms",
+      "lead": "Track the {count} selected prompts on more platforms. Each prompt location uses one tracking slot on each platform. A platform a prompt waits on runs again.",
+      "removeTitle": "Remove platforms",
+      "removeLead": "Stop tracking the {count} selected prompts on some platforms. Their slots are free again.",
+      "none": "No platform to add. Add tracking slots in Settings › Billing to track on more platforms.",
+      "removeNone": "The selected prompts run on no platform you can remove.",
+      "free": "{count} free",
+      "previewAdd": "{count, plural, one {# prompt will change} other {# prompts will change}} · {unchanged} already have them",
+      "previewRemove": "{count, plural, one {# prompt will change} other {# prompts will change}} · {unchanged} don't have them · {blocked} would have no platform left",
+      "short": "{platform} needs {needed} slots and has {free} free.",
+      "addSlots": "Add slots",
+      "save": "Add to {count, plural, one {# prompt} other {# prompts}}",
+      "removeSave": "Remove from {count, plural, one {# prompt} other {# prompts}}",
+      "done": "{count, plural, one {Platforms added to # prompt} other {Platforms added to # prompts}}",
+      "removed": "{count, plural, one {Platforms removed from # prompt} other {Platforms removed from # prompts}}",
+      "saveFailed": "Couldn't change the platforms. Try again."
+    },
     "waiting": {
       "resultTitle": "{added} added, {waiting} waiting for a spot",
       "savedTitle": "{count, plural, one {Saved, but not tracked yet} other {# prompts saved, but not tracked yet}}",
@@ -15777,6 +15803,13 @@
       "bulkTitle": "{count, plural, one {Start tracking the selected prompt with no answers yet} other {Start tracking the # selected prompts with no answers yet}}"
     },
     "usage": {
+      "slots": {
+        "title": "Tracking slots",
+        "add": "Add slots",
+        "usage": "{used} / {limit}",
+        "unlimited": "{used} · no limit",
+        "meter": "{platform} slots used"
+      },
       "panelLabel": "Prompt usage",
       "planAndUsage": "Plan & usage",
       "hide": "Hide",
