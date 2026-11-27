@@ -24,6 +24,8 @@ vi.mock('@/lib/subscription-guard', async (importOriginal) => ({
   assertWritable: guard.assertWritable,
 }));
 
+const capacity = vi.hoisted(() => ({ settleSlots: vi.fn() }));
+vi.mock('@/lib/prompt-capacity', () => capacity);
 const usage = vi.hoisted(() => ({
   prompts: 150,
   brands: 3,
@@ -750,21 +752,31 @@ describe('tracking slots (00564)', () => {
     ).toMatchObject({ ok: false, failure: 'unavailable' });
   });
 
-  it('never lowers a platform’s slots under what its prompts use', async () => {
+  it('lowers a platform’s slots under its use, saying how many locations will wait', async () => {
     org().add_on_slots = { 'claude-web': 300 };
     stripeApi.retrieve.mockResolvedValue(subscription([planItem(), slotItem('claude-web', 3)]));
     usage.slots = new Map([['claude-web', 250]]);
     expect(
       await previewAddOnChange({ trackingUnits: 0, extraBrands: 0, slots: { 'claude-web': 2 } }),
     ).toMatchObject({
-      ok: false,
-      failure: 'below_usage',
-      slotsOver: [{ platform: 'claude-web', inUse: 250, limit: 200 }],
+      ok: true,
+      slots: { 'claude-web': 200 },
+      slotsWaiting: [{ platform: 'claude-web', inUse: 250, limit: 200 }],
     });
     usage.slots = new Map([['claude-web', 180]]);
     expect(
       await previewAddOnChange({ trackingUnits: 0, extraBrands: 0, slots: { 'claude-web': 2 } }),
-    ).toMatchObject({ ok: true, slots: { 'claude-web': 200 } });
+    ).toMatchObject({ ok: true, slotsWaiting: [] });
+  });
+
+  it('sets the newest locations past the new slots waiting once paid', async () => {
+    org().add_on_slots = { 'claude-web': 300 };
+    stripeApi.retrieve.mockResolvedValue(subscription([planItem(), slotItem('claude-web', 3)]));
+    await applyAddOnChange({ trackingUnits: 0, extraBrands: 0, slots: { 'claude-web': 2 } });
+    expect(capacity.settleSlots).toHaveBeenCalledWith(
+      ORG,
+      expect.objectContaining({ 'claude-web': 200, 'chatgpt-web': 250 }),
+    );
   });
 
   it('keeps the slots it has when the cart doesn’t name them', async () => {
