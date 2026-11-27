@@ -15906,6 +15906,10 @@
     "loadError": "No se pudieron cargar sus prompts.",
     "visibilityDegraded": "Las cifras de Visibilidad no están disponibles temporalmente; mostrando prompts sin ellas.",
     "positions": {
+      "slots": {
+        "note": "Aún no incluido en su plan · Añada slots de seguimiento para rastrear los resultados y posiciones de {platform}.",
+        "add": "Añadir slots"
+      },
       "answers": "{count, plural, one {# respuesta} other {# respuestas}}",
       "answersInPeriod": "{count, plural, one {# respuesta} other {# respuestas}} en este periodo",
       "mentionedIn": "En {mentioned} de {answers, plural, one {# respuesta} other {# respuestas}} · {mentions, plural, one {# mención} other {# menciones}}",

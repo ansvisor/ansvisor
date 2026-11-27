@@ -15908,6 +15908,10 @@
     "loadError": "Impossibile caricare i tuoi prompt.",
     "visibilityDegraded": "I dati di Visibilità non sono al momento disponibili: visualizzazione dei prompt senza questi dati.",
     "positions": {
+      "slots": {
+        "note": "Non incluso nel tuo piano · Aggiungi slot di tracciamento per monitorare risultati e posizioni su {platform}.",
+        "add": "Aggiungi slot"
+      },
       "answers": "{count, plural, one {# risposta} other {# risposte}}",
       "answersInPeriod": "{count, plural, one {# risposta} other {# risposte}} in questo periodo",
       "mentionedIn": "In {mentioned} su {answers, plural, one {# risposta} other {# risposte}} · {mentions, plural, one {# menzione} other {# menzioni}}",

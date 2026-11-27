@@ -11,6 +11,7 @@
  * never "not mentioned".
  */
 
+import { ADD_ONS_HREF } from '@/lib/billing/add-on-links';
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import {
@@ -529,7 +530,34 @@ function AnswerLine({ answer, showTime }: { answer: AnswerView; showTime: boolea
 }
 
 function LockedRow({ platform, planId }: { platform: PlatformPositions; planId: PlanId }) {
+  const t = useTranslations('prompts.positions.slots');
   if (platform.access.state !== 'locked') return null;
+  // A platform sold as tracking slots: bought in Billing, never a sales call (00564).
+  if (platform.access.addSlots) {
+    return (
+      <div
+        className="flex flex-wrap items-center justify-between gap-3 px-3 py-3"
+        data-locked={platform.id}
+      >
+        <div className="flex min-w-0 items-center gap-3">
+          <AIProviderAvatar
+            plain
+            provider={resolveAIProvider('', platform.id)}
+            className="h-6 w-6"
+          />
+          <div className="min-w-0">
+            <p className="text-sm font-medium">{platform.label}</p>
+            <p className="text-xs text-muted-foreground">
+              {t('note', { platform: platform.label })}
+            </p>
+          </div>
+        </div>
+        <Link href={ADD_ONS_HREF} className={buttonVariants({ variant: 'outline', size: 'sm' })}>
+          {t('add')}
+        </Link>
+      </div>
+    );
+  }
   const growth = platform.access.requiredPlan === 'growth';
   const note = growth
     ? 'Available on Growth'
