@@ -24,9 +24,9 @@ const ENGINE_NAMES = {
   'chatgpt-web': /\bchat\s?gpt\b/i,
   'perplexity-web': /\bperplexity\b/i,
   'google-aio': /\b(?:google\s+)?ai\s+overviews?\b|\baio\b/i,
-  'google-aimode': /\b(?:google\s+)?ai\s+mode\b/i,
+  'google-aimode': /\b(?:google\s+)?(?<!bing\s)ai\s+mode\b/i,
   'gemini-web': /\bgemini\b/i,
-  'copilot-web': /\bcopilot\b/i,
+  'copilot-web': /\bcopilot\b|\bbing\s+ai\s+mode\b/i,
   'grok-web': /\bgrok\b/i,
   claude: /\bclaude\b/i,
 };

@@ -1,0 +1,29 @@
+{
+  "unit": 100,
+  "standard": ["chatgpt-web", "gemini-web", "google-aio", "google-aimode", "copilot-web"],
+  "platforms": [
+    { "id": "chatgpt-web", "stripeId": "chatgpt_web", "group": "standard", "centsPer100": 1500 },
+    { "id": "gemini-web", "stripeId": "gemini_web", "group": "standard", "centsPer100": 1500 },
+    { "id": "google-aio", "stripeId": "google_aio", "group": "standard", "centsPer100": 1500 },
+    {
+      "id": "google-aimode",
+      "stripeId": "google_aimode",
+      "group": "standard",
+      "centsPer100": 1500
+    },
+    { "id": "copilot-web", "stripeId": "copilot_web", "group": "standard", "centsPer100": 1500 },
+    { "id": "naver-web", "stripeId": "naver_web", "group": "standard", "centsPer100": 1500 },
+    { "id": "wenxin-web", "stripeId": "wenxin_web", "group": "standard", "centsPer100": 1500 },
+    { "id": "chatgpt-ads", "stripeId": "chatgpt_ads", "group": "mid", "centsPer100": 4500 },
+    { "id": "meta-ai-web", "stripeId": "meta_ai_web", "group": "mid", "centsPer100": 4500 },
+    {
+      "id": "perplexity-web",
+      "stripeId": "perplexity_web",
+      "group": "signed_in",
+      "centsPer100": 6000
+    },
+    { "id": "claude-web", "stripeId": "claude_web", "group": "signed_in", "centsPer100": 6000 },
+    { "id": "grok-web", "stripeId": "grok_web", "group": "signed_in", "centsPer100": 6000 },
+    { "id": "copilot-app", "stripeId": "copilot_app", "group": "signed_in", "centsPer100": 6000 }
+  ]
+}
