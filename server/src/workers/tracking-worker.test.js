@@ -2,7 +2,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // The module pulls in the supabase admin client, whose config hard-exits when
 // SUPABASE_* env is absent (as in CI) — stub it before the import chain.
-vi.mock('../config/supabase.js', () => ({ default: {} }));
+const db = vi.hoisted(() => ({ from: vi.fn() }));
+vi.mock('../config/supabase.js', () => ({ default: db }));
 const cloro = vi.hoisted(() => ({ submitPromptTask: vi.fn(), pollScraperResult: vi.fn() }));
 const log = vi.hoisted(() => ({ info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() }));
 vi.mock('../lib/logger.js', () => ({ default: log, logger: log }));
@@ -17,6 +18,7 @@ import {
   drainBudgetExceeded,
   fetchAllPendingRows,
   interactiveTailExhausted,
+  loadOrgPlanRow,
   runnablePlatforms,
   pollTrackingTask,
   runAsksChatgptFanout,
@@ -26,6 +28,7 @@ import {
 } from './tracking-worker.js';
 import { getPlan, PLANS } from '../config/plans.js';
 import { UNAVAILABLE_PLATFORMS } from '../lib/cloro-scraper.js';
+import { slottedPlatforms } from '../config/tracking-slots.js';
 import { chatgptFanoutWeekday } from '../lib/chatgpt-fanout.js';
 
 /**
@@ -235,6 +238,25 @@ describe('fetchAllPendingRows', () => {
  * both have to hold at run time, not at the moment the prompt was saved.
  */
 describe('runnablePlatforms', () => {
+  // Tracking slots (00564): a prompt can list a platform its workspace has no
+  // slots for; that one never runs, so it's never paid for.
+  it('runs only the platforms the plan and bought slots cover', () => {
+    const slotted = slottedPlatforms(PLANS.growth, { 'claude-web': 200 });
+    expect(
+      runnablePlatforms(
+        ['chatgpt-web', 'claude-web', 'grok-web', 'meta-ai-web', 'chatgpt-shopping'],
+        { shoppingEnabled: true, slotted },
+      ),
+    ).toEqual(['chatgpt-web', 'claude-web', 'chatgpt-shopping']);
+  });
+
+  it('runs every listed platform when nothing is limited', () => {
+    expect(runnablePlatforms(['claude-web', 'meta-ai-web'], { slotted: null })).toEqual([
+      'claude-web',
+      'meta-ai-web',
+    ]);
+  });
+
   it('drops a platform that is currently unavailable', () => {
     expect(
       runnablePlatforms(['chatgpt-web', 'grok-web', 'gemini-web'], { shoppingEnabled: true }),
@@ -455,5 +477,44 @@ describe('pollTrackingTask', () => {
       await expect(pollTrackingTask({ taskId: 't1', ...task, meta })).rejects.toBe(err);
     }
     expect(cloro.submitPromptTask).not.toHaveBeenCalled();
+  });
+});
+
+describe('loadOrgPlanRow', () => {
+  const answer = (result) => ({
+    select: () => ({ eq: () => ({ single: () => Promise.resolve(result) }) }),
+  });
+
+  beforeEach(() => db.from.mockReset());
+
+  it('reads the plan with the bought slots', async () => {
+    db.from.mockReturnValueOnce(
+      answer({ data: { plan: 'growth', add_on_slots: { 'claude-web': 100 } }, error: null }),
+    );
+    expect(await loadOrgPlanRow('org-1')).toEqual({
+      plan: 'growth',
+      add_on_slots: { 'claude-web': 100 },
+    });
+  });
+
+  it('reads it again without the slots before 00564 is applied', async () => {
+    db.from
+      .mockReturnValueOnce(
+        answer({
+          data: null,
+          error: { message: 'column organizations.add_on_slots does not exist' },
+        }),
+      )
+      .mockReturnValueOnce(answer({ data: { plan: 'growth', plan_overrides: null }, error: null }));
+    expect(await loadOrgPlanRow('org-1')).toEqual({
+      plan: 'growth',
+      plan_overrides: null,
+      add_on_slots: {},
+    });
+  });
+
+  it('gives nothing when the row cannot be read', async () => {
+    db.from.mockReturnValueOnce(answer({ data: null, error: { message: 'timeout' } }));
+    expect(await loadOrgPlanRow('org-1')).toBeNull();
   });
 });
