@@ -8,6 +8,7 @@ import type { PromptSet, Prompt, AIPlatform, PromptVolume } from '@/types';
 import { ORG_PLAN_COLUMNS, getOrgPlan, planFromOrgRow } from '@/lib/guards/plan-guard';
 import { promptPlatformsAllowed } from '@/lib/guards/plan-row';
 import { freeSlots, stillWaiting } from '@/lib/prompt-slots';
+import { planBulkPlatformChange } from '@/lib/prompt-platform-change';
 import { slotPlatform } from '@/config/tracking-slots';
 import { platformLabel } from '@/config/platform-labels';
 import { dbClient } from '@/lib/supabase/scoped';
@@ -23,7 +24,12 @@ import {
   promptsThatFit,
   waitingPromptColumns,
 } from '@/lib/prompt-locations';
-import { ALL_MODELS, ALL_SCRAPERS, DEFAULT_PROMPT_RANGE_DAYS } from '@/config/prompt-options';
+import {
+  ALL_MODELS,
+  ALL_SCRAPERS,
+  DEFAULT_PROMPT_RANGE_DAYS,
+  PROMPT_SCRAPERS,
+} from '@/config/prompt-options';
 import { PROMPT_DELETE_BATCH } from '@/lib/prompt-bulk-actions';
 import { isValidLocation, locationCode } from '@/lib/region';
 import { createLimiter } from '@/lib/limiter';
@@ -753,6 +759,144 @@ export async function bulkUpdatePromptTags(
 
   revalidatePath('/dashboard/brands');
   return { updated, unchanged: plan.unchanged, blocked: plan.blocked };
+}
+
+export interface BulkPlatformSummary {
+  /** Prompts whose platforms changed. */
+  updated: number;
+  /** Already had every added platform, or none of the removed ones. */
+  unchanged: number;
+  /** Skipped: removing would have left them with nothing to run. */
+  blocked: number;
+}
+
+export type BulkUpdatePromptPlatformsResult =
+  | BulkPlatformSummary
+  | { error: string; code?: 'plan_limit' | 'slots' };
+
+/**
+ * Add or remove platforms across a selection of prompts (00564): the way a
+ * prompt gets a platform its workspace bought slots for, and the way a
+ * platform it waits on runs again. Adding checks each platform's free
+ * slots for the active prompts' locations first, and refuses the whole
+ * change when one has too few (nothing is written). Only platforms the plan
+ * and its slots allow are added; ChatGPT Shopping stays per brand. RLS
+ * decides which selected prompts may be written, as the tag change.
+ */
+export async function bulkUpdatePromptPlatforms(
+  promptIds: string[],
+  action: 'add' | 'remove',
+  platformsInput: string[],
+): Promise<BulkUpdatePromptPlatformsResult> {
+  await assertWritable();
+  const supabase = await createClient();
+
+  const ids = [...new Set(promptIds)].filter(Boolean);
+  if (ids.length === 0) return { error: 'Select at least one prompt.' };
+  const known = new Set<string>(PROMPT_SCRAPERS.map((s) => s.id));
+  const platforms = [...new Set(platformsInput)].filter(
+    (p) => known.has(p) && p !== 'chatgpt-shopping',
+  );
+  if (platforms.length === 0) return { error: 'Select at least one platform.' };
+
+  const rows: {
+    id: string;
+    platforms: string[];
+    waiting_platforms: string[];
+    models: string[];
+    regions: string[];
+    is_active: boolean;
+    organizationId: string;
+  }[] = [];
+  for (let i = 0; i < ids.length; i += BULK_LOCATION_READ_CHUNK) {
+    const { data, error } = await supabase
+      .from('prompts')
+      .select(
+        'id, platforms, waiting_platforms, models, regions, is_active, prompt_sets!inner(brands!inner(organization_id))',
+      )
+      .in('id', ids.slice(i, i + BULK_LOCATION_READ_CHUNK));
+    if (error) return { error: error.message };
+    for (const row of data ?? []) {
+      const orgId = (row.prompt_sets as unknown as { brands: { organization_id: string } } | null)
+        ?.brands?.organization_id;
+      if (!orgId) continue;
+      rows.push({
+        id: row.id as string,
+        platforms: (row.platforms as string[] | null) ?? [],
+        waiting_platforms: (row.waiting_platforms as string[] | null) ?? [],
+        models: (row.models as string[] | null) ?? [],
+        regions: (row.regions as string[] | null) ?? [],
+        is_active: row.is_active !== false,
+        organizationId: orgId,
+      });
+    }
+  }
+  if (rows.length === 0) return { error: 'None of the selected prompts are available.' };
+  const orgId = rows[0].organizationId;
+
+  if (action === 'add') {
+    const plan = await getOrgPlan(orgId);
+    const allowed = promptPlatformsAllowed(plan);
+    const outside = allowed ? platforms.filter((p) => !allowed.has(p)) : [];
+    if (outside.length) {
+      return {
+        error: `${outside.map(platformLabel).join(', ')} ${outside.length === 1 ? "isn't" : "aren't"} in your plan. Add tracking slots in Settings › Billing.`,
+        code: 'plan_limit',
+      };
+    }
+  }
+
+  const change = planBulkPlatformChange(rows, action, platforms);
+  if (change.changes.length === 0) {
+    return { updated: 0, unchanged: change.unchanged, blocked: change.blocked };
+  }
+
+  if (change.needed.size > 0) {
+    const plan = await getOrgPlan(orgId);
+    if (plan.slots) {
+      const used = await getOrgSlotUsage(supabase, orgId);
+      const short = [...change.needed].filter(
+        ([platform, needed]) => freeSlots(plan.slots!, used, platform) < needed,
+      );
+      if (short.length) {
+        return {
+          error: short
+            .map(
+              ([platform, needed]) =>
+                `${platformLabel(platform)} needs ${needed} slots and has ${freeSlots(plan.slots!, used, platform)} free.`,
+            )
+            .concat('Add slots in Settings › Billing, or pick fewer prompts.')
+            .join(' '),
+          code: 'slots',
+        };
+      }
+    }
+  }
+
+  let updated = 0;
+  for (const c of change.changes) {
+    // Counted per written row: an update RLS refuses changes nothing and
+    // reports success (see bulkUpdatePromptTags).
+    const { data, error } = await supabase
+      .from('prompts')
+      .update({ platforms: c.platforms as AIPlatform[], waiting_platforms: c.waiting_platforms })
+      .eq('id', c.promptId)
+      .select('id');
+    if (error) {
+      return {
+        error:
+          updated > 0
+            ? `${error.message} (${updated} prompt${updated === 1 ? '' : 's'} updated before this.)`
+            : error.message,
+      };
+    }
+    updated += data?.length ?? 0;
+  }
+
+  // Another change may have used the slots meanwhile: the newest wait.
+  if (change.needed.size > 0) await settleOrgSlots(orgId);
+  revalidatePath('/dashboard/brands');
+  return { updated, unchanged: change.unchanged, blocked: change.blocked };
 }
 
 /**

@@ -1,16 +1,17 @@
 ---
 title: Tracked Prompts list, statuses and columns
 route: /dashboard/prompts/tracked
-keywords: [tracked prompts, what is a prompt, how to find the best prompts, prompts guide, prompt status, columns, performance filter, paused prompts, waiting for a spot, free up a spot, prompt tags, tag filter, bulk tags, export csv, manage prompts, plan and usage, location filter, analyze volume, track now, no answers yet]
+keywords: [tracked prompts, what is a prompt, how to find the best prompts, prompts guide, prompt status, columns, performance filter, paused prompts, waiting for a spot, free up a spot, prompt tags, tag filter, bulk tags, export csv, manage prompts, plan and usage, location filter, analyze volume, track now, no answers yet, tracking slots, add a platform, bulk platforms, waiting platform]
 synonyms: [prompt list, my prompts, prompt table, tracked queries]
 plan: all
-updated: 2026-11-20
-last_checked: 2026-11-20
+updated: 2026-11-27
+last_checked: 2026-11-27
 owner: Cihan
 app_version: 0.3.0
 approved: true
 sources: [docs/guides/prompts.mdx]
 ---
+
 **Tracked Prompts** lists every prompt Ansvisor asks the AI engines for your brand, with its results over the date range you pick (24h, 7d, 30d, 90d or custom). It sits on the **Prompts** tab of the **Prompts** page: the **Tracked** | **Suggestions** switch, at the left of the date range, picks this list or **Prompt Suggestions**. A range you pick carries over to Topics and Query Fan-out.
 
 ## What a prompt is, and the guide
@@ -80,6 +81,12 @@ Tags label prompts with your own words, such as a campaign or product line. A pr
 To tag many at once, tick their rows and open **Tags** in the bar that appears: **Add tags** puts them on every selected prompt, leaving one that would go over 10 alone, and **Remove tags** takes the picked tags off. The dialog says how many prompts will change before you save.
 
 The **Tags** filter beside the search box narrows the table to one or more tags. With several picked, **Match all** keeps prompts carrying every one; **Match any** keeps those carrying at least one. It combines with search and the other filters.
+
+## Tracking slots per platform
+
+On Growth and Enterprise, **Show usage** also lists **Tracking slots**: each platform's slots in use against the slots you have, amber near full and red when full. A slot is one prompt in one location on one platform. **Add slots** opens **Settings › Billing**.
+
+To track prompts on another platform, tick their rows and open **Platforms** in the bar: **Add platforms** offers the platforms you have slots on, each with its free slots, and says if one has too few for the selection. **Remove platforms** takes a platform off, freeing its slots; a prompt it would leave with nothing to run is left alone. When a platform runs out of slots, the newest prompts wait on it; adding it again here runs it again.
 
 ## Open a prompt or act on it
 

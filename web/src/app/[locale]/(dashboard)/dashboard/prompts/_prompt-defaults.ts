@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { usePlanContext } from '@/components/providers/plan-provider';
-import { ALL_MODELS, ALL_SCRAPERS } from '@/config/prompt-options';
+import { ALL_MODELS, ALL_SCRAPERS, PROMPT_SCRAPERS } from '@/config/prompt-options';
 import { PLANS } from '@/config/plans';
 import { isValidLocation, locationCode } from '@/lib/region';
 
@@ -17,19 +17,24 @@ import { isValidLocation, locationCode } from '@/lib/region';
  * server-side too.
  */
 export function useAllowedEngines(shoppingEnabled: boolean) {
-  const { planId, allowedModelIds: planAllowedModelIds } = usePlanContext();
+  const { planId, allowedModelIds: planAllowedModelIds, promptPlatformIds } = usePlanContext();
 
+  // Where the plan has tracking slots, the platforms with slots (00564).
   const allowedScraperIds = useMemo(() => {
     const allowed = PLANS[planId].limits.allowedScrapers;
-    const ids = allowed ? [...allowed] : ALL_SCRAPERS.map((s) => s.id);
+    const ids: string[] = promptPlatformIds
+      ? [...promptPlatformIds]
+      : allowed
+        ? [...allowed]
+        : ALL_SCRAPERS.map((s) => s.id);
     return shoppingEnabled ? ids : ids.filter((id) => id !== 'chatgpt-shopping');
-  }, [planId, shoppingEnabled]);
+  }, [planId, promptPlatformIds, shoppingEnabled]);
   const allowedModelIds = useMemo(
     () => planAllowedModelIds ?? ALL_MODELS.map((m) => m.id),
     [planAllowedModelIds],
   );
   const visibleScrapers = useMemo(
-    () => ALL_SCRAPERS.filter((s) => allowedScraperIds.includes(s.id)),
+    () => PROMPT_SCRAPERS.filter((s) => allowedScraperIds.includes(s.id)),
     [allowedScraperIds],
   );
   const visibleModels = useMemo(
