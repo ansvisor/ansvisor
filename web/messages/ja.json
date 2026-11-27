@@ -277,6 +277,7 @@
       "label": "ブランドはまだ追跡されていません"
     },
     "actions": {
+      "changePlatforms": "プラットフォームを変更するにはプランが必要です",
       "addPrompts": "Promptの追加にはプランが必要です",
       "removeLocations": "ロケーションの削除にはプランが必要です",
       "editPrompts": "Promptの編集にはプランが必要です",
@@ -4532,6 +4533,10 @@
       "name": "今月のサイト監査の残り回数を読み取る",
       "step": "サイト監査を読み取り"
     },
+    "crawlerAccess": {
+      "name": "AIクローラーの問題を読み取る",
+      "step": "サイト監査・クローラーを読み取り中"
+    },
     "goToPage": {
       "name": "ページに移動",
       "step": "ページを開きました"
@@ -8037,6 +8042,7 @@
       "traffic": "AIトラフィックと登録数",
       "ai-revenue": "AI経由の顧客と収益",
       "feed-advisor": "ショッピングフィードのギャップ",
+      "tech-fix": "クローラーと技術面の修正",
       "earn-or-pay": "獲得または支払い",
       "ad-drafts": "広告の下書き",
       "paid-overlap": "有料広告の重複",
@@ -15777,6 +15783,31 @@
     }
   },
   "prompts": {
+    "bulkPlatforms": {
+      "bulkButton": "プラットフォーム",
+      "bulkAdd": "プラットフォームを追加",
+      "bulkRemove": "プラットフォームを削除",
+      "modes": "追加または削除",
+      "modeAdd": "追加",
+      "modeRemove": "削除",
+      "platforms": "プラットフォーム",
+      "title": "プラットフォームを追加",
+      "lead": "選択した{count}件のPromptをさらに多くのプラットフォームで追跡します。各Promptの地域ごとに、プラットフォームごとにtracking slotを1つ使用します。Promptが待機中のプラットフォームは再実行されます。",
+      "removeTitle": "プラットフォームを削除",
+      "removeLead": "選択した{count}件のPromptを一部のプラットフォームで追跡しないようにします。そのslotは再び空きになります。",
+      "none": "追加できるプラットフォームがありません。さらに多くのプラットフォームで追跡するには、設定 › 請求でtracking slotを追加してください。",
+      "removeNone": "選択したPromptは、削除できるプラットフォームでは実行されていません。",
+      "free": "空き{count}",
+      "previewAdd": "{count, plural, other {#件のPromptが変更されます}} · {unchanged}件は設定済みです",
+      "previewRemove": "{count, plural, other {#件のPromptが変更されます}} · {unchanged}件は未設定です · {blocked}件はプラットフォームが残らなくなります",
+      "short": "{platform}には{needed}個のslotが必要ですが、空きは{free}個です。",
+      "addSlots": "slotを追加",
+      "save": "{count, plural, other {#件のPromptに追加}}",
+      "removeSave": "{count, plural, other {#件のPromptから削除}}",
+      "done": "{count, plural, other {#件のPromptにプラットフォームを追加しました}}",
+      "removed": "{count, plural, other {#件のPromptからプラットフォームを削除しました}}",
+      "saveFailed": "プラットフォームを変更できませんでした。もう一度お試しください。"
+    },
     "waiting": {
       "resultTitle": "{added}件を追加、{waiting}件が空き枠待ちです",
       "savedTitle": "{count, plural, other {#件のPromptを保存しましたが、まだ追跡されていません}}",
@@ -16160,6 +16191,13 @@
       "bulkTitle": "{count, plural, other {まだ回答のない選択した#件のPromptの追跡を開始}}"
     },
     "usage": {
+      "slots": {
+        "title": "Tracking slots",
+        "add": "slotを追加",
+        "usage": "{used} / {limit}",
+        "unlimited": "{used}・上限なし",
+        "meter": "{platform}のslot使用量"
+      },
       "panelLabel": "Prompt使用状況",
       "planAndUsage": "プランと使用状況",
       "hide": "非表示",
@@ -16242,7 +16280,7 @@
       "enginesLegend": "カラー表示: 期間内にこのPromptの検索が共有されたエンジン。薄い表示: 追跡中ですが共有されなかったエンジン。",
       "engineEmptyTitle": "{range}内に{engine}の検索はありません",
       "engineEmptyBody": "{engine}は通常、回答の背景にある検索を共有します。より長い期間を指定してお試しください。",
-      "sourceNote": "Perplexityは追跡されなくなり、Copilotは検索を共有しないため、これらは一部の日程で共有されるChatGPTのみからのものです。以前よりも少なくなっています。",
+      "sourceNote": "Perplexityは追跡対象外となり、Bing AI Modeは検索内容を共有しないため、これらはChatGPTのみから取得されます。ChatGPTが共有するのも一部の日のみです。以前より件数は少なくなっています。",
       "emptyTitle": "キャプチャされたfan-outはまだありません",
       "emptyBody": "ChatGPTの検索は一部の日程でサンプリングされ、ChatGPT APIは検索実行時に共有します。Google AI Overviews、AI Mode、Geminiは検索を共有しません。対象のエンジンがお客様のPromptで実行されると、検索がここに表示されます。",
       "coverageTooltip": "この期間内に追跡された{total}件の回答のうち、{withFanout}件でエンジンが実行した検索が含まれていました。ChatGPTの検索は一部の日程でサンプリングされ、ChatGPT APIは検索実行時に共有します。"
@@ -18703,7 +18741,38 @@
     },
     "planAddOns": {
       "title": "プランにオプションを追加",
-      "description": "Growthプラント向けの追加トラッキング、追加ブランド、AI使用量のチャージです。選択した内容は、登録済みのカードに一度だけ請求されます。",
+      "slots": {
+        "title": "追加のトラッキングクレジットを購入",
+        "description": "{plan}には、各標準プラットフォームに{included}個のslotが含まれます。任意のプラットフォームで追加slotを選択できます。0まで減らすことも可能です。",
+        "descriptionNone": "任意のプラットフォームで追加slotを選択できます。0まで減らすことも可能です。",
+        "discount": {
+          "reached": "追加トラッキングが<b>{percent}%割引</b>：{list}が{interval, select, year {年} other {月}}あたり{off}割引。",
+          "list": "追加トラッキング：{interval, select, year {年} other {月}}あたり{list}。",
+          "next": "{interval, select, year {年} other {月}}あたりさらに{more}追加すると、{from}を超える分が<b>{percent}%割引</b>になります。",
+          "top": "最上位のステップに到達しました。",
+          "drops": "この変更により割引率が{from}%から{to}%に下がるため、100 slotsあたりの価格が上がります。",
+          "steps": "ボリューム割引の段階",
+          "stepsLead": "各段階の割引率は、その段階を超える部分に適用されます。",
+          "step": "{from}/{interval, select, year {年} other {月}}超で{percent}%オフ",
+          "yours": "· 現在",
+          "nextTag": "· 次"
+        },
+        "unit": "<b>1 slot</b> = そのプラットフォームの1つのロケーションで、1つのPromptを毎日追跡できる単位です。",
+        "columns": {
+          "platform": "プラットフォーム",
+          "included": "プランに含まれる数",
+          "extra": "追加slots",
+          "price": "100 slotsあたりの{interval, select, year {年額} other {月額}}料金",
+          "cost": "{interval, select, year {年額} other {月額}}費用"
+        },
+        "unlimited": "無制限",
+        "fewer": "{platform}のslotsを100減らす",
+        "more": "{platform}のslotsを100増やす",
+        "extraOn": "{platform}の追加slots",
+        "was": "変更前: {slots}",
+        "undo": "元に戻す",
+        "footer": "料金は各プラットフォームの追跡にかかるコストに基づいています。回答の取得に手間がかかるもの(例: Perplexity)は高くなります。年払いなら2か月分無料です。"
+      },
       "tracking": {
         "title": "追加トラッキング",
         "description": "プランのエンジンで毎日トラッキングされる Prompt ロケーションを増やせます。一度に選べるのは1つのティアで、いつでも変更や削除ができます。",
@@ -18711,8 +18780,7 @@
         "none": "なし",
         "tier": "+{units} Prompt ロケーション",
         "price": "{price}/{interval, select, year {年} other {月}}",
-        "contactSales": "営業に問い合わせる",
-        "yearly": "年額プランは2か月分無料です。"
+        "contactSales": "営業に問い合わせる"
       },
       "brands": {
         "title": "追加ブランド",
@@ -18720,7 +18788,7 @@
         "count": "{count}件追加",
         "fewer": "ブランドを1つ減らす",
         "more": "ブランドを1つ増やす",
-        "note": "現在のブランド数より少なくはできません。先にブランドで1つ削除してください。"
+        "limit": "ご利用のプランには{base}件のブランドが含まれています。新しい上限は<b>{limit}</b>件です。"
       },
       "topUp": {
         "title": "AI使用量のチャージ",
@@ -18729,10 +18797,12 @@
         "label": "AI使用量のチャージ",
         "none": "なし",
         "option": "+{multiplier}倍",
-        "adds": "今月のAI使用量の{multiplier}倍 ・ ブリーフ+{briefs}件 ・ 機会+{opportunities}件"
+        "usage": "AI使用量{multiplier}倍",
+        "adds": "今月のAI使用量の{multiplier}倍 ・ ブリーフ+{briefs}件 ・ 機会+{opportunities}件",
+        "alsoAdds": "今月分として、ブリーフ+{briefs}件と機会+{opportunities}件も追加されます。",
+        "once": "{price}(1回払い)"
       },
       "summary": "{prompts} Prompt ロケーション・{brands}ブランド",
-      "nothing": "上で変更する内容を選択してください。",
       "review": "確認して支払う",
       "reviewing": "料金を確認中…",
       "dialog": {
@@ -18743,20 +18813,25 @@
         "brands": "{count, plural, =0 {追加ブランドなし} other {追加ブランド#件}}",
         "topUp": "AI使用量のチャージ +{multiplier}倍(1回払い)",
         "dueToday": "本日のお支払い",
-        "dueTodayNote": "追加トラッキングとブランドの今期の残り期間分と、チャージの全額です。",
+        "dueTodayNote": "slots、追加トラッキング、ブランドは今期の残り期間分、トップアップは全額が対象です。",
+        "slots": "{platform}のslots",
+        "slotsValue": "{slots}(+{extra}追加)",
+        "volumeDiscount": "ボリューム割引({percent}%)",
+        "discountValue": "−{off}/{interval, select, year {年} other {月}}",
         "total": "次回の更新から",
         "totalValue": "{interval, select, year {年額} other {月額}} {price}",
-        "credit": "下位のティアへの変更やブランド数の削減を行うと、差額は次回以降の請求書にクレジットとして反映されます。",
+        "credit": "slots、ティア、ブランドを減らすと、差額が次回以降の請求にクレジットとして適用されます。",
         "pay": "{price}を支払う",
         "confirm": "確認",
         "cancel": "キャンセル",
-        "processing": "処理中…"
+        "processing": "処理中…",
+        "slotsWaiting": "{platform}: 新しい順に{count}件のPromptロケーションはslotの空きを待機します。削除されることはありません。追跡するにはslotsを再度追加してください。"
       },
       "done": "アドオンを更新しました。追加購入分は、支払いが確認され次第すぐに反映されます。",
       "states": {
         "not_admin": "アドオンを変更できるのは管理者のみです。ワークスペースの管理者にご依頼ください。",
         "starter": "アドオンはGrowthプランでご利用いただけます。Growthにアップグレードすると、トラッキング、ブランド、AI使用量を追加できます。",
-        "enterprise": "上限は契約内容によって定められています。追加をご希望の場合は、担当のアカウントマネージャーにお問い合わせください。",
+        "enterprise": "その他の上限は契約により設定されています。増やす場合は担当のアカウントマネージャーにご連絡ください。",
         "trial": "アドオンはプランの開始後に購入できます。",
         "no_plan": "アドオンはプランが有効な間に購入できます。",
         "ending": "プランは終了する予定です。アドオンを変更するには、プランを継続してください。"
@@ -18774,7 +18849,23 @@
         "payment_failed": "お支払いを完了できませんでした。",
         "failed": "アドオンを変更できませんでした。もう一度お試しください。"
       },
-      "readFailed": "アドオンを読み取れませんでした。しばらくしてからもう一度お試しください。"
+      "readFailed": "アドオンを読み取れませんでした。しばらくしてからもう一度お試しください。",
+      "perInterval": "{price}/{interval, select, year {年} other {月}}",
+      "cart": {
+        "title": "アドオン",
+        "onePayment": "1回払い",
+        "plan": "{plan}プラン",
+        "slots": "{platform}の追加トラッキング",
+        "slotsCount": "{slots} slots",
+        "remove": "{item}を削除",
+        "discount": "追加トラッキングにボリューム割引{percent}%が上記の価格に適用されています。",
+        "discountDrops": "ボリューム割引が{from}%から{to}%に下がるため、上記の価格が上がります。",
+        "brands": "{count, plural, other {#ブランド}} · 各{price}",
+        "topUp": "AI使用量{multiplier}倍 · {date}まで",
+        "total": "次回更新からの{interval, select, year {年額} other {月額}}合計 <b>{price}</b>",
+        "undoAll": "すべての変更を元に戻す",
+        "dueToday": "本日のお支払い:今期の残り期間に追加された項目の料金です。「確認してお支払い」に表示されます。"
+      }
     },
     "cancelsOn": "サブスクリプションは {date} に終了します",
     "changePlan": "プランを変更",

@@ -277,6 +277,7 @@
       "label": "Twoja marka nie jest jeszcze monitorowana"
     },
     "actions": {
+      "changePlatforms": "Zmiana platform wymaga planu",
       "addPrompts": "Dodawanie Prompts wymaga planu",
       "removeLocations": "Usuwanie lokalizacji wymaga planu",
       "editPrompts": "Edytowanie Prompts wymaga planu",
@@ -4533,6 +4534,10 @@
       "name": "Sprawdź liczbę audytów witryny pozostałych w tym miesiącu",
       "step": "Odczytaj audyt witryny"
     },
+    "crawlerAccess": {
+      "name": "Odczyt problemów z crawlerami AI",
+      "step": "Odczyt Site Audit · Crawlery"
+    },
     "goToPage": {
       "name": "Przejdź do strony",
       "step": "Otwarto stronę"
@@ -8038,6 +8043,7 @@
       "traffic": "Ruch i rejestracje z AI",
       "ai-revenue": "Klienci i przychody z AI",
       "feed-advisor": "Luki w feedzie produktowym",
+      "tech-fix": "Poprawki crawlerów i techniczne",
       "earn-or-pay": "Zarabiaj lub płać",
       "ad-drafts": "Wersje robocze reklam",
       "paid-overlap": "Nakładanie się płatnych działań",
@@ -15778,6 +15784,31 @@
     }
   },
   "prompts": {
+    "bulkPlatforms": {
+      "bulkButton": "Platformy",
+      "bulkAdd": "Dodaj platformy",
+      "bulkRemove": "Usuń platformy",
+      "modes": "Dodaj lub usuń",
+      "modeAdd": "Dodaj",
+      "modeRemove": "Usuń",
+      "platforms": "Platformy",
+      "title": "Dodaj platformy",
+      "lead": "Śledź wybrane Prompts ({count}) na większej liczbie platform. Każda lokalizacja Prompta zajmuje jeden slot śledzenia na każdej platformie. Platforma, na którą Prompt czeka, zostanie uruchomiona ponownie.",
+      "removeTitle": "Usuń platformy",
+      "removeLead": "Zatrzymaj śledzenie wybranych Prompts ({count}) na wybranych platformach. Ich sloty znów będą wolne.",
+      "none": "Brak platform do dodania. Dodaj sloty śledzenia w Ustawienia › Płatności, aby śledzić na większej liczbie platform.",
+      "removeNone": "Wybrane Prompts nie działają na żadnej platformie, którą można usunąć.",
+      "free": "Wolne: {count}",
+      "previewAdd": "{count, plural, one {# Prompt zostanie zmieniony} few {# Prompts zostaną zmienione} many {# Prompts zostanie zmienionych} other {# Prompts zostanie zmienionych}} · {unchanged} już je ma",
+      "previewRemove": "{count, plural, one {# Prompt zostanie zmieniony} few {# Prompts zostaną zmienione} many {# Prompts zostanie zmienionych} other {# Prompts zostanie zmienionych}} · {unchanged} ich nie ma · {blocked} nie miałoby żadnej platformy",
+      "short": "{platform} potrzebuje slotów: {needed}, a wolnych jest {free}.",
+      "addSlots": "Dodaj sloty",
+      "save": "Dodaj do {count, plural, one {# Prompta} few {# Prompts} many {# Prompts} other {# Prompts}}",
+      "removeSave": "Usuń z {count, plural, one {# Prompta} few {# Prompts} many {# Prompts} other {# Prompts}}",
+      "done": "{count, plural, one {Dodano platformy do # Prompta} few {Dodano platformy do # Prompts} many {Dodano platformy do # Prompts} other {Dodano platformy do # Prompts}}",
+      "removed": "{count, plural, one {Usunięto platformy z # Prompta} few {Usunięto platformy z # Prompts} many {Usunięto platformy z # Prompts} other {Usunięto platformy z # Prompts}}",
+      "saveFailed": "Nie udało się zmienić platform. Spróbuj ponownie."
+    },
     "waiting": {
       "resultTitle": "Dodano: {added}, oczekuje na miejsce: {waiting}",
       "savedTitle": "{count, plural, one {Zapisano, ale jeszcze nie jest monitorowany} few {Zapisano # Prompty, ale jeszcze nie są monitorowane} many {Zapisano # Promptów, ale jeszcze nie są monitorowane} other {Zapisano # Promptów, ale jeszcze nie są monitorowane}}",
@@ -16161,6 +16192,13 @@
       "bulkTitle": "{count, plural, one {Rozpocznij śledzenie wybranego promptu bez odpowiedzi} few {Rozpocznij śledzenie # wybranych promptów bez odpowiedzi} many {Rozpocznij śledzenie # wybranych promptów bez odpowiedzi} other {Rozpocznij śledzenie # wybranego promptu bez odpowiedzi}}"
     },
     "usage": {
+      "slots": {
+        "title": "Sloty śledzenia",
+        "add": "Dodaj sloty",
+        "usage": "{used} / {limit}",
+        "unlimited": "{used} · bez limitu",
+        "meter": "Wykorzystane sloty: {platform}"
+      },
       "panelLabel": "Użycie promptów",
       "planAndUsage": "Plan i użycie",
       "hide": "Ukryj",
@@ -16243,7 +16281,7 @@
       "enginesLegend": "Kolorowe: udostępnione wyszukiwania dla tego promptu w tym okresie. Wyszarzone: monitorowane, ale nie udostępniono żadnych.",
       "engineEmptyTitle": "Brak wyszukiwań z {engine} w {range}",
       "engineEmptyBody": "{engine} zazwyczaj udostępnia wyszukiwania stojące za odpowiedziami. Wypróbuj dłuższy zakres dat.",
-      "sourceNote": "Perplexity nie jest już monitorowane, a Microsoft Copilot nie udostępnia swoich wyszukiwań, więc pochodzą one tylko z ChatGPT, który udostępnia je w niektóre dni. Jest ich mniej niż wcześniej.",
+      "sourceNote": "Perplexity nie jest już śledzone, a Bing AI Mode nie udostępnia swoich wyszukiwań, więc pochodzą one tylko z ChatGPT, który udostępnia je w niektóre dni. Jest ich mniej niż wcześniej.",
       "emptyTitle": "Nie zarejestrowano jeszcze fan-out",
       "emptyBody": "Wyszukiwania z ChatGPT są próbkowane w wybrane dni, a ChatGPT API udostępnia je, gdy wykonuje wyszukiwanie. Google AI Overviews, AI Mode i Gemini ich nie udostępniają. Gdy te silniki uruchomią się dla Twoich promptów, wyszukiwania pojawią się tutaj.",
       "coverageTooltip": "Spośród {total} monitorowanych odpowiedzi w tym okresie, {withFanout} zawierało wyszukiwania wykonane przez silnik. Wyszukiwania z ChatGPT są próbkowane w wybrane dni, a ChatGPT API udostępnia je, gdy wykonuje wyszukiwanie."
@@ -18704,7 +18742,38 @@
     },
     "planAddOns": {
       "title": "Rozszerz swój plan",
-      "description": "Dodatkowe śledzenie, dodatkowe marki i doładowania użycia AI do planu Growth. Wszystko, co wybierzesz, zostanie pobrane jednorazowo z zapisanej karty.",
+      "slots": {
+        "title": "Kup dodatkowe kredyty śledzenia",
+        "description": "{plan} obejmuje {included} slotów na każdej standardowej platformie. Wybierz dodatkowe sloty na dowolnej platformie; możesz je zmniejszyć nawet do 0.",
+        "descriptionNone": "Wybierz dodatkowe sloty na dowolnej platformie; możesz je zmniejszyć nawet do 0.",
+        "discount": {
+          "reached": "<b>{percent}% zniżki</b> na dodatkowe śledzenie: {off} zniżki od {list} {interval, select, year {rocznie} other {miesięcznie}}.",
+          "list": "Dodatkowe śledzenie: {list} {interval, select, year {rocznie} other {miesięcznie}}.",
+          "next": "Dodaj jeszcze {more} {interval, select, year {rocznie} other {miesięcznie}}, aby otrzymać <b>{percent}% zniżki</b> na część powyżej {from}.",
+          "top": "Osiągasz najwyższy próg.",
+          "drops": "Ta zmiana obniża Twój rabat z {from}% do {to}%, więc cena za 100 slots wzrośnie.",
+          "steps": "Progi rabatu ilościowego",
+          "stepsLead": "Stawka każdego progu dotyczy tylko części powyżej niego:",
+          "step": "{percent}% rabatu powyżej {from}/{interval, select, year {rok} other {mies.}}",
+          "yours": "· Twój",
+          "nextTag": "· następny"
+        },
+        "unit": "<b>1 slot</b> = 1 Prompt śledzony w 1 lokalizacji na tej platformie, codziennie.",
+        "columns": {
+          "platform": "Platforma",
+          "included": "W Twoim planie",
+          "extra": "Dodatkowe slots",
+          "price": "Cena za 100 slots na {interval, select, year {rok} other {miesiąc}}",
+          "cost": "Twój koszt {interval, select, year {roczny} other {miesięczny}}"
+        },
+        "unlimited": "Bez limitu",
+        "fewer": "O 100 mniej slots {platform}",
+        "more": "O 100 więcej slots {platform}",
+        "extraOn": "Dodatkowe slots na platformie {platform}",
+        "was": "było {slots}",
+        "undo": "Cofnij",
+        "footer": "Ceny odzwierciedlają koszt śledzenia każdej platformy: niektóre odpowiedzi wymagają więcej pracy (na przykład Perplexity). Plan roczny: 2 miesiące za darmo."
+      },
       "tracking": {
         "title": "Dodatkowe śledzenie",
         "description": "Więcej lokalizacji Promptów, śledzonych codziennie w silnikach z Twojego planu. Jeden poziom naraz; możesz go zmienić lub usunąć w dowolnym momencie.",
@@ -18712,8 +18781,7 @@
         "none": "Brak",
         "tier": "+{units} lokalizacji Promptów",
         "price": "{price}/{interval, select, year {rok} other {mies.}}",
-        "contactSales": "Skontaktuj się z działem sprzedaży",
-        "yearly": "Ceny roczne: 2 miesiące gratis."
+        "contactSales": "Skontaktuj się z działem sprzedaży"
       },
       "brands": {
         "title": "Dodatkowe marki",
@@ -18721,7 +18789,7 @@
         "count": "{count} dodatkowe",
         "fewer": "O jedną markę mniej",
         "more": "O jedną markę więcej",
-        "note": "Nie możesz zejść poniżej liczby posiadanych marek: najpierw usuń markę w sekcji Marki."
+        "limit": "Twój plan obejmuje {base} marek. Nowy limit: <b>{limit}</b>."
       },
       "topUp": {
         "title": "Doładowanie użycia AI",
@@ -18730,10 +18798,12 @@
         "label": "Doładowania użycia AI",
         "none": "Brak",
         "option": "+{multiplier}x",
-        "adds": "{multiplier}× użycia AI z tego miesiąca · +{briefs} briefów · +{opportunities} okazji"
+        "usage": "{multiplier}x użycia AI",
+        "adds": "{multiplier}× użycia AI z tego miesiąca · +{briefs} briefów · +{opportunities} okazji",
+        "alsoAdds": "Dodaje też +{briefs} briefów i +{opportunities} szans w tym miesiącu.",
+        "once": "{price} jednorazowo"
       },
       "summary": "{prompts} lokalizacji Promptów · {brands} marek",
-      "nothing": "Wybierz powyżej, co zmienić.",
       "review": "Sprawdź i zapłać",
       "reviewing": "Sprawdzanie ceny…",
       "dialog": {
@@ -18744,20 +18814,25 @@
         "brands": "{count, plural, =0 {Brak dodatkowych marek} one {# dodatkowa marka} few {# dodatkowe marki} many {# dodatkowych marek} other {# dodatkowej marki}}",
         "topUp": "Doładowanie użycia AI +{multiplier}x, jedna płatność",
         "dueToday": "Do zapłaty dzisiaj",
-        "dueTodayNote": "Reszta bieżącego okresu za dodatkowe śledzenie i marki oraz doładowanie w całości.",
+        "dueTodayNote": "Pozostała część tego okresu za slots, dodatkowe śledzenie i marki oraz pełna kwota doładowania.",
+        "slots": "Slots {platform}",
+        "slotsValue": "{slots} (+{extra} dodano)",
+        "volumeDiscount": "Rabat ilościowy ({percent}%)",
+        "discountValue": "−{off} na {interval, select, year {rok} other {miesiąc}}",
         "total": "Od następnego odnowienia",
         "totalValue": "{price} {interval, select, year {rocznie} other {miesięcznie}}",
-        "credit": "Niższy poziom lub mniej marek oznacza środki do wykorzystania na kolejnych fakturach.",
+        "credit": "Mniej slots, niższy poziom lub mniej marek oznacza środki do wykorzystania na kolejnych fakturach.",
         "pay": "Zapłać {price}",
         "confirm": "Potwierdź",
         "cancel": "Anuluj",
-        "processing": "Przetwarzanie…"
+        "processing": "Przetwarzanie…",
+        "slotsWaiting": "{platform}: najnowsze lokalizacje Promptów ({count}) będą czekać na slot. Nic nie zostanie usunięte; dodaj slots ponownie, aby je śledzić."
       },
       "done": "Twoje dodatki zostały zaktualizowane. Doładowanie zostanie naliczone zaraz po potwierdzeniu płatności.",
       "states": {
         "not_admin": "Dodatki mogą zmieniać tylko administratorzy. Skontaktuj się z administratorem swojego workspace'u.",
         "starter": "Dodatki są dostępne w planie Growth. Przejdź na Growth, aby dodać śledzenie, marki i zużycie AI.",
-        "enterprise": "Twoje limity określa umowa. Skontaktuj się ze swoim opiekunem konta, aby uzyskać więcej.",
+        "enterprise": "Pozostałe limity określa Twoja umowa. Skontaktuj się z opiekunem konta, aby uzyskać więcej.",
         "trial": "Dodatki można kupić po rozpoczęciu planu.",
         "no_plan": "Dodatki można kupić, gdy Twój plan jest aktywny.",
         "ending": "Twój plan wkrótce się zakończy. Zachowaj plan, aby zmieniać jego dodatki."
@@ -18775,7 +18850,23 @@
         "payment_failed": "Płatność nie powiodła się.",
         "failed": "Nie udało się zmienić dodatków. Spróbuj ponownie."
       },
-      "readFailed": "Nie udało się odczytać dodatków. Spróbuj ponownie później."
+      "readFailed": "Nie udało się odczytać dodatków. Spróbuj ponownie później.",
+      "perInterval": "{price}/{interval, select, year {rok} other {mies.}}",
+      "cart": {
+        "title": "Twoje dodatki",
+        "onePayment": "Jedna płatność",
+        "plan": "Plan {plan}",
+        "slots": "Dodatkowe śledzenie {platform}",
+        "slotsCount": "{slots} slots",
+        "remove": "Usuń: {item}",
+        "discount": "Rabat ilościowy {percent}% na dodatkowe śledzenie, uwzględniony w cenach powyżej.",
+        "discountDrops": "Twój rabat ilościowy spada z {from}% do {to}%, więc ceny powyżej wzrosną.",
+        "brands": "{count, plural, one {# marka} few {# marki} many {# marek} other {# marki}} · {price} za sztukę",
+        "topUp": "{multiplier}x użycia AI · do {date}",
+        "total": "{interval, select, year {Suma roczna} other {Suma miesięczna}} od następnego odnowienia: <b>{price}</b>",
+        "undoAll": "Cofnij wszystkie zmiany",
+        "dueToday": "Do zapłaty dziś: dodane pozycje za pozostałą część bieżącego okresu, widoczne w kroku Przejrzyj i zapłać."
+      }
     },
     "cancelsOn": "Subskrypcja kończy się {date}",
     "changePlan": "Zmień plan",

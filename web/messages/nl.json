@@ -277,6 +277,7 @@
       "label": "Uw merk wordt nog niet bijgehouden"
     },
     "actions": {
+      "changePlatforms": "Platforms wijzigen vereist een abonnement",
       "addPrompts": "Prompts toevoegen vereist een abonnement",
       "removeLocations": "Locaties verwijderen vereist een abonnement",
       "editPrompts": "Prompts bewerken vereist een abonnement",
@@ -4539,6 +4540,10 @@
       "name": "Resterende Site Audits deze maand lezen",
       "step": "Site Audit gelezen"
     },
+    "crawlerAccess": {
+      "name": "AI-crawlerproblemen bekijken",
+      "step": "Site Audit · Crawlers bekijken"
+    },
     "goToPage": {
       "name": "Ga naar een pagina",
       "step": "Pagina geopend"
@@ -8044,6 +8049,7 @@
       "traffic": "AI-verkeer en aanmeldingen",
       "ai-revenue": "Klanten en omzet via AI",
       "feed-advisor": "Lacunes in shoppingfeed",
+      "tech-fix": "Crawler- en technische oplossingen",
       "earn-or-pay": "Verdienen of betalen",
       "ad-drafts": "Advertentieconcepten",
       "paid-overlap": "Betaalde overlap",
@@ -15784,6 +15790,31 @@
     }
   },
   "prompts": {
+    "bulkPlatforms": {
+      "bulkButton": "Platforms",
+      "bulkAdd": "Platforms toevoegen",
+      "bulkRemove": "Platforms verwijderen",
+      "modes": "Toevoegen of verwijderen",
+      "modeAdd": "Toevoegen",
+      "modeRemove": "Verwijderen",
+      "platforms": "Platforms",
+      "title": "Platforms toevoegen",
+      "lead": "Volg de {count} geselecteerde Prompts op meer platforms. Elke Prompt-locatie gebruikt één tracking-slot per platform. Een platform waarop een Prompt wacht, wordt opnieuw uitgevoerd.",
+      "removeTitle": "Platforms verwijderen",
+      "removeLead": "Stop met het volgen van de {count} geselecteerde Prompts op bepaalde platforms. Hun slots komen weer vrij.",
+      "none": "Geen platform om toe te voegen. Voeg tracking-slots toe via Instellingen › Facturatie om op meer platforms te volgen.",
+      "removeNone": "De geselecteerde Prompts draaien op geen enkel platform dat u kunt verwijderen.",
+      "free": "{count} vrij",
+      "previewAdd": "{count, plural, one {# Prompt wordt gewijzigd} other {# Prompts worden gewijzigd}} · {unchanged} hebben ze al",
+      "previewRemove": "{count, plural, one {# Prompt wordt gewijzigd} other {# Prompts worden gewijzigd}} · {unchanged} hebben ze niet · {blocked} zouden geen platform meer overhouden",
+      "short": "{platform} heeft {needed} slots nodig en heeft er {free} vrij.",
+      "addSlots": "Slots toevoegen",
+      "save": "Toevoegen aan {count, plural, one {# Prompt} other {# Prompts}}",
+      "removeSave": "Verwijderen van {count, plural, one {# Prompt} other {# Prompts}}",
+      "done": "{count, plural, one {Platforms toegevoegd aan # Prompt} other {Platforms toegevoegd aan # Prompts}}",
+      "removed": "{count, plural, one {Platforms verwijderd van # Prompt} other {Platforms verwijderd van # Prompts}}",
+      "saveFailed": "De platforms konden niet worden gewijzigd. Probeer het opnieuw."
+    },
     "waiting": {
       "resultTitle": "{added} toegevoegd, {waiting} in de wachtrij voor een plek",
       "savedTitle": "{count, plural, one {Opgeslagen, maar nog niet gevolgd} other {# prompts opgeslagen, maar nog niet gevolgd}}",
@@ -16167,6 +16198,13 @@
       "bulkTitle": "{count, plural, one {De geselecteerde prompt zonder antwoorden beginnen te volgen} other {De # geselecteerde prompts zonder antwoorden beginnen te volgen}}"
     },
     "usage": {
+      "slots": {
+        "title": "Tracking-slots",
+        "add": "Slots toevoegen",
+        "usage": "{used} / {limit}",
+        "unlimited": "{used} · geen limiet",
+        "meter": "{platform}-slots in gebruik"
+      },
       "panelLabel": "Prompt-verbruik",
       "planAndUsage": "Abonnement en verbruik",
       "hide": "Verbergen",
@@ -16249,7 +16287,7 @@
       "enginesLegend": "Gekleurd: gedeelde zoekopdrachten voor deze prompt in het venster. Vervaagd: bijgehouden, maar geen gedeeld.",
       "engineEmptyTitle": "Geen zoekopdrachten van {engine} in het bereik {range}",
       "engineEmptyBody": "{engine} deelt gewoonlijk de zoekopdrachten achter zijn antwoorden. Probeer een groter datumbereik.",
-      "sourceNote": "Perplexity wordt niet meer bijgehouden en Microsoft Copilot deelt zijn zoekopdrachten niet, dus deze zijn uitsluitend afkomstig van ChatGPT, die ze op sommige dagen deelt. Het zijn er minder dan voorheen.",
+      "sourceNote": "Perplexity wordt niet meer gevolgd en Bing AI Mode deelt zijn zoekopdrachten niet, dus deze komen alleen van ChatGPT, dat ze op sommige dagen deelt. Het zijn er minder dan voorheen.",
       "emptyTitle": "Nog geen fan-out vastgelegd",
       "emptyBody": "De zoekopdrachten van ChatGPT worden op sommige dagen als steekproef verzameld, en de ChatGPT API deelt ze wanneer deze zoekt. Google AI Overviews, AI Mode en Gemini delen ze niet. Zodra die zoekmachines voor uw prompts worden uitgevoerd, verschijnen de zoekopdrachten hier.",
       "coverageTooltip": "Van de {total} bijgehouden antwoorden in dit venster bevatten er {withFanout} de zoekopdrachten die de zoekmachine heeft uitgevoerd. Die van ChatGPT worden op sommige dagen als steekproef verzameld, en de ChatGPT API deelt ze wanneer deze zoekt."
@@ -18710,7 +18748,38 @@
     },
     "planAddOns": {
       "title": "Voeg meer toe aan uw abonnement",
-      "description": "Extra tracking, extra merken en AI-gebruikstoppers voor uw Growth-abonnement. Alles wat u kiest wordt eenmalig afgeschreven van de opgeslagen kaart.",
+      "slots": {
+        "title": "Extra tracking-credits kopen",
+        "description": "{plan} bevat {included} slots op elk standaardplatform. Kies extra slots op elk platform; u kunt ze verlagen tot 0.",
+        "descriptionNone": "Kies extra slots op elk platform; u kunt ze verlagen tot 0.",
+        "discount": {
+          "reached": "<b>{percent}% korting</b> op uw extra tracking: {off} korting op {list} per {interval, select, year {jaar} other {maand}}.",
+          "list": "Extra tracking: {list} per {interval, select, year {jaar} other {maand}}.",
+          "next": "Voeg {more} meer toe per {interval, select, year {jaar} other {maand}} voor <b>{percent}% korting</b> op het deel boven {from}.",
+          "top": "U hebt de hoogste stap bereikt.",
+          "drops": "Door deze wijziging daalt uw korting van {from}% naar {to}%, waardoor de prijs per 100 slots stijgt.",
+          "steps": "Staffelkorting",
+          "stepsLead": "Elk niveau trekt zijn percentage af van het deel erboven:",
+          "step": "{percent}% korting boven {from}/{interval, select, year {jr} other {mnd}}",
+          "yours": "· uw niveau",
+          "nextTag": "· volgende"
+        },
+        "unit": "<b>1 slot</b> = 1 Prompt die dagelijks wordt gevolgd in 1 locatie op dat platform.",
+        "columns": {
+          "platform": "Platform",
+          "included": "In uw abonnement",
+          "extra": "Extra slots",
+          "price": "Prijs per 100 slots per {interval, select, year {jaar} other {maand}}",
+          "cost": "Uw {interval, select, year {jaarlijkse} other {maandelijkse}} kosten"
+        },
+        "unlimited": "Geen limiet",
+        "fewer": "100 slots minder voor {platform}",
+        "more": "100 slots meer voor {platform}",
+        "extraOn": "Extra slots voor {platform}",
+        "was": "was {slots}",
+        "undo": "Ongedaan maken",
+        "footer": "De prijzen volgen de kosten om elk platform te volgen: sommige antwoorden vergen meer werk (bijvoorbeeld Perplexity). Jaarlijks: 2 maanden gratis."
+      },
       "tracking": {
         "title": "Extra tracking",
         "description": "Meer Prompt-locaties, dagelijks gevolgd op de engines van uw abonnement. Eén niveau tegelijk; u kunt het op elk moment wijzigen of verwijderen.",
@@ -18718,8 +18787,7 @@
         "none": "Geen",
         "tier": "+{units} Prompt-locaties",
         "price": "{price}/{interval, select, year {jr} other {mnd}}",
-        "contactSales": "Neem contact op met sales",
-        "yearly": "Jaarprijzen: 2 maanden gratis."
+        "contactSales": "Neem contact op met sales"
       },
       "brands": {
         "title": "Extra merken",
@@ -18727,7 +18795,7 @@
         "count": "{count} extra",
         "fewer": "Eén merk minder",
         "more": "Eén merk meer",
-        "note": "U kunt niet onder het aantal merken dat u heeft komen: verwijder eerst een merk bij Merken."
+        "limit": "Uw abonnement bevat {base} merken. Nieuwe limiet: <b>{limit}</b>."
       },
       "topUp": {
         "title": "AI-gebruikstopper",
@@ -18736,10 +18804,12 @@
         "label": "AI-gebruikstoppers",
         "none": "Geen",
         "option": "+{multiplier}x",
-        "adds": "{multiplier}× het AI-gebruik van deze maand · +{briefs} briefings · +{opportunities} kansen"
+        "usage": "{multiplier}x AI-gebruik",
+        "adds": "{multiplier}× het AI-gebruik van deze maand · +{briefs} briefings · +{opportunities} kansen",
+        "alsoAdds": "Voegt deze maand ook +{briefs} briefings en +{opportunities} kansen toe.",
+        "once": "{price} eenmalig"
       },
       "summary": "{prompts} Prompt-locaties · {brands} merken",
-      "nothing": "Kies hierboven wat u wilt wijzigen.",
       "review": "Controleren en betalen",
       "reviewing": "Prijs controleren…",
       "dialog": {
@@ -18750,20 +18820,25 @@
         "brands": "{count, plural, =0 {Geen extra merken} one {# extra merk} other {# extra merken}}",
         "topUp": "AI-gebruikstopper +{multiplier}x, eenmalige betaling",
         "dueToday": "Vandaag te betalen",
-        "dueTodayNote": "Het resterende deel van deze periode voor extra tracking en merken, en een opwaardering in volledig bedrag.",
+        "dueTodayNote": "De rest van deze periode voor slots, extra tracking en merken, en een top-up in zijn geheel.",
+        "slots": "{platform} slots",
+        "slotsValue": "{slots} (+{extra} toegevoegd)",
+        "volumeDiscount": "Staffelkorting ({percent}%)",
+        "discountValue": "−{off} per {interval, select, year {jaar} other {maand}}",
         "total": "Vanaf de volgende verlenging",
         "totalValue": "{price} per {interval, select, year {jaar} other {maand}}",
-        "credit": "Een lager niveau of minder merken levert tegoed op voor uw volgende facturen.",
+        "credit": "Minder slots, een lager niveau of minder merken geven tegoed voor uw volgende facturen.",
         "pay": "Betaal {price}",
         "confirm": "Bevestigen",
         "cancel": "Annuleren",
-        "processing": "Bezig met verwerken…"
+        "processing": "Bezig met verwerken…",
+        "slotsWaiting": "{platform}: de nieuwste {count} Prompt-locaties wachten op een slot. Er wordt niets verwijderd; voeg opnieuw slots toe om ze te volgen."
       },
       "done": "Uw add-ons zijn bijgewerkt. Een opwaardering telt mee zodra de betaling is bevestigd.",
       "states": {
         "not_admin": "Alleen beheerders kunnen add-ons wijzigen. Vraag het aan een beheerder van uw werkruimte.",
         "starter": "Add-ons zijn beschikbaar bij het Growth-abonnement. Upgrade naar Growth om tracking, merken en AI-gebruik toe te voegen.",
-        "enterprise": "Uw contract bepaalt uw limieten. Neem contact op met uw accountmanager voor meer.",
+        "enterprise": "Uw contract bepaalt uw overige limieten. Neem contact op met uw accountmanager voor meer.",
         "trial": "Add-ons kunnen worden gekocht zodra uw abonnement is gestart.",
         "no_plan": "Add-ons kunnen worden gekocht zolang uw abonnement actief is.",
         "ending": "Uw abonnement staat op het punt te eindigen. Behoud uw abonnement om de add-ons te wijzigen."
@@ -18781,7 +18856,23 @@
         "payment_failed": "De betaling is niet gelukt.",
         "failed": "Uw add-ons konden niet worden gewijzigd. Probeer het opnieuw."
       },
-      "readFailed": "Uw add-ons konden niet worden gelezen. Probeer het later opnieuw."
+      "readFailed": "Uw add-ons konden niet worden gelezen. Probeer het later opnieuw.",
+      "perInterval": "{price}/{interval, select, year {jr} other {mnd}}",
+      "cart": {
+        "title": "Uw add-ons",
+        "onePayment": "Eén betaling",
+        "plan": "Abonnement {plan}",
+        "slots": "Extra tracking {platform}",
+        "slotsCount": "{slots} slots",
+        "remove": "{item} verwijderen",
+        "discount": "Staffelkorting van {percent}% op extra tracking, verwerkt in de prijzen hierboven.",
+        "discountDrops": "Uw staffelkorting daalt van {from}% naar {to}%, waardoor de prijzen hierboven stijgen.",
+        "brands": "{count, plural, one {# merk} other {# merken}} · {price} per stuk",
+        "topUp": "{multiplier}x AI-gebruik · tot {date}",
+        "total": "{interval, select, year {Jaarlijks} other {Maandelijks}} totaal vanaf de volgende verlenging <b>{price}</b>",
+        "undoAll": "Alle wijzigingen ongedaan maken",
+        "dueToday": "Vandaag verschuldigd: de toegevoegde items voor de rest van deze periode, weergegeven bij Controleren en betalen."
+      }
     },
     "cancelsOn": "Abonnement eindigt op {date}",
     "changePlan": "Abonnement wijzigen",
