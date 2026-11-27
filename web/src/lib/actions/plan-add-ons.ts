@@ -179,7 +179,8 @@ export type AddOnChangePreview =
   | AddOnChangeRefusal;
 
 export type AddOnChangeResult =
-  { ok: true; changed: boolean; limits: AddOnLimits } | AddOnChangeRefusal;
+  | { ok: true; changed: boolean; limits: AddOnLimits }
+  | AddOnChangeRefusal;
 
 const inputSchema = z.object({
   trackingUnits: z.number().int().min(0).max(1_000_000),
@@ -750,7 +751,13 @@ async function prepare(raw: AddOnChangeInput): Promise<Cart | AddOnChangeRefusal
 
 /** Why the workspace can't change its add-ons now, or `open` when it can. */
 export type PlanAddOnsState =
-  'open' | 'not_admin' | 'starter' | 'enterprise' | 'trial' | 'no_plan' | 'ending';
+  | 'open'
+  | 'not_admin'
+  | 'starter'
+  | 'enterprise'
+  | 'trial'
+  | 'no_plan'
+  | 'ending';
 
 export interface PlanAddOnsView {
   state: PlanAddOnsState;
@@ -769,6 +776,10 @@ export interface PlanAddOnsView {
   topUps: { multiplier: number; priceCents: number; briefs: number; opportunities: number }[];
   /** When the plan renews: a top-up lasts until then. */
   renewsOn: string | null;
+  /** The organization's plan, for the cart's first line. */
+  planId: string;
+  /** The plan's price on its period, in cents; null when it couldn't be read. */
+  planPriceCents: number | null;
   /** Tracking slots per platform (00564); null when the plan doesn't sell them or none is on sale. */
   slots: PlanSlotsView | null;
 }
@@ -795,7 +806,8 @@ export interface PlanSlotsView {
 }
 
 export type PlanAddOnsRead =
-  { ok: true; addOns: PlanAddOnsView } | { ok: false; failure: 'not_cloud' | 'failed' };
+  | { ok: true; addOns: PlanAddOnsView }
+  | { ok: false; failure: 'not_cloud' | 'failed' };
 
 interface ViewRow {
   kind: 'tracking' | 'brand' | 'ai_topup' | 'slots';
@@ -869,13 +881,19 @@ export async function readPlanAddOns(): Promise<PlanAddOnsRead> {
     // on a yearly plan sees yearly prices); monthly when there's no
     // subscription or it can't be read.
     let interval: 'month' | 'year' = 'month';
+    // The plan's own price, for the cart's first line; null when unread.
+    let planPriceCents: number | null = null;
     if (sellsSlots && org.stripe_subscription_id) {
       try {
         const stripe = await loadStripe();
         if (stripe) {
           const sub = await stripe.subscriptions.retrieve(org.stripe_subscription_id as string);
-          const found = planItemOf(sub.items.data)?.price?.recurring?.interval;
+          const item = planItemOf(sub.items.data);
+          const found = item?.price?.recurring?.interval;
           if (found === 'year') interval = 'year';
+          if (item?.price?.unit_amount != null) {
+            planPriceCents = item.price.unit_amount * (item.quantity ?? 1);
+          }
         }
       } catch (err) {
         if (running === 'open' || running === 'not_admin') throw err;
@@ -938,6 +956,8 @@ export async function readPlanAddOns(): Promise<PlanAddOnsRead> {
         brandPriceCents: brand?.price_cents ?? null,
         topUps,
         renewsOn: (org.subscription_ends_at as string | null) ?? null,
+        planId,
+        planPriceCents,
         slots,
       },
     };
