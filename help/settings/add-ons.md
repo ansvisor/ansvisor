@@ -4,15 +4,15 @@ route: /dashboard/settings/billing
 keywords: [add-ons, tracking slots, slots, volume discount, extra tracking, extra brands, AI top-up, more prompts, AI credits, buy credits, storage pack, extra storage, AI limit used up, get more, storage full]
 synonyms: [buy slots, track on more platforms, add Claude, add Perplexity, add more prompts, track more prompts, add a brand, more brands, get more AI usage, top up credits, more storage, buy more AI, credit pack]
 plan: starter
-updated: 2026-11-27
-last_checked: 2026-11-27
+updated: 2026-11-28
+last_checked: 2026-11-28
 owner: Cihan
 app_version: 0.3.0
 approved: true
 sources: [web/src/components/settings/plan-add-ons-card.tsx, web/src/components/settings/plan-slots-section.tsx, web/src/lib/billing/slot-discount.ts, web/src/lib/actions/plan-add-ons.ts, web/src/components/settings/add-ons-card.tsx, web/src/components/ai-usage/get-more.tsx, web/src/lib/actions/add-ons.ts]
 ---
 
-**Settings › Billing** sells more for your plan. On Growth, **Add more to your plan** adds tracking slots, extra brands and AI usage top-ups, picked together and paid once. On Enterprise it adds tracking slots. **Add-ons** shows AI credit you have left and the packs you bought. Everything is paid with Stripe, added only after the payment goes through, and shown on your invoice.
+**Settings › Billing** sells more for your plan. On Growth, **Add more to your plan** adds tracking slots, extra brands and AI usage top-ups, picked together and paid once. Enterprise buys the same tracking slots, extra brands and AI usage top-ups, at the same prices; extra brands add to the brands your contract includes. **Add-ons** shows AI credit you have left and the packs you bought. Everything is paid with Stripe, added only after the payment goes through, and shown on your invoice.
 
 ## Tracking slots
 

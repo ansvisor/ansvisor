@@ -102,7 +102,7 @@ const topUpRow = (multiplier: number, price: number) => ({
   stripe_price_id: `price_ai_topup_${multiplier}x`,
   stripe_lookup_key: `addon_ai_topup_${multiplier}x`,
   sale: 'self_serve',
-  plans: ['growth'],
+  plans: ['growth', 'enterprise'],
   active: true,
 });
 
@@ -170,8 +170,9 @@ beforeEach(() => {
       row('tracking_1000_month', 'tracking', 1000),
       row('tracking_5000_month', 'tracking', 5000, { sale: 'contact_sales' }),
       row('tracking_1000_year', 'tracking', 1000),
-      row('brand_month', 'brand', null),
-      row('brand_year', 'brand', null),
+      // Extra brands: Growth's and Enterprise's (00565).
+      row('brand_month', 'brand', null, { plans: ['growth', 'enterprise'] }),
+      row('brand_year', 'brand', null, { plans: ['growth', 'enterprise'] }),
       topUpRow(5, 3900),
       topUpRow(10, 6900),
       topUpRow(20, 12900),
@@ -788,14 +789,48 @@ describe('tracking slots (00564)', () => {
     expect(items.some((i: { id?: string }) => i.id === 'si_slots_claude_web')).toBe(false);
   });
 
-  it('lets Enterprise buy slots, and only slots', async () => {
+  it('lets Enterprise buy slots, extra brands and top-ups, not tracking tiers', async () => {
     org().plan = 'enterprise';
     expect(
       await previewAddOnChange({ trackingUnits: 0, extraBrands: 0, slots: { 'claude-web': 3 } }),
     ).toMatchObject({ ok: true, slots: { 'claude-web': 300 } });
     expect(
       await previewAddOnChange({ trackingUnits: 0, extraBrands: 1, slots: { 'claude-web': 3 } }),
-    ).toMatchObject({ ok: false, failure: 'not_growth', plan: 'enterprise' });
+    ).toMatchObject({ ok: true });
+    expect(await previewAddOnChange({ trackingUnits: 0, extraBrands: 0, topUp: 5 })).toMatchObject({
+      ok: true,
+      dueTodayCents: 3900,
+    });
+    expect(await previewAddOnChange({ trackingUnits: 100, extraBrands: 0 })).toMatchObject({
+      ok: false,
+      failure: 'not_growth',
+      plan: 'enterprise',
+    });
+  });
+
+  it('counts Enterprise’s brands on top of its contract’s limit', async () => {
+    org().plan = 'enterprise';
+    org().plan_overrides = { maxBrands: 10 };
+    const preview = await previewAddOnChange({ trackingUnits: 0, extraBrands: 2 });
+    expect(preview).toMatchObject({ ok: true, limits: { brands: 12 } });
+    const params = stripeApi.preview.mock.calls[0][0];
+    expect(params.subscription_details.items).toEqual([
+      { price: 'price_brand_month', quantity: 2 },
+    ]);
+  });
+
+  it('shows Enterprise its brand price and top-ups, and no tiers', async () => {
+    org().plan = 'enterprise';
+    org().plan_overrides = { maxBrands: 10 };
+    const read = await readPlanAddOns();
+    expect(read.ok && read.addOns).toMatchObject({
+      state: 'enterprise',
+      buyState: 'open',
+      brandPriceCents: 2500,
+      topUps: [{ multiplier: 5 }, { multiplier: 10 }, { multiplier: 20 }],
+      tiers: [],
+      base: { brands: 10 },
+    });
   });
   it('shows Billing the slots on sale on the plan’s period, with what is included, bought and used', async () => {
     org().add_on_slots = { 'claude-web': 300 };

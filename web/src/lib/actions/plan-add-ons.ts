@@ -194,6 +194,13 @@ const inputSchema = z.object({
 const refuse = (failure: AddOnChangeFailure, extra: Partial<AddOnChangeRefusal> = {}) =>
   ({ ok: false, failure, ...extra }) as AddOnChangeRefusal;
 
+/** A plan's own limits before add-ons: Enterprise's contract overrides merged. */
+function ownLimits(planId: string, overrides: unknown) {
+  const limits = getPlan(planId as Parameters<typeof getPlan>[0]).limits;
+  if (planId !== 'enterprise' || !overrides || typeof overrides !== 'object') return limits;
+  return { ...limits, ...(overrides as Partial<typeof limits>) };
+}
+
 /** What a preview or a change costs, without changing anything. */
 export async function previewAddOnChange(input: AddOnChangeInput): Promise<AddOnChangePreview> {
   try {
@@ -484,10 +491,11 @@ async function prepare(raw: AddOnChangeInput): Promise<Cart | AddOnChangeRefusal
     .maybeSingle();
   if (!org) return refuse('failed');
   const planId = (org.plan as string | null) ?? 'starter';
-  // Enterprise buys tracking slots here; its other add-ons are its contract's.
-  const slotsOnly = planId === 'enterprise';
-  if (planId !== 'growth' && !slotsOnly) return refuse('not_growth', { plan: planId });
-  if (slotsOnly && (input.trackingUnits > 0 || input.extraBrands > 0 || input.topUp)) {
+  // Enterprise buys tracking slots, extra brands and AI top-ups here (00564,
+  // 00565); the retired tracking tiers are Growth's.
+  const enterprise = planId === 'enterprise';
+  if (planId !== 'growth' && !enterprise) return refuse('not_growth', { plan: planId });
+  if (enterprise && input.trackingUnits > 0) {
     return refuse('not_growth', { plan: planId });
   }
   if (input.slots && Object.keys(input.slots).some((id) => !slotPlatform(id))) {
@@ -537,10 +545,9 @@ async function prepare(raw: AddOnChangeInput): Promise<Cart | AddOnChangeRefusal
       slots: keptSlots,
     };
   }
-  if (slotsOnly && (current.tracking || current.brands))
-    return refuse('not_growth', { plan: planId });
+  if (enterprise && current.tracking) return refuse('not_growth', { plan: planId });
   const slotUnits = input.slots ?? keptSlots;
-  const base = getPlan(planId).limits;
+  const base = ownLimits(planId, org.plan_overrides);
   const limits: AddOnLimits = {
     prompts: base.maxPrompts + input.trackingUnits,
     brands: base.maxBrands + input.extraBrands,
@@ -706,7 +713,7 @@ async function prepare(raw: AddOnChangeInput): Promise<Cart | AddOnChangeRefusal
         r.kind === 'ai_topup' &&
         r.multiplier === input.topUp &&
         r.active &&
-        addOnForPlan(r, 'growth'),
+        addOnForPlan(r, planId),
     );
     if (!row || row.sale === 'contact_sales') return refuse('unavailable');
     const priceId = await resolveAddOnPrice(stripe, row);
@@ -776,6 +783,8 @@ export interface PlanAddOnsView {
   topUps: { multiplier: number; priceCents: number; briefs: number; opportunities: number }[];
   /** When the plan renews: a top-up lasts until then. */
   renewsOn: string | null;
+  /** How far an active plan lets this person buy, whatever the plan (Enterprise's state is 'enterprise'). */
+  buyState: PlanSlotsView['state'];
   /** The organization's plan, for the cart's first line. */
   planId: string;
   /** The plan's price on its period, in cents; null when it couldn't be read. */
@@ -901,8 +910,9 @@ export async function readPlanAddOns(): Promise<PlanAddOnsRead> {
       }
     }
 
+    // The add-ons the plan sells: Growth's all, Enterprise's brands (and slots below).
     const catalog = ((rows ?? []) as ViewRow[]).filter(
-      (r) => r.active && addOnForPlan(r, 'growth'),
+      (r) => r.active && addOnForPlan(r, planId === 'enterprise' ? 'enterprise' : 'growth'),
     );
     const slots = sellsSlots
       ? await slotsView(
@@ -938,7 +948,7 @@ export async function readPlanAddOns(): Promise<PlanAddOnsRead> {
         briefs: r.grant_briefs ?? 0,
         opportunities: r.grant_opportunities ?? 0,
       }));
-    const base = getPlan('growth').limits;
+    const base = ownLimits(planId === 'enterprise' ? 'enterprise' : 'growth', org.plan_overrides);
     const count = (v: unknown) => (typeof v === 'number' && v > 0 ? v : 0);
 
     return {
@@ -956,6 +966,7 @@ export async function readPlanAddOns(): Promise<PlanAddOnsRead> {
         brandPriceCents: brand?.price_cents ?? null,
         topUps,
         renewsOn: (org.subscription_ends_at as string | null) ?? null,
+        buyState: running,
         planId,
         planPriceCents,
         slots,
