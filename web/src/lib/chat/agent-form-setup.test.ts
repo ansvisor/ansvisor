@@ -173,6 +173,7 @@ describe('agentFormSetupFor', () => {
       'chatgpt-profile',
       'earn-or-pay',
       'ad-drafts',
+      'paid-overlap',
       // The AEO Operator's skill until CHAT_OPERATOR is on for the workspace (PR 4).
       'operator',
     ]);

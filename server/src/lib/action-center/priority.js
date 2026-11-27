@@ -110,6 +110,8 @@ const KIND_CHANGE = {
   new_engine: 'opportunity',
   ai_platform_new: 'opportunity',
   gsc_low_ctr: 'opportunity',
+  // Google spend rising where AI already picks the brand (Ads Phase 1 P4).
+  paid_overlap: 'opportunity',
   // Ground never held: a gap to close or a lead to answer.
   prompt_visibility_gap: 'gap',
   high_demand_gap: 'gap',

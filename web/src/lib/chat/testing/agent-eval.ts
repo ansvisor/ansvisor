@@ -99,7 +99,14 @@ export type OutputPromise =
   | 'plan_card';
 
 export type EvalGroup = 'agents' | 'skills';
-export type EvalTrigger = 'schedule' | 'signal' | 'kpi' | 'brand_added' | 'manual';
+export type EvalTrigger =
+  | 'schedule'
+  | 'signal'
+  | 'kpi'
+  | 'brand_added'
+  | 'page_published'
+  | 'catalog_synced'
+  | 'manual';
 
 export interface AgentEvalScenario {
   id: string;
@@ -231,6 +238,10 @@ const AGENT_PROMISES: Readonly<
   'ceo-brief': { must: ['report'] },
   // Sign-ups are "Not measured" here: the workspace has no Google Analytics.
   'ai-traffic-signups': { must: ['report'] },
+  // The feed's gaps by impact, with fixes; an action it sends waits on a card.
+  'shopping-feed-advisor': { must: ['list'], review: ['action'] },
+  // What keeps AI crawlers out, with fixes; an action it sends waits on a card.
+  'technical-fixer': { must: ['list'], review: ['action'] },
   'unmet-needs-miner': { must: ['list'] },
   'market-source-finder': { must: ['list'] },
   // AEO Operator plan §4.6: one card, today's plan from its scope, and nothing else.
@@ -423,6 +434,14 @@ const SKILL_REQUESTS: Readonly<Record<string, { message: string; must: OutputPro
   },
   'ai-revenue': {
     message: 'Which pages and AI assistants bring us customers, and how much revenue?',
+    must: ['list'],
+  },
+  'feed-advisor': {
+    message: 'What is our product feed missing for AI shopping answers, and how do we fix it?',
+    must: ['list'],
+  },
+  'tech-fix': {
+    message: 'Can AI crawlers get into our site? Write the fixes for what keeps them out.',
     must: ['list'],
   },
 };

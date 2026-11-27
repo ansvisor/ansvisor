@@ -42,7 +42,7 @@ vi.mock('@/lib/actions/settings-state', () => ({
 vi.mock('@/lib/actions/user-brand-state', () => ({ markSeen: vi.fn(async () => ({ ok: true })) }));
 const signOut = vi.fn(async () => ({}));
 vi.mock('@/lib/supabase/client', () => ({ createClient: () => ({ auth: { signOut } }) }));
-vi.mock('@/lib/chat/start-chat', () => ({ startChatRun: vi.fn() }));
+vi.mock('@/lib/chat/start-chat', () => ({ askInOneChat: vi.fn() }));
 // The Language item's list (LOC-005): a customer's, English only.
 vi.mock('@/lib/actions/ui-language', () => ({
   getUiLanguageState: async () => ({
@@ -199,25 +199,36 @@ describe('UserProfileNavItem', () => {
     globalThis.fetch = vi.fn(
       async () => new Response(JSON.stringify({ ok: true, hasUnread: false })),
     ) as unknown as typeof fetch;
-    const { startChatRun } = await import('@/lib/chat/start-chat');
-    vi.mocked(startChatRun).mockResolvedValueOnce({ ok: true, chatId: 'chat-9' });
+    const { askInOneChat } = await import('@/lib/chat/start-chat');
+    vi.mocked(askInOneChat).mockResolvedValueOnce({ ok: true, chatId: 'chat-9' });
     try {
       await render('analyst');
       await openMenu();
       const item = document.querySelector<HTMLElement>('[data-account-item="whats-new"]')!;
       await act(async () => item.click());
-      expect(startChatRun).toHaveBeenCalledWith(expect.any(String), null);
+      // In the person's What's new chat when they have one (askInOneChat).
+      expect(askInOneChat).toHaveBeenCalledWith(
+        'What’s new in Ansvisor and how can it help me?',
+        null,
+      );
       expect(push).toHaveBeenCalledWith('/dashboard/chat/chat-9');
     } finally {
       globalThis.fetch = realFetch;
     }
   });
 
-  it('signs out', async () => {
-    await render('analyst');
-    const items = await openMenu();
-    await act(async () => items.at(-1)!.click());
-    expect(signOut).toHaveBeenCalled();
-    expect(push).toHaveBeenCalledWith('/sign-in');
+  it('signs out, then loads the sign-in page afresh, never back to the page left', async () => {
+    const assign = vi.fn();
+    vi.stubGlobal('location', { ...window.location, assign });
+    try {
+      await render('analyst');
+      const items = await openMenu();
+      await act(async () => items.at(-1)!.click());
+      expect(signOut).toHaveBeenCalled();
+      expect(assign).toHaveBeenCalledWith('/sign-in');
+      expect(push).not.toHaveBeenCalledWith('/sign-in');
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });

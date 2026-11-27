@@ -13,19 +13,32 @@ import { PROMPTS_TRACKED } from '@/lib/prompts-routes';
  */
 export const DASHBOARD_HOME = PROMPTS_TRACKED;
 
+/**
+ * Brand Visibility's Overview: where someone lands once their workspace has
+ * answers (the owner's decision of 2026-11-26), so a sign-in opens on how
+ * visible the brand is and what changed. Before the first answers it would
+ * be empty, so Tracked Prompts stays the home until then, with the first
+ * run's progress.
+ */
+export const RESULTS_HOME = '/dashboard/insights';
+
 /** The menu section the home is in (menu access): Prompts. */
 const HOME_SECTION = menuSectionOf(DASHBOARD_HOME);
 
 /**
  * A person's home, by the sections off their menu (menu access, as the
- * sidebar has them: MyMenu.hidden): Tracked Prompts, or Action Center ›
- * Today, which is on every menu, when Prompts is off theirs. Nobody lands
- * on a page their menu doesn't show.
+ * sidebar has them: MyMenu.hidden) and whether the workspace has answers
+ * yet: Brand Visibility's Overview once it has (RESULTS_HOME), else
+ * Tracked Prompts, else Action Center › Today, which is on every menu.
+ * Nobody lands on a page their menu doesn't show.
  */
-export function homeFor(hiddenSections: Iterable<string> = []): string {
-  for (const section of hiddenSections) {
-    if (section === HOME_SECTION) return ACTION_CENTER_TODAY;
-  }
+export function homeFor(
+  hiddenSections: Iterable<string> = [],
+  { hasResults = false }: { hasResults?: boolean } = {},
+): string {
+  const hidden = new Set(hiddenSections);
+  if (hasResults && !hidden.has(menuSectionOf(RESULTS_HOME) ?? '')) return RESULTS_HOME;
+  if (hidden.has(HOME_SECTION ?? '')) return ACTION_CENTER_TODAY;
   return DASHBOARD_HOME;
 }
 

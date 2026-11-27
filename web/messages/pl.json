@@ -277,6 +277,7 @@
       "label": "Twoja marka nie jest jeszcze monitorowana"
     },
     "actions": {
+      "changePlatforms": "Zmiana platform wymaga planu",
       "addPrompts": "Dodawanie Prompts wymaga planu",
       "removeLocations": "Usuwanie lokalizacji wymaga planu",
       "editPrompts": "Edytowanie Prompts wymaga planu",
@@ -622,6 +623,8 @@
       "slow": "To trwa dłużej niż zwykle.",
       "ready": "Gotowe. Otwieranie Prompts…",
       "failed": "Nie udało się przygotować wersji demonstracyjnej. Sprawdź połączenie i spróbuj ponownie.",
+      "stuck": "Demo jest gotowe, ale jego strona się nie otworzyła. Otwórz je ponownie albo zamknij to i spróbuj później.",
+      "open": "Otwórz demo",
       "retry": "Spróbuj ponownie",
       "close": "Zamknij"
     }
@@ -1881,6 +1884,10 @@
         "title": "Wysoka konwersja z AI na {targets}",
         "description": "Te strony przekształcają ruch z AI w kluczowe zdarzenia znacznie powyżej średniej Twojej witryny."
       },
+      "paid_overlap": {
+        "title": "Wydatki na reklamy Google rosną dla {targets}, dla których AI już Cię wybiera",
+        "description": "AI już wybiera Cię w odpowiedziach na te intencje zakupowe, a Twoje wydatki w Google na powiązane wyszukiwane hasła wzrosły w porównaniu z poprzednimi 30 dniami."
+      },
       "bridge_link_gap": {
         "title": "Połącz {targets} ze stronami, które konwertują",
         "description": "AI kieruje czytelników na te strony, ale niewiele z nich generuje konwersje. Strony o tej samej tematyce, które konwertują, mają niewielki ruch z AI."
@@ -2478,6 +2485,8 @@
           "task_review_withdrawn": "Cofnięto gotowość do przeglądu za pomocą polecenia Cofnij: {task}{title}",
           "cancelled": "Anulowano z czatu przez {by} · cofnij",
           "reopened": "Działanie wznowione — jego warunek został ponownie spełniony",
+          "replaced": "Zastąpione nowszym działaniem tego samego rodzaju: nikt nad nim nie pracował od 30 dni",
+          "replaces": "Otwarte w miejsce starszego działania tego samego rodzaju, nad którym nikt nie pracował od 30 dni",
           "signals_linked": "{count, plural, one {Połączono 1 nowy sygnał} few {Połączono # nowe sygnały} many {Połączono # nowych sygnałów} other {Połączono # nowego sygnału}}",
           "status_changed": "Zmieniono status na: {to}",
           "assigned": "Zmieniono osobę przypisaną",
@@ -3344,6 +3353,12 @@
         "description": "Te źródła są cytowane, gdy odpowiedzi wspominają o Twojej marce, i mogłyby odsyłać bezpośrednio do Twoich stron.",
         "goal": "Zmień wzmianki z innych źródeł w odnośniki do Twoich zasobów."
       },
+      "review_paid_overlap": {
+        "title": "Przejrzyj reklamy Google dla {targets}, dla których AI już Cię wybiera",
+        "titleGeneric": "Przejrzyj reklamy Google tam, gdzie AI już Cię wybiera",
+        "description": "AI już wybiera Cię w odpowiedziach na te intencje zakupowe, a Twoje wydatki w Google na powiązane wyszukiwane hasła rosną. Możesz płacić za kliknięcia, które i tak byś zyskał.",
+        "goal": "Inwestuj w reklamy tam, gdzie przynoszą dodatkowe kliknięcia, i zachowaj odpowiedź AI."
+      },
       "bridge_links": {
         "title": "Podlinkuj {targets} do stron, które konwertują",
         "titleGeneric": "Podlinkuj strony odwiedzane przez AI do stron, które konwertują",
@@ -3808,6 +3823,8 @@
       "prioritize_targets_target": "Ustal priorytety dla {targets} według wpływu",
       "review_link_plan": "Przejrzyj linki do dodania",
       "review_link_plan_target": "Przejrzyj linki do dodania na {targets}",
+      "review_paid_overlap": "Przejrzyj reklamy Google dla tych wyszukiwanych haseł",
+      "review_paid_overlap_target": "Przejrzyj reklamy Google dla {targets}",
       "define_validation_baseline": "Zapisz linię bazową do pomiaru wyników",
       "define_validation_baseline_target": "Zarejestruj punkt odniesienia dla {targets}",
       "create_content_brief": "Utwórz brief treści",
@@ -3919,6 +3936,7 @@
       "strengthen_entity_content": "Strona opisuje markę zgodnie z jej profilem, co potwierdza ponowne pobranie",
       "add_internal_links": "Strony, które powinny do niej linkować, robią to (potwierdzone ponownym pobraniem)",
       "review_link_plan": "Każdy link i jego tekst zakotwiczenia (anchor) zostały zatwierdzone lub zmienione – potwierdzasz to",
+      "review_paid_overlap": "Reklama każdego wyszukiwanego hasła została zachowana, ograniczona lub wstrzymana w Google Ads: potwierdzasz to",
       "improve_cta_path": "Wezwanie do działania (CTA) działa na stronie – potwierdzasz to",
       "publish_content": "Strona została opublikowana pod swoim adresem i odpowiada przy pobraniu",
       "fix_crawler_access": "Plik robots.txt oraz strona zezwalają na dostęp robotom AI (potwierdzone ponownym pobraniem)",
@@ -4065,6 +4083,7 @@
         "whatHappened": "Co się wydarzyło?",
         "triggeredBy": "Skonsolidowano z {count, plural, one {# sygnału} few {# sygnałów} many {# sygnałów} other {# sygnałów}}",
         "dismissedBecause": "Odrzucono: {reason}.",
+        "replaced": "Zastąpione nowszym działaniem tego samego rodzaju: nikt nad nim nie pracował od 30 dni, więc nowe ustalenia otworzyły nowe.",
         "readings": "Odczyt po zakończeniu: {list}.",
         "reading": "dzień {day}, {outcome}",
         "finalOn": "Ostateczny odczyt nastąpi w dniu {day}.",
@@ -4116,7 +4135,10 @@
         "actions": "Działania",
         "scorecard": "Karta wyników",
         "kpis": "Wskaźniki KPI",
-        "label": "Widoki historii"
+        "label": "Widoki historii",
+        "actionsHint": "Każde działanie w toku lub zakończone, po kolei: jaki miało cel i co zmierzono od tego czasu.",
+        "scorecardHint": "Co osiągnął każdy rodzaj działań ogółem: ile ukończono, jaki jest odsetek sukcesów i mediana zmiany.",
+        "kpisHint": "Cele Twojej marki i to, jak blisko jesteś ich osiągnięcia."
       },
       "scorecard": {
         "note": "Wpływ każdego rodzaju działania w tej marce, wyłącznie na podstawie jej własnych działań. Wyniki to dotychczasowe odczyty; każdy staje się ostateczny miesiąc po zamknięciu działania. Mediana zmiany dotyczy głównego wskaźnika każdego działania.",
@@ -4488,6 +4510,10 @@
       "name": "Odczytaj źródła katalogu",
       "step": "Odczytaj Katalog"
     },
+    "catalogFeedGaps": {
+      "name": "Odczytaj luki w feedzie",
+      "step": "Odczytaj Produkty · Luki w feedzie"
+    },
     "contentPlan": {
       "name": "Odczytaj plan treści",
       "step": "Odczytaj plan treści"
@@ -4507,6 +4533,10 @@
     "siteAuditQuota": {
       "name": "Sprawdź liczbę audytów witryny pozostałych w tym miesiącu",
       "step": "Odczytaj audyt witryny"
+    },
+    "crawlerAccess": {
+      "name": "Odczyt problemów z crawlerami AI",
+      "step": "Odczyt Site Audit · Crawlery"
     },
     "goToPage": {
       "name": "Przejdź do strony",
@@ -4801,6 +4831,10 @@
     "adsOpportunities": {
       "name": "Odczytaj szanse Ads",
       "step": "Odczytano szanse Ads"
+    },
+    "adsPaidOverlap": {
+      "name": "Sprawdź nakładanie się płatnych działań",
+      "step": "Sprawdzanie nakładania się płatnych działań"
     },
     "adDrafts": {
       "name": "Zapisz wersje robocze reklam",
@@ -6201,7 +6235,6 @@
       "home": "Strona główna",
       "inbox": "Skrzynka odbiorcza",
       "inboxLabel": "Skrzynka odbiorcza · {needsYou, plural, one {# wymaga Twojej uwagi} few {# wymagają Twojej uwagi} many {# wymaga Twojej uwagi} other {# wymaga Twojej uwagi}}",
-      "inboxLabelNeedsYou": "Skrzynka odbiorcza · {count, plural, one {# element} few {# elementy} many {# elementów} other {# elementu}} · {needsYou, plural, one {# wymaga Twojej uwagi} few {# wymagają Twojej uwagi} many {# wymaga Twojej uwagi} other {# wymaga Twojej uwagi}}",
       "skills": "Umiejętności",
       "activity": "Aktywność",
       "capabilities": "Możliwości czatu",
@@ -6651,10 +6684,7 @@
       "landsWithSuggestions": "Tutaj trafiają wyniki od Twoich agentów i codzienne sugestie.",
       "nothingNeedsYou": "Brak zadań wymagających uwagi.",
       "summary": {
-        "needsYou": "{count, plural, one {# wymaga Twojej uwagi} few {# wymagają Twojej uwagi} many {# wymaga Twojej uwagi} other {# wymaga Twojej uwagi}}",
-        "running": "{count} w toku",
-        "doneToday": "{count} ukończonych dzisiaj",
-        "suggestions": "{count, plural, one {# sugestia} few {# sugestie} many {# sugestii} other {# sugestii}} w tym tygodniu"
+        "needsYou": "{count, plural, one {# wymaga Twojej uwagi} few {# wymagają Twojej uwagi} many {# wymaga Twojej uwagi} other {# wymaga Twojej uwagi}}"
       },
       "empty": "Brak zadań wymagających uwagi. Tutaj trafiają wyniki od Twoich agentów.",
       "tabs": {
@@ -7765,7 +7795,9 @@
         "signal": "Utworzono sygnał",
         "kpi": "Zmieniono KPI",
         "watch_rule": "Reguła monitorowania",
-        "brand_added": "Dodano markę"
+        "brand_added": "Dodano markę",
+        "page_published": "Strona opublikowana",
+        "catalog_synced": "Katalog zsynchronizowany"
       },
       "daily": "Codziennie o {time}",
       "weekdays": "W dni robocze o {time}",
@@ -7780,13 +7812,17 @@
       "kpiAny": "Wskaźnik KPI",
       "watchRule": "Reguła monitorowania",
       "brandAdded": "Po dodaniu marki",
+      "pagePublished": "Gdy strona zostanie opublikowana",
+      "catalogSynced": "Gdy katalog zostanie zsynchronizowany",
       "manualOnly": "Tylko ręcznie",
       "more": "+{count}",
       "firesWhen": {
         "signal": "Uruchamia się, gdy Centrum akcji znajdzie pasujący sygnał",
         "kpi": "Uruchamia się, gdy KPI przekroczy wartość progową",
         "watch_rule": "Uruchamia się, gdy zadziała powiązana reguła monitorowania",
-        "brand_added": "Uruchamia się jednorazowo dla każdej marki dodanej do obszaru roboczego"
+        "brand_added": "Uruchamia się jednorazowo dla każdej marki dodanej do obszaru roboczego",
+        "page_published": "Uruchamia się raz dla każdej strony, która trafia na żywo w CMS marki",
+        "catalog_synced": "Uruchamia się raz dla każdej synchronizacji katalogu, która zmienia produkty"
       },
       "timeZone": "Strefa czasowa: {zone}",
       "off": "Wył. · nie uruchamia się",
@@ -7886,6 +7922,8 @@
         "trigger": "Wyzwalacz",
         "signal": "Sygnał",
         "slot": "Zaplanowano na",
+        "page": "Strona opublikowana",
+        "catalog": "Źródło katalogu zsynchronizowane",
         "earlier": "Wcześniejsze uruchomienia",
         "action": "Działanie"
       },
@@ -7927,6 +7965,8 @@
       "kpi": "Zmiana KPI",
       "watch_rule": "Reguła monitorowania",
       "brand_added": "Dodano markę",
+      "page_published": "Strona opublikowana",
+      "catalog_synced": "Katalog zsynchronizowany",
       "manual": "Ręcznie",
       "action": "Uruchom agenta z akcji",
       "agent": "Wywołany przez innego agenta"
@@ -8002,8 +8042,11 @@
       "seasonal": "Prompty sezonowe",
       "traffic": "Ruch i rejestracje z AI",
       "ai-revenue": "Klienci i przychody z AI",
+      "feed-advisor": "Luki w feedzie produktowym",
+      "tech-fix": "Poprawki crawlerów i techniczne",
       "earn-or-pay": "Zarabiaj lub płać",
       "ad-drafts": "Wersje robocze reklam",
+      "paid-overlap": "Nakładanie się płatnych działań",
       "operator": "Operator AEO"
     },
     "form": {
@@ -8070,7 +8113,9 @@
           "signal": "Utworzono sygnał",
           "kpi": "Zmieniono KPI",
           "watch_rule": "Reguła obserwacji",
-          "brand_added": "Po dodaniu marki"
+          "brand_added": "Po dodaniu marki",
+          "page_published": "Gdy strona zostanie opublikowana",
+          "catalog_synced": "Gdy katalog zostanie zsynchronizowany"
         },
         "notes": {
           "manual": "Uruchamiaj z poziomu czatu lub akcji",
@@ -8078,7 +8123,9 @@
           "signal": "Nowy sygnał w Centrum akcji",
           "kpi": "Wskaźnik KPI przekracza próg",
           "watch_rule": "KIEDY · DLA · WTEDY",
-          "brand_added": "Raz na nową markę · wymaga opcji Wszystkie marki"
+          "brand_added": "Raz na nową markę · wymaga opcji Wszystkie marki",
+          "page_published": "Raz dla każdej strony opublikowanej w Twoim CMS",
+          "catalog_synced": "Raz dla każdej synchronizacji, która zmienia produkty"
         },
         "watchRuleNone": "Ustaw w regule monitorowania: jej warunek WTEDY uruchamia agenta",
         "list": "Wyzwalacze",
@@ -8142,6 +8189,8 @@
         },
         "watchRuleWhen": "Gdy zadziała reguła monitorowania",
         "brandAddedWhen": "gdy marka zostanie dodana do przestrzeni roboczej, raz na markę",
+        "pagePublishedWhen": "strona zostaje opublikowana w CMS marki, raz dla każdej strony",
+        "catalogSyncedWhen": "synchronizacja katalogu produktów marki zmienia produkty, raz dla każdej synchronizacji",
         "runAgent": "Uruchom agenta"
       },
       "scope": {
@@ -8608,7 +8657,7 @@
       },
       "paid-opportunity": {
         "name": "Płatne możliwości",
-        "description": "W każdym tygodniu wskazuje, które Prompty zakupowe pozyskiwać treściami, a za które płacić, oznacza zmiany (np. gdy konkurent płaci za Twoją nazwę) i tworzy wersje robocze reklam w Ansvisor."
+        "description": "Co tydzień wskazuje, które Prompty zakupowe pozyskiwać treściami, a za które płacić, oznacza zmiany (np. gdy konkurent promuje się na Twoją markę), pokazuje wydatki w Google tam, gdzie AI już Cię cytuje, oraz tworzy wersje robocze reklam w Ansvisor."
       },
       "ai-ads-watch": {
         "name": "Monitor reklam AI",
@@ -15395,7 +15444,14 @@
       "sov": "Płatny SoV",
       "sovNote": "Reklamy sponsorowane w odpowiedziach AI nie są jeszcze rejestrowane",
       "cost": "Koszt rejestracji wspomaganej przez AI",
-      "costNote": "Wymaga połączonego konta reklamowego",
+      "costNote": "Wymaga połączenia konta reklamowego i odczytania danych w Połączeniach",
+      "costOf": "Wydatki na reklamy: {spend} ÷ {count, plural, one {# rejestracja ze wsparciem AI} few {# rejestracje ze wsparciem AI} many {# rejestracji ze wsparciem AI} other {# rejestracji ze wsparciem AI}}",
+      "costSpend": "Wydatki na reklamy w tym okresie: {spend}",
+      "costNoSignups": "Brak rejestracji do tej pory",
+      "costNoSpend": "Brak wydatków na reklamy",
+      "costNoSpendNote": "Połączone konta reklamowe nic nie wydały w tym okresie",
+      "costCurrencies": "Kilka walut",
+      "costCurrenciesNote": "Wydatki na reklamy: {spend}: kwoty w różnych walutach nie są sumowane, więc nie ma jednolitego kosztu rejestracji",
       "signups": "{count, plural, one {# rejestracja wspomagana przez AI} few {# rejestracje wspomagane przez AI} many {# rejestracji wspomaganych przez AI} other {# rejestracji wspomaganych przez AI}} w tym okresie",
       "signupsNotMeasured": "Rejestracje wspomagane przez AI: niemierzone",
       "barTitle": "Organiczne lub płatne · {count, plural, one {# prompt} few {# prompty} many {# promptów} other {# promptów}}",
@@ -15404,7 +15460,11 @@
       "earnedPaid": "Organiczne + płatne",
       "paidOnly": "Tylko płatne",
       "neither": "Żadne",
-      "paidNotMeasured": "Wyniki płatne nie są jeszcze mierzone, więc pasek pokazuje tylko organiczne i żadne.",
+      "paidNotMeasured": "Działania płatne nie są mierzone do momentu połączenia i odczytania konta Google Ads, więc wykres pokazuje tylko ruch bezpłatny i brak danych.",
+      "spendOverlap": "Wydano w Google na Prompty, w których AI już Cię cytuje: {amount}",
+      "spendMatched": "Na wszystkie śledzone Prompty: {amount}",
+      "spendUnmatched": "Na wyszukiwane hasła niedopasowane do żadnego śledzonego Promptu: {amount}",
+      "spendNote": "Na podstawie wyszukiwanych haseł w Google Ads. Wydatki na ChatGPT Ads są widoczne w Kampaniach: nie wskazują, przy którym pytaniu wyświetliła się reklama.",
       "openPrompts": "Zobacz {count, plural, one {# otwarty prompt} few {# otwarte prompty} many {# otwartych promptów} other {# otwartych promptów}}",
       "locked": "{count, plural, one {# dodatkowy prompt} few {# dodatkowe prompty} many {# dodatkowych promptów} other {# dodatkowych promptów}} w Szansach {count, plural, one {jest dostępny} few {są dostępne} many {jest dostępnych} other {jest dostępnych}} od planu {plan}.",
       "openSov": "Kto płaci za dany prompt"
@@ -15481,7 +15541,7 @@
         "volume_at_least": "{volume} wyszukiwań w Google miesięcznie, co najmniej {threshold}",
         "volume_below": "{volume} wyszukiwań w Google miesięcznie, poniżej {threshold}",
         "volume_not_measured": "Wyszukiwania w Google nie są jeszcze mierzone",
-        "paid_not_measured": "To, kto płaci, nie jest jeszcze mierzone",
+        "paid_not_measured": "{wePay, select, false {To, czy konkurenci płacą za reklamy, nie jest jeszcze mierzone} other {To, kto płaci za reklamy, nie jest jeszcze mierzone}}",
         "no_ad_channel": "Żaden kanał reklamowy nie dociera do platform AI, na których jest śledzony"
       },
       "answers": "Co AI odpowiada dzisiaj",
@@ -15491,6 +15551,13 @@
       "cites": "Cytuje: {domains}",
       "fanOuts": "Zapytania fan-out",
       "keywords": "Słowa kluczowe źródłowe",
+      "paid": {
+        "title": "Twoje reklamy Google dla tego Promptu",
+        "spend": "{amount} za {clicks, plural, one {# kliknięcie} few {# kliknięcia} many {# kliknięć} other {# kliknięć}} w tym okresie",
+        "terms": "Dopasowano {count, plural, one {# wyszukiwane hasło} few {# wyszukiwane hasła} many {# wyszukiwanych haseł} other {# wyszukiwanych haseł}}, od najdroższych:",
+        "none": "Brak dopasowanych wydatków na reklamy Google w tym okresie.",
+        "note": "Wyszukiwane hasła są dopasowywane do Promptu na podstawie słów. Wydatki na ChatGPT Ads nie są dopasowywane: nie wskazują, przy którym pytaniu wyświetliła się reklama."
+      },
       "failed": "Nie udało się odczytać odpowiedzi. Zamknij to i otwórz ponownie.",
       "earn": {
         "title": "Earn · popraw odpowiedź",
@@ -15565,14 +15632,31 @@
         "channel": "Kanał",
         "status": "Status",
         "spend": "Wydatki",
-        "signups": "Rejestracje wspomagane przez AI",
-        "cost": "Koszt rejestracji"
+        "clicks": "Kliknięcia",
+        "cpc": "CPC",
+        "conversions": "Konwersje",
+        "costPerConversion": "Koszt konwersji"
       },
-      "empty": "Połącz konto reklamowe · wkrótce",
-      "emptyNote": "Twoje kampanie pojawią się tutaj, początkowo w trybie tylko do odczytu.",
+      "channels": {
+        "google": "Google Ads",
+        "chatgpt": "ChatGPT Ads"
+      },
+      "statuses": {
+        "active": "Aktywna",
+        "paused": "Wstrzymana",
+        "ended": "Zakończona"
+      },
+      "empty": "Brak połączonego konta reklamowego",
+      "emptyNote": "Połącz Google Ads lub ChatGPT Ads, aby przeglądać tutaj swoje kampanie w trybie tylko do odczytu.",
+      "openConnections": "Otwórz połączenia",
+      "failed": "Nie udało się załadować kampanii. Spróbuj ponownie za chwilę.",
+      "firstRead": "Pierwsze dane pojawią się w ciągu doby od połączenia.",
+      "noneInPeriod": "W tym okresie nie prowadzono żadnej kampanii.",
+      "attention": "{count, plural, one {# konto reklamowe wymaga uwagi.} few {# konta reklamowe wymagają uwagi.} many {# kont reklamowych wymaga uwagi.} other {# konta reklamowego wymaga uwagi.}}",
+      "currencyNote": "Każda kampania jest wyświetlana w walucie swojego konta reklamowego. Dane są pobierane raz dziennie.",
       "safety": {
         "title": "Bezpieczeństwo",
-        "note": "Wymuszane przez Ansvisor, nie przez agenta. Żadne działania nie wpływają obecnie na konto reklamowe.",
+        "note": "Wymuszane przez Ansvisor, a nie przez agenta. Obecnie Ansvisor odczytuje dane z Twoich kont reklamowych wyłącznie w trybie do odczytu.",
         "click": "Każde włączenie, wstrzymanie, zmiana budżetu lub stawki wymaga kliknięcia i potwierdzenia przez człowieka, w każdym trybie.",
         "agents": "Agenci nigdy nie wydają środków: agent może zaproponować zmianę, a wprowadzić może ją tylko człowiek.",
         "cap": "Administratorzy ustalają miesięczny limit dla każdego kanału. Zmiana przekraczająca limit jest blokowana z uwzględnieniem zmian z ostatnich 24 godzin.",
@@ -15580,7 +15664,6 @@
       }
     },
     "connections": {
-      "soon": "Wkrótce",
       "later": "W późniejszym terminie",
       "notify": "Powiadom mnie",
       "notified": "Powiadomimy Cię",
@@ -15594,6 +15677,79 @@
       },
       "manage": "Zarządzaj",
       "connect": "Połącz",
+      "adminConnects": "Administrator musi to połączyć",
+      "accountStatus": {
+        "active": "Połączono",
+        "error": "Wymaga uwagi",
+        "disconnected": "Rozłączono"
+      },
+      "sync": {
+        "syncedAt": "Dane pobrano: {when}",
+        "pending": "Pierwszy odczyt w ciągu doby: ostatnie 90 dni",
+        "error": {
+          "key_refused": "ChatGPT Ads odrzuciło klucz. Wklej nowy klucz.",
+          "key_missing": "Klucz wygasł lub został usunięty. Połącz konto ponownie.",
+          "signin_gone": "Sesja logowania Google Ads wygasła. Połącz Google Ads ponownie.",
+          "upstream": "Platforma reklamowa nie odpowiada. Ansvisor spróbuje ponownie w ciągu doby.",
+          "failed": "Nie udało się pobrać danych. Ansvisor spróbuje ponownie w ciągu doby."
+        }
+      },
+      "chatgpt": {
+        "connect": "Połącz",
+        "addAnother": "Dodaj konto",
+        "dialogTitle": "Połącz ChatGPT Ads",
+        "dialogLine": "Wklej klucz Ads API z ChatGPT Ads Menedżer. Każdy klucz obsługuje jedno konto reklamowe, więc dodaj jeden klucz na konto.",
+        "keyLabel": "Klucz Ads API",
+        "keyNote": "Ansvisor weryfikuje klucz w ChatGPT Ads, a następnie zapisuje go w postaci zaszyfrowanej. Służy wyłącznie do odczytu.",
+        "cancel": "Anuluj",
+        "save": "Połącz",
+        "checking": "Sprawdzanie…",
+        "connectedToast": "Połączono konto {name}.",
+        "accountLine": "Konto ChatGPT Ads · {currency}",
+        "accountLineNoCurrency": "Konto ChatGPT Ads",
+        "billing": "ChatGPT Ads Menedżer",
+        "error": {
+          "invalid_key": "ChatGPT Ads nie zaakceptowało tego klucza. Sprawdź go i spróbuj ponownie.",
+          "upstream": "ChatGPT Ads nie odpowiada. Spróbuj ponownie za minutę.",
+          "other": "Nie udało się połączyć. Spróbuj ponownie."
+        }
+      },
+      "google": {
+        "name": "Google Ads",
+        "connect": "Połącz",
+        "addAnother": "Dodaj konto",
+        "billing": "Google Ads",
+        "pickTitle": "Wybierz konta Google Ads",
+        "pickLine": "To są konta powiązane z Twoim logowaniem Google. Ansvisor odczytuje tylko wybrane konta; nigdy nie modyfikuje kampanii ani budżetu.",
+        "noCustomers": "To logowanie Google nie ma dostępu do żadnego konta Google Ads. Zaloguj się na konto Google, które zarządza Twoimi reklamami.",
+        "unnamed": "Konto bez nazwy",
+        "more": "{count, plural, one {Jeszcze # konto nie jest wyświetlane.} few {Jeszcze # konta nie są wyświetlane.} many {Jeszcze # kont nie jest wyświetlanych.} other {Jeszcze # konta nie jest wyświetlane.}}",
+        "why": {
+          "connected": "Połączono",
+          "manager": "Konto menedżera",
+          "unavailable": "Niedostępne",
+          "test": "Konto testowe"
+        },
+        "cancel": "Anuluj",
+        "save": "{count, plural, =0 {Połącz} one {Połącz # konto} few {Połącz # konta} many {Połącz # kont} other {Połącz # konta}}",
+        "connectedToast": "{count, plural, one {Połączono # konto Google Ads.} few {Połączono # konta Google Ads.} many {Połączono # kont Google Ads.} other {Połączono # konta Google Ads.}}",
+        "error": {
+          "not_configured": "Google Ads nie jest jeszcze skonfigurowane na tym serwerze.",
+          "not_connected": "Najpierw zaloguj się do Google Ads, a następnie spróbuj ponownie.",
+          "not_accessible": "To logowanie Google nie ma już dostępu do tego konta. Zamknij i połącz ponownie.",
+          "manager_account": "Konto menedżera nie zawiera własnych kampanii. Wybierz konta podrzędne.",
+          "upstream": "Google Ads nie odpowiada. Spróbuj ponownie za chwilę.",
+          "other": "Nie udało się połączyć. Spróbuj ponownie."
+        }
+      },
+      "account": {
+        "disconnect": "Odłącz",
+        "disconnectTitle": "Odłączyć {name}?",
+        "disconnectLine": "Ansvisor usuwa dane przechowywane dla tego konta: jego klucz (jeśli istnieje) oraz odczytane dane liczbowe. Twoje reklamy nadal działają w {billing}.",
+        "disconnectedToast": "Odłączono {name}.",
+        "disconnectFailed": "Nie udało się odłączyć. Spróbuj ponownie.",
+        "cancel": "Anuluj"
+      },
       "platforms": {
         "chatgpt": {
           "name": "ChatGPT Ads",
@@ -15628,6 +15784,31 @@
     }
   },
   "prompts": {
+    "bulkPlatforms": {
+      "bulkButton": "Platformy",
+      "bulkAdd": "Dodaj platformy",
+      "bulkRemove": "Usuń platformy",
+      "modes": "Dodaj lub usuń",
+      "modeAdd": "Dodaj",
+      "modeRemove": "Usuń",
+      "platforms": "Platformy",
+      "title": "Dodaj platformy",
+      "lead": "Śledź wybrane Prompts ({count}) na większej liczbie platform. Każda lokalizacja Prompta zajmuje jeden slot śledzenia na każdej platformie. Platforma, na którą Prompt czeka, zostanie uruchomiona ponownie.",
+      "removeTitle": "Usuń platformy",
+      "removeLead": "Zatrzymaj śledzenie wybranych Prompts ({count}) na wybranych platformach. Ich sloty znów będą wolne.",
+      "none": "Brak platform do dodania. Dodaj sloty śledzenia w Ustawienia › Płatności, aby śledzić na większej liczbie platform.",
+      "removeNone": "Wybrane Prompts nie działają na żadnej platformie, którą można usunąć.",
+      "free": "Wolne: {count}",
+      "previewAdd": "{count, plural, one {# Prompt zostanie zmieniony} few {# Prompts zostaną zmienione} many {# Prompts zostanie zmienionych} other {# Prompts zostanie zmienionych}} · {unchanged} już je ma",
+      "previewRemove": "{count, plural, one {# Prompt zostanie zmieniony} few {# Prompts zostaną zmienione} many {# Prompts zostanie zmienionych} other {# Prompts zostanie zmienionych}} · {unchanged} ich nie ma · {blocked} nie miałoby żadnej platformy",
+      "short": "{platform} potrzebuje slotów: {needed}, a wolnych jest {free}.",
+      "addSlots": "Dodaj sloty",
+      "save": "Dodaj do {count, plural, one {# Prompta} few {# Prompts} many {# Prompts} other {# Prompts}}",
+      "removeSave": "Usuń z {count, plural, one {# Prompta} few {# Prompts} many {# Prompts} other {# Prompts}}",
+      "done": "{count, plural, one {Dodano platformy do # Prompta} few {Dodano platformy do # Prompts} many {Dodano platformy do # Prompts} other {Dodano platformy do # Prompts}}",
+      "removed": "{count, plural, one {Usunięto platformy z # Prompta} few {Usunięto platformy z # Prompts} many {Usunięto platformy z # Prompts} other {Usunięto platformy z # Prompts}}",
+      "saveFailed": "Nie udało się zmienić platform. Spróbuj ponownie."
+    },
     "waiting": {
       "resultTitle": "Dodano: {added}, oczekuje na miejsce: {waiting}",
       "savedTitle": "{count, plural, one {Zapisano, ale jeszcze nie jest monitorowany} few {Zapisano # Prompty, ale jeszcze nie są monitorowane} many {Zapisano # Promptów, ale jeszcze nie są monitorowane} other {Zapisano # Promptów, ale jeszcze nie są monitorowane}}",
@@ -16011,6 +16192,13 @@
       "bulkTitle": "{count, plural, one {Rozpocznij śledzenie wybranego promptu bez odpowiedzi} few {Rozpocznij śledzenie # wybranych promptów bez odpowiedzi} many {Rozpocznij śledzenie # wybranych promptów bez odpowiedzi} other {Rozpocznij śledzenie # wybranego promptu bez odpowiedzi}}"
     },
     "usage": {
+      "slots": {
+        "title": "Sloty śledzenia",
+        "add": "Dodaj sloty",
+        "usage": "{used} / {limit}",
+        "unlimited": "{used} · bez limitu",
+        "meter": "Wykorzystane sloty: {platform}"
+      },
       "panelLabel": "Użycie promptów",
       "planAndUsage": "Plan i użycie",
       "hide": "Ukryj",
@@ -16093,7 +16281,7 @@
       "enginesLegend": "Kolorowe: udostępnione wyszukiwania dla tego promptu w tym okresie. Wyszarzone: monitorowane, ale nie udostępniono żadnych.",
       "engineEmptyTitle": "Brak wyszukiwań z {engine} w {range}",
       "engineEmptyBody": "{engine} zazwyczaj udostępnia wyszukiwania stojące za odpowiedziami. Wypróbuj dłuższy zakres dat.",
-      "sourceNote": "Perplexity nie jest już monitorowane, a Microsoft Copilot nie udostępnia swoich wyszukiwań, więc pochodzą one tylko z ChatGPT, który udostępnia je w niektóre dni. Jest ich mniej niż wcześniej.",
+      "sourceNote": "Perplexity nie jest już śledzone, a Bing AI Mode nie udostępnia swoich wyszukiwań, więc pochodzą one tylko z ChatGPT, który udostępnia je w niektóre dni. Jest ich mniej niż wcześniej.",
       "emptyTitle": "Nie zarejestrowano jeszcze fan-out",
       "emptyBody": "Wyszukiwania z ChatGPT są próbkowane w wybrane dni, a ChatGPT API udostępnia je, gdy wykonuje wyszukiwanie. Google AI Overviews, AI Mode i Gemini ich nie udostępniają. Gdy te silniki uruchomią się dla Twoich promptów, wyszukiwania pojawią się tutaj.",
       "coverageTooltip": "Spośród {total} monitorowanych odpowiedzi w tym okresie, {withFanout} zawierało wyszukiwania wykonane przez silnik. Wyszukiwania z ChatGPT są próbkowane w wybrane dni, a ChatGPT API udostępnia je, gdy wykonuje wyszukiwanie."
@@ -18248,24 +18436,139 @@
       }
     },
     "notifications": "Powiadomienia",
-    "notificationsDescription": "Każda marka może wysyłać dwie wiadomości e-mail: Daily Pulse po zakończeniu śledzenia oraz cotygodniowe podsumowanie AI Traffic w każdy poniedziałek. Obie trafiają do odbiorców Daily Pulse danej marki.",
-    "pulseSection": "Daily Pulse",
-    "pulseSectionDescription": "Krótkie podsumowanie dla każdej marki po każdym śledzeniu, z najważniejszymi wynikami i ostrzeżeniami. Wybierz, jak często ma przychodzić i kto je otrzymuje.",
-    "pulseFrequencyLabel": "Jak często przychodzi Daily Pulse marki {brand}",
+    "yourEmails": {
+      "title": "Twoje e-maile",
+      "description": "Wybierz, jakie e-maile Ansvisor ma do Ciebie wysyłać i jak często. Dotyczą tylko Ciebie: każdy członek zespołu ustawia własne.",
+      "carriedOver": "To e-maile, które otrzymujesz obecnie. Zapisz, aby zachować je jako własne ustawienia.",
+      "for": "Dla",
+      "scopeAll": "Wszystkie moje marki ({count})",
+      "deliveryHint": "E-maile o markach przychodzą osobno dla każdej marki lub razem w jednym e-mailu:",
+      "delivery_per_brand": "Jeden e-mail na markę",
+      "delivery_combined": "Wszystkie marki w jednym e-mailu (wkrótce)",
+      "brandOnly": "Ustaw tylko dla {brand}",
+      "useAll": "Użyj mojego wyboru z opcji Wszystkie moje marki",
+      "notableNote": "Twój pierwszy raport, a potem tylko wtedy, gdy wydarzy się coś istotnego.",
+      "comingSoon": "Wkrótce",
+      "comingSoonHint": "E-maile oznaczone jako Wkrótce zachowają zapisany przez Ciebie wybór i zaczną być wysyłane, gdy będą gotowe.",
+      "admins": "Administratorzy",
+      "groups": {
+        "visibility": "Widoczność marki",
+        "traffic": "Ruch z AI",
+        "actions": "Centrum działań",
+        "agents": "Agenci i czat",
+        "audit": "Audyt witryny",
+        "content": "Treści",
+        "account": "Konto"
+      },
+      "kinds": {
+        "daily_pulse": {
+          "name": "Codzienny raport",
+          "description": "Jak każda marka wypadła w odpowiedziach AI: wynik widoczności, wzmianki, cytowania, wyróżnienia i ostrzeżenia."
+        },
+        "traffic_digest": {
+          "name": "Tygodniowe podsumowanie",
+          "description": "Wizyty z AI z zeszłego tygodnia w jednej linii, z trzema największymi zmianami. W poniedziałki."
+        },
+        "critical_action": {
+          "name": "Nowe krytyczne działanie",
+          "description": "Nowe działanie o priorytecie krytycznym dla Twoich marek."
+        },
+        "due_actions": {
+          "name": "Zaległe i na dziś",
+          "description": "Działania i zadania przypisane do Ciebie, których termin jest dziś lub minął."
+        },
+        "weekly_actions": {
+          "name": "Tygodniowe podsumowanie działań",
+          "description": "Co zrobiono, co jest otwarte i co dalej. W poniedziałki."
+        },
+        "run_finished": {
+          "name": "Uruchomienie zakończone",
+          "description": "Uruchomiony przez Ciebie agent zakończył pracę, wraz z opisem tego, co zrobił."
+        },
+        "audit_finished": {
+          "name": "Audyt zakończony",
+          "description": "Zbiorczy lub zaplanowany audyt został ukończony, wraz z wynikiem."
+        },
+        "score_dropped": {
+          "name": "Spadek wyniku",
+          "description": "Wynik strony spadł o 5 punktów lub więcej od ostatniego audytu."
+        },
+        "drafts_review": {
+          "name": "Wersje robocze czekają na Twoją recenzję",
+          "description": "Wersje robocze przygotowane dla Twoich marek, które wymagają Twojej recenzji przed publikacją."
+        },
+        "ai_usage": {
+          "name": "Użycie AI",
+          "description": "Przy 80% i 100% miesięcznego limitu AI."
+        }
+      },
+      "links": {
+        "approvals": {
+          "name": "Czeka na Twoje zatwierdzenie",
+          "description": "Agent lub uruchomienie czatu potrzebuje Twojej zgody, zanim cokolwiek zmieni lub opublikuje. Ustaw to w opcji Powiadom mnie, gdy agent mnie potrzebuje.",
+          "link": "Ustawienia czatu"
+        },
+        "scheduled": {
+          "name": "Zaplanowane zadania",
+          "description": "Każde zadanie wysyła e-maile zgodnie ze swoimi ustawieniami.",
+          "link": "Otwórz zadania"
+        },
+        "billing": {
+          "name": "Rozliczenia i bezpieczeństwo",
+          "description": "Faktury, problemy z płatnościami i alerty logowania. Zawsze wysyłane.",
+          "locked": "Zawsze włączone"
+        }
+      },
+      "options": {
+        "pulse": {
+          "daily": "Codziennie",
+          "weekly": "Co tydzień",
+          "notable": "Tylko gdy istotne",
+          "off": "Wyłączone"
+        },
+        "instant": {
+          "instant": "Natychmiast",
+          "daily": "Podsumowanie dzienne",
+          "off": "Wyłączone"
+        },
+        "digest": {
+          "daily": "Podsumowanie dzienne",
+          "weekly": "Podsumowanie tygodniowe",
+          "off": "Wyłączone"
+        },
+        "weekly": {
+          "weekly": "W każdy poniedziałek",
+          "off": "Wyłączone"
+        },
+        "onoff": {
+          "on": "Włączone",
+          "off": "Wyłączone"
+        }
+      },
+      "save": "Zapisz zmiany",
+      "saved": "Twoje ustawienia e-maili zostały zapisane",
+      "saveFailed": "Nie udało się zapisać ustawień e-maili. Spróbuj ponownie.",
+      "loadFailed": "Nie udało się wczytać ustawień e-maili.",
+      "turnOffAll": "Wyłącz wszystkie opcjonalne e-maile",
+      "turnedOff": "Wszystkie opcjonalne e-maile są ustawione na Wyłączone. Zapisz zmiany, aby je zachować."
+    },
+    "outsideEmails": {
+      "title": "Wysyłaj do osób spoza przestrzeni roboczej",
+      "description": "Klient lub menedżer bez miejsca w Ansvisor może również otrzymywać podsumowania marki. Nigdy nie otrzyma e-maili z zatwierdzeniami ani dotyczących konta.",
+      "sends": "Daily Pulse · Tygodniowe podsumowanie AI Traffic",
+      "recipients": "Odbiorcy",
+      "placeholder": "klient@example.com, szef@example.com",
+      "hint": "Oddzielone przecinkami. Członkowie zespołu, którzy nie zapisali własnych ustawień e-maili, nadal otrzymują e-maile tej marki jak dotąd: wszyscy, gdy ta lista jest pusta, w przeciwnym razie tylko osoby z listy.",
+      "frequency": "Daily Pulse",
+      "frequencyNote": "Określa to także kanał Slack marki, webhooki oraz członków zespołu, którzy nie zapisali własnych ustawień.",
+      "digest": "Wysyłaj także tygodniowe podsumowanie AI Traffic",
+      "digestPulseOff": "Tygodniowe podsumowanie nie jest wysyłane, gdy Daily Pulse jest wyłączony."
+    },
     "pulseFrequency_daily": "Codziennie",
     "pulseFrequency_weekly": "Cotygodniowo",
     "pulseFrequency_notable": "Tylko ważne zdarzenia",
-    "pulseFrequency_notableNote": "Pierwszy raport natychmiast, a kolejne tylko w przypadku ważnych zdarzeń.",
     "pulseFrequency_off": "Wyłączone",
-    "pulseRecipients": "Odbiorcy",
-    "pulseRecipientsPlaceholder": "alex@example.com, sam@example.com",
-    "pulseRecipientsHint": "Adresy e-mail rozdzielone przecinkami. Pozostaw puste, aby wysyłać do każdego członka organizacji.",
     "pulseRecipientsInvalid": "Nieprawidłowy adres e-mail: {emails}. Popraw go lub usuń przed zapisaniem.",
-    "trafficDigest": "Cotygodniowe podsumowanie ruchu z AI",
-    "trafficDigestDescription": "W każdy poniedziałek: wizyty AI z zeszłego tygodnia w jednym wierszu podsumowania, z trzema największymi zmianami. Trafia do odbiorców Daily Pulse każdej marki i zapisuje się od razu po zaznaczeniu lub odznaczeniu.",
-    "trafficDigestTo": "Do: {emails}",
-    "trafficDigestToEveryone": "Do wszystkich członków organizacji",
-    "trafficDigestPulseOff": "Niewysyłane, gdy funkcja Daily Pulse jest wyłączona. Włącz ją ponownie, aby wznowić otrzymywanie.",
     "pulseSaved": "Zapisano ustawienia powiadomień",
     "pulseSaveFailed": "Nie udało się zapisać ustawień powiadomień. Spróbuj ponownie.",
     "pulseLoadFailed": "Nie udało się wczytać ustawień powiadomień.",
@@ -18290,7 +18593,6 @@
       "loading": "Wczytywanie języków…",
       "moreSoon": "Kolejne języki są w drodze.",
       "preview": "Pracownicy i wersje testowe widzą również języki bez tłumaczenia. Brakujące teksty wyświetlają się w języku angielskim.",
-      "testLanguage": "{language} · test",
       "saved": "Język został zapisany",
       "saveFailed": "Nie udało się zapisać języka. Spróbuj ponownie.",
       "suggest": {
@@ -18440,7 +18742,38 @@
     },
     "planAddOns": {
       "title": "Rozszerz swój plan",
-      "description": "Dodatkowe śledzenie, dodatkowe marki i doładowania użycia AI do planu Growth. Wszystko, co wybierzesz, zostanie pobrane jednorazowo z zapisanej karty.",
+      "slots": {
+        "title": "Kup dodatkowe kredyty śledzenia",
+        "description": "{plan} obejmuje {included} slotów na każdej standardowej platformie. Wybierz dodatkowe sloty na dowolnej platformie; możesz je zmniejszyć nawet do 0.",
+        "descriptionNone": "Wybierz dodatkowe sloty na dowolnej platformie; możesz je zmniejszyć nawet do 0.",
+        "discount": {
+          "reached": "<b>{percent}% zniżki</b> na dodatkowe śledzenie: {off} zniżki od {list} {interval, select, year {rocznie} other {miesięcznie}}.",
+          "list": "Dodatkowe śledzenie: {list} {interval, select, year {rocznie} other {miesięcznie}}.",
+          "next": "Dodaj jeszcze {more} {interval, select, year {rocznie} other {miesięcznie}}, aby otrzymać <b>{percent}% zniżki</b> na część powyżej {from}.",
+          "top": "Osiągasz najwyższy próg.",
+          "drops": "Ta zmiana obniża Twój rabat z {from}% do {to}%, więc cena za 100 slots wzrośnie.",
+          "steps": "Progi rabatu ilościowego",
+          "stepsLead": "Stawka każdego progu dotyczy tylko części powyżej niego:",
+          "step": "{percent}% rabatu powyżej {from}/{interval, select, year {rok} other {mies.}}",
+          "yours": "· Twój",
+          "nextTag": "· następny"
+        },
+        "unit": "<b>1 slot</b> = 1 Prompt śledzony w 1 lokalizacji na tej platformie, codziennie.",
+        "columns": {
+          "platform": "Platforma",
+          "included": "W Twoim planie",
+          "extra": "Dodatkowe slots",
+          "price": "Cena za 100 slots na {interval, select, year {rok} other {miesiąc}}",
+          "cost": "Twój koszt {interval, select, year {roczny} other {miesięczny}}"
+        },
+        "unlimited": "Bez limitu",
+        "fewer": "O 100 mniej slots {platform}",
+        "more": "O 100 więcej slots {platform}",
+        "extraOn": "Dodatkowe slots na platformie {platform}",
+        "was": "było {slots}",
+        "undo": "Cofnij",
+        "footer": "Ceny odzwierciedlają koszt śledzenia każdej platformy: niektóre odpowiedzi wymagają więcej pracy (na przykład Perplexity). Plan roczny: 2 miesiące za darmo."
+      },
       "tracking": {
         "title": "Dodatkowe śledzenie",
         "description": "Więcej lokalizacji Promptów, śledzonych codziennie w silnikach z Twojego planu. Jeden poziom naraz; możesz go zmienić lub usunąć w dowolnym momencie.",
@@ -18448,8 +18781,7 @@
         "none": "Brak",
         "tier": "+{units} lokalizacji Promptów",
         "price": "{price}/{interval, select, year {rok} other {mies.}}",
-        "contactSales": "Skontaktuj się z działem sprzedaży",
-        "yearly": "Ceny roczne: 2 miesiące gratis."
+        "contactSales": "Skontaktuj się z działem sprzedaży"
       },
       "brands": {
         "title": "Dodatkowe marki",
@@ -18457,7 +18789,7 @@
         "count": "{count} dodatkowe",
         "fewer": "O jedną markę mniej",
         "more": "O jedną markę więcej",
-        "note": "Nie możesz zejść poniżej liczby posiadanych marek: najpierw usuń markę w sekcji Marki."
+        "limit": "Twój plan obejmuje {base} marek. Nowy limit: <b>{limit}</b>."
       },
       "topUp": {
         "title": "Doładowanie użycia AI",
@@ -18466,10 +18798,12 @@
         "label": "Doładowania użycia AI",
         "none": "Brak",
         "option": "+{multiplier}x",
-        "adds": "{multiplier}× użycia AI z tego miesiąca · +{briefs} briefów · +{opportunities} okazji"
+        "usage": "{multiplier}x użycia AI",
+        "adds": "{multiplier}× użycia AI z tego miesiąca · +{briefs} briefów · +{opportunities} okazji",
+        "alsoAdds": "Dodaje też +{briefs} briefów i +{opportunities} szans w tym miesiącu.",
+        "once": "{price} jednorazowo"
       },
       "summary": "{prompts} lokalizacji Promptów · {brands} marek",
-      "nothing": "Wybierz powyżej, co zmienić.",
       "review": "Sprawdź i zapłać",
       "reviewing": "Sprawdzanie ceny…",
       "dialog": {
@@ -18480,20 +18814,25 @@
         "brands": "{count, plural, =0 {Brak dodatkowych marek} one {# dodatkowa marka} few {# dodatkowe marki} many {# dodatkowych marek} other {# dodatkowej marki}}",
         "topUp": "Doładowanie użycia AI +{multiplier}x, jedna płatność",
         "dueToday": "Do zapłaty dzisiaj",
-        "dueTodayNote": "Reszta bieżącego okresu za dodatkowe śledzenie i marki oraz doładowanie w całości.",
+        "dueTodayNote": "Pozostała część tego okresu za slots, dodatkowe śledzenie i marki oraz pełna kwota doładowania.",
+        "slots": "Slots {platform}",
+        "slotsValue": "{slots} (+{extra} dodano)",
+        "volumeDiscount": "Rabat ilościowy ({percent}%)",
+        "discountValue": "−{off} na {interval, select, year {rok} other {miesiąc}}",
         "total": "Od następnego odnowienia",
         "totalValue": "{price} {interval, select, year {rocznie} other {miesięcznie}}",
-        "credit": "Niższy poziom lub mniej marek oznacza środki do wykorzystania na kolejnych fakturach.",
+        "credit": "Mniej slots, niższy poziom lub mniej marek oznacza środki do wykorzystania na kolejnych fakturach.",
         "pay": "Zapłać {price}",
         "confirm": "Potwierdź",
         "cancel": "Anuluj",
-        "processing": "Przetwarzanie…"
+        "processing": "Przetwarzanie…",
+        "slotsWaiting": "{platform}: najnowsze lokalizacje Promptów ({count}) będą czekać na slot. Nic nie zostanie usunięte; dodaj slots ponownie, aby je śledzić."
       },
       "done": "Twoje dodatki zostały zaktualizowane. Doładowanie zostanie naliczone zaraz po potwierdzeniu płatności.",
       "states": {
         "not_admin": "Dodatki mogą zmieniać tylko administratorzy. Skontaktuj się z administratorem swojego workspace'u.",
         "starter": "Dodatki są dostępne w planie Growth. Przejdź na Growth, aby dodać śledzenie, marki i zużycie AI.",
-        "enterprise": "Twoje limity określa umowa. Skontaktuj się ze swoim opiekunem konta, aby uzyskać więcej.",
+        "enterprise": "Pozostałe limity określa Twoja umowa. Skontaktuj się z opiekunem konta, aby uzyskać więcej.",
         "trial": "Dodatki można kupić po rozpoczęciu planu.",
         "no_plan": "Dodatki można kupić, gdy Twój plan jest aktywny.",
         "ending": "Twój plan wkrótce się zakończy. Zachowaj plan, aby zmieniać jego dodatki."
@@ -18511,7 +18850,23 @@
         "payment_failed": "Płatność nie powiodła się.",
         "failed": "Nie udało się zmienić dodatków. Spróbuj ponownie."
       },
-      "readFailed": "Nie udało się odczytać dodatków. Spróbuj ponownie później."
+      "readFailed": "Nie udało się odczytać dodatków. Spróbuj ponownie później.",
+      "perInterval": "{price}/{interval, select, year {rok} other {mies.}}",
+      "cart": {
+        "title": "Twoje dodatki",
+        "onePayment": "Jedna płatność",
+        "plan": "Plan {plan}",
+        "slots": "Dodatkowe śledzenie {platform}",
+        "slotsCount": "{slots} slots",
+        "remove": "Usuń: {item}",
+        "discount": "Rabat ilościowy {percent}% na dodatkowe śledzenie, uwzględniony w cenach powyżej.",
+        "discountDrops": "Twój rabat ilościowy spada z {from}% do {to}%, więc ceny powyżej wzrosną.",
+        "brands": "{count, plural, one {# marka} few {# marki} many {# marek} other {# marki}} · {price} za sztukę",
+        "topUp": "{multiplier}x użycia AI · do {date}",
+        "total": "{interval, select, year {Suma roczna} other {Suma miesięczna}} od następnego odnowienia: <b>{price}</b>",
+        "undoAll": "Cofnij wszystkie zmiany",
+        "dueToday": "Do zapłaty dziś: dodane pozycje za pozostałą część bieżącego okresu, widoczne w kroku Przejrzyj i zapłać."
+      }
     },
     "cancelsOn": "Subskrypcja kończy się {date}",
     "changePlan": "Zmień plan",

@@ -8,6 +8,7 @@ import {
   Pause,
   Play,
   Radar,
+  Layers,
   Tags,
   Trash2,
   X,
@@ -47,6 +48,8 @@ export function BulkActionBar({
   onRemoveLocations,
   onAddTags,
   onRemoveTags,
+  onAddPlatforms,
+  onRemovePlatforms,
   onDelete,
   onClear,
 }: {
@@ -75,12 +78,16 @@ export function BulkActionBar({
   /** Open the tags dialog on the selection, to add or to remove some. */
   onAddTags: () => void;
   onRemoveTags: () => void;
+  /** Open the platforms dialog on the selection (00564); undefined hides it. */
+  onAddPlatforms?: () => void;
+  onRemovePlatforms?: () => void;
   onDelete: () => void;
   onClear: () => void;
 }) {
   const t = useTranslations('prompts.bulkDelete');
   const tLocations = useTranslations('prompts.addLocations');
   const tTags = useTranslations('prompts.bulkTags');
+  const tPlatforms = useTranslations('prompts.bulkPlatforms');
   const tTrack = useTranslations('prompts.trackNow');
   const pausedCount = count - activeCount;
   const progress = deleting && (
@@ -173,6 +180,24 @@ export function BulkActionBar({
             <DropdownMenuItem onClick={onRemoveTags}>{tTags('bulkRemove')}</DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
+        {onAddPlatforms && onRemovePlatforms && (
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              render={<Button variant="outline" size="sm" className="h-7 gap-1.5 text-xs" />}
+              disabled={busy}
+            >
+              <Layers className="h-3 w-3" />
+              {tPlatforms('bulkButton')}
+              <ChevronDown className="h-3 w-3" />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-44">
+              <DropdownMenuItem onClick={onAddPlatforms}>{tPlatforms('bulkAdd')}</DropdownMenuItem>
+              <DropdownMenuItem onClick={onRemovePlatforms}>
+                {tPlatforms('bulkRemove')}
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
         {suggestBlockedReason && !suggesting && (
           <span className="px-1 text-[11px] text-muted-foreground">{suggestBlockedReason}</span>
         )}

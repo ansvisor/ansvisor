@@ -47,7 +47,36 @@ const VIEW: PlanAddOnsView = {
     { multiplier: 10, priceCents: 6900, briefs: 100, opportunities: 100 },
   ],
   renewsOn: '2026-11-29T10:00:00.000Z',
+  planId: 'growth',
+  planPriceCents: 24900,
+  slots: null,
 };
+
+const SLOTS: NonNullable<PlanAddOnsView['slots']> = {
+  state: 'open',
+  platforms: [
+    {
+      id: 'chatgpt-web',
+      group: 'standard',
+      unitCents: 1500,
+      unitSlots: 100,
+      included: 250,
+      units: 0,
+      inUse: 120,
+    },
+    {
+      id: 'claude-web',
+      group: 'signed_in',
+      unitCents: 6000,
+      unitSlots: 100,
+      included: 0,
+      units: 0,
+      inUse: 0,
+    },
+  ],
+};
+
+const SLOTS_PRICE = { listCents: 0, percentOff: 0, discountCents: 0, next: null };
 
 let container: HTMLDivElement;
 let root: Root;
@@ -92,13 +121,13 @@ describe('the add-ons card', () => {
   it('lists the tiers with None and Contact sales, the brands and the top-ups', async () => {
     await render();
     const text = container.textContent ?? '';
-    expect(text).toContain('Add more to your plan');
+    expect(text).toContain('Extra brands');
     expect(text).toContain('+100 prompt locations$75/mo');
     expect(text).toContain('None');
     expect(byText('+5,000 prompt locations')?.getAttribute('href')).toContain('contact');
     expect(text).toContain('$25 a month per brand');
     expect(text).toContain('until your plan renews on Nov 29, 2026');
-    expect(text).toContain('+10x');
+    expect(text).toContain('10x AI usage');
   });
 
   it('reviews the whole cart with Stripe’s figures, then pays it once', async () => {
@@ -111,14 +140,17 @@ describe('the add-ons card', () => {
       currency: 'usd',
       interval: 'month',
       prorationDate: 1_800_000_000,
+      slots: {},
+      slotsPrice: SLOTS_PRICE,
+      slotsWaiting: [],
     });
     api.apply.mockResolvedValue({ ok: true, changed: true, limits: { prompts: 1200, brands: 7 } });
     await render();
     await click(byText('+1,000 prompt locations'));
     for (let i = 0; i < 3; i++)
       await click(document.querySelector<HTMLElement>('[aria-label="One brand more"]')!);
-    await click(byText('+10x'));
-    expect(container.textContent).toContain('1,200 prompt locations · 7 brands');
+    await click(byText('10x AI usage'));
+    expect(container.textContent).toContain('Monthly total from the next renewal $983/mo');
 
     await click(byText('Review and pay'));
     expect(api.preview).toHaveBeenCalledWith({ trackingUnits: 1000, extraBrands: 3, topUp: 10 });
@@ -183,6 +215,110 @@ describe('the add-ons card', () => {
     window.history.replaceState(null, '', '/dashboard/settings/billing?add=tracking');
     await render({ state: 'not_admin', current: { trackingUnits: 100, extraBrands: 0 } });
     expect(byText('+1,000 prompt locations')?.getAttribute('aria-checked')).not.toBe('true');
+  });
+
+  it('sells tracking slots in a table, with the volume discount worked out as you pick', async () => {
+    await render({ slots: SLOTS });
+    const text = () => container.textContent ?? '';
+    expect(text()).toContain('Buy extra tracking credits');
+    expect(text()).toContain('Growth includes 250 slots on each standard platform.');
+    expect(text()).toContain('In your plan');
+    expect(text()).toContain('Extra tracking: $0 a month. Add $500 more a month for 5% off');
+
+    const more = document.querySelector<HTMLElement>('[aria-label="100 more Claude slots"]')!;
+    for (let i = 0; i < 9; i++) await click(more);
+    // $540: 5% of the $40 above $500 is $2, 0.37%.
+    expect(text()).toContain('0.37% off your extra tracking: $2 off $540 a month.');
+    expect(text()).toContain('Add $460 more a month for 10% off the part above $1,000.');
+    // The cart: what the plan will have, and the monthly total.
+    const cart = document.querySelector('[data-slot="add-ons-cart"]')!.textContent ?? '';
+    expect(cart).toContain('Growth plan$249/mo');
+    expect(cart).toContain('Claude extra tracking900 slots');
+    expect(cart).toContain('$538/mo');
+    expect(cart).toContain('Monthly total from the next renewal $787/mo');
+
+    api.preview.mockResolvedValue({
+      ok: true,
+      changed: true,
+      limits: { prompts: 200, brands: 4 },
+      slots: { 'chatgpt-web': 250, 'claude-web': 900 },
+      slotsPrice: { listCents: 54000, percentOff: 0.37, discountCents: 200, next: null },
+      slotsWaiting: [],
+      dueTodayCents: 30000,
+      totalCents: 78700,
+      currency: 'usd',
+      interval: 'month',
+      prorationDate: 1_800_000_000,
+    });
+    await click(byText('Review and pay'));
+    expect(api.preview).toHaveBeenCalledWith({
+      trackingUnits: 0,
+      extraBrands: 0,
+      topUp: 0,
+      slots: { 'chatgpt-web': 0, 'claude-web': 9 },
+    });
+    const dialog = document.body.textContent ?? '';
+    expect(dialog).toContain('Claude slots900 (+900 added)');
+    expect(dialog).toContain('Volume discount (0.37%)−$2 a month');
+  });
+
+  it('takes a platform out of the cart with ×, and undoes everything', async () => {
+    await render({ slots: { ...SLOTS, platforms: [{ ...SLOTS.platforms[1], units: 3 }] } });
+    const cart = () => document.querySelector('[data-slot="add-ons-cart"]')!.textContent ?? '';
+    expect(cart()).toContain('Claude extra tracking300 slots');
+    await click(
+      document.querySelector<HTMLElement>('[aria-label="Remove Claude extra tracking"]')!,
+    );
+    expect(cart()).not.toContain('Claude extra tracking');
+    expect(container.textContent).toContain('was 300');
+    await click(byText('Undo all changes'));
+    expect(cart()).toContain('Claude extra tracking300 slots');
+  });
+
+  it('hides the retired tracking tiers unless the workspace holds one', async () => {
+    await render({ slots: SLOTS, tiers: [] });
+    expect(container.querySelector('[aria-label="Extra tracking tiers"]')).toBeNull();
+  });
+
+  it('keeps showing a retired tier to a workspace that holds one', async () => {
+    await render({ slots: SLOTS, tiers: [], current: { trackingUnits: 100, extraBrands: 0 } });
+    expect(container.querySelector('[aria-label="Extra tracking tiers"]')).not.toBeNull();
+  });
+
+  it('lets Enterprise buy slots alone', async () => {
+    await render({ state: 'enterprise', planId: 'enterprise', slots: SLOTS, tiers: [] });
+    const text = container.textContent ?? '';
+    expect(text).toContain('Buy extra tracking credits');
+    expect(text).toContain('Enterprise plan');
+    expect(text).not.toContain('Extra brands');
+    expect(text).not.toContain('AI usage top-up');
+    expect(text).not.toContain('Your contract sets');
+    await click(document.querySelector<HTMLElement>('[aria-label="100 more ChatGPT slots"]')!);
+    expect(byText('Review and pay')?.hasAttribute('disabled')).toBe(false);
+  });
+
+  it('says on Review and pay how many locations will wait when slots go below use', async () => {
+    api.preview.mockResolvedValue({
+      ok: true,
+      changed: true,
+      limits: { prompts: 200, brands: 4 },
+      slots: { 'claude-web': 200 },
+      slotsPrice: { listCents: 12000, percentOff: 0, discountCents: 0, next: null },
+      slotsWaiting: [{ platform: 'claude-web', inUse: 250, limit: 200 }],
+      dueTodayCents: 0,
+      totalCents: 36900,
+      currency: 'usd',
+      interval: 'month',
+      prorationDate: 1_800_000_000,
+    });
+    await render({
+      slots: { ...SLOTS, platforms: [{ ...SLOTS.platforms[1], units: 3, inUse: 250 }] },
+    });
+    await click(document.querySelector<HTMLElement>('[aria-label="100 fewer Claude slots"]')!);
+    await click(byText('Review and pay'));
+    expect(document.body.textContent).toContain(
+      'Claude: the newest 50 prompt locations will wait for a slot.',
+    );
   });
 
   it('says when it can’t be read', async () => {

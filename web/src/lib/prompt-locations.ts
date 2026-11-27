@@ -83,6 +83,22 @@ export async function getOrgLocationUsage(
 }
 
 /**
+ * Tracking slots used per platform across the organization (00564): each
+ * active prompt's locations on each platform it runs on. The demo brand
+ * doesn't count. Members and the server only, like the location count.
+ */
+export async function getOrgSlotUsage(
+  supabase: ServerSupabase,
+  organizationId: string,
+): Promise<Map<string, number>> {
+  const { data, error } = await supabase.rpc('org_platform_slot_usage', {
+    p_organization_id: organizationId,
+  });
+  if (error) throw new Error(error.message);
+  return new Map((data ?? []).map((row) => [row.platform, Number(row.slots)]));
+}
+
+/**
  * Locations that making these prompts active adds to the plan's count: each
  * one that is paused now brings all its locations back. Resuming is metered
  * like adding, so pausing prompts, filling their room with new ones and

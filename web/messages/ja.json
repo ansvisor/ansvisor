@@ -277,6 +277,7 @@
       "label": "ブランドはまだ追跡されていません"
     },
     "actions": {
+      "changePlatforms": "プラットフォームを変更するにはプランが必要です",
       "addPrompts": "Promptの追加にはプランが必要です",
       "removeLocations": "ロケーションの削除にはプランが必要です",
       "editPrompts": "Promptの編集にはプランが必要です",
@@ -622,6 +623,8 @@
       "slow": "通常より時間がかかっています。",
       "ready": "準備完了。Promptsを開いています…",
       "failed": "デモを準備できませんでした。接続を確認して再試行してください。",
+      "stuck": "デモの準備はできましたが、ページが開きませんでした。もう一度開くか、閉じて後でお試しください。",
+      "open": "デモを開く",
       "retry": "再試行",
       "close": "閉じる"
     }
@@ -1881,6 +1884,10 @@
         "title": "{targets} で好調なAIコンバージョン",
         "description": "これらのページは、サイト全体の平均を大きく上回る割合でAIトラフィックを主要イベントへと転換しています。"
       },
+      "paid_overlap": {
+        "title": "AIがすでにあなたを選出している{targets}でGoogle広告費が増加しています",
+        "description": "これらの購買意向のPromptの回答でAIがすでにあなたを選出していますが、その検索語句に対してGoogleに支払っている金額が直近30日より増加しています。"
+      },
       "bridge_link_gap": {
         "title": "{targets} からコンバージョンにつながるページへリンク",
         "description": "AIはこのページへ読者を誘導していますが、コンバージョンはほとんど発生していません。同じトピックでコンバージョンにつながっているページには、AIトラフィックがほとんどありません。"
@@ -2478,6 +2485,8 @@
           "task_review_withdrawn": "「元に戻す」によりレビュー待ちが取り消されました: {task}{title}",
           "cancelled": "{by} がチャットからキャンセルしました · 元に戻す",
           "reopened": "アクションが再開されました — 条件が再度発生しています",
+          "replaced": "同じ種類の新しいアクションに置き換えられました（30日間誰も取り組んでいませんでした）",
+          "replaces": "30日間誰も取り組んでいなかった同じ種類の古いアクションの代わりに作成されました",
           "signals_linked": "{count, plural, other {# 件の新しいシグナル}}をリンクしました",
           "status_changed": "ステータスが「{to}」に変更されました",
           "assigned": "担当者が変更されました",
@@ -3343,6 +3352,12 @@
         "description": "これらの情報源は、回答で自社ブランドについて言及される際に引用されており、自社ページへの参照元となる可能性があります。",
         "goal": "サードパーティでの言及を自社アセットへの引用・参照へと変えましょう。"
       },
+      "review_paid_overlap": {
+        "title": "AIがすでにあなたを選出している{targets}のGoogle広告を確認する",
+        "titleGeneric": "AIがすでにあなたを選出している箇所のGoogle広告を確認する",
+        "description": "これらの購買意向のPromptの回答でAIがすでにあなたを選出していますが、その検索語句に対するGoogle広告費が増加しています。出稿しなくても獲得できていたクリックに対しても費用を支払っている可能性があります。",
+        "goal": "広告によって追加のクリックが得られる箇所に予算を投入しつつ、AIの回答での選出を維持します。"
+      },
       "bridge_links": {
         "title": "{targets} をCVにつながるページにリンク",
         "titleGeneric": "AIが訪問したページをCVにつながるページにリンク",
@@ -3807,6 +3822,8 @@
       "prioritize_targets_target": "影響度に応じて{targets}の優先順位を設定する",
       "review_link_plan": "追加するリンクを確認する",
       "review_link_plan_target": "{targets}に追加するリンクを確認する",
+      "review_paid_overlap": "これらの検索語句のGoogle広告を確認する",
+      "review_paid_overlap_target": "{targets}のGoogle広告を確認する",
       "define_validation_baseline": "測定基準となるベースラインを記録する",
       "define_validation_baseline_target": "{targets} のベースラインを記録する",
       "create_content_brief": "コンテンツ構成案を作成する",
@@ -3918,6 +3935,7 @@
       "strengthen_entity_content": "プロフィールのとおりにブランドがページで説明されており、再取得時にも反映されている",
       "add_internal_links": "リンク元のページからリンクが設定され、再取得が完了したとき",
       "review_link_plan": "各リンクとアンカーテキストが承認または変更され、確認を行ったとき",
+      "review_paid_overlap": "各検索語句の広告について、Google Adsで維持、減額、または一時停止を行い、完了を確認したとき",
       "improve_cta_path": "ページ上のコールトゥアクション（CTA）が公開され、確認を行ったとき",
       "publish_content": "ページが指定のアドレスで公開され、取得時に応答が得られたとき",
       "fix_crawler_access": "robots.txtとページでAIクローラーへのアクセスが許可され、再取得が完了したとき",
@@ -4064,6 +4082,7 @@
         "whatHappened": "何が起きましたか？",
         "triggeredBy": "{count, plural, other {#件のシグナル}}から統合されました",
         "dismissedBecause": "却下理由: {reason}",
+        "replaced": "同じ種類の新しいアクションに置き換えられました。30日間誰もこのアクションに取り組んでいなかったため、新しい発見から新しいアクションが作成されました。",
         "readings": "終了後の測定結果: {list}",
         "reading": "{day}日目: {outcome}",
         "finalOn": "最終測定日は{day}日目です。",
@@ -4115,7 +4134,10 @@
         "actions": "アクション",
         "scorecard": "スコアカード",
         "kpis": "KPI",
-        "label": "履歴ビュー"
+        "label": "履歴ビュー",
+        "actionsHint": "進行中または完了した各アクションを1件ずつ表示します。目的と、その後に計測された結果を確認できます。",
+        "scorecardHint": "アクションの種類ごとの全体的な成果です。完了数、成功率、変化の中央値を表示します。",
+        "kpisHint": "ブランドの目標と、それぞれの達成度です。"
       },
       "scorecard": {
         "note": "各アクションタイプがこのブランドでどのような結果をもたらしたかを示します（自社のアクションのみ）。結果は現時点の数値です。各アクションが終了してから1か月後に確定します。変化の中央値は各アクションの主要指標に基づきます。",
@@ -4487,6 +4509,10 @@
       "name": "カタログソースを読み込み",
       "step": "カタログを読み込み"
     },
+    "catalogFeedGaps": {
+      "name": "フィードのギャップを読み取る",
+      "step": "商品・フィードのギャップを読み取り"
+    },
     "contentPlan": {
       "name": "コンテンツプランを読み込み",
       "step": "コンテンツプランを読み込み"
@@ -4506,6 +4532,10 @@
     "siteAuditQuota": {
       "name": "今月のサイト監査の残り回数を読み取る",
       "step": "サイト監査を読み取り"
+    },
+    "crawlerAccess": {
+      "name": "AIクローラーの問題を読み取る",
+      "step": "サイト監査・クローラーを読み取り中"
     },
     "goToPage": {
       "name": "ページに移動",
@@ -4800,6 +4830,10 @@
     "adsOpportunities": {
       "name": "広告の機会を確認",
       "step": "広告の機会を確認しました"
+    },
+    "adsPaidOverlap": {
+      "name": "有料広告の重複を確認",
+      "step": "有料広告の重複を確認中"
     },
     "adDrafts": {
       "name": "広告の下書きを保存",
@@ -6200,7 +6234,6 @@
       "home": "ホーム",
       "inbox": "受信トレイ",
       "inboxLabel": "{needsYou, plural, other {受信トレイ · #件の要対応}}",
-      "inboxLabelNeedsYou": "受信トレイ · {count, plural, other {#件のアイテム}} · {needsYou, plural, other {#件要対応}}",
       "skills": "スキル",
       "activity": "アクティビティ",
       "capabilities": "Chatでできること",
@@ -6650,10 +6683,7 @@
       "landsWithSuggestions": "エージェントの結果と日々の提案がここに届きます。",
       "nothingNeedsYou": "対応が必要な項目はありません。",
       "summary": {
-        "needsYou": "{count, plural, other {#件の対応が必要です}}",
-        "running": "{count}件実行中",
-        "doneToday": "本日完了：{count}件",
-        "suggestions": "今週の提案：{count, plural, other {#件}}"
+        "needsYou": "{count, plural, other {#件の対応が必要です}}"
       },
       "empty": "対応が必要な項目はありません。エージェントの結果がここに届きます。",
       "tabs": {
@@ -7764,7 +7794,9 @@
         "signal": "シグナル作成時",
         "kpi": "KPI変更時",
         "watch_rule": "監視ルール",
-        "brand_added": "ブランド追加時"
+        "brand_added": "ブランド追加時",
+        "page_published": "ページ公開",
+        "catalog_synced": "カタログ同期完了"
       },
       "daily": "毎日 {time}",
       "weekdays": "平日 {time}",
@@ -7779,13 +7811,17 @@
       "kpiAny": "KPI",
       "watchRule": "監視ルール",
       "brandAdded": "ブランドが追加されたとき",
+      "pagePublished": "ページが公開されたとき",
+      "catalogSynced": "カタログが同期されたとき",
       "manualOnly": "手動のみ",
       "more": "+{count}",
       "firesWhen": {
         "signal": "アクションセンターで一致するシグナルが見つかったときに実行されます",
         "kpi": "KPIがしきい値を超えたときに実行されます",
         "watch_rule": "監視ルールがトリガーされたときに実行されます",
-        "brand_added": "ワークスペースにブランドが追加されるたびに1回実行されます"
+        "brand_added": "ワークスペースにブランドが追加されるたびに1回実行されます",
+        "page_published": "ブランドのCMSで公開されたページごとに1回実行されます",
+        "catalog_synced": "商品に変更があったカタログ同期ごとに1回実行されます"
       },
       "timeZone": "{zone}時間",
       "off": "オフ · 実行されません",
@@ -7885,6 +7921,8 @@
         "trigger": "トリガー",
         "signal": "シグナル",
         "slot": "予定日時",
+        "page": "ページ公開",
+        "catalog": "カタログソース同期完了",
         "earlier": "過去のトリガー",
         "action": "アクション"
       },
@@ -7926,6 +7964,8 @@
       "kpi": "KPI変更",
       "watch_rule": "監視ルール",
       "brand_added": "ブランド追加",
+      "page_published": "ページ公開",
+      "catalog_synced": "カタログ同期完了",
       "manual": "手動",
       "action": "アクションからエージェントを実行",
       "agent": "別のエージェントから呼び出し"
@@ -8001,8 +8041,11 @@
       "seasonal": "季節性の高いPrompt",
       "traffic": "AIトラフィックと登録数",
       "ai-revenue": "AI経由の顧客と収益",
+      "feed-advisor": "ショッピングフィードのギャップ",
+      "tech-fix": "クローラーと技術面の修正",
       "earn-or-pay": "獲得または支払い",
       "ad-drafts": "広告の下書き",
+      "paid-overlap": "有料広告の重複",
       "operator": "AEO Operator"
     },
     "form": {
@@ -8069,7 +8112,9 @@
           "signal": "シグナル作成時",
           "kpi": "KPI変更時",
           "watch_rule": "監視ルール",
-          "brand_added": "ブランド追加時"
+          "brand_added": "ブランド追加時",
+          "page_published": "ページが公開されたとき",
+          "catalog_synced": "カタログが同期されたとき"
         },
         "notes": {
           "manual": "チャットまたはアクションから実行",
@@ -8077,7 +8122,9 @@
           "signal": "アクションセンターの新規シグナル",
           "kpi": "KPIがしきい値を超えたとき",
           "watch_rule": "WHEN · FOR · THEN",
-          "brand_added": "新しいブランドごとに1回 · すべてのブランドが必要"
+          "brand_added": "新しいブランドごとに1回 · すべてのブランドが必要",
+          "page_published": "CMSで公開されたページごとに1回",
+          "catalog_synced": "商品に変更があった同期ごとに1回"
         },
         "watchRuleNone": "監視ルールで設定：そのTHENでエージェントを実行します",
         "list": "トリガー",
@@ -8141,6 +8188,8 @@
         },
         "watchRuleWhen": "監視ルールが発火したとき",
         "brandAddedWhen": "ワークスペースにブランドが追加されたとき（ブランドごとに1回）",
+        "pagePublishedWhen": "ブランドのCMSでページが公開されたとき(ページごとに1回)",
+        "catalogSyncedWhen": "ブランドの商品カタログの同期で商品が変更されたとき(同期ごとに1回)",
         "runAgent": "エージェントを実行"
       },
       "scope": {
@@ -8607,7 +8656,7 @@
       },
       "paid-opportunity": {
         "name": "有料機会",
-        "description": "コンテンツで獲得すべきか、広告費を投じるべき購買Promptを毎週提示し、競合他社が自社名で出稿を始めたなどの変化を通知して、Ansvisor内で広告を下書きします。"
+        "description": "毎週、コンテンツで獲得すべきか広告を出稿すべきかの購買意向Promptを提示し、競合他社がお客様のブランド名で出稿を始めたなどの変化を通知し、AIがすでに引用している箇所でGoogleに支払っている広告費を表示して、Ansvisor内で広告の下書きを作成します。"
       },
       "ai-ads-watch": {
         "name": "AI広告ウォッチ",
@@ -15394,7 +15443,14 @@
       "sov": "ペイドSoV",
       "sovNote": "AIの回答内のスポンサー広告はまだ取得されていません",
       "cost": "AI支援による登録あたりのコスト",
-      "costNote": "広告アカウントの連携が必要です",
+      "costNote": "「連携」で広告アカウントを接続して読み込む必要があります",
+      "costOf": "広告費{spend} ÷ {count, plural, other {#件のAI経由の登録}}",
+      "costSpend": "この期間の広告費: {spend}",
+      "costNoSignups": "登録はまだありません",
+      "costNoSpend": "広告費なし",
+      "costNoSpendNote": "接続された広告アカウントはこの期間に支出がありませんでした",
+      "costCurrencies": "複数の通貨",
+      "costCurrenciesNote": "広告費{spend}: 異なる通貨の金額は合算されないため、単一の登録単価は算出されません",
       "signups": "この期間に{count, plural, other {# 件のAIアシストによる登録}}",
       "signupsNotMeasured": "AI支援による登録：未測定",
       "barTitle": "獲得または支払い · {count, plural, other {# 件のPrompt}}",
@@ -15403,7 +15459,11 @@
       "earnedPaid": "獲得 + ペイド",
       "paidOnly": "ペイドのみ",
       "neither": "どちらでもない",
-      "paidNotMeasured": "ペイドはまだ測定されていないため、バーには獲得とどちらでもないのみが表示されます。",
+      "paidNotMeasured": "Google Adsアカウントを連携して読み込むまで有料広告は測定されないため、バーにはオーガニック獲得とどちらでもないもののみが表示されます。",
+      "spendOverlap": "AIがすでに引用しているPromptに対してGoogleに支払った金額: {amount}",
+      "spendMatched": "すべてのトラッキング中Prompt: {amount}",
+      "spendUnmatched": "トラッキング中のどのPromptにも一致しない検索語句: {amount}",
+      "spendNote": "Google Adsの検索語句に基づきます。ChatGPT Adsの費用は「キャンペーン」に計上されます（どの質問に広告が表示されたかは示されません）。",
       "openPrompts": "{count, plural, other {# 件のオープンなPrompt}}を見る",
       "locked": "「機会」のさらに{count, plural, other {# 件のPrompt}}は{plan}プランに含まれています。",
       "openSov": "Promptごとの支払い者"
@@ -15480,7 +15540,7 @@
         "volume_at_least": "月間{volume}件のGoogle検索（{threshold}以上）",
         "volume_below": "月間{volume}件のGoogle検索（{threshold}未満）",
         "volume_not_measured": "Google検索数はまだ計測されていません",
-        "paid_not_measured": "広告出稿状況はまだ計測されていません",
+        "paid_not_measured": "{wePay, select, false {競合他社が広告を出稿しているかはまだ測定されていません} other {誰が出稿しているかはまだ測定されていません}}",
         "no_ad_channel": "追跡対象のAIプラットフォームにリーチできる広告チャネルがありません"
       },
       "answers": "AIによる現在の回答",
@@ -15490,6 +15550,13 @@
       "cites": "引用: {domains}",
       "fanOuts": "fan-outクエリ",
       "keywords": "シードキーワード",
+      "paid": {
+        "title": "この項目に対するGoogle広告",
+        "spend": "この期間に{amount}（{clicks, plural, other {#回のクリック}}）",
+        "terms": "{count, plural, other {#件の検索語句が一致}}（費用の高い順）:",
+        "none": "この期間に一致するGoogle広告の支出はありませんでした。",
+        "note": "検索語句は単語に基づいてPromptと照合されます。ChatGPT Adsの費用は照合されません（どの質問に広告が表示されたかは示されません）。"
+      },
       "failed": "回答を読み込めませんでした。一度閉じてから再度開いてください。",
       "earn": {
         "title": "獲得 · 回答を改善",
@@ -15564,14 +15631,31 @@
         "channel": "チャネル",
         "status": "ステータス",
         "spend": "費用",
-        "signups": "AI経由の登録数",
-        "cost": "登録単価"
+        "clicks": "クリック数",
+        "cpc": "CPC",
+        "conversions": "コンバージョン数",
+        "costPerConversion": "コンバージョン単価"
       },
-      "empty": "広告アカウントを連携 · まもなく公開",
-      "emptyNote": "キャンペーンはここに一覧表示されます（初期は閲覧のみ）。",
+      "channels": {
+        "google": "Google Ads",
+        "chatgpt": "ChatGPT Ads"
+      },
+      "statuses": {
+        "active": "アクティブ",
+        "paused": "一時停止中",
+        "ended": "終了"
+      },
+      "empty": "広告アカウントがまだ連携されていません",
+      "emptyNote": "Google AdsまたはChatGPT Adsを連携すると、ここにキャンペーンが読み取り専用で表示されます。",
+      "openConnections": "連携設定を開く",
+      "failed": "キャンペーンを読み込めませんでした。しばらくしてからもう一度お試しください。",
+      "firstRead": "連携後、24時間以内に最初のデータが届きます。",
+      "noneInPeriod": "この期間に実施されたキャンペーンはありません。",
+      "attention": "{count, plural, other {#件の広告アカウントで対応が必要です。}}",
+      "currencyNote": "各キャンペーンは広告アカウントの通貨で表示されます。データは1日1回読み取られます。",
       "safety": {
         "title": "安全性",
-        "note": "エージェントではなくAnsvisorによって適用されます。現時点で広告アカウントに変更が反映されることはありません。",
+        "note": "エージェントではなくAnsvisorによって適用されます。現在、Ansvisorは広告アカウントの読み取りのみを行います。",
         "click": "有効化、一時停止、予算や入札単価の変更はすべて、どのモードでも担当者によるクリックと確認が必要です。",
         "agents": "エージェントが自動で費用を消化することはありません。エージェントが提案を行い、変更を実行できるのは人のみです。",
         "cap": "管理者がチャネルごとに月次上限を設定します。過去24時間の変更を含め、上限を超える変更はブロックされます。",
@@ -15579,7 +15663,6 @@
       }
     },
     "connections": {
-      "soon": "まもなく公開",
       "later": "今後対応予定",
       "notify": "通知を受け取る",
       "notified": "通知予定",
@@ -15593,6 +15676,79 @@
       },
       "manage": "管理",
       "connect": "連携",
+      "adminConnects": "管理者が連携",
+      "accountStatus": {
+        "active": "連携済み",
+        "error": "要対応",
+        "disconnected": "未連携"
+      },
+      "sync": {
+        "syncedAt": "{when}に読み取り完了",
+        "pending": "24時間以内に初回読み取り：過去90日分",
+        "error": {
+          "key_refused": "ChatGPT Adsがキーを拒否しました。新しいキーを貼り付けてください。",
+          "key_missing": "キーが見つかりません。アカウントを再度連携してください。",
+          "signin_gone": "Google Adsのサインイン情報が無効になりました。Google Adsを再度連携してください。",
+          "upstream": "広告プラットフォームからの応答がありませんでした。Ansvisorが24時間以内に再試行します。",
+          "failed": "データを読み取れませんでした。Ansvisorが24時間以内に再試行します。"
+        }
+      },
+      "chatgpt": {
+        "connect": "連携",
+        "addAnother": "アカウントを追加",
+        "dialogTitle": "ChatGPT Adsを連携",
+        "dialogLine": "ChatGPT Ads ManagerのAds APIキーを貼り付けてください。1つのキーで連携できる広告アカウントは1つです。アカウントごとにキーを追加してください。",
+        "keyLabel": "Ads APIキー",
+        "keyNote": "AnsvisorはChatGPT Adsでキーを確認した後、暗号化して保存します。読み取りのみ行います。",
+        "cancel": "キャンセル",
+        "save": "連携",
+        "checking": "確認中…",
+        "connectedToast": "{name}を連携しました。",
+        "accountLine": "ChatGPT Adsアカウント · {currency}",
+        "accountLineNoCurrency": "ChatGPT Adsアカウント",
+        "billing": "ChatGPT Ads Manager",
+        "error": {
+          "invalid_key": "ChatGPT Adsがこのキーを受け付けませんでした。キーを確認して、もう一度お試しください。",
+          "upstream": "ChatGPT Adsからの応答がありませんでした。しばらくしてからもう一度お試しください。",
+          "other": "連携できませんでした。もう一度お試しください。"
+        }
+      },
+      "google": {
+        "name": "Google Ads",
+        "connect": "連携",
+        "addAnother": "アカウントを追加",
+        "billing": "Google Ads",
+        "pickTitle": "Google Adsアカウントを選択",
+        "pickLine": "これらは現在ログインしているGoogleアカウントでアクセスできるアカウントです。Ansvisorは選択されたアカウントの情報を読み取ります。キャンペーンや予算を変更することはありません。",
+        "noCustomers": "このGoogleアカウントにはアクセス可能なGoogle Adsアカウントがありません。広告を管理しているGoogleアカウントでログインしてください。",
+        "unnamed": "名前のないアカウント",
+        "more": "{count, plural, other {他 # 件のアカウントは表示されていません。}}",
+        "why": {
+          "connected": "接続済み",
+          "manager": "マネージャーアカウント",
+          "unavailable": "利用不可",
+          "test": "テストアカウント"
+        },
+        "cancel": "キャンセル",
+        "save": "{count, plural, =0 {接続} other {# 件のアカウントを接続}}",
+        "connectedToast": "{count, plural, other {# 件のGoogle Adsアカウントを接続しました。}}",
+        "error": {
+          "not_configured": "このサーバーではGoogle Adsがまだ設定されていません。",
+          "not_connected": "先にGoogle Adsにログインしてから、もう一度お試しください。",
+          "not_accessible": "このGoogleアカウントからはそのアカウントにアクセスできなくなりました。閉じて再度接続してください。",
+          "manager_account": "マネージャーアカウント自体にはキャンペーンがありません。配下のアカウントを選択してください。",
+          "upstream": "Google Adsから応答がありませんでした。少し待ってからもう一度お試しください。",
+          "other": "接続できませんでした。もう一度お試しください。"
+        }
+      },
+      "account": {
+        "disconnect": "接続解除",
+        "disconnectTitle": "{name} の接続を解除しますか？",
+        "disconnectLine": "Ansvisorはこのアカウント用に保持している情報（キーがある場合はそのキーと読み取った数値）を削除します。広告は{billing}で引き続き配信されます。",
+        "disconnectedToast": "{name} の接続を解除しました。",
+        "disconnectFailed": "接続を解除できませんでした。もう一度お試しください。",
+        "cancel": "キャンセル"
+      },
       "platforms": {
         "chatgpt": {
           "name": "ChatGPT Ads",
@@ -15627,6 +15783,31 @@
     }
   },
   "prompts": {
+    "bulkPlatforms": {
+      "bulkButton": "プラットフォーム",
+      "bulkAdd": "プラットフォームを追加",
+      "bulkRemove": "プラットフォームを削除",
+      "modes": "追加または削除",
+      "modeAdd": "追加",
+      "modeRemove": "削除",
+      "platforms": "プラットフォーム",
+      "title": "プラットフォームを追加",
+      "lead": "選択した{count}件のPromptをさらに多くのプラットフォームで追跡します。各Promptの地域ごとに、プラットフォームごとにtracking slotを1つ使用します。Promptが待機中のプラットフォームは再実行されます。",
+      "removeTitle": "プラットフォームを削除",
+      "removeLead": "選択した{count}件のPromptを一部のプラットフォームで追跡しないようにします。そのslotは再び空きになります。",
+      "none": "追加できるプラットフォームがありません。さらに多くのプラットフォームで追跡するには、設定 › 請求でtracking slotを追加してください。",
+      "removeNone": "選択したPromptは、削除できるプラットフォームでは実行されていません。",
+      "free": "空き{count}",
+      "previewAdd": "{count, plural, other {#件のPromptが変更されます}} · {unchanged}件は設定済みです",
+      "previewRemove": "{count, plural, other {#件のPromptが変更されます}} · {unchanged}件は未設定です · {blocked}件はプラットフォームが残らなくなります",
+      "short": "{platform}には{needed}個のslotが必要ですが、空きは{free}個です。",
+      "addSlots": "slotを追加",
+      "save": "{count, plural, other {#件のPromptに追加}}",
+      "removeSave": "{count, plural, other {#件のPromptから削除}}",
+      "done": "{count, plural, other {#件のPromptにプラットフォームを追加しました}}",
+      "removed": "{count, plural, other {#件のPromptからプラットフォームを削除しました}}",
+      "saveFailed": "プラットフォームを変更できませんでした。もう一度お試しください。"
+    },
     "waiting": {
       "resultTitle": "{added}件を追加、{waiting}件が空き枠待ちです",
       "savedTitle": "{count, plural, other {#件のPromptを保存しましたが、まだ追跡されていません}}",
@@ -16010,6 +16191,13 @@
       "bulkTitle": "{count, plural, other {まだ回答のない選択した#件のPromptの追跡を開始}}"
     },
     "usage": {
+      "slots": {
+        "title": "Tracking slots",
+        "add": "slotを追加",
+        "usage": "{used} / {limit}",
+        "unlimited": "{used}・上限なし",
+        "meter": "{platform}のslot使用量"
+      },
       "panelLabel": "Prompt使用状況",
       "planAndUsage": "プランと使用状況",
       "hide": "非表示",
@@ -16092,7 +16280,7 @@
       "enginesLegend": "カラー表示: 期間内にこのPromptの検索が共有されたエンジン。薄い表示: 追跡中ですが共有されなかったエンジン。",
       "engineEmptyTitle": "{range}内に{engine}の検索はありません",
       "engineEmptyBody": "{engine}は通常、回答の背景にある検索を共有します。より長い期間を指定してお試しください。",
-      "sourceNote": "Perplexityは追跡されなくなり、Copilotは検索を共有しないため、これらは一部の日程で共有されるChatGPTのみからのものです。以前よりも少なくなっています。",
+      "sourceNote": "Perplexityは追跡対象外となり、Bing AI Modeは検索内容を共有しないため、これらはChatGPTのみから取得されます。ChatGPTが共有するのも一部の日のみです。以前より件数は少なくなっています。",
       "emptyTitle": "キャプチャされたfan-outはまだありません",
       "emptyBody": "ChatGPTの検索は一部の日程でサンプリングされ、ChatGPT APIは検索実行時に共有します。Google AI Overviews、AI Mode、Geminiは検索を共有しません。対象のエンジンがお客様のPromptで実行されると、検索がここに表示されます。",
       "coverageTooltip": "この期間内に追跡された{total}件の回答のうち、{withFanout}件でエンジンが実行した検索が含まれていました。ChatGPTの検索は一部の日程でサンプリングされ、ChatGPT APIは検索実行時に共有します。"
@@ -18247,24 +18435,139 @@
       }
     },
     "notifications": "通知",
-    "notificationsDescription": "各ブランドは2種類のメールを送信できます。トラッキング実行後のDaily Pulseと、毎週月曜日のAIトラフィック週間ダイジェストです。どちらもブランドのDaily Pulse受信者に送信されます。",
-    "pulseSection": "Daily Pulse",
-    "pulseSectionDescription": "トラッキング実行ごとに、ブランド別のハイライトと警告をまとめた短いダイジェストが届きます。頻度と受信者を選択してください。",
-    "pulseFrequencyLabel": "{brand}のDaily Pulseの頻度",
+    "yourEmails": {
+      "title": "自分のメール",
+      "description": "Ansvisorから送信されるメールの種類と頻度を選択します。この設定は自分専用で、チームの各メンバーが個別に設定します。",
+      "carriedOver": "現在受信しているメールです。保存すると、自分の設定として保持されます。",
+      "for": "対象",
+      "scopeAll": "すべてのブランド（{count}）",
+      "deliveryHint": "ブランドのメールは、ブランドごとに1通ずつ、またはまとめて1通で届きます。",
+      "delivery_per_brand": "ブランドごとに1通",
+      "delivery_combined": "すべてのブランドを1通にまとめる（近日公開）",
+      "brandOnly": "{brand}のみに設定",
+      "useAll": "「すべてのブランド」の設定を使用",
+      "notableNote": "最初のパルスをお届けし、その後は注目すべき出来事があったときのみお送りします。",
+      "comingSoon": "近日公開",
+      "comingSoonHint": "「近日公開」のメールは、保存した設定が維持され、準備ができ次第開始されます。",
+      "admins": "管理者",
+      "groups": {
+        "visibility": "ブランドの可視性",
+        "traffic": "AIトラフィック",
+        "actions": "アクションセンター",
+        "agents": "エージェントとチャット",
+        "audit": "サイト監査",
+        "content": "コンテンツ",
+        "account": "アカウント"
+      },
+      "kinds": {
+        "daily_pulse": {
+          "name": "デイリーパルス",
+          "description": "各ブランドがAIの回答にどのように表示されたか：可視性スコア、言及、引用、ハイライト、警告。"
+        },
+        "traffic_digest": {
+          "name": "週次ダイジェスト",
+          "description": "先週のAIからの訪問を1行でまとめ、上位3件の変化をお知らせします。毎週月曜日。"
+        },
+        "critical_action": {
+          "name": "新しい重要アクション",
+          "description": "ブランドに対して優先度「重要」の新しいアクションが追加されました。"
+        },
+        "due_actions": {
+          "name": "期限超過・本日期限",
+          "description": "あなたに割り当てられたアクションやタスクのうち、期限が来ているもの、または遅れているもの。"
+        },
+        "weekly_actions": {
+          "name": "週次アクションサマリー",
+          "description": "完了した内容、未完了の内容、次の予定。毎週月曜日。"
+        },
+        "run_finished": {
+          "name": "実行完了",
+          "description": "開始したエージェントの実行が完了しました。実行内容も含まれます。"
+        },
+        "audit_finished": {
+          "name": "監査完了",
+          "description": "一括または定期の監査が完了しました。スコアも含まれます。"
+        },
+        "score_dropped": {
+          "name": "スコア低下",
+          "description": "前回の監査から、ページのスコアが5ポイント以上下がりました。"
+        },
+        "drafts_review": {
+          "name": "レビュー待ちのドラフト",
+          "description": "公開前にレビューが必要な、ブランド用に作成されたドラフト。"
+        },
+        "ai_usage": {
+          "name": "AI使用量",
+          "description": "月間AI上限の80%と100%に達したとき。"
+        }
+      },
+      "links": {
+        "approvals": {
+          "name": "承認待ち",
+          "description": "エージェントまたはチャットの実行が、変更や公開を行う前にあなたの承認を求めています。「エージェントが私を必要とするときに通知」で設定できます。",
+          "link": "チャット設定"
+        },
+        "scheduled": {
+          "name": "スケジュールジョブ",
+          "description": "各ジョブは、ジョブで設定した内容に従ってメールを送信します。",
+          "link": "ジョブを開く"
+        },
+        "billing": {
+          "name": "請求とセキュリティ",
+          "description": "請求書、お支払いの問題、サインインのアラート。常に送信されます。",
+          "locked": "常にオン"
+        }
+      },
+      "options": {
+        "pulse": {
+          "daily": "毎日",
+          "weekly": "毎週",
+          "notable": "注目すべき場合のみ",
+          "off": "オフ"
+        },
+        "instant": {
+          "instant": "すぐに",
+          "daily": "日次サマリー",
+          "off": "オフ"
+        },
+        "digest": {
+          "daily": "日次サマリー",
+          "weekly": "週次サマリー",
+          "off": "オフ"
+        },
+        "weekly": {
+          "weekly": "毎週月曜日",
+          "off": "オフ"
+        },
+        "onoff": {
+          "on": "オン",
+          "off": "オフ"
+        }
+      },
+      "save": "変更を保存",
+      "saved": "メールの設定を保存しました",
+      "saveFailed": "メールの設定を保存できませんでした。もう一度お試しください。",
+      "loadFailed": "メールの設定を読み込めませんでした。",
+      "turnOffAll": "任意のメールをすべてオフにする",
+      "turnedOff": "任意のメールはすべてオフに設定されています。保持するには変更を保存してください。"
+    },
+    "outsideEmails": {
+      "title": "ワークスペース外の人に送信",
+      "description": "Ansvisorのシートを持たないクライアントやマネージャーにも、ブランドのサマリーを送信できます。承認メールやアカウント関連のメールは送信されません。",
+      "sends": "Daily Pulse · AI Trafficの週次ダイジェスト",
+      "recipients": "受信者",
+      "placeholder": "client@example.com, boss@example.com",
+      "hint": "カンマ区切り。自分のメール設定を保存していないチームメイトには、これまでどおりこのブランドのメールが送信されます。このリストが空の間は全員に、空でない場合はリスト内の人のみに送信されます。",
+      "frequency": "Daily Pulse",
+      "frequencyNote": "これは、ブランドのSlackチャンネルとWebhook、および自分の設定を保存していないチームメイトにも適用されます。",
+      "digest": "AI Trafficの週次ダイジェストも送信する",
+      "digestPulseOff": "このDaily Pulseがオフの間は、週次ダイジェストは送信されません。"
+    },
     "pulseFrequency_daily": "毎日",
     "pulseFrequency_weekly": "毎週",
     "pulseFrequency_notable": "注目すべき変更時のみ",
-    "pulseFrequency_notableNote": "初回のPulse以降は、注目すべき動きがあった場合のみ送信されます。",
     "pulseFrequency_off": "オフ",
-    "pulseRecipients": "宛先",
-    "pulseRecipientsPlaceholder": "alex@example.com, sam@example.com",
-    "pulseRecipientsHint": "カンマ区切りのメールアドレス。組織の全メンバーに送信する場合は空欄にしてください。",
     "pulseRecipientsInvalid": "無効なメールアドレスです: {emails}。修正または削除してから保存してください。",
-    "trafficDigest": "AI Traffic 週次ダイジェスト",
-    "trafficDigestDescription": "毎週月曜日に、先週のAI経由の訪問数を1行にまとめ、上位3件の変化とともにお届けします。各ブランドのDaily Pulse受信者に送信され、チェックのオン・オフを切り替えるとすぐに保存されます。",
-    "trafficDigestTo": "宛先：{emails}",
-    "trafficDigestToEveryone": "組織のメンバー全員に送信",
-    "trafficDigestPulseOff": "Daily Pulseがオフの間は送信されません。再度受信するにはPulseをオンにしてください。",
     "pulseSaved": "通知設定を保存しました",
     "pulseSaveFailed": "通知設定を保存できませんでした。もう一度お試しください。",
     "pulseLoadFailed": "通知設定を読み込めませんでした。",
@@ -18289,7 +18592,6 @@
       "loading": "言語を読み込んでいます…",
       "moreSoon": "今後、対応言語を追加予定です。",
       "preview": "スタッフとテストビルドでは、まだ翻訳されていない言語も表示されます。テキストがない部分には英語が表示されます。",
-      "testLanguage": "{language}・テスト",
       "saved": "言語を保存しました",
       "saveFailed": "言語を保存できませんでした。もう一度お試しください。",
       "suggest": {
@@ -18439,7 +18741,38 @@
     },
     "planAddOns": {
       "title": "プランにオプションを追加",
-      "description": "Growthプラント向けの追加トラッキング、追加ブランド、AI使用量のチャージです。選択した内容は、登録済みのカードに一度だけ請求されます。",
+      "slots": {
+        "title": "追加のトラッキングクレジットを購入",
+        "description": "{plan}には、各標準プラットフォームに{included}個のslotが含まれます。任意のプラットフォームで追加slotを選択できます。0まで減らすことも可能です。",
+        "descriptionNone": "任意のプラットフォームで追加slotを選択できます。0まで減らすことも可能です。",
+        "discount": {
+          "reached": "追加トラッキングが<b>{percent}%割引</b>：{list}が{interval, select, year {年} other {月}}あたり{off}割引。",
+          "list": "追加トラッキング：{interval, select, year {年} other {月}}あたり{list}。",
+          "next": "{interval, select, year {年} other {月}}あたりさらに{more}追加すると、{from}を超える分が<b>{percent}%割引</b>になります。",
+          "top": "最上位のステップに到達しました。",
+          "drops": "この変更により割引率が{from}%から{to}%に下がるため、100 slotsあたりの価格が上がります。",
+          "steps": "ボリューム割引の段階",
+          "stepsLead": "各段階の割引率は、その段階を超える部分に適用されます。",
+          "step": "{from}/{interval, select, year {年} other {月}}超で{percent}%オフ",
+          "yours": "· 現在",
+          "nextTag": "· 次"
+        },
+        "unit": "<b>1 slot</b> = そのプラットフォームの1つのロケーションで、1つのPromptを毎日追跡できる単位です。",
+        "columns": {
+          "platform": "プラットフォーム",
+          "included": "プランに含まれる数",
+          "extra": "追加slots",
+          "price": "100 slotsあたりの{interval, select, year {年額} other {月額}}料金",
+          "cost": "{interval, select, year {年額} other {月額}}費用"
+        },
+        "unlimited": "無制限",
+        "fewer": "{platform}のslotsを100減らす",
+        "more": "{platform}のslotsを100増やす",
+        "extraOn": "{platform}の追加slots",
+        "was": "変更前: {slots}",
+        "undo": "元に戻す",
+        "footer": "料金は各プラットフォームの追跡にかかるコストに基づいています。回答の取得に手間がかかるもの(例: Perplexity)は高くなります。年払いなら2か月分無料です。"
+      },
       "tracking": {
         "title": "追加トラッキング",
         "description": "プランのエンジンで毎日トラッキングされる Prompt ロケーションを増やせます。一度に選べるのは1つのティアで、いつでも変更や削除ができます。",
@@ -18447,8 +18780,7 @@
         "none": "なし",
         "tier": "+{units} Prompt ロケーション",
         "price": "{price}/{interval, select, year {年} other {月}}",
-        "contactSales": "営業に問い合わせる",
-        "yearly": "年額プランは2か月分無料です。"
+        "contactSales": "営業に問い合わせる"
       },
       "brands": {
         "title": "追加ブランド",
@@ -18456,7 +18788,7 @@
         "count": "{count}件追加",
         "fewer": "ブランドを1つ減らす",
         "more": "ブランドを1つ増やす",
-        "note": "現在のブランド数より少なくはできません。先にブランドで1つ削除してください。"
+        "limit": "ご利用のプランには{base}件のブランドが含まれています。新しい上限は<b>{limit}</b>件です。"
       },
       "topUp": {
         "title": "AI使用量のチャージ",
@@ -18465,10 +18797,12 @@
         "label": "AI使用量のチャージ",
         "none": "なし",
         "option": "+{multiplier}倍",
-        "adds": "今月のAI使用量の{multiplier}倍 ・ ブリーフ+{briefs}件 ・ 機会+{opportunities}件"
+        "usage": "AI使用量{multiplier}倍",
+        "adds": "今月のAI使用量の{multiplier}倍 ・ ブリーフ+{briefs}件 ・ 機会+{opportunities}件",
+        "alsoAdds": "今月分として、ブリーフ+{briefs}件と機会+{opportunities}件も追加されます。",
+        "once": "{price}(1回払い)"
       },
       "summary": "{prompts} Prompt ロケーション・{brands}ブランド",
-      "nothing": "上で変更する内容を選択してください。",
       "review": "確認して支払う",
       "reviewing": "料金を確認中…",
       "dialog": {
@@ -18479,20 +18813,25 @@
         "brands": "{count, plural, =0 {追加ブランドなし} other {追加ブランド#件}}",
         "topUp": "AI使用量のチャージ +{multiplier}倍(1回払い)",
         "dueToday": "本日のお支払い",
-        "dueTodayNote": "追加トラッキングとブランドの今期の残り期間分と、チャージの全額です。",
+        "dueTodayNote": "slots、追加トラッキング、ブランドは今期の残り期間分、トップアップは全額が対象です。",
+        "slots": "{platform}のslots",
+        "slotsValue": "{slots}(+{extra}追加)",
+        "volumeDiscount": "ボリューム割引({percent}%)",
+        "discountValue": "−{off}/{interval, select, year {年} other {月}}",
         "total": "次回の更新から",
         "totalValue": "{interval, select, year {年額} other {月額}} {price}",
-        "credit": "下位のティアへの変更やブランド数の削減を行うと、差額は次回以降の請求書にクレジットとして反映されます。",
+        "credit": "slots、ティア、ブランドを減らすと、差額が次回以降の請求にクレジットとして適用されます。",
         "pay": "{price}を支払う",
         "confirm": "確認",
         "cancel": "キャンセル",
-        "processing": "処理中…"
+        "processing": "処理中…",
+        "slotsWaiting": "{platform}: 新しい順に{count}件のPromptロケーションはslotの空きを待機します。削除されることはありません。追跡するにはslotsを再度追加してください。"
       },
       "done": "アドオンを更新しました。追加購入分は、支払いが確認され次第すぐに反映されます。",
       "states": {
         "not_admin": "アドオンを変更できるのは管理者のみです。ワークスペースの管理者にご依頼ください。",
         "starter": "アドオンはGrowthプランでご利用いただけます。Growthにアップグレードすると、トラッキング、ブランド、AI使用量を追加できます。",
-        "enterprise": "上限は契約内容によって定められています。追加をご希望の場合は、担当のアカウントマネージャーにお問い合わせください。",
+        "enterprise": "その他の上限は契約により設定されています。増やす場合は担当のアカウントマネージャーにご連絡ください。",
         "trial": "アドオンはプランの開始後に購入できます。",
         "no_plan": "アドオンはプランが有効な間に購入できます。",
         "ending": "プランは終了する予定です。アドオンを変更するには、プランを継続してください。"
@@ -18510,7 +18849,23 @@
         "payment_failed": "お支払いを完了できませんでした。",
         "failed": "アドオンを変更できませんでした。もう一度お試しください。"
       },
-      "readFailed": "アドオンを読み取れませんでした。しばらくしてからもう一度お試しください。"
+      "readFailed": "アドオンを読み取れませんでした。しばらくしてからもう一度お試しください。",
+      "perInterval": "{price}/{interval, select, year {年} other {月}}",
+      "cart": {
+        "title": "アドオン",
+        "onePayment": "1回払い",
+        "plan": "{plan}プラン",
+        "slots": "{platform}の追加トラッキング",
+        "slotsCount": "{slots} slots",
+        "remove": "{item}を削除",
+        "discount": "追加トラッキングにボリューム割引{percent}%が上記の価格に適用されています。",
+        "discountDrops": "ボリューム割引が{from}%から{to}%に下がるため、上記の価格が上がります。",
+        "brands": "{count, plural, other {#ブランド}} · 各{price}",
+        "topUp": "AI使用量{multiplier}倍 · {date}まで",
+        "total": "次回更新からの{interval, select, year {年額} other {月額}}合計 <b>{price}</b>",
+        "undoAll": "すべての変更を元に戻す",
+        "dueToday": "本日のお支払い:今期の残り期間に追加された項目の料金です。「確認してお支払い」に表示されます。"
+      }
     },
     "cancelsOn": "サブスクリプションは {date} に終了します",
     "changePlan": "プランを変更",

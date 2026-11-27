@@ -20,6 +20,8 @@
         "run with chat",
         "stale actions",
         "still relevant",
+        "replaced actions",
+        "no new actions",
         "confidence",
         "sort actions",
         "recently updated",
@@ -49,7 +51,7 @@
         "oldest first"
       ],
       "plan": "all",
-      "updated": "2026-11-21",
+      "updated": "2026-11-25",
       "sections": [
         {
           "heading": null,
@@ -94,6 +96,10 @@
         {
           "heading": "Stale actions",
           "text": "An action that has stayed **New** for 30 days, with no one assigning, editing, sending or updating its tasks, is marked **Stale** each night. It isn't closed or dismissed: its row keeps one status, **New**, with \"No update in 44 d\" under it, the open action shows a **Stale** label, and the **Status** filter's **Stale** lists them all.\n\nIf it still matters, click **Keep** in the open action, or **Still relevant** in the row menu. The hint and label go, its 30 days start again, and History says who kept it. Any other change to the action, or moving it out of New, clears the label too. If it no longer matters, click **Dismiss**.\n\nAn open action whose signals have all resolved shows **Signal resolved, review** instead of a signal count. It stays open: check whether the work is done, then complete or dismiss it."
+        },
+        {
+          "heading": "Replaced actions",
+          "text": "If a stale action's kind still finds something, the nightly run replaces it: it closes the old one and opens a new action of the same kind from the latest findings, the old one's open signals included. History shows the old one as **Replaced by a newer action**, not as dismissed by you. An action someone is working on, or kept with **Still relevant**, is never replaced."
         },
         {
           "heading": "The top of an action",
@@ -198,11 +204,11 @@
         "home page"
       ],
       "plan": "all",
-      "updated": "2026-11-17",
+      "updated": "2026-11-26",
       "sections": [
         {
           "heading": null,
-          "text": "The **Action Center** is where Ansvisor turns what changed in AI search into a ranked list of work. Open it from **Action Center**, first under **Execution** in the main menu, after the **Analytics** group: it opens on its **Today** tab, and its tabs are listed under it too. When you sign in, Ansvisor opens on **Prompts › Tracked Prompts**, whatever the plan, or on **Today** when Prompts is off your menu. Everything in it is per brand: switch brands to see another brand's work."
+          "text": "The **Action Center** is where Ansvisor turns what changed in AI search into a ranked list of work. Open it from **Action Center**, first under **Execution** in the main menu, after the **Analytics** group: it opens on its **Today** tab, and its tabs are listed under it too. When you sign in, Ansvisor opens on **Brand Visibility › Overview** once your brands have answers, on **Prompts › Tracked Prompts** before that, or on **Today** when neither is on your menu. Everything in it is per brand: switch brands to see another brand's work."
         },
         {
           "heading": "The tabs",
@@ -308,12 +314,12 @@
           "text": "An action sent from a prompt's Improve tab reports on how many platforms its position improved. It is read again daily while the action is open, and for 30 days after it is completed."
         },
         {
-          "heading": "The Scorecard",
-          "text": "Switch History from **Actions** to **Scorecard** to see what each kind of action did at this brand: the actions closed in the range, 90 days unless you pick another, by when they were completed or dismissed. It shows how many were completed, their results so far, the **Success rate** (the share of results that improved, shown once a kind has three), the median change in each action's main metric, and how many were dismissed, with the reason given most often. It counts this brand's own actions only, and its cards count the same closed actions: **Closed Actions**, completed, no improvement and dismissed."
+          "heading": "Results by kind",
+          "text": "Switch History from **Past actions**, the actions one by one, to **Results by kind** to see what each kind of action did at this brand: the actions closed in the range, 90 days unless you pick another, by when they were completed or dismissed. It shows how many were completed, their results so far, the **Success rate** (the share of results that improved, shown once a kind has three), the median change in each action's main metric, and how many were dismissed, with the reason given most often. It counts this brand's own actions only, and its cards count the same closed actions: **Closed Actions**, completed, no improvement and dismissed."
         },
         {
-          "heading": "The Scorecard by play",
-          "text": "When an action asks for new content, the page its prompts pick is its play, such as a comparison page or a how-to guide. On the **Scorecard**, switch from **By kind** to **By play** to see what each play did at this brand, whichever kind of action it was for. Only actions opened with a play count there. A play's results also weigh on the priority of new actions opened with it, once one of them has a result."
+          "heading": "Results by kind, by play",
+          "text": "When an action asks for new content, the page its prompts pick is its play, such as a comparison page or a how-to guide. In **Results by kind**, switch from **By kind** to **By play** to see what each play did at this brand, whichever kind of action it was for. Only actions opened with a play count there. A play's results also weigh on the priority of new actions opened with it, once one of them has a result."
         },
         {
           "heading": "When a problem comes back",
@@ -701,15 +707,15 @@
         "my day"
       ],
       "plan": "all",
-      "updated": "2026-11-20",
+      "updated": "2026-11-26",
       "sections": [
         {
           "heading": null,
-          "text": "**Today** is the first tab of the **Action Center**: what changed since your last visit, what to do today and what is waiting for you, on one page per brand. Open it from **Action Center**, first under **Execution** in the main menu. When you sign in, Ansvisor opens on **Prompts › Tracked Prompts**, whatever the plan; Today is one click away. When Prompts is off your menu, Ansvisor opens here instead."
+          "text": "**Today** is the first tab of the **Action Center**: what changed since your last visit, what to do today and what is waiting for you, on one page per brand. Open it from **Action Center**, first under **Execution** in the main menu. When you sign in, Ansvisor opens on **Brand Visibility › Overview** once your brands have answers, and on **Prompts › Tracked Prompts** before that; Today is one click away. When neither is on your menu, Ansvisor opens here instead."
         },
         {
           "heading": "The tabs",
-          "text": "The Action Center has five tabs: **Today**, **Actions**, **Signals**, **Agents** and **History**. **Agents** (formerly Agent Center) is there when Chat's agents are on for your workspace and on your menu. **KPIs** opens from **History**, next to its Actions and Scorecard views. Admins and managers open **Needs review** from **Waiting for you** on Today.\n\nBeside **Agents** is how many of your agent runs wait for you."
+          "text": "The Action Center has five tabs: **Today**, **Actions**, **Signals**, **Agents** and **History**. **Agents** (formerly Agent Center) is there when Chat's agents are on for your workspace and on your menu. **KPIs** opens from **History**, next to its Past actions and Results by kind views. Admins and managers open **Needs review** from **Waiting for you** on Today.\n\nBeside **Agents** is how many of your agent runs wait for you."
         },
         {
           "heading": "The top of the page",
@@ -862,7 +868,7 @@
         },
         {
           "heading": "Weekly AI Traffic e-mail",
-          "text": "Every Monday, an e-mail about the week before goes to each brand's Daily Pulse recipients, if the brand had AI visits that week or the one before. It shows AI visits with the change, the top platform, the summary line, visits by day and platform, and the top changes.\n\nTo turn it off for a brand, untick the brand under **AI Traffic weekly digest** in **Settings › Notifications**; it's saved at once, and admins and managers can change it. It isn't sent while the brand's Daily Pulse is **Off**. The e-mail is on Ansvisor Cloud only."
+          "text": "Every Monday, an e-mail about the week before goes out for each brand, if the brand had AI visits that week or the one before. It shows AI visits with the change, the top platform, the summary line, visits by day and platform, and the top changes.\n\nEach person picks **Every Monday** or **Off** for it under **Your e-mails** in **Settings › Notifications**, for all their brands or one brand apart. An Admin sets it for people outside the workspace under the brand; they don't get it while the brand's Daily Pulse is **Off**. The e-mail is on Ansvisor Cloud only."
         }
       ]
     },
@@ -1163,9 +1169,29 @@
         "ai traffic",
         "sign-ups",
         "/traffic",
+        "crawler & technical fixer",
+        "technical fixer",
+        "ai crawlers",
+        "robots.txt",
+        "gptbot",
+        "/tech-fix",
+        "shopping feed advisor",
+        "feed gaps",
+        "product feed",
+        "gtin",
+        "/feed-advisor",
         "when a brand is added",
         "brand added",
         "new brand trigger",
+        "when a page is published",
+        "page published",
+        "when the catalog syncs",
+        "catalog synced",
+        "shopping readiness",
+        "/shopping",
+        "localization",
+        "translate pages",
+        "/translate",
         "goal",
         "role",
         "filter agents",
@@ -1206,14 +1232,20 @@
         "holiday prompts",
         "black friday",
         "ai traffic report",
-        "ai visitors who sign up"
+        "ai visitors who sign up",
+        "can chatgpt crawl my site",
+        "ai bots blocked",
+        "firewall blocks ai bots",
+        "what is my feed missing",
+        "missing gtin",
+        "feed fixes"
       ],
       "plan": "all",
       "updated": "2026-11-21",
       "sections": [
         {
           "heading": null,
-          "text": "An agent is a saved skill, mode, connections and model that runs in Chat again and again: on a schedule, when Action Center finds a signal, when a KPI changes, when a brand is added, or when someone clicks **Run now**. **Agents**, a tab of the **Action Center** (formerly Agent Center), lists every agent you can see and offers ready-to-use agents, and each agent has its own page with its triggers, its runs and how much of your monthly AI limit it uses."
+          "text": "An agent is a saved skill, mode, connections and model that runs in Chat again and again: on a schedule, when Action Center finds a signal, when a KPI changes, when a brand is added, when a page is published, when the product catalog syncs, or when someone clicks **Run now**. **Agents**, a tab of the **Action Center** (formerly Agent Center), lists every agent you can see and offers ready-to-use agents, and each agent has its own page with its triggers, its runs and how much of your monthly AI limit it uses."
         },
         {
           "heading": "Open Agents",
@@ -1240,6 +1272,14 @@
           "text": "**Onboarding & Help** gets a new brand or a new teammate going. Its skill is **Setup guide** (**/setup**). It starts on **All brands** with **When a brand is added**: once it's on, each brand someone adds gets one run, which acts as the agent's owner and shows in their Inbox. You can also click **Run now** on its page. Each run says how many set-up steps are done, lists the open ones with a link to each page, then recommends 3 to 5 ready-to-use agents for the brand's site type and your work areas, each linked to its card in **Ready to use**. It never turns an agent on: you click **Use this agent**, then **Turn on**. It runs on **Ask me first**, so it asks before every change, such as adding competitors. Ask it how to do something in Ansvisor, and Chat answers from Help."
         },
         {
+          "heading": "Shopping Readiness",
+          "text": "**Shopping Readiness** checks your products for AI shopping results each time your product catalog changes. Its skill is **AI shopping readiness**, and it starts with **When the catalog syncs**: each sync of one of the brand's catalog sources that adds, changes or removes products gets one run. A sync that changes nothing doesn't start it. Each run reads how the products show in ChatGPT Shopping and Google Shopping, and says what their pages and feed need. It needs a connected product catalog, and a plan that includes Product Visibility. It runs on **Auto, ask before changes**. In Chat, the same skill is **/shopping**."
+        },
+        {
+          "heading": "Localization",
+          "text": "**Localization** translates a page into the languages of your other markets once it goes live. Its skill is **Translate a page**, and it starts with **When a page is published**: each page that goes live in the brand's CMS gets one run, which acts as the agent's owner. A page an agent made, such as a translation, doesn't start it again. Each run reads the page and drafts it in each language. Only the language changes: the facts, sources and rules stay the same. It runs on **Auto, ask before changes**, and sending or publishing the drafts stays yours. In Chat, the same skill is **/translate**."
+        },
+        {
           "heading": "Prompt Portfolio Manager",
           "text": "**Prompt Portfolio Manager** runs every Monday at 09:00 on **Ask me first**. It is made for the **AEO/GEO & Audit** work area. It proposes prompts to track, from your prompt suggestions, the sub-questions AI engines searched and your Search Console queries, and prompts to pause: ones tracked for 8 weeks or more whose answers never named or cited your brand in that time, with little or no known search demand. Each proposal shows its evidence and is a card: nothing is added or paused until you approve it, and the **Activity** log can undo each change. A prompt counts as out of scope only when you say so. Search Console is optional. In Chat, the same skill is **/prompts**."
         },
@@ -1254,6 +1294,14 @@
         {
           "heading": "AI Traffic → Signups",
           "text": "**AI Traffic → Signups** runs every Monday at 09:00 on **Auto, ask before changes**. It is made for the **Growth** work area. It reports the visits AI assistants sent to your site last week, by assistant and by landing page, against the week before. With Google Analytics connected, it adds the key events, such as sign-ups, and the sessions that came from AI. Without it, sign-ups show as **Not measured**. Sign-ups by assistant or by page, and the prompt behind a visit, aren't measured, and the report says so. Sending a page to the Action Center is a card you approve. Google Analytics is optional. In Chat, the same skill is **/traffic**."
+        },
+        {
+          "heading": "Shopping Feed Advisor",
+          "text": "**Shopping Feed Advisor** runs every Monday at 09:00 on **Auto, ask before changes**. It is made for e-commerce brands and needs a product catalog: connect one in **Settings › Integrations › Catalog**. Each run checks every live product in your catalog for what AI shopping answers need: a GTIN, a photo, a price, stock, a full description that says early on what the product is, a category and a brand. It lists the gaps by impact, the readiness points your catalog loses on each, and gives example products and a fix for each gap. It never changes your store or feed. Sending a fix to the Action Center is a card you approve. In Chat, the same skill is **/feed-advisor**."
+        },
+        {
+          "heading": "Crawler & Technical Fixer",
+          "text": "**Crawler & Technical Fixer** runs when you click **Run now**, on **Ask me first**. It is made for AEO and developer roles. It reads each page's latest **Site Audit** and lists what keeps AI crawlers out: AI bots your robots.txt blocks, bots your CDN or firewall turns away, main text that only appears once JavaScript runs, and missing HTTPS or canonical tags. For each issue it writes the fix ready for your developer, such as the robots.txt lines to add. It never changes your site and doesn't open pull requests. Sending a fix to the Action Center is a card you approve. A page with no audit isn't checked; with no audit at all, it offers to audit your home page, which uses one of the month's audits. In Chat, the same skill is **/tech-fix**."
         },
         {
           "heading": "Agency Client Reporter",
@@ -1305,7 +1353,7 @@
         },
         {
           "heading": "When an agent runs by itself",
-          "text": "A **Schedule** trigger runs at its time on the clock of its time zone, summer time included. A time missed while the agent was paused isn't made up later. A **Signal** trigger runs when Action Center finds a new signal of its category, definitions, pages and engines. **When a brand is added** runs once for each brand someone adds, never the demo brand, on an agent with **All brands** whose owner can use that brand. **KPI changed** and **Watch rule** triggers are saved, but don't start runs yet.\n\nSignals within 15 minutes join one run, a brand gets at most one signal run every 6 hours, and your plan sets how many signal and new-brand runs an agent may start a day. A fire that had to wait is listed in the agent's next run, and in **Run history** as **Skipped** with the reason."
+          "text": "A **Schedule** trigger runs at its time in its time zone, summer time included; missed times aren't made up. A **Signal** trigger runs on a new Action Center signal matching its category, definitions, pages and engines. **When a brand is added** runs once per new brand, never the demo brand, on an agent with **All brands** whose owner can use it. **When a page is published** and **When the catalog syncs** run once per page live in a brand's CMS, or per catalog sync that changes products, on the agent's brands. **KPI changed** and **Watch rule** triggers don't start runs yet.\n\nSignals within 15 minutes join one run, and a brand gets at most one signal run every 6 hours. Your plan caps how many runs other than schedules an agent starts a day. A fire that had to wait shows in **Run history** as **Skipped**, with the reason."
         },
         {
           "heading": "A schedule's time zone",
@@ -1664,7 +1712,7 @@
         "ask ansvisor"
       ],
       "plan": "all",
-      "updated": "2026-11-19",
+      "updated": "2026-11-22",
       "sections": [
         {
           "heading": null,
@@ -1704,7 +1752,7 @@
         },
         {
           "heading": "Chats in the panel",
-          "text": "A chat you start in the panel is saved like any other: it is in **Chat**, where you can carry on with it. If you used a panel chat in the last 30 minutes, the panel opens on it again.\n\nOnce the panel has a chat, its **⋯** menu offers **Open as full page**, **Open in new window**, and for your own chats **Pin**, **Rename**, **Share with team**, **Archive** and **Delete**. On the full page, **↙ Back to** the page you came from takes you back there, with the chat in the panel as it is now.\n\nThe panel isn't on Chat's own pages, where **Ctrl J** takes you to the message box, or in the Content Editor, which has its own chat."
+          "text": "Panel chats are saved in **Chat** too. The panel opens on the chat you used in the last 30 minutes, else on your latest chat from this page and brand, even days later. Each draft or report counts as its own page. **New chat** starts fresh.\n\nOnce the panel has a chat, its **⋯** menu offers **Open as full page**, **Open in new window**, and for your own chats **Pin**, **Rename**, **Share with team**, **Archive** and **Delete**. On the full page, **↙ Back to** the page you came from takes you back there, with the chat in the panel as it is now.\n\nThe panel isn't on Chat's own pages, where **Ctrl J** takes you to the message box, or in the Content Editor, which has its own chat."
         },
         {
           "heading": "Stop or steer",
@@ -2824,6 +2872,8 @@
       "route": "/dashboard/chat",
       "keywords": [
         "whats new",
+        "one chat",
+        "what's new chat",
         "what's new",
         "new features",
         "updates",
@@ -2842,7 +2892,7 @@
         "recent improvements"
       ],
       "plan": "all",
-      "updated": "2026-11-06",
+      "updated": "2026-11-23",
       "sections": [
         {
           "heading": null,
@@ -2850,7 +2900,7 @@
         },
         {
           "heading": "On Chat Home",
-          "text": "When there is an update you haven't read, a line with a **New** tag shows under the shortcuts, for up to 14 days. Click **Show me** to put \"What's new: how can {feature} help me?\" in the box. Nothing is sent until you send it.\n\nThe **What's new** shortcut asks Chat what's new. A small dot on it means you have updates you haven't read."
+          "text": "When there is an update you haven't read, a line with a **New** tag shows under the shortcuts, for up to 14 days. Click **Show me** to put \"What's new: how can {feature} help me?\" in the box. Nothing is sent until you send it.\n\nThe **What's new** shortcut asks Chat what's new. A small dot on it means you have updates you haven't read.\n\nThe shortcut, and **What's new** in your profile menu, keep to one chat: asked again, the question goes on in your What's new chat for the brand open, so your chat menu doesn't fill up with copies. A renamed chat still counts, since the question was asked in it. If you archived or deleted that chat, a new one starts. Chats from before stay as they are."
         },
         {
           "heading": "The answer",
@@ -2889,7 +2939,7 @@
         "citations page"
       ],
       "plan": "all",
-      "updated": "2026-11-06",
+      "updated": "2026-11-23",
       "sections": [
         {
           "heading": null,
@@ -2905,7 +2955,7 @@
         },
         {
           "heading": "Top Sources and the source choice",
-          "text": "The **Top Sources** card has four tabs: **Domains**, **URLs**, **Competitor Gaps** and **Source Types**.\n\nAbove the Domains and URLs tables, four buttons choose which sources they list:\n\n- **Brand** (the default): your brand's own domains.\n- **Competitors**: the domains of the competitors you track.\n- **Third-Party**: every other site.\n- **All**: every source.\n\nThe choice doesn't change **Total Citations**, **Avg citations per result**, **Competitor Gaps** or **Source Types**."
+          "text": "The **Top Sources** card has four tabs: **Domains**, **URLs**, **Competitor Gaps** and **Source Types**. It opens on **URLs**.\n\nAbove the Domains and URLs tables, four buttons choose which sources they list:\n\n- **Brand**: your brand's own domains. The **Citations** card on Overview opens the page here.\n- **Competitors**: the domains of the competitors you track.\n- **Third-Party**: every other site.\n- **All** (the default): every source.\n\nThe choice doesn't change **Total Citations**, **Avg citations per result**, **Competitor Gaps** or **Source Types**."
         },
         {
           "heading": "The Domains tab",
@@ -2929,7 +2979,7 @@
         },
         {
           "heading": "How to use the tab",
-          "text": "- **See which of your pages AI cites**: keep **Brand**, the default, and open the **URLs** tab. It lists your own pages that AI cites, on which platforms and how often. Open a page to see the prompts it's cited for.\n- **Find the third-party sources AI trusts**: choose **Third-Party**. The top of the Domains and URLs lists are the sites AI leans on most for your prompts: places to be mentioned or cited.\n- **Watch your competitors' pages**: choose **Competitors** to see which competitor domains and pages AI cites in your answers.\n- **Find outreach targets**: the **Competitor Gaps** tab lists the third-party sites AI cites when it names a competitor and not you."
+          "text": "- **See which of your pages AI cites**: pick **Brand** and stay on the **URLs** tab. It lists your own pages that AI cites, on which platforms and how often. Open a page to see the prompts it's cited for.\n- **Find the third-party sources AI trusts**: choose **Third-Party**. The top of the Domains and URLs lists are the sites AI leans on most for your prompts: places to be mentioned or cited.\n- **Watch your competitors' pages**: choose **Competitors** to see which competitor domains and pages AI cites in your answers.\n- **Find outreach targets**: the **Competitor Gaps** tab lists the third-party sites AI cites when it names a competitor and not you."
         }
       ]
     },
@@ -3151,7 +3201,7 @@
         },
         {
           "heading": "Scores and Platform Breakdown",
-          "text": "At the top of the comparison, **Your Visibility score** and **Their Visibility score** show each side's score out of 100 over the date range, the same numbers as the two cards, and **Difference** shows the gap between them in points.\n\n**Platform Breakdown** shows your score and the competitor's on each AI platform, with the difference. A competitor can lead on one platform and trail on another, so aim your work at the platforms where it's ahead. It lists the platforms your plan tracks, with **No answers in this period** for one without answers yet. Microsoft Copilot is asked through Bing AI Mode. Platforms outside your plan, such as Claude on Growth, aren't shown; a line under the card names them."
+          "text": "At the top of the comparison, **Your Visibility score** and **Their Visibility score** show each side's score out of 100 over the date range, the same numbers as the two cards, and **Difference** shows the gap between them in points.\n\n**Platform Breakdown** shows your score and the competitor's on each AI platform, with the difference. A competitor can lead on one platform and trail on another, so aim your work at the platforms where it's ahead. It lists the platforms your plan tracks, with **No answers in this period** for one without answers yet. Bing AI Mode is listed under its own name. Platforms outside your plan, such as Claude on Growth, aren't shown; a line under the card names them."
         },
         {
           "heading": "Gaps and Strengths",
@@ -4136,7 +4186,7 @@
         "send the snippet to my developer"
       ],
       "plan": "all",
-      "updated": "2026-11-17",
+      "updated": "2026-11-25",
       "sections": [
         {
           "heading": null,
@@ -4144,7 +4194,7 @@
         },
         {
           "heading": "On the cloud: choose how to start",
-          "text": "The first screen, **How do you want to start?**, opens on the free trial. You can pick **Monthly**, **Yearly** or **Demo** instead.\n\n- **Start 14-day free trial** opens checkout. You enter card details, nothing is charged until the trial ends, and you can cancel any time. The trial comes with an organization's first subscription only.\n- **Buy now**, or a plan without a trial, starts the plan the same day.\n\nAfter checkout, the five setup steps open, and your brand's first run starts when you finish them.\n\nNot ready to add a card? Pick **Demo**, then **Explore the sample brand**, or select **Explore a sample brand first** under the plans. The sample brand is made up, with sample data: you can open every page, but nothing runs or changes. When you pick a plan there, you set up your own brand.\n\nA self-hosted install has no such screen."
+          "text": "The first screen, **How do you want to start?**, opens on the free trial. You can pick **Monthly**, **Yearly** or **Demo** instead.\n\n- **Start 14-day free trial** opens checkout. Nothing is charged until the trial ends, and you can cancel any time. The trial comes with an organization's first subscription only.\n- **Buy now**, or a plan without a trial, starts the plan the same day.\n\nAfter checkout, the five setup steps open; your brand's first run starts when you finish.\n\nNot ready to add a card? Pick **Demo**, then **Explore the sample brand**, or select **Explore a sample brand first** under the plans. It's made up, with sample data: every page opens, but nothing runs or changes. When you pick a plan there, you set up your own brand. If it doesn't open after it's prepared, **Open the demo** loads it again.\n\nA self-hosted install has no such screen."
         },
         {
           "heading": "Step 1: Brand basics",
@@ -4840,7 +4890,7 @@
         "stop tracking a location"
       ],
       "plan": "all",
-      "updated": "2026-11-11",
+      "updated": "2026-11-25",
       "sections": [
         {
           "heading": null,
@@ -4864,7 +4914,7 @@
         },
         {
           "heading": "Which engines answer from a state or city",
-          "text": "**US states** are asked by every engine from the state itself. Google's engines asked a state country-wide until October 2026, so their answers from before then stay in the country's column.\n\n**Cities** are asked only by the engines that can answer from a city: Google AI Mode, Google AI Overview and the API models (OpenAI, Claude). ChatGPT, Gemini and Grok answer per country, so they skip a city and their answers stay in the country's column; track the country too to see them. A city column says **AI Mode · AIO · APIs**. A city counts as one location on your plan, like a country."
+          "text": "**US states** are asked by every engine from the state itself; Gemini may answer from the whole US instead. Google's engines asked a state country-wide until October 2026, so their answers from before then stay in the country's column.\n\n**Cities** are asked only by the engines that can answer from a city: Google AI Mode, Google AI Overview and the API models (OpenAI, Claude). ChatGPT, Gemini and Grok answer per country, so they skip a city and their answers stay in the country's column; track the country too to see them. A city column says **AI Mode · AIO · APIs**. A city counts as one location on your plan, like a country."
         },
         {
           "heading": "What a new location shows",
@@ -4984,7 +5034,7 @@
         },
         {
           "heading": "Which engines share their searches",
-          "text": "ChatGPT's searches are sampled on some days, and the ChatGPT API shares them when it searches. Google AI Overviews, AI Mode, Gemini, Microsoft Copilot and the Claude and Gemini API models don't share them: their chips say **not shared**, and a note under the chips names them. Copilot shared them until November 2026; Ansvisor now reads its answers from Bing, which doesn't. Perplexity shared them too, but Ansvisor no longer tracks it. Searches from their past answers still show for the dates you pick.\n\nNew searches now come from ChatGPT only, so the tab lists fewer of them than before. A note at the top of the tab says so."
+          "text": "ChatGPT's searches are sampled on some days, and the ChatGPT API shares them when it searches. Google AI Overviews, AI Mode, Gemini, Bing AI Mode and the Claude and Gemini API models don't share them: their chips say **not shared**, and a note under the chips names them. Microsoft Copilot shared them until November 2026; Ansvisor now tracks Bing AI Mode in its place, which doesn't. Perplexity shared them too, but Ansvisor no longer tracks it. Searches from their past answers still show for the dates you pick.\n\nNew searches now come from ChatGPT only, so the tab lists fewer of them than before. A note at the top of the tab says so."
         },
         {
           "heading": "Engines",
@@ -5100,7 +5150,11 @@
         "location filter",
         "analyze volume",
         "track now",
-        "no answers yet"
+        "no answers yet",
+        "tracking slots",
+        "add a platform",
+        "bulk platforms",
+        "waiting platform"
       ],
       "synonyms": [
         "prompt list",
@@ -5109,7 +5163,7 @@
         "tracked queries"
       ],
       "plan": "all",
-      "updated": "2026-11-20",
+      "updated": "2026-11-27",
       "sections": [
         {
           "heading": null,
@@ -5152,6 +5206,10 @@
           "text": "Tags label prompts with your own words, such as a campaign or product line. A prompt carries up to 10 tags, each up to 50 characters. Admins and managers tag one from **Edit** on its **…** menu, under **Tags**: type and press Enter. Tags show beside the prompt's text in the table.\n\nTo tag many at once, tick their rows and open **Tags** in the bar that appears: **Add tags** puts them on every selected prompt, leaving one that would go over 10 alone, and **Remove tags** takes the picked tags off. The dialog says how many prompts will change before you save.\n\nThe **Tags** filter beside the search box narrows the table to one or more tags. With several picked, **Match all** keeps prompts carrying every one; **Match any** keeps those carrying at least one. It combines with search and the other filters."
         },
         {
+          "heading": "Tracking slots per platform",
+          "text": "On Growth and Enterprise, **Show usage** also lists **Tracking slots**: each platform's slots in use against the slots you have, amber near full and red when full. A slot is one prompt in one location on one platform. **Add slots** opens **Settings › Billing**.\n\nTo track prompts on another platform, tick their rows and open **Platforms** in the bar: **Add platforms** offers the platforms you have slots on, each with its free slots, and says if one has too few for the selection. **Remove platforms** takes a platform off, freeing its slots; a prompt it would leave with nothing to run is left alone. When a platform runs out of slots, the newest prompts wait on it; adding it again here runs it again."
+        },
+        {
           "heading": "Open a prompt or act on it",
           "text": "Click a prompt's text to open its own page, with its visibility, mentions, citations and per-platform results. For admins and managers, each row's **…** menu offers **Edit**, **Pause tracking** (or **Resume tracking**), **Improve position…**, **Suggest content** (or **Open content suggestion**), **Create content** (or **Open draft**) and **Delete**.\n\nWhen an Improve action sent for a prompt is still being tracked, its **Work** cell shows a link with the action's code, such as **AC-12 · Improving**. It opens the prompt's positions panel on its **Improve** tab.\n\n**Export CSV** downloads the list. Estimated volumes in it are marked as estimates, with their confidence and range, so a spreadsheet doesn't read them as counts."
         }
@@ -5185,19 +5243,19 @@
         },
         {
           "heading": "Choose how often it comes",
-          "text": "Open **Settings › Notifications**. The page has two sections: **Daily Pulse** and **AI Traffic weekly digest**. Under **Daily Pulse**, every active brand has its own card with a frequency and a recipient list. Admins and managers can change them; other members see them read-only. The **Manage notification settings** link at the bottom of every pulse email opens this page.\n\n- **Daily**: after every scheduled daily tracking run.\n- **Weekly**: once a week on Monday (UTC), covering the last 7 days compared with the 7 days before.\n- **Only when notable** (the default): your first pulse always goes out, so you see your starting point. After that it is like Daily, but skipped when there are no highlights and no warnings. Brands that never chose a frequency use this; a brand whose admin saved **Daily** keeps it.\n- **Off**: no email, no webhook and no Slack post."
+          "text": "Open **Settings › Notifications**. Under **Your e-mails**, **Daily Pulse** is in the **Brand Visibility** group: pick how often it comes to you, for all your brands or one brand apart, and press **Save changes**. Each teammate picks their own. The **Manage notification settings** link at the bottom of every pulse email opens this page.\n\n- **Daily**: after every scheduled daily tracking run.\n- **Weekly**: once a week on Monday (UTC), covering the last 7 days compared with the 7 days before.\n- **Only when notable** (the default): your first pulse always goes out, so you see your starting point. After that it is like Daily, but skipped when there are no highlights and no warnings.\n- **Off**: you get no pulse email."
         },
         {
-          "heading": "Choose who gets it",
-          "text": "Enter email addresses separated by commas. Leave the field empty to send to every member of the organization. Each address is checked when you save: if one isn't valid, the save is rejected and the invalid entries are listed under the field, so fix or remove them and save again. Up to 50 addresses are stored. Recipients apply to the email only, not to the webhook."
+          "heading": "Choose who else gets it",
+          "text": "Admins can add people outside the workspace, such as a client, under **Send to people outside the workspace**: each brand has a list of addresses, separated by commas, and how often its pulse comes. Each address is checked when you save; invalid ones are listed under the field. Up to 50 addresses are stored. A teammate who hasn't saved their own choices gets the pulse as before: every teammate while the list is empty, else only those on it. The brand's frequency there also sets its webhook and Slack post; **Off** stops both."
         },
         {
           "heading": "AI Traffic weekly digest",
-          "text": "The **AI Traffic weekly digest** has its own section on the same page, with one tick box per brand: every Monday, last week's AI visits in one summary line, with the top three changes. Each brand's line shows who gets it: the brand's Daily Pulse recipients, or every member when that list is empty. A tick or untick is saved at once. The digest isn't sent while the brand's Daily Pulse is **Off**."
+          "text": "The **AI Traffic weekly digest** comes every Monday: last week's AI visits in one summary line, with the top three changes. Pick **Every Monday** or **Off** for it under **Your e-mails**, in the **AI Traffic** group. For people outside the workspace, an Admin ticks or unticks it under the brand; it isn't sent to them while the brand's Daily Pulse is **Off**."
         },
         {
           "heading": "When it is sent",
-          "text": "A pulse follows a brand's scheduled daily tracking run; manual runs and single-prompt refreshes never trigger one. It waits up to 90 minutes for late answers, so its numbers match the dashboard. No pulse is sent when the frequency is **Off**, or **Weekly** and it isn't Monday; when the brand already had one that day; when there are no tracking results in the window; when the frequency is **Only when notable**, it isn't the brand's first pulse and nothing is notable; or, on the cloud, when the subscription isn't active or trialing."
+          "text": "A pulse follows a brand's scheduled daily tracking run; manual runs and single-prompt refreshes never trigger one. It waits up to 90 minutes for late answers, so its numbers match the dashboard. Nobody gets a pulse whose frequency is **Off**, or **Weekly** when it isn't Monday. No pulse is sent when the brand already had one that day; when there are no tracking results in the window; when the frequency is **Only when notable**, it isn't the brand's first pulse and nothing is notable; or, on the cloud, when the subscription isn't active or trialing."
         },
         {
           "heading": "What's in a pulse",
@@ -5217,7 +5275,7 @@
         },
         {
           "heading": "Send it to a webhook",
-          "text": "Every pulse also goes to the brand's active webhook, if it is subscribed to the Daily Pulse event: under **Content**, open **Webhook Settings** and tick **Daily Pulse created**. On self-hosted installs, this is the only way the pulse is delivered. The webhook carries the same KPIs, highlights and warnings as the email. The frequency applies to it too; the recipient list doesn't."
+          "text": "Every pulse also goes to the brand's active webhook, if it is subscribed to the Daily Pulse event: under **Content**, open **Webhook Settings** and tick **Daily Pulse created**. On self-hosted installs, this is the only way the pulse is delivered. The webhook carries the same KPIs, highlights and warnings as the email. The brand's frequency under **Send to people outside the workspace** applies to it too; the recipient list and people's own choices don't."
         }
       ]
     },
@@ -5456,10 +5514,13 @@
     },
     {
       "id": "settings/add-ons",
-      "title": "Add-ons: extra tracking, brands, AI top-ups and packs",
+      "title": "Add-ons: tracking slots, brands, AI top-ups and packs",
       "route": "/dashboard/settings/billing",
       "keywords": [
         "add-ons",
+        "tracking slots",
+        "slots",
+        "volume discount",
         "extra tracking",
         "extra brands",
         "AI top-up",
@@ -5473,6 +5534,10 @@
         "storage full"
       ],
       "synonyms": [
+        "buy slots",
+        "track on more platforms",
+        "add Claude",
+        "add Perplexity",
         "add more prompts",
         "track more prompts",
         "add a brand",
@@ -5484,19 +5549,27 @@
         "credit pack"
       ],
       "plan": "starter",
-      "updated": "2026-11-21",
+      "updated": "2026-11-27",
       "sections": [
         {
           "heading": null,
-          "text": "**Settings › Billing** sells more for your plan. On Growth, **Add more to your plan** adds extra tracking, extra brands and AI usage top-ups, picked together and paid once. **Add-ons** shows AI credit you have left and the packs you bought. Everything is paid with Stripe, added only after the payment goes through, and shown on your invoice."
+          "text": "**Settings › Billing** sells more for your plan. On Growth, **Add more to your plan** adds tracking slots, extra brands and AI usage top-ups, picked together and paid once. On Enterprise it adds tracking slots. **Add-ons** shows AI credit you have left and the packs you bought. Everything is paid with Stripe, added only after the payment goes through, and shown on your invoice."
+        },
+        {
+          "heading": "Tracking slots",
+          "text": "A slot tracks one prompt in one location on one platform, every day. Your plan includes slots on its own platforms (Growth: 250 on each standard platform). Under **Tracking slots**, each platform shows how many slots are used, your total and what is included. Click **+** or **−** to add or remove 100 slots on it.\n\nPrices per 100 slots a month: $15 on the standard platforms, $45 on ChatGPT Ads and Meta AI, $60 on Perplexity, Claude, Grok and Microsoft Copilot. On a yearly plan, prices are yearly, with 2 months free. Add-ons follow your plan's billing period.\n\nYou can't go below the slots a platform uses: remove it from some prompts first."
+        },
+        {
+          "heading": "Volume discount",
+          "text": "The more slots you add, the less each costs: 5% off the part of your monthly slots price above $500, 10% above $1,000, 15% above $2,000 and 20% above $4,000. The card shows your discount and what to add for the next step. It applies to slots only; a plan discount code stays on your plan."
         },
         {
           "heading": "Add more to your plan (Growth)",
-          "text": "- **Extra tracking:** more prompt locations, tracked on your plan's engines every day. Pick one tier, or **None** to remove it. The largest tiers say **Contact sales**.\n- **Extra brands:** each with its own topics, competitors and white-label reports, at a monthly price per brand.\n- **AI usage top-up:** one payment that adds AI usage, briefs and opportunities until your plan renews. It doesn't renew, and you can buy another any time.\n\nOn a yearly plan, tracking and brands show yearly prices, with 2 months free."
+          "text": "- **Extra tracking:** no longer sold; tracking slots replace it. A workspace that has a tier keeps it, and can remove it.\n- **Extra brands:** each with its own topics, competitors and white-label reports, at a monthly price per brand.\n- **AI usage top-up:** one payment that adds AI usage, briefs and opportunities until your plan renews. It doesn't renew, and you can buy another any time.\n\nOn a yearly plan, slots and brands show yearly prices, with 2 months free."
         },
         {
           "heading": "Review and pay",
-          "text": "Pick what you want, then click **Review and pay**. The window shows your new limits, what is **Due today** (the rest of this period for tracking and brands, and a top-up in full) and your total from the next renewal. **Pay** charges the card on file once. A lower tier or fewer brands leaves a credit for your next invoices. You can't go below what you use: pause prompts or remove brands first.\n\nOnly admins of an active Growth plan buy. In a free trial, start your plan first; if your plan is set to end, keep it first."
+          "text": "Pick what you want, then click **Review and pay**. The window shows your new slots and limits, the volume discount, what is **Due today** (the rest of this period for slots and brands, and a top-up in full) and your total from the next renewal. **Pay** charges the card on file once. Fewer slots or brands leave a credit for your next invoices. You can't go below what you use: pause prompts or remove brands first.\n\nOnly admins of an active Growth or Enterprise plan buy. In a free trial, start your plan first; if your plan is set to end, keep it first."
         },
         {
           "heading": "AI credit packs (no longer sold)",
@@ -6025,7 +6098,7 @@
         "slack buttons"
       ],
       "plan": "starter",
-      "updated": "2026-11-15",
+      "updated": "2026-11-20",
       "sections": [
         {
           "heading": null,
@@ -6037,7 +6110,7 @@
         },
         {
           "heading": "When the Pulse is posted",
-          "text": "With **Daily Pulse** on under the channel, the Pulse is posted as often as it goes out by e-mail: **Daily**, **Weekly** on Mondays, or **Only when notable** (the default). Change how often in **Settings › Notifications**. When it is **Off** there, nothing is posted. Turn **Daily Pulse** off on the Slack card to keep the e-mail and stop the Slack post.\n\nEach Pulse is posted once. If Slack doesn't take it, Ansvisor tries once more, then leaves it for that day."
+          "text": "With **Daily Pulse** on under the channel, the Pulse is posted as often as the brand's Pulse is set to go out: **Daily**, **Weekly** on Mondays, or **Only when notable** (the default). An Admin changes how often for the brand under **Send to people outside the workspace** in **Settings › Notifications**. When it is **Off** there, nothing is posted. Turn **Daily Pulse** off on the Slack card to keep the e-mail and stop the Slack post.\n\nEach Pulse is posted once. If Slack doesn't take it, Ansvisor tries once more, then leaves it for that day."
         },
         {
           "heading": "Drop alerts",

@@ -431,3 +431,33 @@ describe('the table status filter', () => {
     ]);
   });
 });
+
+describe('tracking slots per platform (00564)', () => {
+  it('shows each platform’s slots, amber near full and red when full, with Add slots', () => {
+    render({
+      status: 'ready',
+      usage: summary({
+        plan: { key: 'growth', name: 'Growth plan', locationLimit: 300, cta: 'add_more' },
+        slots: [
+          { platform: 'chatgpt-web', used: 120, limit: 250 },
+          { platform: 'gemini-web', used: 230, limit: 250 },
+          { platform: 'claude-web', used: 300, limit: 300 },
+        ],
+      }),
+    });
+    const meters = container.querySelector('[data-slot="slot-meters"]')!;
+    expect(meters.textContent).toContain('Tracking slots');
+    expect(meters.textContent).toContain('ChatGPT120 / 250');
+    expect(meters.querySelector('a')?.getAttribute('href')).toContain('#plan-add-ons');
+    const tone = (platform: string) =>
+      meters.querySelector(`[data-platform="${platform}"] .tabular-nums`)!.className;
+    expect(tone('chatgpt-web')).not.toMatch(/amber|red/);
+    expect(tone('gemini-web')).toMatch(/amber/);
+    expect(tone('claude-web')).toMatch(/red/);
+  });
+
+  it('shows no meters on a plan without slots', () => {
+    render({ status: 'ready', usage: summary() });
+    expect(container.querySelector('[data-slot="slot-meters"]')).toBeNull();
+  });
+});

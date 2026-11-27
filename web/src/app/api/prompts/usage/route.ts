@@ -2,7 +2,8 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { createClient } from '@/lib/supabase/server';
 import { ORG_PLAN_COLUMNS, usagePlanFromOrgRow } from '@/lib/guards/plan-guard';
-import { fetchPromptUsageRow, toPromptUsageSummary } from '@/lib/prompt-usage-summary';
+import { fetchPromptUsageRow, slotMeters, toPromptUsageSummary } from '@/lib/prompt-usage-summary';
+import { getOrgSlotUsage } from '@/lib/prompt-locations';
 
 /**
  * GET /api/prompts/usage?brandId=…
@@ -54,7 +55,17 @@ export async function GET(req: Request) {
 
     // An organization whose plan ended counts against the plan it was on.
     const { plan, ended } = usagePlanFromOrgRow(brand.organizations);
-    return NextResponse.json(toPromptUsageSummary(row, plan, new Date(), { ended }), {
+    // Slots per platform (00564), on a plan that has them; the meters are
+    // extra, so a failed read leaves them out rather than the cards.
+    let slots;
+    if (plan.slots && !ended) {
+      try {
+        slots = slotMeters(plan.slots, await getOrgSlotUsage(supabase, brand.organization_id));
+      } catch (err) {
+        console.error('[prompts/usage] Slot usage not read:', err);
+      }
+    }
+    return NextResponse.json(toPromptUsageSummary(row, plan, new Date(), { ended, slots }), {
       headers: { 'Cache-Control': 'private, no-store' },
     });
   } catch (err) {

@@ -54,8 +54,8 @@ describe('actionTexts', () => {
     expect(() => actionGoal(kind, t)).not.toThrow();
   });
 
-  it("holds copy for all sixty-two definitions and the AC plan's, the eleven person-sent kinds, the catalog check's and Business Hub's two", () => {
-    expect(ACTION_KINDS).toHaveLength(79);
+  it("holds copy for all sixty-two definitions, the AC plan's and Ads', the eleven person-sent kinds, the catalog check's and Business Hub's two", () => {
+    expect(ACTION_KINDS).toHaveLength(80);
   });
 
   it('names the weekly Business Hub reminder after the last entry’s days, with no signals tag', () => {

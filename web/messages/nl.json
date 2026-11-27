@@ -277,6 +277,7 @@
       "label": "Uw merk wordt nog niet bijgehouden"
     },
     "actions": {
+      "changePlatforms": "Platforms wijzigen vereist een abonnement",
       "addPrompts": "Prompts toevoegen vereist een abonnement",
       "removeLocations": "Locaties verwijderen vereist een abonnement",
       "editPrompts": "Prompts bewerken vereist een abonnement",
@@ -622,6 +623,8 @@
       "slow": "Dit duurt langer dan gebruikelijk.",
       "ready": "Gereed. Prompts openen…",
       "failed": "Kan de demo niet voorbereiden. Controleer uw verbinding en probeer het opnieuw.",
+      "stuck": "De demo is klaar, maar de pagina is niet geopend. Open hem opnieuw, of sluit dit en probeer het later.",
+      "open": "Demo openen",
       "retry": "Opnieuw proberen",
       "close": "Sluiten"
     }
@@ -1881,6 +1884,10 @@
         "title": "Sterke AI-conversies op {targets}",
         "description": "Deze pagina's zetten AI-verkeer om in belangrijke gebeurtenissen, ruim boven het gemiddelde van uw site."
       },
+      "paid_overlap": {
+        "title": "Google-advertentie-uitgaven stijgen voor {targets} waar AI u al voor kiest",
+        "description": "AI kiest u al in de antwoorden op deze koopprompts, en wat u aan Google betaalt voor de bijbehorende zoektermen is gestegen ten opzichte van de voorgaande 30 dagen."
+      },
       "bridge_link_gap": {
         "title": "Link {targets} naar pagina's die converteren",
         "description": "AI stuurt lezers naar deze pagina's en weinigen van hen converteren. Pagina's over hetzelfde onderwerp die wel converteren, hebben weinig AI-verkeer."
@@ -2478,6 +2485,8 @@
           "task_review_withdrawn": "Klaar voor beoordeling ingetrokken via Ongedaan maken: {task}{title}",
           "cancelled": "Geannuleerd vanuit Chat door {by} · ongedaan maken",
           "reopened": "Actie heropend — de voorwaarde is weer actief",
+          "replaced": "Vervangen door een nieuwere actie van hetzelfde soort: niemand had er 30 dagen aan gewerkt",
+          "replaces": "Geopend in plaats van een oudere actie van hetzelfde soort waar 30 dagen niemand aan had gewerkt",
           "signals_linked": "{count, plural, one {1 nieuw signaal} other {# nieuwe signalen}} gekoppeld",
           "status_changed": "Status gewijzigd in {to}",
           "assigned": "Toegewezene gewijzigd",
@@ -3350,6 +3359,12 @@
         "description": "Deze bronnen worden geciteerd wanneer antwoorden uw merk bespreken, en kunnen naar uw eigen pagina's verwijzen.",
         "goal": "Zet vermeldingen van derden om in referenties naar uw assets."
       },
+      "review_paid_overlap": {
+        "title": "Beoordeel de Google-advertenties voor {targets} waar AI u al voor kiest",
+        "titleGeneric": "Beoordeel Google-advertenties waar AI u al kiest",
+        "description": "AI kiest u al in de antwoorden op deze koopprompts, en uw Google-uitgaven voor de bijbehorende zoektermen stijgen. Mogelijk betaalt u voor klikken die u anders ook zou krijgen.",
+        "goal": "Besteed aan advertenties waar ze extra klikken opleveren, en behoud het AI-antwoord."
+      },
       "bridge_links": {
         "title": "Link {targets} naar pagina's die converteren",
         "titleGeneric": "Link door AI bezochte pagina's naar pagina's die converteren",
@@ -3814,6 +3829,8 @@
       "prioritize_targets_target": "Prioriteer {targets} op basis van impact",
       "review_link_plan": "Beoordeel de toe te voegen links",
       "review_link_plan_target": "Beoordeel de links die moeten worden toegevoegd aan {targets}",
+      "review_paid_overlap": "Beoordeel de Google-advertenties voor deze zoektermen",
+      "review_paid_overlap_target": "Beoordeel de Google-advertenties voor {targets}",
       "define_validation_baseline": "Leg de nulmeting vast om tegen af te zetten",
       "define_validation_baseline_target": "Leg de nulmeting vast voor {targets}",
       "create_content_brief": "Maak een contentbriefing",
@@ -3925,6 +3942,7 @@
       "strengthen_entity_content": "De pagina beschrijft het merk zoals het profiel dat doet, na opnieuw ophalen",
       "add_internal_links": "De pagina's die ernaar moeten linken doen dat, opnieuw opgehaald",
       "review_link_plan": "Elke link en de bijbehorende ankertekst is goedgekeurd of gewijzigd: u bevestigt dit",
+      "review_paid_overlap": "De advertentie voor elke zoekterm is behouden, verlaagd of onderbroken in Google Ads: u bevestigt dit",
       "improve_cta_path": "De call-to-action staat live op de pagina: u bevestigt dit",
       "publish_content": "De pagina is gepubliceerd op het adres en reageert wanneer deze wordt opgehaald",
       "fix_crawler_access": "robots.txt en de pagina laten de AI-crawlers toe, opnieuw opgehaald",
@@ -4071,6 +4089,7 @@
         "whatHappened": "Wat is er gebeurd?",
         "triggeredBy": "Samengevoegd uit {count, plural, one {# signaal} other {# signalen}}",
         "dismissedBecause": "Afgewezen: {reason}.",
+        "replaced": "Vervangen door een nieuwere actie van hetzelfde soort: niemand had er 30 dagen aan gewerkt, dus de nieuwe bevindingen openden een nieuwe.",
         "readings": "Meting na afronding: {list}.",
         "reading": "dag {day}, {outcome}",
         "finalOn": "De definitieve meting is op dag {day}.",
@@ -4122,7 +4141,10 @@
         "actions": "Acties",
         "scorecard": "Scorecard",
         "kpis": "KPI's",
-        "label": "Geschiedenisweergaven"
+        "label": "Geschiedenisweergaven",
+        "actionsHint": "Elke actie die loopt of is afgesloten, stuk voor stuk: wat ze beoogde en wat sindsdien is gemeten.",
+        "scorecardHint": "Wat elk type actie in totaal heeft opgeleverd: hoeveel er zijn afgerond, het slagingspercentage en de mediane verandering.",
+        "kpisHint": "De doelen van uw merk en hoe dicht u bij elk doel bent."
       },
       "scorecard": {
         "note": "Wat elk type actie bij dit merk heeft opgeleverd, uitsluitend op basis van de eigen acties. Resultaten zijn de metingen tot nu toe; elk resultaat is definitief een maand nadat de actie is gesloten. Mediaanverandering betreft de hoofdstatistiek van elke actie.",
@@ -4494,6 +4516,10 @@
       "name": "Catalogusbronnen lezen",
       "step": "Catalogus lezen"
     },
+    "catalogFeedGaps": {
+      "name": "Feedlacunes lezen",
+      "step": "Producten · Feedlacunes lezen"
+    },
     "contentPlan": {
       "name": "Het contentplan lezen",
       "step": "Contentplan lezen"
@@ -4513,6 +4539,10 @@
     "siteAuditQuota": {
       "name": "Resterende Site Audits deze maand lezen",
       "step": "Site Audit gelezen"
+    },
+    "crawlerAccess": {
+      "name": "AI-crawlerproblemen bekijken",
+      "step": "Site Audit · Crawlers bekijken"
     },
     "goToPage": {
       "name": "Ga naar een pagina",
@@ -4807,6 +4837,10 @@
     "adsOpportunities": {
       "name": "Advertentiekansen lezen",
       "step": "Advertentiekansen gelezen"
+    },
+    "adsPaidOverlap": {
+      "name": "Betaalde overlap uitlezen",
+      "step": "Betaalde overlap uitlezen"
     },
     "adDrafts": {
       "name": "Advertentieconcepten opslaan",
@@ -6207,7 +6241,6 @@
       "home": "Home",
       "inbox": "Inbox",
       "inboxLabel": "Inbox · {needsYou, plural, one {# vereist uw aandacht} other {# vereisen uw aandacht}}",
-      "inboxLabelNeedsYou": "Inbox · {count, plural, one {# item} other {# items}} · {needsYou, plural, one {# vereist uw aandacht} other {# vereisen uw aandacht}}",
       "skills": "Skills",
       "activity": "Activiteit",
       "capabilities": "Wat Chat kan doen",
@@ -6657,10 +6690,7 @@
       "landsWithSuggestions": "Resultaten van uw agents en dagelijkse suggesties komen hier binnen.",
       "nothingNeedsYou": "Niets vereist uw aandacht.",
       "summary": {
-        "needsYou": "{count, plural, one {# vereist uw aandacht} other {# vereisen uw aandacht}}",
-        "running": "{count} actief",
-        "doneToday": "{count} vandaag voltooid",
-        "suggestions": "{count, plural, one {# suggestie} other {# suggesties}} deze week"
+        "needsYou": "{count, plural, one {# vereist uw aandacht} other {# vereisen uw aandacht}}"
       },
       "empty": "Niets vereist uw aandacht. Resultaten van uw agents komen hier binnen.",
       "tabs": {
@@ -7771,7 +7801,9 @@
         "signal": "Signaal aangemaakt",
         "kpi": "KPI gewijzigd",
         "watch_rule": "Waakregel",
-        "brand_added": "Merk toegevoegd"
+        "brand_added": "Merk toegevoegd",
+        "page_published": "Pagina gepubliceerd",
+        "catalog_synced": "Catalogus gesynchroniseerd"
       },
       "daily": "Elke dag om {time}",
       "weekdays": "Werkdagen om {time}",
@@ -7786,13 +7818,17 @@
       "kpiAny": "Een KPI",
       "watchRule": "Meldingsregel",
       "brandAdded": "Wanneer een merk wordt toegevoegd",
+      "pagePublished": "Wanneer een pagina wordt gepubliceerd",
+      "catalogSynced": "Wanneer de catalogus wordt gesynchroniseerd",
       "manualOnly": "Alleen handmatig",
       "more": "+{count}",
       "firesWhen": {
         "signal": "Wordt geactiveerd wanneer Action Center een passend signaal vindt",
         "kpi": "Wordt geactiveerd wanneer de KPI de drempelwaarde overschrijdt",
         "watch_rule": "Wordt geactiveerd wanneer de bijbehorende meldingsregel afgaat",
-        "brand_added": "Wordt eenmalig geactiveerd voor elk merk dat aan de workspace wordt toegevoegd"
+        "brand_added": "Wordt eenmalig geactiveerd voor elk merk dat aan de workspace wordt toegevoegd",
+        "page_published": "Wordt eenmaal geactiveerd voor elke pagina die live gaat in het CMS van het merk",
+        "catalog_synced": "Wordt eenmaal geactiveerd voor elke catalogussynchronisatie die producten wijzigt"
       },
       "timeZone": "{zone}-tijd",
       "off": "Uit · wordt niet geactiveerd",
@@ -7892,6 +7928,8 @@
         "trigger": "Trigger",
         "signal": "Signaal",
         "slot": "Gepland voor",
+        "page": "Pagina gepubliceerd",
+        "catalog": "Catalogusbron gesynchroniseerd",
         "earlier": "Eerdere activeringen",
         "action": "Actie"
       },
@@ -7933,6 +7971,8 @@
       "kpi": "KPI gewijzigd",
       "watch_rule": "Watch-regel",
       "brand_added": "Merk toegevoegd",
+      "page_published": "Pagina gepubliceerd",
+      "catalog_synced": "Catalogus gesynchroniseerd",
       "manual": "Handmatig",
       "action": "Agent uitvoeren vanuit een actie",
       "agent": "Aangeroepen door een andere agent"
@@ -8008,8 +8048,11 @@
       "seasonal": "Seizoensgebonden prompts",
       "traffic": "AI-verkeer en aanmeldingen",
       "ai-revenue": "Klanten en omzet via AI",
+      "feed-advisor": "Lacunes in shoppingfeed",
+      "tech-fix": "Crawler- en technische oplossingen",
       "earn-or-pay": "Verdienen of betalen",
       "ad-drafts": "Advertentieconcepten",
+      "paid-overlap": "Betaalde overlap",
       "operator": "AEO Operator"
     },
     "form": {
@@ -8076,7 +8119,9 @@
           "signal": "Signaal aangemaakt",
           "kpi": "KPI gewijzigd",
           "watch_rule": "Bewakingsregel",
-          "brand_added": "Wanneer een merk wordt toegevoegd"
+          "brand_added": "Wanneer een merk wordt toegevoegd",
+          "page_published": "Wanneer een pagina wordt gepubliceerd",
+          "catalog_synced": "Wanneer de catalogus wordt gesynchroniseerd"
         },
         "notes": {
           "manual": "Uitvoeren via Chat of een actie",
@@ -8084,7 +8129,9 @@
           "signal": "Een nieuw Actiecentrum-signaal",
           "kpi": "Een KPI overschrijdt een drempelwaarde",
           "watch_rule": "WANNEER · VOOR · DAN",
-          "brand_added": "Eenmalig per nieuw merk · vereist Alle merken"
+          "brand_added": "Eenmalig per nieuw merk · vereist Alle merken",
+          "page_published": "Eén keer per pagina die live gaat in uw CMS",
+          "catalog_synced": "Eén keer per synchronisatie die producten wijzigt"
         },
         "watchRuleNone": "Ingesteld op een bewakingsregel: de bijbehorende DAN voert de agent uit",
         "list": "Triggers",
@@ -8148,6 +8195,8 @@
         },
         "watchRuleWhen": "De controleerregel wordt geactiveerd",
         "brandAddedWhen": "er een merk wordt toegevoegd aan de werkruimte, eenmaal per merk",
+        "pagePublishedWhen": "een pagina live gaat in het CMS van het merk, eenmaal per pagina",
+        "catalogSyncedWhen": "een synchronisatie van de productcatalogus van het merk producten wijzigt, eenmaal per synchronisatie",
         "runAgent": "Agent uitvoeren"
       },
       "scope": {
@@ -8614,7 +8663,7 @@
       },
       "paid-opportunity": {
         "name": "Betaalde kansen",
-        "description": "Geeft wekelijks aan welke koopprompts u met content moet verdienen of voor moet betalen, signaleert wijzigingen zoals een concurrent die op uw naam adverteert, en ontwerpt advertenties in Ansvisor."
+        "description": "Geeft wekelijks aan welke koopprompts u organisch met content moet behalen of voor moet betalen, signaleert wijzigingen zoals een concurrent die nu op uw naam adverteert, toont wat u op Google betaalt waar AI u al citeert, en stelt advertenties op in Ansvisor."
       },
       "ai-ads-watch": {
         "name": "AI Ads Watch",
@@ -15401,7 +15450,14 @@
       "sov": "Betaalde SoV",
       "sovNote": "Gesponsorde advertenties in AI-antwoorden worden nog niet geregistreerd",
       "cost": "Kosten per AI-ondersteunde aanmelding",
-      "costNote": "Vereist een gekoppeld advertentieaccount",
+      "costNote": "Vereist een gekoppeld en uitgelezen advertentieaccount in Koppelingen",
+      "costOf": "{spend} advertentie-uitgaven ÷ {count, plural, one {# AI-ondersteunde aanmelding} other {# AI-ondersteunde aanmeldingen}}",
+      "costSpend": "{spend} advertentie-uitgaven in deze periode",
+      "costNoSignups": "Nog geen aanmeldingen",
+      "costNoSpend": "Geen advertentie-uitgaven",
+      "costNoSpendNote": "De gekoppelde advertentieaccounts hebben in deze periode niets uitgegeven",
+      "costCurrencies": "Meerdere valuta's",
+      "costCurrenciesNote": "{spend} advertentie-uitgaven: bedragen in verschillende valuta's worden niet opgeteld, dus er zijn geen eenduidige kosten per aanmelding",
       "signups": "{count, plural, one {# AI-ondersteunde aanmelding} other {# AI-ondersteunde aanmeldingen}} in deze periode",
       "signupsNotMeasured": "AI-ondersteunde aanmeldingen: niet gemeten",
       "barTitle": "Organisch of betaald · {count, plural, one {# prompt} other {# prompts}}",
@@ -15410,7 +15466,11 @@
       "earnedPaid": "Organisch + betaald",
       "paidOnly": "Alleen betaald",
       "neither": "Geen van beide",
-      "paidNotMeasured": "Betaald wordt nog niet gemeten, dus de balk toont alleen organisch en geen van beide.",
+      "paidNotMeasured": "Betaald wordt pas gemeten zodra een Google Ads-account is gekoppeld en uitgelezen, dus de balk toont alleen organisch en geen van beide.",
+      "spendOverlap": "Betaald op Google voor prompts waar AI u al voor citeert: {amount}",
+      "spendMatched": "Voor al uw gevolgde prompts: {amount}",
+      "spendUnmatched": "Voor zoektermen die met geen enkele gevolgde prompt overeenkomen: {amount}",
+      "spendNote": "Van uw Google Ads-zoektermen. Uitgaven aan ChatGPT Ads zijn te vinden onder Campagnes: daar staat niet bij bij welke vraag een advertentie werd getoond.",
       "openPrompts": "Bekijk {count, plural, one {# open prompt} other {# open prompts}}",
       "locked": "{count, plural, one {# extra prompt} other {# extra prompts}} in Kansen {count, plural, one {is} other {zijn}} inbegrepen vanaf het {plan}-abonnement.",
       "openSov": "Wie betaalt per prompt"
@@ -15487,7 +15547,7 @@
         "volume_at_least": "{volume} Google-zoekopdrachten per maand, minimaal {threshold}",
         "volume_below": "{volume} Google-zoekopdrachten per maand, onder {threshold}",
         "volume_not_measured": "Google-zoekopdrachten worden nog niet gemeten",
-        "paid_not_measured": "Wie betaalt wordt nog niet gemeten",
+        "paid_not_measured": "{wePay, select, false {Of concurrenten betalen voor advertenties is nog niet gemeten} other {Wie betaalt is nog niet gemeten}}",
         "no_ad_channel": "Geen enkel advertentiekanaal bereikt de AI-platforms waarop dit wordt gevolgd"
       },
       "answers": "Wat AI vandaag antwoordt",
@@ -15497,6 +15557,13 @@
       "cites": "Citeert: {domains}",
       "fanOuts": "Fan-out-zoekopdrachten",
       "keywords": "Keyword-seeds",
+      "paid": {
+        "title": "Uw Google-advertenties hiervoor",
+        "spend": "{amount} voor {clicks, plural, one {# klik} other {# klikken}} in deze periode",
+        "terms": "{count, plural, one {# zoekterm kwam overeen} other {# zoektermen kwamen overeen}}, de duurste eerst:",
+        "none": "Er zijn in deze periode geen Google Ads-uitgaven aan gekoppeld.",
+        "note": "Zoektermen worden op basis van hun woorden gekoppeld aan de prompt. ChatGPT Ads-uitgaven worden niet gekoppeld: daar staat niet bij bij welke vraag een advertentie werd getoond."
+      },
       "failed": "De antwoorden konden niet worden gelezen. Sluit dit venster en open het opnieuw.",
       "earn": {
         "title": "Earn · verbeter het antwoord",
@@ -15571,14 +15638,31 @@
         "channel": "Kanaal",
         "status": "Status",
         "spend": "Uitgaven",
-        "signups": "AI-ondersteunde aanmeldingen",
-        "cost": "Kosten per aanmelding"
+        "clicks": "Klikken",
+        "cpc": "CPC",
+        "conversions": "Conversies",
+        "costPerConversion": "Kosten per conversie"
       },
-      "empty": "Koppel een advertentieaccount · binnenkort beschikbaar",
-      "emptyNote": "Uw campagnes worden hier weergegeven, in het begin alleen-lezen.",
+      "channels": {
+        "google": "Google Ads",
+        "chatgpt": "ChatGPT Ads"
+      },
+      "statuses": {
+        "active": "Actief",
+        "paused": "Onderbroken",
+        "ended": "Beëindigd"
+      },
+      "empty": "Nog geen advertentieaccount gekoppeld",
+      "emptyNote": "Koppel Google Ads of ChatGPT Ads om uw campagnes hier te bekijken, alleen-lezen.",
+      "openConnections": "Verbindingen openen",
+      "failed": "Kan uw campagnes niet laden. Probeer het over een ogenblik opnieuw.",
+      "firstRead": "Uw eerste cijfers zijn binnen een dag na koppeling beschikbaar.",
+      "noneInPeriod": "Er liep geen campagne in deze periode.",
+      "attention": "{count, plural, one {# advertentieaccount vereist aandacht.} other {# advertentieaccounts vereisen aandacht.}}",
+      "currencyNote": "Elke campagne wordt weergegeven in de valuta van het betreffende advertentieaccount. Cijfers worden eenmaal per dag uitgelezen.",
       "safety": {
         "title": "Veiligheid",
-        "note": "Afgedwongen door Ansvisor, niet door een agent. Er wordt momenteel niets naar een advertentieaccount gestuurd.",
+        "note": "Afgedwongen door Ansvisor, niet door een agent. Momenteel leest Ansvisor uw advertentieaccounts alleen uit.",
         "click": "Elke activering, pauzering, budget- of bodwijziging vereist een klik en bevestiging van een persoon, in elke modus.",
         "agents": "Agents geven nooit geld uit: een agent kan een wijziging voorstellen, maar alleen een persoon kan deze doorvoeren.",
         "cap": "Beheerders stellen een maandelijks limiet in voor elk kanaal. Een wijziging boven de limiet wordt geblokkeerd, waarbij de wijzigingen van de afgelopen 24 uur worden meegeteld.",
@@ -15586,7 +15670,6 @@
       }
     },
     "connections": {
-      "soon": "Binnenkort beschikbaar",
       "later": "Komt later",
       "notify": "Houd me op de hoogte",
       "notified": "U ontvangt bericht",
@@ -15600,6 +15683,79 @@
       },
       "manage": "Beheren",
       "connect": "Koppelen",
+      "adminConnects": "Een Beheerder koppelt dit",
+      "accountStatus": {
+        "active": "Verbonden",
+        "error": "Aandacht vereist",
+        "disconnected": "Niet verbonden"
+      },
+      "sync": {
+        "syncedAt": "Cijfers uitgelezen {when}",
+        "pending": "Eerste uitlezing binnen een dag: de afgelopen 90 dagen",
+        "error": {
+          "key_refused": "ChatGPT Ads heeft de sleutel geweigerd. Plak een nieuwe.",
+          "key_missing": "De sleutel ontbreekt. Koppel het account opnieuw.",
+          "signin_gone": "De Google Ads-inloggegevens ontbreken. Koppel Google Ads opnieuw.",
+          "upstream": "Het advertentieplatform reageerde niet. Ansvisor probeert het binnen een dag opnieuw.",
+          "failed": "Kan de cijfers niet uitlezen. Ansvisor probeert het binnen een dag opnieuw."
+        }
+      },
+      "chatgpt": {
+        "connect": "Koppelen",
+        "addAnother": "Account toevoegen",
+        "dialogTitle": "ChatGPT Ads koppelen",
+        "dialogLine": "Plak een Ads API-sleutel van ChatGPT Ads Manager. Elke sleutel geeft toegang tot één advertentieaccount, voeg dus één sleutel per account toe.",
+        "keyLabel": "Ads API-sleutel",
+        "keyNote": "Ansvisor controleert de sleutel bij ChatGPT Ads en slaat deze vervolgens versleuteld op. Het leest alleen gegevens uit.",
+        "cancel": "Annuleren",
+        "save": "Koppelen",
+        "checking": "Controleren…",
+        "connectedToast": "{name} verbonden.",
+        "accountLine": "ChatGPT Ads-account · {currency}",
+        "accountLineNoCurrency": "ChatGPT Ads-account",
+        "billing": "ChatGPT Ads Manager",
+        "error": {
+          "invalid_key": "ChatGPT Ads heeft deze sleutel niet geaccepteerd. Controleer deze en probeer het opnieuw.",
+          "upstream": "ChatGPT Ads reageerde niet. Probeer het over een minuut opnieuw.",
+          "other": "Kan geen verbinding maken. Probeer het opnieuw."
+        }
+      },
+      "google": {
+        "name": "Google Ads",
+        "connect": "Koppelen",
+        "addAnother": "Account toevoegen",
+        "billing": "Google Ads",
+        "pickTitle": "Google Ads-accounts kiezen",
+        "pickLine": "Dit zijn de accounts die bereikbaar zijn via uw Google-aanmelding. Ansvisor leest alleen de accounts die u selecteert; het wijzigt nooit campagnes of budgetten.",
+        "noCustomers": "Deze Google-aanmelding heeft geen toegang tot een Google Ads-account. Meld u aan met het Google-account waarmee u uw advertenties beheert.",
+        "unnamed": "Naamloos account",
+        "more": "{count, plural, one {Nog # ander account wordt niet weergegeven.} other {Nog # andere accounts worden niet weergegeven.}}",
+        "why": {
+          "connected": "Verbonden",
+          "manager": "Manager-account",
+          "unavailable": "Niet beschikbaar",
+          "test": "Testaccount"
+        },
+        "cancel": "Annuleren",
+        "save": "{count, plural, =0 {Verbinden} one {# account verbinden} other {# accounts verbinden}}",
+        "connectedToast": "{count, plural, one {# Google Ads-account verbonden.} other {# Google Ads-accounts verbonden.}}",
+        "error": {
+          "not_configured": "Google Ads is nog niet ingesteld op deze server.",
+          "not_connected": "Meld u eerst aan bij Google Ads en probeer het opnieuw.",
+          "not_accessible": "Deze Google-aanmelding heeft geen toegang meer tot dat account. Sluit dit venster en maak opnieuw verbinding.",
+          "manager_account": "Een Manager-account heeft zelf geen campagnes. Kies de onderliggende accounts.",
+          "upstream": "Google Ads reageerde niet. Probeer het over een minuut opnieuw.",
+          "other": "Kon geen verbinding maken. Probeer het opnieuw."
+        }
+      },
+      "account": {
+        "disconnect": "Verbinding verbreken",
+        "disconnectTitle": "Verbinding met {name} verbreken?",
+        "disconnectLine": "Ansvisor verwijdert de gegevens die voor dit account zijn opgeslagen: de sleutel (indien aanwezig) en de uitgelezen cijfers. Uw advertenties blijven gewoon actief in {billing}.",
+        "disconnectedToast": "Verbinding met {name} verbroken.",
+        "disconnectFailed": "Kon verbinding niet verbreken. Probeer het opnieuw.",
+        "cancel": "Annuleren"
+      },
       "platforms": {
         "chatgpt": {
           "name": "ChatGPT Ads",
@@ -15634,6 +15790,31 @@
     }
   },
   "prompts": {
+    "bulkPlatforms": {
+      "bulkButton": "Platforms",
+      "bulkAdd": "Platforms toevoegen",
+      "bulkRemove": "Platforms verwijderen",
+      "modes": "Toevoegen of verwijderen",
+      "modeAdd": "Toevoegen",
+      "modeRemove": "Verwijderen",
+      "platforms": "Platforms",
+      "title": "Platforms toevoegen",
+      "lead": "Volg de {count} geselecteerde Prompts op meer platforms. Elke Prompt-locatie gebruikt één tracking-slot per platform. Een platform waarop een Prompt wacht, wordt opnieuw uitgevoerd.",
+      "removeTitle": "Platforms verwijderen",
+      "removeLead": "Stop met het volgen van de {count} geselecteerde Prompts op bepaalde platforms. Hun slots komen weer vrij.",
+      "none": "Geen platform om toe te voegen. Voeg tracking-slots toe via Instellingen › Facturatie om op meer platforms te volgen.",
+      "removeNone": "De geselecteerde Prompts draaien op geen enkel platform dat u kunt verwijderen.",
+      "free": "{count} vrij",
+      "previewAdd": "{count, plural, one {# Prompt wordt gewijzigd} other {# Prompts worden gewijzigd}} · {unchanged} hebben ze al",
+      "previewRemove": "{count, plural, one {# Prompt wordt gewijzigd} other {# Prompts worden gewijzigd}} · {unchanged} hebben ze niet · {blocked} zouden geen platform meer overhouden",
+      "short": "{platform} heeft {needed} slots nodig en heeft er {free} vrij.",
+      "addSlots": "Slots toevoegen",
+      "save": "Toevoegen aan {count, plural, one {# Prompt} other {# Prompts}}",
+      "removeSave": "Verwijderen van {count, plural, one {# Prompt} other {# Prompts}}",
+      "done": "{count, plural, one {Platforms toegevoegd aan # Prompt} other {Platforms toegevoegd aan # Prompts}}",
+      "removed": "{count, plural, one {Platforms verwijderd van # Prompt} other {Platforms verwijderd van # Prompts}}",
+      "saveFailed": "De platforms konden niet worden gewijzigd. Probeer het opnieuw."
+    },
     "waiting": {
       "resultTitle": "{added} toegevoegd, {waiting} in de wachtrij voor een plek",
       "savedTitle": "{count, plural, one {Opgeslagen, maar nog niet gevolgd} other {# prompts opgeslagen, maar nog niet gevolgd}}",
@@ -16017,6 +16198,13 @@
       "bulkTitle": "{count, plural, one {De geselecteerde prompt zonder antwoorden beginnen te volgen} other {De # geselecteerde prompts zonder antwoorden beginnen te volgen}}"
     },
     "usage": {
+      "slots": {
+        "title": "Tracking-slots",
+        "add": "Slots toevoegen",
+        "usage": "{used} / {limit}",
+        "unlimited": "{used} · geen limiet",
+        "meter": "{platform}-slots in gebruik"
+      },
       "panelLabel": "Prompt-verbruik",
       "planAndUsage": "Abonnement en verbruik",
       "hide": "Verbergen",
@@ -16099,7 +16287,7 @@
       "enginesLegend": "Gekleurd: gedeelde zoekopdrachten voor deze prompt in het venster. Vervaagd: bijgehouden, maar geen gedeeld.",
       "engineEmptyTitle": "Geen zoekopdrachten van {engine} in het bereik {range}",
       "engineEmptyBody": "{engine} deelt gewoonlijk de zoekopdrachten achter zijn antwoorden. Probeer een groter datumbereik.",
-      "sourceNote": "Perplexity wordt niet meer bijgehouden en Microsoft Copilot deelt zijn zoekopdrachten niet, dus deze zijn uitsluitend afkomstig van ChatGPT, die ze op sommige dagen deelt. Het zijn er minder dan voorheen.",
+      "sourceNote": "Perplexity wordt niet meer gevolgd en Bing AI Mode deelt zijn zoekopdrachten niet, dus deze komen alleen van ChatGPT, dat ze op sommige dagen deelt. Het zijn er minder dan voorheen.",
       "emptyTitle": "Nog geen fan-out vastgelegd",
       "emptyBody": "De zoekopdrachten van ChatGPT worden op sommige dagen als steekproef verzameld, en de ChatGPT API deelt ze wanneer deze zoekt. Google AI Overviews, AI Mode en Gemini delen ze niet. Zodra die zoekmachines voor uw prompts worden uitgevoerd, verschijnen de zoekopdrachten hier.",
       "coverageTooltip": "Van de {total} bijgehouden antwoorden in dit venster bevatten er {withFanout} de zoekopdrachten die de zoekmachine heeft uitgevoerd. Die van ChatGPT worden op sommige dagen als steekproef verzameld, en de ChatGPT API deelt ze wanneer deze zoekt."
@@ -18254,24 +18442,139 @@
       }
     },
     "notifications": "Meldingen",
-    "notificationsDescription": "Elk merk kan twee e-mails versturen: de Daily Pulse na de trackingruns en het wekelijkse AI Traffic-overzicht elke maandag. Beide gaan naar de Daily Pulse-ontvangers van het merk.",
-    "pulseSection": "Daily Pulse",
-    "pulseSectionDescription": "Een kort overzicht per merk na elke trackingrun, met hoogtepunten en waarschuwingen. Kies hoe vaak u het ontvangt en wie het krijgt.",
-    "pulseFrequencyLabel": "Hoe vaak de Daily Pulse van {brand} komt",
+    "yourEmails": {
+      "title": "Uw e-mails",
+      "description": "Kies welke e-mails Ansvisor u stuurt en hoe vaak. Dit geldt alleen voor u: iedereen in het team stelt zijn eigen voorkeuren in.",
+      "carriedOver": "Dit zijn de e-mails die u nu ontvangt. Sla op om ze als uw eigen keuzes te bewaren.",
+      "for": "Voor",
+      "scopeAll": "Al mijn brands ({count})",
+      "deliveryHint": "Brand-e-mails komen per brand binnen, of samen in één e-mail:",
+      "delivery_per_brand": "Eén e-mail per brand",
+      "delivery_combined": "Alle brands in één e-mail (binnenkort beschikbaar)",
+      "brandOnly": "Alleen instellen voor {brand}",
+      "useAll": "Mijn keuze voor Al mijn brands gebruiken",
+      "notableNote": "Je eerste pulse, daarna alleen wanneer er iets opmerkelijks gebeurt.",
+      "comingSoon": "Binnenkort beschikbaar",
+      "comingSoonHint": "E-mails met de markering Binnenkort beschikbaar behouden de keuze die u opslaat en starten zodra ze klaar zijn.",
+      "admins": "Beheerders",
+      "groups": {
+        "visibility": "Brandzichtbaarheid",
+        "traffic": "AI-verkeer",
+        "actions": "Actiecentrum",
+        "agents": "Agents en chat",
+        "audit": "Site-audit",
+        "content": "Content",
+        "account": "Account"
+      },
+      "kinds": {
+        "daily_pulse": {
+          "name": "Dagelijkse Pulse",
+          "description": "Hoe elk brand verscheen in AI-antwoorden: Visibility score, vermeldingen, citaties, highlights en waarschuwingen."
+        },
+        "traffic_digest": {
+          "name": "Wekelijks overzicht",
+          "description": "De AI-bezoeken van vorige week in één regel, met de top drie wijzigingen. Op maandag."
+        },
+        "critical_action": {
+          "name": "Nieuwe kritieke actie",
+          "description": "Een nieuwe actie met prioriteit Kritiek voor uw brands."
+        },
+        "due_actions": {
+          "name": "Verlopen en vandaag te doen",
+          "description": "Aan u toegewezen acties en taken die vandaag aan de beurt of te laat zijn."
+        },
+        "weekly_actions": {
+          "name": "Wekelijks actieoverzicht",
+          "description": "Wat is gedaan, wat openstaat en wat er nog komt. Op maandag."
+        },
+        "run_finished": {
+          "name": "Run voltooid",
+          "description": "Een agent-run die u hebt gestart is voltooid, met wat er is gedaan."
+        },
+        "audit_finished": {
+          "name": "Audit voltooid",
+          "description": "Een bulk- of geplande audit is klaar, met de score."
+        },
+        "score_dropped": {
+          "name": "Score gedaald",
+          "description": "De score van een pagina is sinds de laatste audit met 5 punten of meer gedaald."
+        },
+        "drafts_review": {
+          "name": "Concepten die op uw beoordeling wachten",
+          "description": "Concepten voor uw brands die u moet beoordelen voordat ze live gaan."
+        },
+        "ai_usage": {
+          "name": "AI-gebruik",
+          "description": "Bij 80% en 100% van de maandelijkse AI-limiet."
+        }
+      },
+      "links": {
+        "approvals": {
+          "name": "Wacht op uw goedkeuring",
+          "description": "Een agent of een chat-run heeft uw akkoord nodig voordat er iets wordt gewijzigd of gepubliceerd. Stel dit in met Breng me op de hoogte wanneer een agent me nodig heeft.",
+          "link": "Chatinstellingen"
+        },
+        "scheduled": {
+          "name": "Geplande taken",
+          "description": "Elke taak stuurt e-mails zoals ingesteld bij de taak.",
+          "link": "Taken openen"
+        },
+        "billing": {
+          "name": "Facturatie en beveiliging",
+          "description": "Facturen, betalingsproblemen en inlogmeldingen. Worden altijd verzonden.",
+          "locked": "Altijd aan"
+        }
+      },
+      "options": {
+        "pulse": {
+          "daily": "Dagelijks",
+          "weekly": "Wekelijks",
+          "notable": "Alleen bij opvallende wijzigingen",
+          "off": "Uit"
+        },
+        "instant": {
+          "instant": "Direct",
+          "daily": "Dagelijkse samenvatting",
+          "off": "Uit"
+        },
+        "digest": {
+          "daily": "Dagelijkse samenvatting",
+          "weekly": "Wekelijkse samenvatting",
+          "off": "Uit"
+        },
+        "weekly": {
+          "weekly": "Elke maandag",
+          "off": "Uit"
+        },
+        "onoff": {
+          "on": "Aan",
+          "off": "Uit"
+        }
+      },
+      "save": "Wijzigingen opslaan",
+      "saved": "Uw e-mailvoorkeuren zijn opgeslagen",
+      "saveFailed": "Uw e-mailvoorkeuren konden niet worden opgeslagen. Probeer het opnieuw.",
+      "loadFailed": "Uw e-mailvoorkeuren konden niet worden geladen.",
+      "turnOffAll": "Alle optionele e-mails uitschakelen",
+      "turnedOff": "Alle optionele e-mails staan op Uit. Sla de wijzigingen op om dit te behouden."
+    },
+    "outsideEmails": {
+      "title": "Verzenden naar mensen buiten de workspace",
+      "description": "Een klant of een manager zonder Ansvisor-seat kan ook de samenvattingen van een merk ontvangen. Zij ontvangen nooit goedkeuringen of accountmails.",
+      "sends": "Daily Pulse · wekelijkse AI Traffic-samenvatting",
+      "recipients": "Ontvangers",
+      "placeholder": "klant@example.com, baas@example.com",
+      "hint": "Gescheiden door komma's. Teamleden die hun eigen e-mailvoorkeuren niet hebben opgeslagen, ontvangen de e-mails van dit merk nog steeds zoals voorheen: allemaal zolang deze lijst leeg is, anders alleen degenen die erop staan.",
+      "frequency": "Daily Pulse",
+      "frequencyNote": "Dit bepaalt ook het Slack-kanaal en de webhooks van het merk, en teamleden die hun eigen keuzes niet hebben opgeslagen.",
+      "digest": "Verstuur ook de wekelijkse AI Traffic-samenvatting",
+      "digestPulseOff": "De wekelijkse samenvatting wordt niet verzonden zolang deze Daily Pulse uit staat."
+    },
     "pulseFrequency_daily": "Dagelijks",
     "pulseFrequency_weekly": "Wekelijks",
     "pulseFrequency_notable": "Alleen bij bijzonderheden",
-    "pulseFrequency_notableNote": "Uw eerste pulse, daarna alleen wanneer er iets opvallends gebeurt.",
     "pulseFrequency_off": "Uit",
-    "pulseRecipients": "Ontvangers",
-    "pulseRecipientsPlaceholder": "alex@example.com, sam@example.com",
-    "pulseRecipientsHint": "Kommagescheiden e-mailadressen. Laat leeg om naar elk Lid van de organisatie te sturen.",
     "pulseRecipientsInvalid": "Geen geldig e-mailadres: {emails}. Corrigeer of verwijder dit voor het opslaan.",
-    "trafficDigest": "Wekelijks AI Traffic-overzicht",
-    "trafficDigestDescription": "Elke maandag: de AI-bezoeken van vorige week in één samenvattende regel, met de drie belangrijkste wijzigingen. Het gaat naar de Daily Pulse-ontvangers van elk merk en wordt opgeslagen zodra u het aan- of uitvinkt.",
-    "trafficDigestTo": "Aan {emails}",
-    "trafficDigestToEveryone": "Aan elk lid van de organisatie",
-    "trafficDigestPulseOff": "Wordt niet verzonden zolang de Daily Pulse uitgeschakeld is. Schakel de pulse weer in om deze te ontvangen.",
     "pulseSaved": "Meldingsinstellingen opgeslagen",
     "pulseSaveFailed": "Kon meldingsinstellingen niet opslaan. Probeer het opnieuw.",
     "pulseLoadFailed": "Kon meldingsinstellingen niet laden.",
@@ -18296,7 +18599,6 @@
       "loading": "Talen laden…",
       "moreSoon": "Er komen meer talen aan.",
       "preview": "Medewerkers en testversies zien ook de talen die nog geen vertaling hebben. Waar tekst ontbreekt, wordt Engels getoond.",
-      "testLanguage": "{language} · test",
       "saved": "Taal opgeslagen",
       "saveFailed": "Uw taal kon niet worden opgeslagen. Probeer het opnieuw.",
       "suggest": {
@@ -18446,7 +18748,38 @@
     },
     "planAddOns": {
       "title": "Voeg meer toe aan uw abonnement",
-      "description": "Extra tracking, extra merken en AI-gebruikstoppers voor uw Growth-abonnement. Alles wat u kiest wordt eenmalig afgeschreven van de opgeslagen kaart.",
+      "slots": {
+        "title": "Extra tracking-credits kopen",
+        "description": "{plan} bevat {included} slots op elk standaardplatform. Kies extra slots op elk platform; u kunt ze verlagen tot 0.",
+        "descriptionNone": "Kies extra slots op elk platform; u kunt ze verlagen tot 0.",
+        "discount": {
+          "reached": "<b>{percent}% korting</b> op uw extra tracking: {off} korting op {list} per {interval, select, year {jaar} other {maand}}.",
+          "list": "Extra tracking: {list} per {interval, select, year {jaar} other {maand}}.",
+          "next": "Voeg {more} meer toe per {interval, select, year {jaar} other {maand}} voor <b>{percent}% korting</b> op het deel boven {from}.",
+          "top": "U hebt de hoogste stap bereikt.",
+          "drops": "Door deze wijziging daalt uw korting van {from}% naar {to}%, waardoor de prijs per 100 slots stijgt.",
+          "steps": "Staffelkorting",
+          "stepsLead": "Elk niveau trekt zijn percentage af van het deel erboven:",
+          "step": "{percent}% korting boven {from}/{interval, select, year {jr} other {mnd}}",
+          "yours": "· uw niveau",
+          "nextTag": "· volgende"
+        },
+        "unit": "<b>1 slot</b> = 1 Prompt die dagelijks wordt gevolgd in 1 locatie op dat platform.",
+        "columns": {
+          "platform": "Platform",
+          "included": "In uw abonnement",
+          "extra": "Extra slots",
+          "price": "Prijs per 100 slots per {interval, select, year {jaar} other {maand}}",
+          "cost": "Uw {interval, select, year {jaarlijkse} other {maandelijkse}} kosten"
+        },
+        "unlimited": "Geen limiet",
+        "fewer": "100 slots minder voor {platform}",
+        "more": "100 slots meer voor {platform}",
+        "extraOn": "Extra slots voor {platform}",
+        "was": "was {slots}",
+        "undo": "Ongedaan maken",
+        "footer": "De prijzen volgen de kosten om elk platform te volgen: sommige antwoorden vergen meer werk (bijvoorbeeld Perplexity). Jaarlijks: 2 maanden gratis."
+      },
       "tracking": {
         "title": "Extra tracking",
         "description": "Meer Prompt-locaties, dagelijks gevolgd op de engines van uw abonnement. Eén niveau tegelijk; u kunt het op elk moment wijzigen of verwijderen.",
@@ -18454,8 +18787,7 @@
         "none": "Geen",
         "tier": "+{units} Prompt-locaties",
         "price": "{price}/{interval, select, year {jr} other {mnd}}",
-        "contactSales": "Neem contact op met sales",
-        "yearly": "Jaarprijzen: 2 maanden gratis."
+        "contactSales": "Neem contact op met sales"
       },
       "brands": {
         "title": "Extra merken",
@@ -18463,7 +18795,7 @@
         "count": "{count} extra",
         "fewer": "Eén merk minder",
         "more": "Eén merk meer",
-        "note": "U kunt niet onder het aantal merken dat u heeft komen: verwijder eerst een merk bij Merken."
+        "limit": "Uw abonnement bevat {base} merken. Nieuwe limiet: <b>{limit}</b>."
       },
       "topUp": {
         "title": "AI-gebruikstopper",
@@ -18472,10 +18804,12 @@
         "label": "AI-gebruikstoppers",
         "none": "Geen",
         "option": "+{multiplier}x",
-        "adds": "{multiplier}× het AI-gebruik van deze maand · +{briefs} briefings · +{opportunities} kansen"
+        "usage": "{multiplier}x AI-gebruik",
+        "adds": "{multiplier}× het AI-gebruik van deze maand · +{briefs} briefings · +{opportunities} kansen",
+        "alsoAdds": "Voegt deze maand ook +{briefs} briefings en +{opportunities} kansen toe.",
+        "once": "{price} eenmalig"
       },
       "summary": "{prompts} Prompt-locaties · {brands} merken",
-      "nothing": "Kies hierboven wat u wilt wijzigen.",
       "review": "Controleren en betalen",
       "reviewing": "Prijs controleren…",
       "dialog": {
@@ -18486,20 +18820,25 @@
         "brands": "{count, plural, =0 {Geen extra merken} one {# extra merk} other {# extra merken}}",
         "topUp": "AI-gebruikstopper +{multiplier}x, eenmalige betaling",
         "dueToday": "Vandaag te betalen",
-        "dueTodayNote": "Het resterende deel van deze periode voor extra tracking en merken, en een opwaardering in volledig bedrag.",
+        "dueTodayNote": "De rest van deze periode voor slots, extra tracking en merken, en een top-up in zijn geheel.",
+        "slots": "{platform} slots",
+        "slotsValue": "{slots} (+{extra} toegevoegd)",
+        "volumeDiscount": "Staffelkorting ({percent}%)",
+        "discountValue": "−{off} per {interval, select, year {jaar} other {maand}}",
         "total": "Vanaf de volgende verlenging",
         "totalValue": "{price} per {interval, select, year {jaar} other {maand}}",
-        "credit": "Een lager niveau of minder merken levert tegoed op voor uw volgende facturen.",
+        "credit": "Minder slots, een lager niveau of minder merken geven tegoed voor uw volgende facturen.",
         "pay": "Betaal {price}",
         "confirm": "Bevestigen",
         "cancel": "Annuleren",
-        "processing": "Bezig met verwerken…"
+        "processing": "Bezig met verwerken…",
+        "slotsWaiting": "{platform}: de nieuwste {count} Prompt-locaties wachten op een slot. Er wordt niets verwijderd; voeg opnieuw slots toe om ze te volgen."
       },
       "done": "Uw add-ons zijn bijgewerkt. Een opwaardering telt mee zodra de betaling is bevestigd.",
       "states": {
         "not_admin": "Alleen beheerders kunnen add-ons wijzigen. Vraag het aan een beheerder van uw werkruimte.",
         "starter": "Add-ons zijn beschikbaar bij het Growth-abonnement. Upgrade naar Growth om tracking, merken en AI-gebruik toe te voegen.",
-        "enterprise": "Uw contract bepaalt uw limieten. Neem contact op met uw accountmanager voor meer.",
+        "enterprise": "Uw contract bepaalt uw overige limieten. Neem contact op met uw accountmanager voor meer.",
         "trial": "Add-ons kunnen worden gekocht zodra uw abonnement is gestart.",
         "no_plan": "Add-ons kunnen worden gekocht zolang uw abonnement actief is.",
         "ending": "Uw abonnement staat op het punt te eindigen. Behoud uw abonnement om de add-ons te wijzigen."
@@ -18517,7 +18856,23 @@
         "payment_failed": "De betaling is niet gelukt.",
         "failed": "Uw add-ons konden niet worden gewijzigd. Probeer het opnieuw."
       },
-      "readFailed": "Uw add-ons konden niet worden gelezen. Probeer het later opnieuw."
+      "readFailed": "Uw add-ons konden niet worden gelezen. Probeer het later opnieuw.",
+      "perInterval": "{price}/{interval, select, year {jr} other {mnd}}",
+      "cart": {
+        "title": "Uw add-ons",
+        "onePayment": "Eén betaling",
+        "plan": "Abonnement {plan}",
+        "slots": "Extra tracking {platform}",
+        "slotsCount": "{slots} slots",
+        "remove": "{item} verwijderen",
+        "discount": "Staffelkorting van {percent}% op extra tracking, verwerkt in de prijzen hierboven.",
+        "discountDrops": "Uw staffelkorting daalt van {from}% naar {to}%, waardoor de prijzen hierboven stijgen.",
+        "brands": "{count, plural, one {# merk} other {# merken}} · {price} per stuk",
+        "topUp": "{multiplier}x AI-gebruik · tot {date}",
+        "total": "{interval, select, year {Jaarlijks} other {Maandelijks}} totaal vanaf de volgende verlenging <b>{price}</b>",
+        "undoAll": "Alle wijzigingen ongedaan maken",
+        "dueToday": "Vandaag verschuldigd: de toegevoegde items voor de rest van deze periode, weergegeven bij Controleren en betalen."
+      }
     },
     "cancelsOn": "Abonnement eindigt op {date}",
     "changePlan": "Abonnement wijzigen",

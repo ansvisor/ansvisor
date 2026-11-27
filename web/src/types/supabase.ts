@@ -356,12 +356,14 @@ export type Database = {
           grant_bytes: number | null
           grant_opportunities: number | null
           grant_prompts: number | null
+          grant_slots: number | null
           highlight: boolean
           id: string
           kind: string
           multiplier: number | null
           name: string
           plans: string[] | null
+          platform: string | null
           price_cents: number
           sale: string
           sort: number
@@ -381,12 +383,14 @@ export type Database = {
           grant_bytes?: number | null
           grant_opportunities?: number | null
           grant_prompts?: number | null
+          grant_slots?: number | null
           highlight?: boolean
           id: string
           kind: string
           multiplier?: number | null
           name: string
           plans?: string[] | null
+          platform?: string | null
           price_cents: number
           sale?: string
           sort?: number
@@ -406,12 +410,14 @@ export type Database = {
           grant_bytes?: number | null
           grant_opportunities?: number | null
           grant_prompts?: number | null
+          grant_slots?: number | null
           highlight?: boolean
           id?: string
           kind?: string
           multiplier?: number | null
           name?: string
           plans?: string[] | null
+          platform?: string | null
           price_cents?: number
           sale?: string
           sort?: number
@@ -2321,6 +2327,7 @@ export type Database = {
           brand_id: string
           claimed_at: string
           kind: string
+          ref: string
           trigger_id: string | null
         }
         Insert: {
@@ -2328,6 +2335,7 @@ export type Database = {
           brand_id: string
           claimed_at?: string
           kind: string
+          ref?: string
           trigger_id?: string | null
         }
         Update: {
@@ -2335,6 +2343,7 @@ export type Database = {
           brand_id?: string
           claimed_at?: string
           kind?: string
+          ref?: string
           trigger_id?: string | null
         }
         Relationships: [
@@ -4479,6 +4488,7 @@ export type Database = {
           brand_id: string
           legacy: boolean
           prompt_id: string
+          provider: string | null
           region: string | null
           scraper_id: string
           submitted_at: string
@@ -4488,6 +4498,7 @@ export type Database = {
           brand_id: string
           legacy?: boolean
           prompt_id: string
+          provider?: string | null
           region?: string | null
           scraper_id: string
           submitted_at?: string
@@ -4497,6 +4508,7 @@ export type Database = {
           brand_id?: string
           legacy?: boolean
           prompt_id?: string
+          provider?: string | null
           region?: string | null
           scraper_id?: string
           submitted_at?: string
@@ -6843,6 +6855,57 @@ export type Database = {
           },
         ]
       }
+      notification_preferences: {
+        Row: {
+          brand_id: string | null
+          created_at: string
+          delivery: string
+          frequency: string
+          id: string
+          kind: string
+          organization_id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          brand_id?: string | null
+          created_at?: string
+          delivery?: string
+          frequency: string
+          id?: string
+          kind: string
+          organization_id: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          brand_id?: string | null
+          created_at?: string
+          delivery?: string
+          frequency?: string
+          id?: string
+          kind?: string
+          organization_id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notification_preferences_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brands"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "notification_preferences_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       organization_ai_keys: {
         Row: {
           active: boolean
@@ -6942,6 +7005,7 @@ export type Database = {
         Row: {
           add_on_brands: number
           add_on_prompts: number
+          add_on_slots: Json
           anthropic_api_key_encrypted: string | null
           anthropic_api_key_last4: string | null
           anthropic_api_key_set_at: string | null
@@ -6964,6 +7028,7 @@ export type Database = {
         Insert: {
           add_on_brands?: number
           add_on_prompts?: number
+          add_on_slots?: Json
           anthropic_api_key_encrypted?: string | null
           anthropic_api_key_last4?: string | null
           anthropic_api_key_set_at?: string | null
@@ -6986,6 +7051,7 @@ export type Database = {
         Update: {
           add_on_brands?: number
           add_on_prompts?: number
+          add_on_slots?: Json
           anthropic_api_key_encrypted?: string | null
           anthropic_api_key_last4?: string | null
           anthropic_api_key_set_at?: string | null
@@ -7725,6 +7791,7 @@ export type Database = {
           text: string
           tags: string[]
           topic_id: string | null
+          waiting_platforms: string[]
           waiting_since: string | null
           work_status: string | null
         }
@@ -7741,6 +7808,7 @@ export type Database = {
           text: string
           tags?: string[]
           topic_id?: string | null
+          waiting_platforms?: string[]
           waiting_since?: string | null
           work_status?: string | null
         }
@@ -7757,6 +7825,7 @@ export type Database = {
           text?: string
           tags?: string[]
           topic_id?: string | null
+          waiting_platforms?: string[]
           waiting_since?: string | null
           work_status?: string | null
         }
@@ -7783,6 +7852,7 @@ export type Database = {
           created_at: string
           frequency: string
           recipients: string[] | null
+          traffic_digest: boolean
           updated_at: string
         }
         Insert: {
@@ -7790,6 +7860,7 @@ export type Database = {
           created_at?: string
           frequency?: string
           recipients?: string[] | null
+          traffic_digest?: boolean
           updated_at?: string
         }
         Update: {
@@ -7797,6 +7868,7 @@ export type Database = {
           created_at?: string
           frequency?: string
           recipients?: string[] | null
+          traffic_digest?: boolean
           updated_at?: string
         }
         Relationships: [
@@ -9864,6 +9936,13 @@ export type Database = {
         }[]
       }
       org_brand_count: { Args: { p_organization_id: string }; Returns: number }
+      org_platform_slot_usage: {
+        Args: { p_organization_id: string }
+        Returns: {
+          platform: string
+          slots: number
+        }[]
+      }
       org_prompt_location_usage: {
         Args: { p_organization_id: string }
         Returns: {
@@ -10043,6 +10122,10 @@ export type Database = {
           p_tool_key: string
         }
         Returns: string
+      }
+      save_notification_preferences: {
+        Args: { p_rows: Json }
+        Returns: undefined
       }
       seed_kpi_presets: {
         Args: { p_brand_id: string; p_kpis: Json }

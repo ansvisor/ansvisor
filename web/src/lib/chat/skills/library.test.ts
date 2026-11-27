@@ -86,7 +86,8 @@ const MCP_COACH_SKILLS = ['ansvisor-aeo-coach', 'ansvisor-aeo-coach-standalone']
  * the Seasonal Prompt Planner's, and /traffic, AI Traffic → Signups'; each
  * line says what the agent's card does. Then /ai-revenue: customers and
  * revenue from AI visits, and what to set up to measure them. Then Ads' two
- * (Ads Phase 0 PR 15), offered only with ADS_ENABLED (flagged.ts ADS_SKILLS).
+ * (Ads Phase 0 PR 15), offered only with ADS_ENABLED (flagged.ts ADS_SKILLS),
+ * and /paid-overlap, the Google spend Ads matched to the prompts, with them.
  */
 const ANSVISOR_SKILLS: Record<string, { title: string; description: string }> = {
   winback: {
@@ -222,6 +223,16 @@ const ANSVISOR_SKILLS: Record<string, { title: string; description: string }> = 
     description:
       'Which pages and AI assistants bring you customers, sign-ups, forms, orders and revenue, and what to set up where nothing is measured yet.',
   },
+  'feed-advisor': {
+    title: 'Shopping feed gaps',
+    description:
+      'A weekly list of what your product feed is missing for AI shopping answers, ordered by impact, with the fix for each. Fixes go to the Action Center only on your approval.',
+  },
+  'tech-fix': {
+    title: 'Crawler and technical fixes',
+    description:
+      'Finds what keeps AI crawlers out of your site, from your Site Audits, and writes each fix ready for your developer: robots.txt rules, CDN and firewall settings, rendering and tags. Fixes go to the Action Center only on your approval.',
+  },
   'earn-or-pay': {
     title: 'Earn or pay',
     description:
@@ -231,6 +242,11 @@ const ANSVISOR_SKILLS: Record<string, { title: string; description: string }> = 
     title: 'Ad drafts',
     description:
       'Writes or rewrites ad drafts for ChatGPT, Google and Microsoft from your approved brand facts, and saves those that pass the claims check.',
+  },
+  'paid-overlap': {
+    title: 'Paid overlap',
+    description:
+      'Shows what you pay on Google for buying prompts AI already cites you for, and where you pay without being cited, with the next step.',
   },
   // AEO Operator plan §4.2 step 4: the Operator's own, agent-only (metadata.agent_only).
   operator: {
@@ -281,7 +297,7 @@ const folders = files.map((file) => file.folder);
 const playbookFiles = allFiles.filter(isHidden);
 
 describe('the skills in /skills', () => {
-  it("are Ansvisor's thirty-two and the Operator's own, with their titles and descriptions", () => {
+  it("are Ansvisor's thirty-three and the Operator's own, with their titles and descriptions", () => {
     expect([...folders].sort()).toEqual([...LIBRARY_NAMES].sort());
     const shown = Object.fromEntries(
       files.map(({ folder, text }) => {
@@ -481,10 +497,14 @@ describe('a skill behind a flag (flagged.ts)', () => {
     vi.stubEnv('CHAT_AGENTIC_ORGS', '');
     vi.stubEnv('ADS_ENABLED', '');
     const names = () => enabledSkills('org-1').map((skill) => skill.name);
-    expect([...ADS_SKILLS]).toEqual(['earn-or-pay', 'ad-drafts']);
+    expect([...ADS_SKILLS]).toEqual(['earn-or-pay', 'ad-drafts', 'paid-overlap']);
     expect(names().filter((name) => ADS_SKILLS.has(name))).toEqual([]);
     vi.stubEnv('ADS_ENABLED', 'true');
-    expect(names().filter((name) => ADS_SKILLS.has(name))).toEqual(['earn-or-pay', 'ad-drafts']);
+    expect(names().filter((name) => ADS_SKILLS.has(name))).toEqual([
+      'earn-or-pay',
+      'ad-drafts',
+      'paid-overlap',
+    ]);
   });
 
   it('leaves the AEO Operator’s skill out unless CHAT_OPERATOR is on for the workspace', () => {
@@ -532,6 +552,11 @@ describe("Ads' skills (Ads Phase 0 PR 15)", () => {
     expect(body('earn-or-pay')).toContain('call `create_action` once');
     expect(body('earn-or-pay')).toContain('by its title with its code');
     expect(body('ad-drafts')).toContain('save them with `save_ad_drafts`');
+    // Paid overlap reads only what Ads matched: no estimate, no sum across currencies, no ad change.
+    expect(body('paid-overlap')).toContain('`get_ads_paid_overlap`');
+    expect(body('paid-overlap')).toContain('Never estimate savings');
+    expect(body('paid-overlap')).toContain('Never add amounts in different currencies');
+    expect(body('paid-overlap')).toContain('Never change a bid, budget or campaign');
     for (const rule of [
       "Never state a fact that isn't in approvedFacts",
       'never write a number',
@@ -549,7 +574,7 @@ describe("Ads' skills (Ads Phase 0 PR 15)", () => {
   });
 });
 
-describe("the packs' skills: /content-plan, /seasonal and /traffic (AGENTS plan §8.1, §8.3)", () => {
+describe("the packs' skills: /content-plan, /seasonal, /traffic, /feed-advisor and /tech-fix (AGENTS plan §8)", () => {
   /** Each skill, its agent, and the only writes it may ask for. */
   const PACKS = [
     {
@@ -563,6 +588,15 @@ describe("the packs' skills: /content-plan, /seasonal and /traffic (AGENTS plan 
       writes: ['add_prompts', 'create_action'],
     },
     { skill: 'traffic', agent: 'ai-traffic-signups', writes: ['create_action'] },
+    // The Shopping Feed Advisor's (AGENTS plan §8): the feed's gaps, its fixes sent on a card.
+    { skill: 'feed-advisor', agent: 'shopping-feed-advisor', writes: ['create_action'] },
+    // The Crawler & Technical Fixer's (AGENTS plan §8): its fixes on a card, and an audit
+    // only where there is none, on its own card.
+    {
+      skill: 'tech-fix',
+      agent: 'technical-fixer',
+      writes: ['create_action', 'run_site_audit'],
+    },
   ];
   const body = (name: string) => SKILL_LIBRARY.find((skill) => skill.name === name)?.body ?? '';
   const named = (text: string) => [
@@ -610,9 +644,11 @@ describe("the packs' skills: /content-plan, /seasonal and /traffic (AGENTS plan 
           expect(['ask', 'ask_full_auto'], at).toContain(tool.defaultPolicy);
         }
       }
-      // Auto, or Ask me first for Seasonal (the owner's choice, as Prompt Portfolio Manager):
-      // either way each write is a card.
-      expect(preset.mode, agent).toBe(agent === 'seasonal-prompt-planner' ? 'ask_first' : 'auto');
+      // Auto, or Ask me first for Seasonal and the Technical Fixer (the owner's choice, as
+      // Prompt Portfolio Manager): either way each write is a card.
+      expect(preset.mode, agent).toBe(
+        ['seasonal-prompt-planner', 'technical-fixer'].includes(agent) ? 'ask_first' : 'auto',
+      );
     }
   });
 

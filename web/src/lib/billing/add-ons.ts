@@ -41,7 +41,7 @@ export type AddOnKind = 'ai' | 'storage';
  * an extra tracking tier and extra brands on the plan's subscription, and
  * one-time AI top-ups.
  */
-export type AddOnProductKind = AddOnKind | 'tracking' | 'brand' | 'ai_topup';
+export type AddOnProductKind = AddOnKind | 'tracking' | 'brand' | 'ai_topup' | 'slots';
 
 /** The kinds CHAT-18's card, purchase and history handle; the Growth add-ons have their own. */
 export const ADD_ON_PACK_KINDS: readonly AddOnKind[] = ['ai', 'storage'];
@@ -146,11 +146,11 @@ export function addMonthsUtc(from: Date, months: number): Date {
   return shifted;
 }
 
-/** The lookup keys of Growth's add-on prices (00546): addon_tracking_…, addon_brand_…, addon_ai_topup_…. */
+/** The lookup keys of the plans' add-on prices (00546, 00564): addon_tracking_…, addon_brand_…, addon_ai_topup_…, addon_slots_…. */
 export const ADD_ON_LOOKUP_PREFIX = 'addon_';
 
 /** The `addon` metadata Growth's add-on prices carry in Stripe. */
-const ADD_ON_METADATA = new Set(['tracking', 'brand', 'ai_topup']);
+const ADD_ON_METADATA = new Set(['tracking', 'brand', 'ai_topup', 'slots']);
 
 /** A Stripe price as an item or a line carries it. */
 export type PriceLike = {

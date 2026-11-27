@@ -277,6 +277,7 @@
       "label": "Ihre Marke wird noch nicht getrackt"
     },
     "actions": {
+      "changePlatforms": "Für das Ändern von Plattformen ist ein Tarif erforderlich",
       "addPrompts": "Das Hinzufügen von Prompts erfordert einen Plan",
       "removeLocations": "Das Entfernen von Standorten erfordert einen Plan",
       "editPrompts": "Das Bearbeiten von Prompts erfordert einen Plan",
@@ -622,6 +623,8 @@
       "slow": "Das dauert länger als gewöhnlich.",
       "ready": "Bereit. Prompts werden geöffnet…",
       "failed": "Die Demo konnte nicht vorbereitet werden. Prüfen Sie Ihre Verbindung und versuchen Sie es erneut.",
+      "stuck": "Die Demo ist bereit, aber ihre Seite hat sich nicht geöffnet. Öffnen Sie sie erneut oder schließen Sie dies und versuchen Sie es später.",
+      "open": "Demo öffnen",
       "retry": "Erneut versuchen",
       "close": "Schließen"
     }
@@ -1881,6 +1884,10 @@
         "title": "Starke KI-Conversions auf {targets}",
         "description": "Diese Seiten wandeln KI-Traffic weit über dem Durchschnitt Ihrer Website in wichtige Ereignisse um."
       },
+      "paid_overlap": {
+        "title": "Steigende Google-Werbeausgaben für {targets}, wofür die KI Sie bereits auswählt",
+        "description": "Die KI wählt Sie bereits in den Antworten auf diese Kauf-Prompts aus, und Ihre Ausgaben bei Google für deren Suchbegriffe sind im Vergleich zu den 30 Tagen zuvor gestiegen."
+      },
       "bridge_link_gap": {
         "title": "{targets} mit Seiten verlinken, die konvertieren",
         "description": "KI leitet Lesende auf diese Seiten und nur wenige davon konvertieren. Seiten zum selben Thema, die konvertieren, verzeichnen wenig KI-Traffic."
@@ -2478,6 +2485,8 @@
           "task_review_withdrawn": "„Bereit zur Überprüfung“ über Rückgängig zurückgenommen: {task}{title}",
           "cancelled": "Aus Chat von {by} abgebrochen · Rückgängig",
           "reopened": "Aktion wiedereröffnet — Bedingung tritt erneut auf",
+          "replaced": "Durch eine neuere Aktion derselben Art ersetzt: Seit 30 Tagen hatte niemand daran gearbeitet",
+          "replaces": "Anstelle einer älteren Aktion derselben Art geöffnet, an der seit 30 Tagen niemand gearbeitet hatte",
           "signals_linked": "{count, plural, one {1 neues Signal verknüpft} other {# neue Signale verknüpft}}",
           "status_changed": "Status in {to} geändert",
           "assigned": "Zuweisung geändert",
@@ -3354,6 +3363,12 @@
         "description": "Diese Quellen werden zitiert, wenn Antworten Ihre Marke erwähnen, und könnten auf Ihre eigenen Seiten verweisen.",
         "goal": "Verwandeln Sie Erwähnungen Dritter in Verweise auf Ihre Ressourcen."
       },
+      "review_paid_overlap": {
+        "title": "Überprüfen Sie die Google Ads für {targets}, wofür die KI Sie bereits auswählt",
+        "titleGeneric": "Überprüfen Sie Google Ads, bei denen die KI Sie bereits auswählt",
+        "description": "Die KI wählt Sie bereits in den Antworten auf diese Kauf-Prompts aus, und Ihre Google-Ausgaben für deren Suchbegriffe steigen. Möglicherweise zahlen Sie für Klicks, die Sie ohnehin erhalten würden.",
+        "goal": "Werbeausgaben dort einsetzen, wo sie zusätzliche Klicks bringen, und die KI-Antwort beibehalten."
+      },
       "bridge_links": {
         "title": "Verlinken Sie {targets} mit Seiten, die konvertieren",
         "titleGeneric": "Verlinken Sie von KI besuchte Seiten mit Seiten, die konvertieren",
@@ -3818,6 +3833,8 @@
       "prioritize_targets_target": "{targets} nach Auswirkung priorisieren",
       "review_link_plan": "Hinzuzufügende Links prüfen",
       "review_link_plan_target": "Auf {targets} hinzuzufügende Links prüfen",
+      "review_paid_overlap": "Überprüfen Sie die Google Ads für diese Suchbegriffe",
+      "review_paid_overlap_target": "Überprüfen Sie die Google Ads für {targets}",
       "define_validation_baseline": "Ausgangsbasis für Messungen erfassen",
       "define_validation_baseline_target": "Baseline für {targets} erfassen",
       "create_content_brief": "Inhalte-Briefing erstellen",
@@ -3929,6 +3946,7 @@
       "strengthen_entity_content": "Die Seite beschreibt die Marke beim erneuten Abruf so wie in ihrem Profil",
       "add_internal_links": "Die Seiten, die darauf verlinken sollen, tun dies; erneut abgerufen",
       "review_link_plan": "Jeder Link und sein Ankertext ist genehmigt oder geändert: Sie bestätigen es",
+      "review_paid_overlap": "Die Anzeige jedes Suchbegriffs wird in Google Ads beibehalten, reduziert oder pausiert: Sie bestätigen dies",
       "improve_cta_path": "Der Call-to-Action ist live auf der Seite: Sie bestätigen es",
       "publish_content": "Die Seite ist unter ihrer Adresse veröffentlicht und antwortet beim Abruf",
       "fix_crawler_access": "robots.txt und die Seite lassen die KI-Crawler zu; erneut abgerufen",
@@ -4075,6 +4093,7 @@
         "whatHappened": "Was ist passiert?",
         "triggeredBy": "Zusammengefasst aus {count, plural, one {# Signal} other {# Signalen}}",
         "dismissedBecause": "Verworfen: {reason}.",
+        "replaced": "Durch eine neuere Aktion derselben Art ersetzt: Seit 30 Tagen hatte niemand daran gearbeitet, daher haben die neuen Befunde eine neue geöffnet.",
         "readings": "Nach Abschluss erfasst: {list}.",
         "reading": "Tag {day}, {outcome}",
         "finalOn": "Die finale Erfassung erfolgt an Tag {day}.",
@@ -4126,7 +4145,10 @@
         "actions": "Aktionen",
         "scorecard": "Scorecard",
         "kpis": "KPIs",
-        "label": "Verlaufsansichten"
+        "label": "Verlaufsansichten",
+        "actionsHint": "Jede laufende oder abgeschlossene Aktion einzeln: was sie erreichen sollte und was seitdem gemessen wurde.",
+        "scorecardHint": "Was jede Art von Aktion insgesamt erreicht hat: wie viele abgeschlossen wurden, ihre Erfolgsquote und die mediane Veränderung.",
+        "kpisHint": "Die Ziele Ihrer Marke und wie nah Sie jedem davon sind."
       },
       "scorecard": {
         "note": "Was jede Art von Aktion bei dieser Marke bewirkt hat, ausschließlich basierend auf ihren eigenen Aktionen. Ergebnisse sind die bisherigen Messwerte; jedes Ergebnis ist einen Monat nach Abschluss der Aktion endgültig. Die Median-Veränderung bezieht sich auf die Hauptmetrik jeder Aktion.",
@@ -4498,6 +4520,10 @@
       "name": "Katalogquellen lesen",
       "step": "Katalog lesen"
     },
+    "catalogFeedGaps": {
+      "name": "Feed-Lücken lesen",
+      "step": "Produkte lesen · Feed-Lücken"
+    },
     "contentPlan": {
       "name": "Inhalte-Plan lesen",
       "step": "Inhalte-Plan lesen"
@@ -4517,6 +4543,10 @@
     "siteAuditQuota": {
       "name": "Verbleibende Website-Audits in diesem Monat lesen",
       "step": "Website-Audit lesen"
+    },
+    "crawlerAccess": {
+      "name": "KI-Crawler-Probleme lesen",
+      "step": "Site Audit · Crawler lesen"
     },
     "goToPage": {
       "name": "Zu einer Seite wechseln",
@@ -4811,6 +4841,10 @@
     "adsOpportunities": {
       "name": "Ads-Chancen auslesen",
       "step": "Ads-Chancen ausgelesen"
+    },
+    "adsPaidOverlap": {
+      "name": "Bezahlte Überschneidungen lesen",
+      "step": "Bezahlte Überschneidungen lesen"
     },
     "adDrafts": {
       "name": "Anzeigenentwürfe speichern",
@@ -6211,7 +6245,6 @@
       "home": "Startseite",
       "inbox": "Posteingang",
       "inboxLabel": "Posteingang · {needsYou, plural, one {# erfordert Ihre Aufmerksamkeit} other {# erfordern Ihre Aufmerksamkeit}}",
-      "inboxLabelNeedsYou": "Posteingang · {count, plural, one {# Element} other {# Elemente}} · {needsYou, plural, one {# erfordert Sie} other {# erfordern Sie}}",
       "skills": "Skills",
       "activity": "Aktivität",
       "capabilities": "Was Chat tun kann",
@@ -6661,10 +6694,7 @@
       "landsWithSuggestions": "Ergebnisse Ihrer Agenten und tägliche Vorschläge landen hier.",
       "nothingNeedsYou": "Nichts erfordert Ihre Aufmerksamkeit.",
       "summary": {
-        "needsYou": "{count, plural, one {# erfordert Ihre Aufmerksamkeit} other {# erfordern Ihre Aufmerksamkeit}}",
-        "running": "{count} aktiv",
-        "doneToday": "{count} heute erledigt",
-        "suggestions": "{count, plural, one {# Vorschlag} other {# Vorschläge}} diese Woche"
+        "needsYou": "{count, plural, one {# erfordert Ihre Aufmerksamkeit} other {# erfordern Ihre Aufmerksamkeit}}"
       },
       "empty": "Nichts erfordert Ihre Aufmerksamkeit. Ergebnisse Ihrer Agenten landen hier.",
       "tabs": {
@@ -7775,7 +7805,9 @@
         "signal": "Signal erstellt",
         "kpi": "KPI geändert",
         "watch_rule": "Überwachungsregel",
-        "brand_added": "Marke hinzugefügt"
+        "brand_added": "Marke hinzugefügt",
+        "page_published": "Seite veröffentlicht",
+        "catalog_synced": "Katalog synchronisiert"
       },
       "daily": "Jeden Tag um {time}",
       "weekdays": "Werktags um {time}",
@@ -7790,13 +7822,17 @@
       "kpiAny": "Ein KPI",
       "watchRule": "Überwachungsregel",
       "brandAdded": "Wenn eine Marke hinzugefügt wird",
+      "pagePublished": "Wenn eine Seite veröffentlicht wird",
+      "catalogSynced": "Wenn der Katalog synchronisiert wird",
       "manualOnly": "Nur manuell",
       "more": "+{count}",
       "firesWhen": {
         "signal": "Wird ausgelöst, wenn das Aktionszentrum ein passendes Signal findet",
         "kpi": "Wird ausgelöst, wenn der KPI den Schwellenwert überschreitet",
         "watch_rule": "Wird ausgelöst, wenn die zugehörige Überwachungsregel ausgelöst wird",
-        "brand_added": "Wird einmal für jede zum Workspace hinzugefügte Marke ausgelöst"
+        "brand_added": "Wird einmal für jede zum Workspace hinzugefügte Marke ausgelöst",
+        "page_published": "Wird einmal für jede Seite ausgelöst, die im CMS der Marke live geht",
+        "catalog_synced": "Wird einmal für jede Katalogsynchronisierung ausgelöst, die Produkte ändert"
       },
       "timeZone": "{zone} Zeit",
       "off": "Aus · wird nicht ausgelöst",
@@ -7896,6 +7932,8 @@
         "trigger": "Auslöser",
         "signal": "Signal",
         "slot": "Geplant für",
+        "page": "Seite veröffentlicht",
+        "catalog": "Katalogquelle synchronisiert",
         "earlier": "Frühere Auslösungen",
         "action": "Aktion"
       },
@@ -7937,6 +7975,8 @@
       "kpi": "KPI geändert",
       "watch_rule": "Überwachungsregel",
       "brand_added": "Marke hinzugefügt",
+      "page_published": "Seite veröffentlicht",
+      "catalog_synced": "Katalog synchronisiert",
       "manual": "Manuell",
       "action": "Agent über eine Aktion ausführen",
       "agent": "Von einem anderen Agenten aufgerufen"
@@ -8012,8 +8052,11 @@
       "seasonal": "Saisonale Prompts",
       "traffic": "KI-Traffic und Registrierungen",
       "ai-revenue": "Kunden und Umsatz durch KI",
+      "feed-advisor": "Lücken im Shopping-Feed",
+      "tech-fix": "Crawler und technische Korrekturen",
       "earn-or-pay": "Verdienen oder zahlen",
       "ad-drafts": "Anzeigenentwürfe",
+      "paid-overlap": "Bezahlte Überschneidung",
       "operator": "AEO-Operator"
     },
     "form": {
@@ -8080,7 +8123,9 @@
           "signal": "Signal erstellt",
           "kpi": "KPI geändert",
           "watch_rule": "Beobachtungsregel",
-          "brand_added": "Wenn eine Marke hinzugefügt wird"
+          "brand_added": "Wenn eine Marke hinzugefügt wird",
+          "page_published": "Wenn eine Seite veröffentlicht wird",
+          "catalog_synced": "Wenn der Katalog synchronisiert wird"
         },
         "notes": {
           "manual": "Über Chat oder eine Aktion ausführen",
@@ -8088,7 +8133,9 @@
           "signal": "Ein neues Signal im Aktionszentrum",
           "kpi": "Ein KPI überschreitet einen Schwellenwert",
           "watch_rule": "WENN · FÜR · DANN",
-          "brand_added": "Einmalig pro neuer Marke · erfordert Alle Marken"
+          "brand_added": "Einmalig pro neuer Marke · erfordert Alle Marken",
+          "page_published": "Einmal pro Seite, die in Ihrem CMS live geht",
+          "catalog_synced": "Einmal pro Synchronisierung, die Produkte ändert"
         },
         "watchRuleNone": "In einer Beobachtungsregel festlegen: Ihr DANN führt den Agenten aus",
         "list": "Trigger",
@@ -8152,6 +8199,8 @@
         },
         "watchRuleWhen": "Die Überwachungsregel wird ausgelöst",
         "brandAddedWhen": "Eine Marke wird zum Workspace hinzugefügt, einmal pro Marke",
+        "pagePublishedWhen": "eine Seite im CMS der Marke live geht, einmal pro Seite",
+        "catalogSyncedWhen": "eine Synchronisierung des Produktkatalogs der Marke Produkte ändert, einmal pro Synchronisierung",
         "runAgent": "Agent ausführen"
       },
       "scope": {
@@ -8618,7 +8667,7 @@
       },
       "paid-opportunity": {
         "name": "Bezahlte Chancen",
-        "description": "Zeigt wöchentlich, welche kaufrelevanten Prompts durch Inhalte abgedeckt oder bezahlt werden sollten, weist auf Änderungen hin (z. B. wenn Mitbewerber auf Ihren Namen bieten) und entwirft Anzeigen in Ansvisor."
+        "description": "Zeigt jede Woche, welche Kauf-Prompts durch Inhalte verdient oder bezahlt werden sollten, markiert Änderungen (z. B. wenn ein Konkurrent jetzt auf Ihren Namen bietet), zeigt Ihre Ausgaben bei Google für Bereiche, in denen die KI Sie bereits zitiert, und erstellt Anzeigenentwürfe in Ansvisor."
       },
       "ai-ads-watch": {
         "name": "KI-Werbebeobachtung",
@@ -15405,7 +15454,14 @@
       "sov": "Bezahlter SoV",
       "sovNote": "Gesponserte Anzeigen in KI-Antworten werden noch nicht erfasst",
       "cost": "Kosten pro KI-unterstützter Registrierung",
-      "costNote": "Erfordert ein verknüpftes Anzeigenkonto",
+      "costNote": "Erfordert ein verknüpftes und ausgelesenes Werbekonto unter „Verbindungen“",
+      "costOf": "{spend} Werbeausgaben ÷ {count, plural, one {# KI-unterstützte Registrierung} other {# KI-unterstützte Registrierungen}}",
+      "costSpend": "{spend} Werbeausgaben in diesem Zeitraum",
+      "costNoSignups": "Noch keine Registrierungen",
+      "costNoSpend": "Keine Werbeausgaben",
+      "costNoSpendNote": "Die verbundenen Werbekonten haben in diesem Zeitraum nichts ausgegeben",
+      "costCurrencies": "Mehrere Währungen",
+      "costCurrenciesNote": "{spend} Werbeausgaben: Beträge in verschiedenen Währungen werden nicht zusammengerechnet, daher gibt es keine einheitlichen Kosten pro Registrierung",
       "signups": "{count, plural, one {# KI-unterstützte Registrierung} other {# KI-unterstützte Registrierungen}} in diesem Zeitraum",
       "signupsNotMeasured": "KI-unterstützte Registrierungen: nicht gemessen",
       "barTitle": "Organisch oder bezahlt · {count, plural, one {# Prompt} other {# Prompts}}",
@@ -15414,7 +15470,11 @@
       "earnedPaid": "Organisch + bezahlt",
       "paidOnly": "Nur bezahlt",
       "neither": "Weder noch",
-      "paidNotMeasured": "Bezahlt wird noch nicht gemessen, daher zeigt das Diagramm nur organisch und weder noch.",
+      "paidNotMeasured": "Bezahlte Aktivitäten werden erst erfasst, wenn ein Google Ads-Konto verknüpft und ausgelesen wurde. Daher zeigt das Diagramm nur unbezahlte und weder noch.",
+      "spendOverlap": "Bei Google bezahlt für Prompts, für die die KI Sie bereits zitiert: {amount}",
+      "spendMatched": "Für alle Ihre getrackten Prompts: {amount}",
+      "spendUnmatched": "Für Suchbegriffe, die mit keinem getrackten Prompt übereinstimmen: {amount}",
+      "spendNote": "Aus Ihren Google Ads-Suchbegriffen. Ausgaben für ChatGPT Ads beziehen sich auf Kampagnen: Es wird nicht angegeben, bei welcher Frage eine Anzeige eingeblendet wurde.",
       "openPrompts": "{count, plural, one {# offenen Prompt} other {# offene Prompts}} ansehen",
       "locked": "{count, plural, one {# weiterer Prompt} other {# weitere Prompts}} in Opportunities {count, plural, one {ist} other {sind}} ab dem {plan}-Plan enthalten.",
       "openSov": "Wer zahlt pro Prompt"
@@ -15491,7 +15551,7 @@
         "volume_at_least": "{volume} Google-Suchanfragen pro Monat, mindestens {threshold}",
         "volume_below": "{volume} Google-Suchanfragen pro Monat, unter {threshold}",
         "volume_not_measured": "Google-Suchanfragen werden noch nicht erfasst",
-        "paid_not_measured": "Werbungtreibende werden noch nicht erfasst",
+        "paid_not_measured": "{wePay, select, false {Ob Mitbewerber für Werbung bezahlen, wird noch nicht erfasst} other {Wer bezahlt, wird noch nicht erfasst}}",
         "no_ad_channel": "Kein Werbekanal erreicht die KI-Plattformen, auf denen dies getrackt wird"
       },
       "answers": "Was die KI heute antwortet",
@@ -15501,6 +15561,13 @@
       "cites": "Zitierungen: {domains}",
       "fanOuts": "Fan-out-Suchanfragen",
       "keywords": "Keyword-Seeds",
+      "paid": {
+        "title": "Ihre Google Ads dazu",
+        "spend": "{amount} für {clicks, plural, one {# Klick} other {# Klicks}} in diesem Zeitraum",
+        "terms": "{count, plural, one {# Suchbegriff stimmte überein} other {# Suchbegriffe stimmten überein}}, die teuersten zuerst:",
+        "none": "In diesem Zeitraum stimmten keine Google-Werbeausgaben damit überein.",
+        "note": "Suchbegriffe werden dem Prompt anhand ihrer Wörter zugeordnet. Ausgaben für ChatGPT Ads werden nicht zugeordnet: Es wird nicht angegeben, bei welcher Frage eine Anzeige eingeblendet wurde."
+      },
       "failed": "Die Antworten konnten nicht geladen werden. Bitte schließen und erneut öffnen.",
       "earn": {
         "title": "Verdienen · Antwort optimieren",
@@ -15575,14 +15642,31 @@
         "channel": "Kanal",
         "status": "Status",
         "spend": "Ausgaben",
-        "signups": "KI-unterstützte Anmeldungen",
-        "cost": "Kosten pro Anmeldung"
+        "clicks": "Klicks",
+        "cpc": "CPC",
+        "conversions": "Conversions",
+        "costPerConversion": "Kosten pro Conversion"
       },
-      "empty": "Werbekonto verknüpfen · Demnächst verfügbar",
-      "emptyNote": "Ihre Kampagnen werden hier aufgeführt, zunächst schreibgeschützt.",
+      "channels": {
+        "google": "Google Ads",
+        "chatgpt": "ChatGPT Ads"
+      },
+      "statuses": {
+        "active": "Aktiv",
+        "paused": "Pausiert",
+        "ended": "Beendet"
+      },
+      "empty": "Noch kein Werbekonto verknüpft",
+      "emptyNote": "Verbinden Sie Google Ads oder ChatGPT Ads, um Ihre Kampagnen hier schreibgeschützt zu sehen.",
+      "openConnections": "Verbindungen öffnen",
+      "failed": "Ihre Kampagnen konnten nicht geladen werden. Versuchen Sie es gleich noch einmal.",
+      "firstRead": "Ihre ersten Zahlen treffen innerhalb eines Tages nach der Verbindung ein.",
+      "noneInPeriod": "In diesem Zeitraum lief keine Kampagne.",
+      "attention": "{count, plural, one {# Werbekonto erfordert Aufmerksamkeit.} other {# Werbekonten erfordern Aufmerksamkeit.}}",
+      "currencyNote": "Jede Kampagne wird in der Währung ihres Werbekontos angezeigt. Zahlen werden einmal täglich ausgelesen.",
       "safety": {
         "title": "Sicherheit",
-        "note": "Wird von Ansvisor durchgesetzt, nicht von einem Agenten. Derzeit gelangt nichts an ein Werbekonto.",
+        "note": "Erzwungen durch Ansvisor, nicht durch einen Agenten. Derzeit liest Ansvisor Ihre Werbekonten nur aus.",
         "click": "Jedes Aktivieren, Pausieren sowie jede Budget- oder Gebotsänderung erfordert den Klick und die Bestätigung einer Person – in jedem Modus.",
         "agents": "Agenten geben niemals Geld aus: Ein Agent kann eine Änderung vorschlagen, durchführen kann sie nur eine Person.",
         "cap": "Administratoren legen ein monatliches Limit für jeden Kanal fest. Eine Änderung über das Limit hinaus wird blockiert, wobei die Änderungen der letzten 24 Stunden berücksichtigt werden.",
@@ -15590,7 +15674,6 @@
       }
     },
     "connections": {
-      "soon": "Demnächst verfügbar",
       "later": "Folgt später",
       "notify": "Benachrichtigen",
       "notified": "Wir geben Bescheid",
@@ -15604,6 +15687,79 @@
       },
       "manage": "Verwalten",
       "connect": "Verbinden",
+      "adminConnects": "Ein Admin verbindet dies",
+      "accountStatus": {
+        "active": "Verbunden",
+        "error": "Erfordert Aufmerksamkeit",
+        "disconnected": "Getrennt"
+      },
+      "sync": {
+        "syncedAt": "Zahlen ausgelesen am {when}",
+        "pending": "Erstes Auslesen innerhalb eines Tages: die letzten 90 Tage",
+        "error": {
+          "key_refused": "ChatGPT Ads hat den Schlüssel abgelehnt. Fügen Sie einen neuen ein.",
+          "key_missing": "Der Schlüssel ist nicht mehr vorhanden. Verbinden Sie das Konto erneut.",
+          "signin_gone": "Die Google Ads-Anmeldung ist nicht mehr vorhanden. Verbinden Sie Google Ads erneut.",
+          "upstream": "Die Werbeplattform hat nicht geantwortet. Ansvisor versucht es innerhalb eines Tages erneut.",
+          "failed": "Die Zahlen konnten nicht ausgelesen werden. Ansvisor versucht es innerhalb eines Tages erneut."
+        }
+      },
+      "chatgpt": {
+        "connect": "Verbinden",
+        "addAnother": "Konto hinzufügen",
+        "dialogTitle": "ChatGPT Ads verbinden",
+        "dialogLine": "Fügen Sie einen Ads-API-Schlüssel aus dem ChatGPT Ads Manager ein. Jeder Schlüssel erreicht ein Werbekonto; fügen Sie daher einen Schlüssel pro Konto hinzu.",
+        "keyLabel": "Ads-API-Schlüssel",
+        "keyNote": "Ansvisor überprüft den Schlüssel mit ChatGPT Ads und speichert ihn dann verschlüsselt. Es liest nur aus.",
+        "cancel": "Abbrechen",
+        "save": "Verbinden",
+        "checking": "Wird überprüft…",
+        "connectedToast": "{name} wurde verbunden.",
+        "accountLine": "ChatGPT Ads-Konto · {currency}",
+        "accountLineNoCurrency": "ChatGPT Ads-Konto",
+        "billing": "ChatGPT Ads Manager",
+        "error": {
+          "invalid_key": "ChatGPT Ads hat diesen Schlüssel nicht akzeptiert. Überprüfen Sie ihn und versuchen Sie es erneut.",
+          "upstream": "ChatGPT Ads hat nicht geantwortet. Versuchen Sie es in einer Minute erneut.",
+          "other": "Verbindung konnte nicht hergestellt werden. Versuchen Sie es erneut."
+        }
+      },
+      "google": {
+        "name": "Google Ads",
+        "connect": "Verbinden",
+        "addAnother": "Konto hinzufügen",
+        "billing": "Google Ads",
+        "pickTitle": "Google Ads-Konten auswählen",
+        "pickLine": "Dies sind die Konten, auf die Ihr Google-Login zugreifen kann. Ansvisor liest die von Ihnen ausgewählten Konten aus; Kampagnen oder Budgets werden niemals geändert.",
+        "noCustomers": "Dieser Google-Login hat keinen Zugriff auf ein Google Ads-Konto. Melden Sie sich mit dem Google-Konto an, das Ihre Anzeigen verwaltet.",
+        "unnamed": "Unbenanntes Konto",
+        "more": "{count, plural, one {# weiteres Konto ist nicht aufgeführt.} other {# weitere Konten sind nicht aufgeführt.}}",
+        "why": {
+          "connected": "Verbunden",
+          "manager": "Verwaltungskonto",
+          "unavailable": "Nicht verfügbar",
+          "test": "Testkonto"
+        },
+        "cancel": "Abbrechen",
+        "save": "{count, plural, =0 {Verbinden} one {# Konto verbinden} other {# Konten verbinden}}",
+        "connectedToast": "{count, plural, one {# Google Ads-Konto verbunden.} other {# Google Ads-Konten verbunden.}}",
+        "error": {
+          "not_configured": "Google Ads ist auf diesem Server noch nicht eingerichtet.",
+          "not_connected": "Melden Sie sich zuerst bei Google Ads an und versuchen Sie es dann erneut.",
+          "not_accessible": "Dieser Google-Login hat keinen Zugriff mehr auf dieses Konto. Schließen Sie das Fenster und verbinden Sie es erneut.",
+          "manager_account": "Ein Verwaltungskonto enthält keine eigenen Kampagnen. Wählen Sie die untergeordneten Konten aus.",
+          "upstream": "Google Ads hat nicht geantwortet. Versuchen Sie es in einer Minute erneut.",
+          "other": "Verbindung fehlgeschlagen. Versuchen Sie es erneut."
+        }
+      },
+      "account": {
+        "disconnect": "Trennen",
+        "disconnectTitle": "{name} trennen?",
+        "disconnectLine": "Ansvisor löscht die für dieses Konto gespeicherten Daten: den Schlüssel (falls vorhanden) und die ausgelesenen Zahlen. Ihre Anzeigen laufen in {billing} weiter.",
+        "disconnectedToast": "{name} getrennt.",
+        "disconnectFailed": "Trennen fehlgeschlagen. Versuchen Sie es erneut.",
+        "cancel": "Abbrechen"
+      },
       "platforms": {
         "chatgpt": {
           "name": "ChatGPT Ads",
@@ -15638,6 +15794,31 @@
     }
   },
   "prompts": {
+    "bulkPlatforms": {
+      "bulkButton": "Plattformen",
+      "bulkAdd": "Plattformen hinzufügen",
+      "bulkRemove": "Plattformen entfernen",
+      "modes": "Hinzufügen oder entfernen",
+      "modeAdd": "Hinzufügen",
+      "modeRemove": "Entfernen",
+      "platforms": "Plattformen",
+      "title": "Plattformen hinzufügen",
+      "lead": "Verfolgen Sie die {count} ausgewählten Prompts auf weiteren Plattformen. Jeder Prompt-Standort belegt auf jeder Plattform einen Tracking-Slot. Eine Plattform, auf die ein Prompt wartet, wird erneut ausgeführt.",
+      "removeTitle": "Plattformen entfernen",
+      "removeLead": "Beenden Sie das Tracking der {count} ausgewählten Prompts auf einigen Plattformen. Die Slots werden wieder frei.",
+      "none": "Keine Plattform zum Hinzufügen. Fügen Sie unter Einstellungen › Abrechnung Tracking-Slots hinzu, um weitere Plattformen zu verfolgen.",
+      "removeNone": "Die ausgewählten Prompts laufen auf keiner Plattform, die Sie entfernen können.",
+      "free": "{count} frei",
+      "previewAdd": "{count, plural, one {# Prompt wird geändert} other {# Prompts werden geändert}} · {unchanged} haben sie bereits",
+      "previewRemove": "{count, plural, one {# Prompt wird geändert} other {# Prompts werden geändert}} · {unchanged} haben sie nicht · bei {blocked} bliebe keine Plattform übrig",
+      "short": "{platform} benötigt {needed} Slots und hat {free} frei.",
+      "addSlots": "Slots hinzufügen",
+      "save": "Zu {count, plural, one {# Prompt} other {# Prompts}} hinzufügen",
+      "removeSave": "Von {count, plural, one {# Prompt} other {# Prompts}} entfernen",
+      "done": "{count, plural, one {Plattformen zu # Prompt hinzugefügt} other {Plattformen zu # Prompts hinzugefügt}}",
+      "removed": "{count, plural, one {Plattformen von # Prompt entfernt} other {Plattformen von # Prompts entfernt}}",
+      "saveFailed": "Die Plattformen konnten nicht geändert werden. Bitte versuchen Sie es erneut."
+    },
     "waiting": {
       "resultTitle": "{added} hinzugefügt, {waiting} warten auf einen Platz",
       "savedTitle": "{count, plural, one {Gespeichert, aber noch nicht getrackt} other {# Prompts gespeichert, aber noch nicht getrackt}}",
@@ -16021,6 +16202,13 @@
       "bulkTitle": "{count, plural, one {Tracking für den ausgewählten Prompt ohne bisherige Antworten starten} other {Tracking für die # ausgewählten Prompts ohne bisherige Antworten starten}}"
     },
     "usage": {
+      "slots": {
+        "title": "Tracking-Slots",
+        "add": "Slots hinzufügen",
+        "usage": "{used} / {limit}",
+        "unlimited": "{used} · unbegrenzt",
+        "meter": "Verwendete {platform}-Slots"
+      },
       "panelLabel": "Prompt-Nutzung",
       "planAndUsage": "Tarif & Nutzung",
       "hide": "Ausblenden",
@@ -16103,7 +16291,7 @@
       "enginesLegend": "Farbig: geteilte Suchanfragen für diesen Prompt im Zeitraum. Ausgegraut: erfasst, aber keine geteilt.",
       "engineEmptyTitle": "Keine Suchanfragen von {engine} im {range}",
       "engineEmptyBody": "{engine} teilt normalerweise die Suchanfragen hinter seinen Antworten. Versuchen Sie einen längeren Datumsbereich.",
-      "sourceNote": "Perplexity wird nicht mehr erfasst und Microsoft Copilot teilt seine Suchanfragen nicht, daher stammen diese nur von ChatGPT, das sie an manchen Tagen teilt. Es sind weniger als zuvor.",
+      "sourceNote": "Perplexity wird nicht mehr verfolgt und Bing AI Mode gibt seine Suchanfragen nicht preis. Daher stammen diese nur von ChatGPT, das sie an einigen Tagen bereitstellt. Es sind weniger als zuvor.",
       "emptyTitle": "Noch kein fan-out erfasst",
       "emptyBody": "Die Suchanfragen von ChatGPT werden an manchen Tagen stichprobenartig erfasst, und die ChatGPT API teilt sie bei Suchvorgängen. Google AI Overviews, AI Mode und Gemini teilen sie nicht. Sobald diese Engines für Ihre Prompts ausgeführt werden, erscheinen die Suchanfragen hier.",
       "coverageTooltip": "Von {total} erfassten Antworten in diesem Zeitraum enthielten {withFanout} die von der Engine durchgeführten Suchanfragen. Die von ChatGPT werden an manchen Tagen stichprobenartig erfasst, und die ChatGPT API teilt sie bei Suchvorgängen."
@@ -18258,24 +18446,139 @@
       }
     },
     "notifications": "Benachrichtigungen",
-    "notificationsDescription": "Jede Marke kann zwei E-Mails senden: den Daily Pulse nach ihren Tracking-Läufen und die wöchentliche KI-Traffic-Zusammenfassung jeden Montag. Beide gehen an die Daily-Pulse-Empfänger der Marke.",
-    "pulseSection": "Daily Pulse",
-    "pulseSectionDescription": "Eine kurze Zusammenfassung pro Marke nach jedem Tracking-Lauf, mit Highlights und Warnungen. Legen Sie fest, wie oft sie kommt und wer sie erhält.",
-    "pulseFrequencyLabel": "Wie oft der Daily Pulse von {brand} kommt",
+    "yourEmails": {
+      "title": "Ihre E-Mails",
+      "description": "Wählen Sie, welche E-Mails Ansvisor Ihnen sendet und wie oft. Diese Einstellungen gelten nur für Sie: Jedes Teammitglied legt seine eigenen fest.",
+      "carriedOver": "Das sind die E-Mails, die Sie aktuell erhalten. Speichern Sie, um sie als Ihre eigene Auswahl zu übernehmen.",
+      "for": "Für",
+      "scopeAll": "Alle meine Marken ({count})",
+      "deliveryHint": "Marken-E-Mails kommen einzeln pro Marke oder gesammelt in einer E-Mail:",
+      "delivery_per_brand": "Eine E-Mail pro Marke",
+      "delivery_combined": "Alle Marken in einer E-Mail (demnächst verfügbar)",
+      "brandOnly": "Nur für {brand} festlegen",
+      "useAll": "Meine Auswahl „Alle meine Marken“ verwenden",
+      "notableNote": "Zuerst Ihr erster Pulse, danach nur, wenn etwas Auffälliges passiert.",
+      "comingSoon": "Demnächst verfügbar",
+      "comingSoonHint": "E-Mails mit dem Hinweis „Demnächst verfügbar“ behalten die gespeicherte Auswahl und starten, sobald sie bereit sind.",
+      "admins": "Admins",
+      "groups": {
+        "visibility": "Markensichtbarkeit",
+        "traffic": "KI-Traffic",
+        "actions": "Aktionszentrum",
+        "agents": "Agents und Chat",
+        "audit": "Website-Audit",
+        "content": "Inhalte",
+        "account": "Konto"
+      },
+      "kinds": {
+        "daily_pulse": {
+          "name": "Daily Pulse",
+          "description": "Wie jede Marke in KI-Antworten aufgetreten ist: Sichtbarkeitswert, Erwähnungen, Zitierungen, Highlights und Warnungen."
+        },
+        "traffic_digest": {
+          "name": "Wöchentliche Zusammenfassung",
+          "description": "Die KI-Besuche der letzten Woche in einer Zeile, mit den drei wichtigsten Änderungen. Montags."
+        },
+        "critical_action": {
+          "name": "Neue kritische Aktion",
+          "description": "Eine neue Aktion mit kritischer Priorität für Ihre Marken."
+        },
+        "due_actions": {
+          "name": "Überfällig und heute fällig",
+          "description": "Ihnen zugewiesene Aktionen und Aufgaben, die fällig oder überfällig sind."
+        },
+        "weekly_actions": {
+          "name": "Wöchentliche Aktionsübersicht",
+          "description": "Was erledigt wurde, was offen ist und was als Nächstes ansteht. Montags."
+        },
+        "run_finished": {
+          "name": "Lauf abgeschlossen",
+          "description": "Ein von Ihnen gestarteter Agent-Lauf ist abgeschlossen, inklusive dessen, was er getan hat."
+        },
+        "audit_finished": {
+          "name": "Audit abgeschlossen",
+          "description": "Ein Bulk- oder geplantes Audit ist abgeschlossen, mit dem Ergebnis."
+        },
+        "score_dropped": {
+          "name": "Wert gesunken",
+          "description": "Der Wert einer Seite ist seit dem letzten Audit um 5 Punkte oder mehr gefallen."
+        },
+        "drafts_review": {
+          "name": "Entwürfe warten auf Ihre Prüfung",
+          "description": "Für Ihre Marken erstellte Entwürfe, die Sie prüfen müssen, bevor sie live gehen."
+        },
+        "ai_usage": {
+          "name": "KI-Nutzung",
+          "description": "Bei 80 % und 100 % des monatlichen KI-Limits."
+        }
+      },
+      "links": {
+        "approvals": {
+          "name": "Wartet auf Ihre Freigabe",
+          "description": "Ein Agent oder ein Chat-Lauf braucht Ihr OK, bevor er etwas ändert oder veröffentlicht. Einstellbar über „Benachrichtigen, wenn ein Agent mich braucht“.",
+          "link": "Chat-Einstellungen"
+        },
+        "scheduled": {
+          "name": "Geplante Jobs",
+          "description": "Jeder Job sendet E-Mails gemäß seinen eigenen Einstellungen.",
+          "link": "Jobs öffnen"
+        },
+        "billing": {
+          "name": "Abrechnung und Sicherheit",
+          "description": "Rechnungen, Zahlungsprobleme und Anmeldewarnungen. Werden immer gesendet.",
+          "locked": "Immer aktiv"
+        }
+      },
+      "options": {
+        "pulse": {
+          "daily": "Täglich",
+          "weekly": "Wöchentlich",
+          "notable": "Nur bei Auffälligkeiten",
+          "off": "Aus"
+        },
+        "instant": {
+          "instant": "Sofort",
+          "daily": "Tägliche Zusammenfassung",
+          "off": "Aus"
+        },
+        "digest": {
+          "daily": "Tägliche Zusammenfassung",
+          "weekly": "Wöchentliche Zusammenfassung",
+          "off": "Aus"
+        },
+        "weekly": {
+          "weekly": "Jeden Montag",
+          "off": "Aus"
+        },
+        "onoff": {
+          "on": "An",
+          "off": "Aus"
+        }
+      },
+      "save": "Änderungen speichern",
+      "saved": "Ihre E-Mail-Einstellungen wurden gespeichert",
+      "saveFailed": "Ihre E-Mail-Einstellungen konnten nicht gespeichert werden. Bitte versuchen Sie es erneut.",
+      "loadFailed": "Ihre E-Mail-Einstellungen konnten nicht geladen werden.",
+      "turnOffAll": "Alle optionalen E-Mails deaktivieren",
+      "turnedOff": "Alle optionalen E-Mails sind auf Aus gesetzt. Speichern Sie die Änderungen, um dies beizubehalten."
+    },
+    "outsideEmails": {
+      "title": "An Personen außerhalb des Workspace senden",
+      "description": "Kunden oder Manager ohne Ansvisor-Platz können die Zusammenfassungen einer Marke ebenfalls erhalten. Freigaben oder Konto-E-Mails erhalten sie nie.",
+      "sends": "Daily Pulse · Wöchentliche Zusammenfassung zu KI-Traffic",
+      "recipients": "Empfänger",
+      "placeholder": "kunde@example.com, chef@example.com",
+      "hint": "Durch Kommas getrennt. Teammitglieder, die ihre eigenen E-Mail-Einstellungen nicht gespeichert haben, erhalten die E-Mails dieser Marke weiterhin wie bisher: alle, solange diese Liste leer ist, sonst nur die aufgeführten.",
+      "frequency": "Daily Pulse",
+      "frequencyNote": "Dies legt auch den Slack-Kanal und die Webhooks der Marke fest sowie die Teammitglieder, die ihre eigenen Einstellungen nicht gespeichert haben.",
+      "digest": "Auch die wöchentliche Zusammenfassung zu KI-Traffic senden",
+      "digestPulseOff": "Die wöchentliche Zusammenfassung wird nicht gesendet, solange dieser Daily Pulse deaktiviert ist."
+    },
     "pulseFrequency_daily": "Täglich",
     "pulseFrequency_weekly": "Wöchentlich",
     "pulseFrequency_notable": "Nur bei Besonderheiten",
-    "pulseFrequency_notableNote": "Ihr erster Pulse, danach nur, wenn etwas Bemerkenswertes passiert.",
     "pulseFrequency_off": "Aus",
-    "pulseRecipients": "Empfänger",
-    "pulseRecipientsPlaceholder": "alex@example.com, sam@example.com",
-    "pulseRecipientsHint": "Kommagetrennte E-Mail-Adressen. Leer lassen, um an jedes Mitglied der Organisation zu senden.",
     "pulseRecipientsInvalid": "Keine gültige E-Mail-Adresse: {emails}. Vor dem Speichern korrigieren oder entfernen.",
-    "trafficDigest": "Wöchentliche KI-Traffic-Übersicht",
-    "trafficDigestDescription": "Jeden Montag: die KI-Besuche der letzten Woche in einer Zusammenfassungszeile, mit den drei größten Änderungen. Sie geht an die Daily-Pulse-Empfänger jeder Marke und wird gespeichert, sobald Sie das Häkchen setzen oder entfernen.",
-    "trafficDigestTo": "An {emails}",
-    "trafficDigestToEveryone": "An alle Mitglieder der Organisation",
-    "trafficDigestPulseOff": "Wird nicht gesendet, solange Daily Pulse deaktiviert ist. Schalten Sie Pulse wieder ein, um die Übersicht zu erhalten.",
     "pulseSaved": "Benachrichtigungseinstellungen gespeichert",
     "pulseSaveFailed": "Benachrichtigungseinstellungen konnten nicht gespeichert werden. Bitte versuchen Sie es erneut.",
     "pulseLoadFailed": "Benachrichtigungseinstellungen konnten nicht geladen werden.",
@@ -18300,7 +18603,6 @@
       "loading": "Sprachen werden geladen…",
       "moreSoon": "Weitere Sprachen folgen in Kürze.",
       "preview": "Mitarbeitende und Test-Builds sehen auch Sprachen, für die es noch keine Übersetzung gibt. Fehlender Text wird auf Englisch angezeigt.",
-      "testLanguage": "{language} · Test",
       "saved": "Sprache gespeichert",
       "saveFailed": "Ihre Sprache konnte nicht gespeichert werden. Bitte versuchen Sie es erneut.",
       "suggest": {
@@ -18450,7 +18752,38 @@
     },
     "planAddOns": {
       "title": "Ihren Tarif erweitern",
-      "description": "Zusätzliches Tracking, zusätzliche Marken und KI-Nutzungs-Aufladungen für Ihren Growth-Tarif. Alles, was Sie auswählen, wird einmalig der hinterlegten Karte belastet.",
+      "slots": {
+        "title": "Zusätzliche Tracking-Credits kaufen",
+        "description": "{plan} enthält {included} Slots pro Standardplattform. Wählen Sie zusätzliche Slots für beliebige Plattformen; Sie können jede Auswahl bis auf 0 verringern.",
+        "descriptionNone": "Wählen Sie zusätzliche Slots für beliebige Plattformen; Sie können jede Auswahl bis auf 0 verringern.",
+        "discount": {
+          "reached": "<b>{percent} % Rabatt</b> auf Ihr zusätzliches Tracking: {off} Rabatt auf {list} pro {interval, select, year {Jahr} other {Monat}}.",
+          "list": "Zusätzliches Tracking: {list} pro {interval, select, year {Jahr} other {Monat}}.",
+          "next": "Fügen Sie {more} weitere pro {interval, select, year {Jahr} other {Monat}} hinzu und erhalten Sie <b>{percent} % Rabatt</b> auf den Anteil über {from}.",
+          "top": "Sie haben die höchste Stufe erreicht.",
+          "drops": "Diese Änderung senkt Ihren Rabatt von {from} % auf {to} %, sodass der Preis pro 100 slots steigt.",
+          "steps": "Mengenrabattstufen",
+          "stepsLead": "Jede Stufe zieht ihren Satz vom darüber liegenden Anteil ab:",
+          "step": "{percent} % Rabatt ab {from}/{interval, select, year {Jahr} other {Monat}}",
+          "yours": "· Ihre Stufe",
+          "nextTag": "· nächste"
+        },
+        "unit": "<b>1 slot</b> = 1 Prompt, der täglich an 1 Standort auf dieser Plattform getrackt wird.",
+        "columns": {
+          "platform": "Plattform",
+          "included": "In Ihrem Tarif",
+          "extra": "Zusätzliche slots",
+          "price": "Preis pro 100 slots pro {interval, select, year {Jahr} other {Monat}}",
+          "cost": "Ihre {interval, select, year {jährlichen} other {monatlichen}} Kosten"
+        },
+        "unlimited": "Kein Limit",
+        "fewer": "100 weniger {platform} slots",
+        "more": "100 weitere {platform} slots",
+        "extraOn": "Zusätzliche slots für {platform}",
+        "was": "vorher {slots}",
+        "undo": "Rückgängig",
+        "footer": "Die Preise richten sich nach den Kosten für das Tracking der jeweiligen Plattform: Manche Antworten sind aufwendiger (zum Beispiel Perplexity). Jährlich: 2 Monate gratis."
+      },
       "tracking": {
         "title": "Zusätzliches Tracking",
         "description": "Mehr Prompt-Standorte, täglich auf den Engines Ihres Tarifs erfasst. Jeweils eine Stufe; jederzeit änderbar oder entfernbar.",
@@ -18458,8 +18791,7 @@
         "none": "Keine",
         "tier": "+{units} Prompt-Standorte",
         "price": "{price}/{interval, select, year {Jahr} other {Monat}}",
-        "contactSales": "Vertrieb kontaktieren",
-        "yearly": "Jahrespreise: 2 Monate gratis."
+        "contactSales": "Vertrieb kontaktieren"
       },
       "brands": {
         "title": "Zusätzliche Marken",
@@ -18467,7 +18799,7 @@
         "count": "{count} zusätzlich",
         "fewer": "Eine Marke weniger",
         "more": "Eine Marke mehr",
-        "note": "Sie können nicht unter die Zahl Ihrer vorhandenen Marken gehen: Entfernen Sie zuerst eine unter Marken."
+        "limit": "Ihr Tarif enthält {base} Marken. Neues Limit: <b>{limit}</b>."
       },
       "topUp": {
         "title": "KI-Nutzungs-Aufladung",
@@ -18476,10 +18808,12 @@
         "label": "KI-Nutzungs-Aufladungen",
         "none": "Keine",
         "option": "+{multiplier}x",
-        "adds": "{multiplier}× der KI-Nutzung dieses Monats · +{briefs} Briefings · +{opportunities} Chancen"
+        "usage": "{multiplier}x KI-Nutzung",
+        "adds": "{multiplier}× der KI-Nutzung dieses Monats · +{briefs} Briefings · +{opportunities} Chancen",
+        "alsoAdds": "Fügt diesen Monat außerdem +{briefs} Briefings und +{opportunities} Chancen hinzu.",
+        "once": "{price} einmalig"
       },
       "summary": "{prompts} Prompt-Standorte · {brands} Marken",
-      "nothing": "Wählen Sie oben aus, was geändert werden soll.",
       "review": "Prüfen und bezahlen",
       "reviewing": "Preis wird geprüft…",
       "dialog": {
@@ -18490,20 +18824,25 @@
         "brands": "{count, plural, =0 {Keine zusätzlichen Marken} one {# zusätzliche Marke} other {# zusätzliche Marken}}",
         "topUp": "KI-Nutzungs-Aufladung +{multiplier}x, einmalige Zahlung",
         "dueToday": "Heute fällig",
-        "dueTodayNote": "Der Rest dieses Zeitraums für zusätzliches Tracking und zusätzliche Marken sowie eine vollständige Aufladung.",
+        "dueTodayNote": "Der Rest dieses Zeitraums für slots, zusätzliches Tracking und Marken sowie ein Top-up in voller Höhe.",
+        "slots": "{platform} slots",
+        "slotsValue": "{slots} (+{extra} hinzugefügt)",
+        "volumeDiscount": "Mengenrabatt ({percent} %)",
+        "discountValue": "−{off} pro {interval, select, year {Jahr} other {Monat}}",
         "total": "Ab der nächsten Verlängerung",
         "totalValue": "{price} pro {interval, select, year {Jahr} other {Monat}}",
-        "credit": "Bei einer niedrigeren Stufe oder weniger Marken erhalten Sie eine Gutschrift für Ihre nächsten Rechnungen.",
+        "credit": "Weniger slots, eine niedrigere Stufe oder weniger Marken führen zu einem Guthaben für Ihre nächsten Rechnungen.",
         "pay": "{price} bezahlen",
         "confirm": "Bestätigen",
         "cancel": "Abbrechen",
-        "processing": "Wird verarbeitet…"
+        "processing": "Wird verarbeitet…",
+        "slotsWaiting": "{platform}: Die neuesten {count} Prompt-Standorte warten auf einen slot. Nichts wird gelöscht; fügen Sie wieder slots hinzu, um sie zu tracken."
       },
       "done": "Ihre Add-ons wurden aktualisiert. Eine Aufladung gilt, sobald die Zahlung bestätigt ist.",
       "states": {
         "not_admin": "Nur Admins können Add-ons ändern. Wenden Sie sich an einen Admin Ihres Workspace.",
         "starter": "Add-ons sind im Growth-Tarif enthalten. Wechseln Sie zu Growth, um Tracking, Marken und KI-Nutzung hinzuzufügen.",
-        "enterprise": "Ihr Vertrag legt Ihre Limits fest. Wenden Sie sich für mehr an Ihren Account Manager.",
+        "enterprise": "Ihr Vertrag legt Ihre übrigen Limits fest. Wenden Sie sich für mehr an Ihren Account Manager.",
         "trial": "Add-ons können gekauft werden, sobald Ihr Tarif gestartet ist.",
         "no_plan": "Add-ons können gekauft werden, solange Ihr Tarif aktiv ist.",
         "ending": "Ihr Tarif läuft aus. Behalten Sie Ihren Tarif, um dessen Add-ons zu ändern."
@@ -18521,7 +18860,23 @@
         "payment_failed": "Die Zahlung ist fehlgeschlagen.",
         "failed": "Ihre Add-ons konnten nicht geändert werden. Versuchen Sie es erneut."
       },
-      "readFailed": "Ihre Add-ons konnten nicht gelesen werden. Versuchen Sie es später erneut."
+      "readFailed": "Ihre Add-ons konnten nicht gelesen werden. Versuchen Sie es später erneut.",
+      "perInterval": "{price}/{interval, select, year {Jahr} other {Monat}}",
+      "cart": {
+        "title": "Ihre Add-ons",
+        "onePayment": "Einmalzahlung",
+        "plan": "Tarif {plan}",
+        "slots": "Zusätzliches Tracking für {platform}",
+        "slotsCount": "{slots} slots",
+        "remove": "{item} entfernen",
+        "discount": "Mengenrabatt {percent} % auf zusätzliches Tracking, in den obigen Preisen enthalten.",
+        "discountDrops": "Ihr Mengenrabatt sinkt von {from} % auf {to} %, sodass die obigen Preise steigen.",
+        "brands": "{count, plural, one {# Marke} other {# Marken}} · je {price}",
+        "topUp": "{multiplier}x KI-Nutzung · bis {date}",
+        "total": "{interval, select, year {Jährliche} other {Monatliche}} Summe ab der nächsten Verlängerung: <b>{price}</b>",
+        "undoAll": "Alle Änderungen rückgängig machen",
+        "dueToday": "Heute fällig: die hinzugefügten Positionen für den Rest dieses Zeitraums, angezeigt unter „Prüfen und bezahlen“."
+      }
     },
     "cancelsOn": "Abonnement endet am {date}",
     "changePlan": "Tarif ändern",

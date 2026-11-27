@@ -60,6 +60,27 @@ async function call<T>(
   return (await res.json()) as T;
 }
 
+/** An amount in an ad account's currency; amounts are never added across currencies. */
+export interface AdsSpend {
+  currencyCode: string | null;
+  amount: number;
+}
+
+/**
+ * What the brand paid on Google for a prompt's matched search terms in the
+ * period (server lib/ads/paid.js).
+ */
+export interface AdsPromptPaid {
+  channel: 'google';
+  spend: AdsSpend[];
+  clicks: number;
+  impressions: number;
+  conversions: number;
+  /** All the terms matched to the prompt; `terms` holds the costliest. */
+  termCount: number;
+  terms: Array<{ term: string; currencyCode: string | null; amount: number; clicks: number }>;
+}
+
 /**
  * The Overview (GET /api/ads/overview, server lib/ads/overview.js), over
  * every buying-intent prompt, for every plan. Null is "not measured", never 0.
@@ -72,7 +93,7 @@ export interface AdsOverview {
   notAnalysed: number;
   /** Opportunities' rows past the plan's (Starter, the trial), from the server. */
   locked: number;
-  /** Our sponsored ads are measured: until then the paid parts are null. */
+  /** Our Google spend is measured (a Google account read): until then the paid parts are null. */
   paidMeasured: boolean;
   bar: {
     earned: number;
@@ -80,9 +101,21 @@ export interface AdsOverview {
     paidOnly: number | null;
     neither: number;
   };
+  /**
+   * Google spend on matched search terms, per currency: on prompts AI cites
+   * us for (overlap), on every matched prompt, on terms no prompt matched.
+   * Null until measured.
+   */
+  spend: { overlap: AdsSpend[]; matched: AdsSpend[]; unmatched: AdsSpend[] } | null;
   paidSov: number | null;
   /** The period's AI-assisted signups; null with conversions off or unread. */
   signups: number | null;
+  /**
+   * The period's ad spend on every read ad account, per currency, and the
+   * cost per AI-assisted signup in one currency with signups (else null).
+   * Null until an ad account of the brand is read.
+   */
+  cost: { spend: AdsSpend[]; perSignup: AdsSpend | null } | null;
 }
 
 export function readAdsOverview(brandId: string, period: AdsPeriod): Promise<AdsOverview> {
@@ -116,6 +149,10 @@ export interface AdsOpportunity {
   estAiVolume: number | null;
   /** Where ads can show beside the prompt's answers. */
   adChannels: AdsChannel[];
+  /** We pay on Google for it (matched search terms); null until a Google account is read. */
+  wePay: boolean | null;
+  /** What we paid on Google for it in the period; null when nothing matched or not measured. */
+  paid: AdsPromptPaid | null;
   paidMeasured: boolean;
   /** Why the rule decided `recommended` (server lib/ads/decision.js). */
   reasons: AdsReason[];
@@ -372,4 +409,70 @@ export function disconnectAdsAccount(brandId: string, accountId: string) {
   return call<{ id: string }>(`accounts/${encodeURIComponent(accountId)}?${query}`, {
     method: 'DELETE',
   });
+}
+
+/** A Google Ads customer the brand's Google Ads sign-in reaches, for the picker. */
+export interface AdsGoogleCustomer {
+  /** 10 digits. */
+  id: string;
+  name: string | null;
+  currencyCode: string | null;
+  timeZone: string | null;
+  /** A manager account (MCC): no campaigns of its own, so it can't be picked. */
+  manager: boolean;
+  testAccount: boolean;
+  /** Google Ads wouldn't describe it (closed, or no access): it can't be picked. */
+  unavailable: boolean;
+  /** The brand reads it already. */
+  connected: boolean;
+}
+
+/**
+ * The customers the brand's Google Ads sign-in reaches (Admins), the first
+ * 50 with `more` past them. Refused with 409 not_connected before the brand
+ * signs in, 503 not_configured, 502 upstream, 403 plan_limit or 402 demo_brand.
+ */
+export function readGoogleAdsCustomers(brandId: string) {
+  const query = new URLSearchParams({ brandId });
+  return call<{ customers: AdsGoogleCustomer[]; more: number }>(
+    `accounts/google/customers?${query}`,
+  );
+}
+
+/** Connects the customers picked to the brand (Admins): only ids its own sign-in reaches. */
+export async function connectGoogleAds(brandId: string, customerIds: string[]) {
+  const body = { brandId, customerIds };
+  return (await call<{ accounts: AdsAccount[] }>('accounts/google', { method: 'POST', body }))
+    .accounts;
+}
+
+/** One campaign's totals over the period, in its account's currency. */
+export interface AdsCampaign {
+  accountId: string;
+  campaignId: string;
+  platform: 'chatgpt' | 'google';
+  currencyCode: string | null;
+  name: string | null;
+  status: 'active' | 'paused' | 'ended' | null;
+  impressions: number;
+  clicks: number;
+  costMicros: number;
+  spend: number;
+  cpc: number | null;
+  conversions: number;
+  conversionValue: number;
+  costPerConversion: number | null;
+}
+
+/** Ads › Campaigns: the brand's accounts (what each read last) and their campaigns. */
+export interface AdsCampaigns {
+  range: { from: string; to: string };
+  accounts: Omit<AdsAccount, 'timeZone' | 'createdAt'>[];
+  campaigns: AdsCampaign[];
+}
+
+/** The brand's campaigns over the period, from the daily sync. 403 plan_limit below Growth. */
+export function readAdsCampaigns(brandId: string, period: AdsPeriod): Promise<AdsCampaigns> {
+  const query = new URLSearchParams({ brandId, period });
+  return call<AdsCampaigns>(`campaigns?${query}`);
 }

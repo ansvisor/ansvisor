@@ -60,6 +60,8 @@ const row = (promptId: string, decision: AdsDecision, over: Partial<AdsOpportuni
   volume: 14_000,
   estAiVolume: 6300,
   adChannels: ['chatgpt', 'google'] as AdsOpportunity['adChannels'],
+  wePay: null,
+  paid: null,
   paidMeasured: false,
   reasons: [],
   ...over,

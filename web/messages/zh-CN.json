@@ -277,6 +277,7 @@
       "label": "您的品牌尚未开始跟踪"
     },
     "actions": {
+      "changePlatforms": "更改平台需要订阅套餐",
       "addPrompts": "添加 Prompt 需要有效方案",
       "removeLocations": "移除地区需要有效方案",
       "editPrompts": "编辑 Prompt 需要有效方案",
@@ -622,6 +623,8 @@
       "slow": "加载时间比平时长。",
       "ready": "准备就绪。正在打开 Prompts…",
       "failed": "无法准备演示。请检查网络连接后重试。",
+      "stuck": "演示已准备好，但页面没有打开。请重新打开，或关闭后稍后再试。",
+      "open": "打开演示",
       "retry": "重试",
       "close": "关闭"
     }
@@ -1881,6 +1884,10 @@
         "title": "{targets} 的 AI 转化表现强劲",
         "description": "这些页面将 AI 流量转化为关键事件的转化率远高于您全站的平均水平。"
       },
+      "paid_overlap": {
+        "title": "AI 已推荐您的 {targets} 的 Google 广告支出正在增加",
+        "description": "在这些购买意向 Prompts 的回答中，AI 已经推荐了您，并且您在过去 30 天内为这些搜索词支付给 Google 的费用有所上升。"
+      },
       "bridge_link_gap": {
         "title": "将 {targets} 链接到高转化页面",
         "description": "AI 将读者引流到这些页面，但转化率很低；而同主题的高转化页面却几乎没有 AI 流量。"
@@ -2478,6 +2485,8 @@
           "task_review_withdrawn": "已撤回提交审核：{task}{title}",
           "cancelled": "由 {by} 从聊天中取消 · 撤销",
           "reopened": "操作已重新开启 — 触发条件再次满足",
+          "replaced": "已被同类型的较新行动取代：30 天内没有人处理这个行动",
+          "replaces": "代替一个 30 天内无人处理的同类型旧行动而开启",
           "signals_linked": "已关联 {count, plural, other {# 个新信号}}",
           "status_changed": "状态已更改为 {to}",
           "assigned": "负责人已更改",
@@ -3301,6 +3310,12 @@
         "description": "当回答讨论您的品牌时引用了这些来源，它们本可以引用您自己的页面。",
         "goal": "将第三方提及转化为对您资产的引用。"
       },
+      "review_paid_overlap": {
+        "title": "审查 AI 已推荐您的 {targets} 的 Google 广告",
+        "titleGeneric": "审查 AI 已推荐您的 Google 广告",
+        "description": "在这些购买意向 Prompts 的回答中，AI 已经推荐了您，而您在这些搜索词上的 Google 支出正在增加。您可能在为本来就能获得的点击付费。",
+        "goal": "将广告预算花在能带来增量点击的地方，同时保留 AI 回答中的推荐。"
+      },
       "bridge_links": {
         "title": "将 {targets} 链接到高转化页面",
         "titleGeneric": "将 AI 访问的页面链接到高转化页面",
@@ -3765,6 +3780,8 @@
       "prioritize_targets_target": "按影响力排定 {targets} 的优先级",
       "review_link_plan": "审核待添加的链接",
       "review_link_plan_target": "审核要在 {targets} 上添加的链接",
+      "review_paid_overlap": "审查这些搜索词上的 Google 广告",
+      "review_paid_overlap_target": "审查 {targets} 上的 Google 广告",
       "define_validation_baseline": "记录用于衡量的基线",
       "define_validation_baseline_target": "记录 {targets} 的基线",
       "create_content_brief": "创建内容大纲",
@@ -3876,6 +3893,7 @@
       "strengthen_entity_content": "页面对品牌的描述与档案一致，重新抓取后确认",
       "add_internal_links": "应链接至该页面的页面已添加链接，重新抓取后确认",
       "review_link_plan": "每个链接及其锚文本均已获得批准或修改：由您确认",
+      "review_paid_overlap": "每个搜索词的广告已在 Google Ads 中保留、降低出价或暂停：由您确认",
       "improve_cta_path": "行动号召已在页面上线：由您确认",
       "publish_content": "页面已在其地址发布，重新抓取时响应正常",
       "fix_crawler_access": "robots.txt 和页面已允许 AI 爬虫访问，重新抓取后确认",
@@ -4022,6 +4040,7 @@
         "whatHappened": "发生了什么？",
         "triggeredBy": "整合自 {count, plural, other {# 个信号}}",
         "dismissedBecause": "已忽略：{reason}。",
+        "replaced": "已被同类型的较新行动取代：30 天内没有人处理这个行动，因此新的发现开启了一个新行动。",
         "readings": "关闭后读取：{list}。",
         "reading": "第 {day} 天，{outcome}",
         "finalOn": "最终读取在第 {day} 天。",
@@ -4073,7 +4092,10 @@
         "actions": "操作",
         "scorecard": "记分卡",
         "kpis": "KPI",
-        "label": "历史视图"
+        "label": "历史视图",
+        "actionsHint": "逐项列出进行中或已结束的操作：目标是什么，此后测得了什么结果。",
+        "scorecardHint": "各类操作的整体成效：完成了多少、成功率以及变化中位数。",
+        "kpisHint": "您品牌的目标，以及每个目标的完成进度。"
       },
       "scorecard": {
         "note": "该品牌各类操作的效果（仅基于其自身操作）。结果为截至目前的读数；每项结果在操作结束一个月后确定。中位数变化基于每项操作的核心指标。",
@@ -4445,6 +4467,10 @@
       "name": "读取目录来源",
       "step": "读取目录"
     },
+    "catalogFeedGaps": {
+      "name": "读取 Feed 缺口",
+      "step": "读取 产品 · Feed 缺口"
+    },
     "contentPlan": {
       "name": "读取内容规划",
       "step": "读取内容规划"
@@ -4464,6 +4490,10 @@
     "siteAuditQuota": {
       "name": "读取本月剩余网站审核次数",
       "step": "读取网站审核"
+    },
+    "crawlerAccess": {
+      "name": "读取 AI 爬虫问题",
+      "step": "读取站点审核 · 爬虫"
     },
     "goToPage": {
       "name": "前往页面",
@@ -4758,6 +4788,10 @@
     "adsOpportunities": {
       "name": "读取广告机会",
       "step": "已读取广告机会"
+    },
+    "adsPaidOverlap": {
+      "name": "读取付费重叠",
+      "step": "读取付费重叠"
     },
     "adDrafts": {
       "name": "保存广告草稿",
@@ -6158,7 +6192,6 @@
       "home": "主页",
       "inbox": "收件箱",
       "inboxLabel": "收件箱 · {needsYou, plural, other {# 项待您处理}}",
-      "inboxLabelNeedsYou": "收件箱 · {count, plural, other {# 项}} · {needsYou, plural, other {# 项需要您处理}}",
       "skills": "技能",
       "activity": "活动",
       "capabilities": "Chat 功能说明",
@@ -6608,10 +6641,7 @@
       "landsWithSuggestions": "智能体生成的结果和每日建议将显示在这里。",
       "nothingNeedsYou": "暂无待处理事项。",
       "summary": {
-        "needsYou": "{count, plural, other {# 项待您处理}}",
-        "running": "{count} 项正在运行",
-        "doneToday": "今日已完成 {count} 项",
-        "suggestions": "本周有 {count, plural, other {# 条建议}}"
+        "needsYou": "{count, plural, other {# 项待您处理}}"
       },
       "empty": "暂无待处理事项。智能体生成的结果将显示在这里。",
       "tabs": {
@@ -7722,7 +7752,9 @@
         "signal": "信号已创建",
         "kpi": "KPI 已变动",
         "watch_rule": "监控规则",
-        "brand_added": "已添加品牌"
+        "brand_added": "已添加品牌",
+        "page_published": "页面已发布",
+        "catalog_synced": "目录已同步"
       },
       "daily": "每天 {time}",
       "weekdays": "工作日 {time}",
@@ -7737,13 +7769,17 @@
       "kpiAny": "某个 KPI",
       "watchRule": "监控规则",
       "brandAdded": "添加品牌时",
+      "pagePublished": "当页面发布时",
+      "catalogSynced": "当目录同步时",
       "manualOnly": "仅手动",
       "more": "+{count}",
       "firesWhen": {
         "signal": "当行动中心发现匹配信号时触发",
         "kpi": "当 KPI 达到阈值时触发",
         "watch_rule": "在监控规则触发时触发",
-        "brand_added": "在向工作区添加每个品牌时触发一次"
+        "brand_added": "在向工作区添加每个品牌时触发一次",
+        "page_published": "品牌 CMS 中每有一个页面上线,触发一次",
+        "catalog_synced": "每次目录同步导致产品变更时,触发一次"
       },
       "timeZone": "{zone}时间",
       "off": "已关闭 · 不会触发",
@@ -7843,6 +7879,8 @@
         "trigger": "触发器",
         "signal": "信号",
         "slot": "预定时间",
+        "page": "页面已发布",
+        "catalog": "目录源已同步",
         "earlier": "较早触发",
         "action": "操作"
       },
@@ -7884,6 +7922,8 @@
       "kpi": "KPI 已变更",
       "watch_rule": "监控规则",
       "brand_added": "已添加品牌",
+      "page_published": "页面已发布",
+      "catalog_synced": "目录已同步",
       "manual": "手动",
       "action": "通过操作运行 Agent",
       "agent": "由其他 Agent 调用"
@@ -7959,8 +7999,11 @@
       "seasonal": "季节性 Prompts",
       "traffic": "AI 流量与注册量",
       "ai-revenue": "来自 AI 的客户与收入",
+      "feed-advisor": "购物 Feed 缺口",
+      "tech-fix": "爬虫与技术修复",
       "earn-or-pay": "赚取或付费",
       "ad-drafts": "广告草稿",
+      "paid-overlap": "付费重叠",
       "operator": "AEO 业务员"
     },
     "form": {
@@ -8027,7 +8070,9 @@
           "signal": "信号已创建",
           "kpi": "KPI 已变更",
           "watch_rule": "监控规则",
-          "brand_added": "添加品牌时"
+          "brand_added": "添加品牌时",
+          "page_published": "当页面发布时",
+          "catalog_synced": "当目录同步时"
         },
         "notes": {
           "manual": "从 Chat 或操作中运行",
@@ -8035,7 +8080,9 @@
           "signal": "新的操作中心信号",
           "kpi": "KPI 超过阈值",
           "watch_rule": "当 · 适用于 · 则",
-          "brand_added": "每个新品牌一次 · 需要“所有品牌”"
+          "brand_added": "每个新品牌一次 · 需要“所有品牌”",
+          "page_published": "CMS 中每个页面上线时触发一次",
+          "catalog_synced": "每次导致产品变更的同步触发一次"
         },
         "watchRuleNone": "在监控规则中设置：其“则”条件将运行 Agent",
         "list": "触发器",
@@ -8099,6 +8146,8 @@
         },
         "watchRuleWhen": "其监控规则触发",
         "brandAddedWhen": "品牌添加到工作区时，每个品牌触发一次",
+        "pagePublishedWhen": "品牌 CMS 中有页面上线时,每个页面触发一次",
+        "catalogSyncedWhen": "品牌产品目录同步导致产品变更时,每次同步触发一次",
         "runAgent": "运行 Agent"
       },
       "scope": {
@@ -8565,7 +8614,7 @@
       },
       "paid-opportunity": {
         "name": "付费机会",
-        "description": "每周指出哪些购买意向的 Prompt 应通过内容争取或进行付费投放，标记变动（例如竞对正在针对您的品牌名投放广告），并在 Ansvisor 中起草广告。"
+        "description": "每周指明哪些购买意向 Prompts 适合通过内容自然获取或通过付费投放，标记变化（例如竞争对手正在针对您的品牌词投放广告），显示 AI 已引用您时您在 Google 上支付的费用，并在 Ansvisor 中起草广告。"
       },
       "ai-ads-watch": {
         "name": "AI 广告监测",
@@ -15352,7 +15401,14 @@
       "sov": "付费 SoV",
       "sovNote": "AI 回答中的赞助广告尚未捕获",
       "cost": "每次 AI 辅助注册的成本",
-      "costNote": "需要关联广告账户",
+      "costNote": "需要在“连接”中关联并读取广告账户",
+      "costOf": "{spend} 广告支出 ÷ {count, plural, other {# 个 AI 辅助注册}}",
+      "costSpend": "在此期间广告支出为 {spend}",
+      "costNoSignups": "暂无注册",
+      "costNoSpend": "无广告支出",
+      "costNoSpendNote": "已连接的广告账户在此期间没有支出",
+      "costCurrencies": "多种货币",
+      "costCurrenciesNote": "{spend} 广告支出：不同币种的金额不会累计相加，因此没有单一的每次注册成本",
       "signups": "在此期间有 {count, plural, other {# 次 AI 辅助注册}}",
       "signupsNotMeasured": "AI 辅助注册：未测量",
       "barTitle": "自然或付费 · {count, plural, other {# 个 Prompt}}",
@@ -15361,7 +15417,11 @@
       "earnedPaid": "自然 + 付费",
       "paidOnly": "仅付费",
       "neither": "两者皆无",
-      "paidNotMeasured": "付费数据尚未衡量，因此进度条仅显示自然和两者皆无。",
+      "paidNotMeasured": "在关联并读取 Google Ads 账户之前无法衡量付费情况，因此进度条仅显示自然获取和两者皆无。",
+      "spendOverlap": "AI 已引用您的 Prompts 在 Google 上的付费支出：{amount}",
+      "spendMatched": "在所有已追踪的 Prompts 上：{amount}",
+      "spendUnmatched": "在未匹配任何已追踪 Prompt 的搜索词上：{amount}",
+      "spendNote": "来自您的 Google Ads 搜索词。ChatGPT Ads 支出显示在广告活动中：它不会指明广告出现在哪个问题上。",
       "openPrompts": "查看 {count, plural, other {# 个未解决的 Prompt}}",
       "locked": "“商机”中还有 {count, plural, other {# 个 Prompt}}，自 {plan} 方案起提供。",
       "openSov": "每个 Prompt 的付费方"
@@ -15438,7 +15498,7 @@
         "volume_at_least": "每月 Google 搜索量为 {volume}，达到或超过 {threshold}",
         "volume_below": "每月 Google 搜索量为 {volume}，低于 {threshold}",
         "volume_not_measured": "尚未统计 Google 搜索量",
-        "paid_not_measured": "尚未统计投放广告者",
+        "paid_not_measured": "{wePay, select, false {竞争对手是否投放广告尚未衡量} other {谁在投放广告尚未衡量}}",
         "no_ad_channel": "没有广告渠道能够覆盖其所追踪的 AI 平台"
       },
       "answers": "AI 当前的回答",
@@ -15448,6 +15508,13 @@
       "cites": "引用：{domains}",
       "fanOuts": "Fan-out 查询",
       "keywords": "种子关键词",
+      "paid": {
+        "title": "您投放的 Google 广告",
+        "spend": "在此期间支出 {amount}，获得 {clicks, plural, other {# 次点击}}",
+        "terms": "已匹配 {count, plural, other {# 个搜索词}}，花费最高的排在前面：",
+        "none": "在此期间未匹配到 Google 广告支出。",
+        "note": "搜索词按字词与 Prompt 进行匹配。ChatGPT Ads 支出未进行匹配：它不会指明广告出现在哪个问题上。"
+      },
       "failed": "无法读取回答。请关闭后重试。",
       "earn": {
         "title": "赢取 · 修正回答",
@@ -15522,14 +15589,31 @@
         "channel": "渠道",
         "status": "状态",
         "spend": "支出",
-        "signups": "AI 辅助注册量",
-        "cost": "每次注册成本"
+        "clicks": "点击次数",
+        "cpc": "CPC",
+        "conversions": "转化次数",
+        "costPerConversion": "每次转化费用"
       },
-      "empty": "关联广告账户 · 即将推出",
-      "emptyNote": "您的广告系列将在此处列出，初次使用为只读模式。",
+      "channels": {
+        "google": "Google Ads",
+        "chatgpt": "ChatGPT Ads"
+      },
+      "statuses": {
+        "active": "有效",
+        "paused": "已暂停",
+        "ended": "已结束"
+      },
+      "empty": "尚未关联广告账户",
+      "emptyNote": "关联 Google Ads 或 ChatGPT Ads 即可在此查看广告系列（只读）。",
+      "openConnections": "打开关联管理",
+      "failed": "无法加载广告系列。请稍后重试。",
+      "firstRead": "关联成功后，首批数据将在 24 小时内送达。",
+      "noneInPeriod": "在此期间没有运行任何广告系列。",
+      "attention": "{count, plural, other {# 个广告账户需要关注。}}",
+      "currencyNote": "每个广告系列均以其广告账户的币种显示。数据每天读取一次。",
       "safety": {
         "title": "安全",
-        "note": "由 Ansvisor 执行保障，而非由智能体执行。当前不会对广告账户进行任何实际操作。",
+        "note": "由 Ansvisor 强制执行，而非代理。目前 Ansvisor 仅读取您的广告账户。",
         "click": "在任何模式下，每次启用、暂停、预算或出价更改都需要人工点击并确认。",
         "agents": "智能体绝不会自行支出：智能体仅可建议更改，且只有人工才能执行。",
         "cap": "管理员为每个渠道设置月度上限。若计入过去 24 小时的更改后超出上限，该更改将被阻止。",
@@ -15537,7 +15621,6 @@
       }
     },
     "connections": {
-      "soon": "即将推出",
       "later": "随后推出",
       "notify": "通知我",
       "notified": "我们将通知您",
@@ -15551,6 +15634,79 @@
       },
       "manage": "管理",
       "connect": "连接",
+      "adminConnects": "由管理员负责关联",
+      "accountStatus": {
+        "active": "已关联",
+        "error": "需要关注",
+        "disconnected": "已断开关联"
+      },
+      "sync": {
+        "syncedAt": "数据读取于 {when}",
+        "pending": "将在 24 小时内完成首次读取：覆盖过去 90 天",
+        "error": {
+          "key_refused": "ChatGPT Ads 拒绝了此密钥。请粘贴新密钥。",
+          "key_missing": "密钥已失效。请重新关联该账户。",
+          "signin_gone": "Google Ads 登录凭据已失效。请重新关联 Google Ads。",
+          "upstream": "广告平台未响应。Ansvisor 将在 24 小时内重试。",
+          "failed": "无法读取数据。Ansvisor 将在 24 小时内重试。"
+        }
+      },
+      "chatgpt": {
+        "connect": "关联",
+        "addAnother": "添加账户",
+        "dialogTitle": "关联 ChatGPT Ads",
+        "dialogLine": "粘贴来自 ChatGPT Ads Manager 的 Ads API 密钥。每个密钥对应一个广告账户，请为每个账户添加一个密钥。",
+        "keyLabel": "Ads API 密钥",
+        "keyNote": "Ansvisor 会向 ChatGPT Ads 验证该密钥，随后加密存储。仅用于读取数据。",
+        "cancel": "取消",
+        "save": "关联",
+        "checking": "正在检查…",
+        "connectedToast": "已关联 {name}。",
+        "accountLine": "ChatGPT Ads 账户 · {currency}",
+        "accountLineNoCurrency": "ChatGPT Ads 账户",
+        "billing": "ChatGPT Ads Manager",
+        "error": {
+          "invalid_key": "ChatGPT Ads 未接受此密钥。请核对后重试。",
+          "upstream": "ChatGPT Ads 未响应。请稍后重试。",
+          "other": "无法关联。请重试。"
+        }
+      },
+      "google": {
+        "name": "Google Ads",
+        "connect": "关联",
+        "addAnother": "添加账户",
+        "billing": "Google Ads",
+        "pickTitle": "选择 Google Ads 账户",
+        "pickLine": "这些是您的 Google 登录可访问的账号。Ansvisor 仅会读取您选中的账号，绝不会更改任何广告系列或预算。",
+        "noCustomers": "此 Google 登录未关联任何 Google Ads 账号。请使用管理您广告的 Google 账号登录。",
+        "unnamed": "未命名账号",
+        "more": "{count, plural, other {还有 # 个账号未列出。}}",
+        "why": {
+          "connected": "已连接",
+          "manager": "经理账号",
+          "unavailable": "不可用",
+          "test": "测试账号"
+        },
+        "cancel": "取消",
+        "save": "{count, plural, =0 {连接} other {连接 # 个账号}}",
+        "connectedToast": "{count, plural, other {已连接 # 个 Google Ads 账号。}}",
+        "error": {
+          "not_configured": "此服务器上尚未配置 Google Ads。",
+          "not_connected": "请先登录 Google Ads，然后再试一次。",
+          "not_accessible": "此 Google 登录已无法访问该账号。请关闭并重新连接。",
+          "manager_account": "经理账号本身没有广告系列。请选择其下属的账号。",
+          "upstream": "Google Ads 未响应。请稍后重试。",
+          "other": "无法连接。请重试。"
+        }
+      },
+      "account": {
+        "disconnect": "断开连接",
+        "disconnectTitle": "断开 {name} 的连接？",
+        "disconnectLine": "Ansvisor 将删除为此账号保留的所有内容：密钥（如有）及其读取的各项数据。您的广告将继续在 {billing} 中投放。",
+        "disconnectedToast": "已断开 {name} 的连接。",
+        "disconnectFailed": "无法断开连接。请重试。",
+        "cancel": "取消"
+      },
       "platforms": {
         "chatgpt": {
           "name": "ChatGPT Ads",
@@ -15585,6 +15741,31 @@
     }
   },
   "prompts": {
+    "bulkPlatforms": {
+      "bulkButton": "平台",
+      "bulkAdd": "添加平台",
+      "bulkRemove": "移除平台",
+      "modes": "添加或移除",
+      "modeAdd": "添加",
+      "modeRemove": "移除",
+      "platforms": "平台",
+      "title": "添加平台",
+      "lead": "在更多平台上追踪所选的 {count} 个 Prompts。每个 Prompt 位置在每个平台上占用一个追踪 slot。Prompt 正在等待的平台将重新运行。",
+      "removeTitle": "移除平台",
+      "removeLead": "停止在部分平台上追踪所选的 {count} 个 Prompts。它们占用的 slots 将重新释放。",
+      "none": "没有可添加的平台。请在“设置 › 账单”中添加追踪 slots,以便在更多平台上追踪。",
+      "removeNone": "所选 Prompts 没有可移除的平台。",
+      "free": "{count} 个空闲",
+      "previewAdd": "{count, plural, other {将更改 # 个 Prompt}} · {unchanged} 个已包含这些平台",
+      "previewRemove": "{count, plural, other {将更改 # 个 Prompt}} · {unchanged} 个不包含这些平台 · {blocked} 个将不剩任何平台",
+      "short": "{platform} 需要 {needed} 个 slots,目前有 {free} 个空闲。",
+      "addSlots": "添加 slots",
+      "save": "添加到 {count, plural, other {# 个 Prompt}}",
+      "removeSave": "从 {count, plural, other {# 个 Prompt}} 中移除",
+      "done": "{count, plural, other {已为 # 个 Prompt 添加平台}}",
+      "removed": "{count, plural, other {已从 # 个 Prompt 中移除平台}}",
+      "saveFailed": "无法更改平台。请重试。"
+    },
     "waiting": {
       "resultTitle": "已添加 {added} 个，{waiting} 个正在排队等待名额",
       "savedTitle": "{count, plural, other {已保存，但尚未追踪（共 # 个 Prompt）}}",
@@ -15968,6 +16149,13 @@
       "bulkTitle": "{count, plural, other {开始跟踪 # 个尚无答案的选定 Prompt}}"
     },
     "usage": {
+      "slots": {
+        "title": "追踪 slots",
+        "add": "添加 slots",
+        "usage": "{used} / {limit}",
+        "unlimited": "{used} · 无限制",
+        "meter": "{platform} 已使用的 slots"
+      },
       "panelLabel": "Prompt 用量",
       "planAndUsage": "套餐与用量",
       "hide": "隐藏",
@@ -16050,7 +16238,7 @@
       "enginesLegend": "彩色：在此时间范围中共享了此 Prompt 的搜索。淡色：已追踪，但未共享任何搜索。",
       "engineEmptyTitle": "在{range}内没有 {engine} 搜索",
       "engineEmptyBody": "{engine} 通常会共享其回答背后的搜索。请尝试选择更长的时间范围。",
-      "sourceNote": "Perplexity 已不再被追踪，且 Microsoft Copilot 不共享其搜索，因此这些仅来自 ChatGPT（其在某些日期会共享搜索）。搜索数量比以往更少。",
+      "sourceNote": "Perplexity 已不再追踪,Bing AI Mode 也不公开其搜索,因此这些数据仅来自 ChatGPT,而它只在部分日期提供。数量比以前少。",
       "emptyTitle": "尚未捕获到 fan-out",
       "emptyBody": "ChatGPT 的搜索仅在某些日期进行抽样，而 ChatGPT API 在执行搜索时会共享这些搜索。Google AI Overviews、AI Mode 和 Gemini 不会共享。一旦这些引擎为您的 Prompts 运行，搜索将显示在此处。",
       "coverageTooltip": "在此时间范围内追踪的 {total} 个回答中，有 {withFanout} 个包含引擎运行的搜索。ChatGPT 的搜索仅在某些日期抽样，而 ChatGPT API 在执行搜索时会共享这些搜索。"
@@ -18205,24 +18393,139 @@
       }
     },
     "notifications": "通知",
-    "notificationsDescription": "每个品牌可发送两类邮件：跟踪运行后的 Daily Pulse，以及每周一发送的 AI 流量周报。两者都会发送给该品牌的 Daily Pulse 收件人。",
-    "pulseSection": "Daily Pulse",
-    "pulseSectionDescription": "每次跟踪运行后按品牌生成的简短摘要，包含亮点和警告。可选择发送频率和接收人。",
-    "pulseFrequencyLabel": "{brand} 的 Daily Pulse 发送频率",
+    "yourEmails": {
+      "title": "您的电子邮件",
+      "description": "选择 Ansvisor 向您发送哪些电子邮件以及发送频率。这些设置仅属于您：团队中每个人都可自行设置。",
+      "carriedOver": "这些是您目前收到的电子邮件。保存即可将其作为您自己的选择。",
+      "for": "适用于",
+      "scopeAll": "我的所有品牌（{count}）",
+      "deliveryHint": "品牌邮件可按每个品牌单独发送，也可合并为一封邮件：",
+      "delivery_per_brand": "每个品牌一封邮件",
+      "delivery_combined": "所有品牌合并为一封邮件（即将推出）",
+      "brandOnly": "仅为 {brand} 设置",
+      "useAll": "使用我为“我的所有品牌”所做的选择",
+      "notableNote": "首封 Pulse 邮件，之后仅在发生值得关注的事件时发送。",
+      "comingSoon": "即将推出",
+      "comingSoonHint": "标有“即将推出”的邮件会保留您保存的选择，并在准备就绪后开始发送。",
+      "admins": "管理员",
+      "groups": {
+        "visibility": "品牌可见度",
+        "traffic": "AI 流量",
+        "actions": "行动中心",
+        "agents": "智能体与聊天",
+        "audit": "网站审核",
+        "content": "内容",
+        "account": "账户"
+      },
+      "kinds": {
+        "daily_pulse": {
+          "name": "每日 Pulse",
+          "description": "各品牌在 AI 回答中的表现：可见度得分、提及、引用、亮点和警告。"
+        },
+        "traffic_digest": {
+          "name": "每周摘要",
+          "description": "用一行概述上周的 AI 访问量，并列出变化最大的三项。每周一发送。"
+        },
+        "critical_action": {
+          "name": "新的关键行动",
+          "description": "为您的品牌新增了一项优先级为“关键”的行动。"
+        },
+        "due_actions": {
+          "name": "已逾期和今日到期",
+          "description": "分配给您且已到期或已逾期的行动和任务。"
+        },
+        "weekly_actions": {
+          "name": "每周行动摘要",
+          "description": "已完成的事项、未完成的事项以及后续安排。每周一发送。"
+        },
+        "run_finished": {
+          "name": "运行已完成",
+          "description": "您启动的智能体运行已完成，并附有其执行内容。"
+        },
+        "audit_finished": {
+          "name": "审核已完成",
+          "description": "批量或定时审核已完成，并附有得分。"
+        },
+        "score_dropped": {
+          "name": "得分下降",
+          "description": "某页面的得分较上次审核下降了 5 分或以上。"
+        },
+        "drafts_review": {
+          "name": "待您审阅的草稿",
+          "description": "为您的品牌生成的草稿，需要您审阅后才能上线。"
+        },
+        "ai_usage": {
+          "name": "AI 用量",
+          "description": "达到每月 AI 限额的 80% 和 100% 时发送。"
+        }
+      },
+      "links": {
+        "approvals": {
+          "name": "等待您的批准",
+          "description": "智能体或聊天运行在更改或发布任何内容之前需要您的确认。请通过“当智能体需要我时通知我”进行设置。",
+          "link": "聊天设置"
+        },
+        "scheduled": {
+          "name": "定时任务",
+          "description": "每个任务按其自身设置发送邮件。",
+          "link": "打开任务"
+        },
+        "billing": {
+          "name": "账单与安全",
+          "description": "发票、付款问题和登录提醒。始终发送。",
+          "locked": "始终开启"
+        }
+      },
+      "options": {
+        "pulse": {
+          "daily": "每天",
+          "weekly": "每周",
+          "notable": "仅在有重要变化时",
+          "off": "关闭"
+        },
+        "instant": {
+          "instant": "立即",
+          "daily": "每日摘要",
+          "off": "关闭"
+        },
+        "digest": {
+          "daily": "每日摘要",
+          "weekly": "每周摘要",
+          "off": "关闭"
+        },
+        "weekly": {
+          "weekly": "每周一",
+          "off": "关闭"
+        },
+        "onoff": {
+          "on": "开启",
+          "off": "关闭"
+        }
+      },
+      "save": "保存更改",
+      "saved": "您的邮件设置已保存",
+      "saveFailed": "无法保存您的邮件设置，请重试。",
+      "loadFailed": "无法加载您的邮件设置。",
+      "turnOffAll": "关闭所有可选邮件",
+      "turnedOff": "所有可选邮件均已设为关闭。请保存更改以生效。"
+    },
+    "outsideEmails": {
+      "title": "发送给工作区以外的人员",
+      "description": "没有 Ansvisor 席位的客户或经理也可以收到品牌摘要。他们不会收到审批或账户邮件。",
+      "sends": "每日 Pulse · AI Traffic 每周摘要",
+      "recipients": "收件人",
+      "placeholder": "client@example.com, boss@example.com",
+      "hint": "以逗号分隔。尚未保存自己邮件设置的团队成员仍会像以前一样收到该品牌的邮件：此列表为空时所有人都会收到，否则仅列表中的人会收到。",
+      "frequency": "每日 Pulse",
+      "frequencyNote": "这也会决定该品牌的 Slack 频道和 webhook，以及尚未保存自己设置的团队成员的接收方式。",
+      "digest": "同时发送 AI Traffic 每周摘要",
+      "digestPulseOff": "此每日 Pulse 关闭时，不会发送每周摘要。"
+    },
     "pulseFrequency_daily": "每天",
     "pulseFrequency_weekly": "每周",
     "pulseFrequency_notable": "仅在有值得关注的情况时",
-    "pulseFrequency_notableNote": "发送首次 Pulse，之后仅在发生值得关注的情况时发送。",
     "pulseFrequency_off": "关闭",
-    "pulseRecipients": "收件人",
-    "pulseRecipientsPlaceholder": "alex@example.com, sam@example.com",
-    "pulseRecipientsHint": "以逗号分隔的邮箱地址。留空则发送给组织的所有成员。",
     "pulseRecipientsInvalid": "无效的电子邮件地址：{emails}。请在保存前修改或删除。",
-    "trafficDigest": "AI 流量每周摘要",
-    "trafficDigestDescription": "每周一发送：用一行摘要概括上周的 AI 访问量，并列出变化最大的三项。会发送给每个品牌的 Daily Pulse 收件人，勾选或取消勾选后立即保存。",
-    "trafficDigestTo": "收件人：{emails}",
-    "trafficDigestToEveryone": "发送给组织的所有成员",
-    "trafficDigestPulseOff": "Daily Pulse 关闭期间不会发送。重新开启后即可恢复接收。",
     "pulseSaved": "通知设置已保存",
     "pulseSaveFailed": "无法保存通知设置。请重试。",
     "pulseLoadFailed": "无法加载通知设置。",
@@ -18247,7 +18550,6 @@
       "loading": "正在加载语言…",
       "moreSoon": "更多语言即将推出。",
       "preview": "员工和测试版本也可以看到尚无翻译的语言。缺失文本处将显示为英文。",
-      "testLanguage": "{language} · 测试",
       "saved": "语言已保存",
       "saveFailed": "无法保存您的语言，请重试。",
       "suggest": {
@@ -18397,7 +18699,38 @@
     },
     "planAddOns": {
       "title": "为您的套餐添加更多内容",
-      "description": "为您的 Growth 套餐提供额外追踪、额外品牌和 AI 用量加购。您所选的所有项目将一次性从预留的银行卡中扣款。",
+      "slots": {
+        "title": "购买额外追踪额度",
+        "description": "{plan} 在每个标准平台上包含 {included} 个 slots。可在任意平台选择额外 slots,也可以随时下调,最低为 0。",
+        "descriptionNone": "可在任意平台选择额外 slots,也可以随时下调,最低为 0。",
+        "discount": {
+          "reached": "额外追踪享 <b>{percent}% 折扣</b>:每{interval, select, year {年} other {月}}{list}减免 {off}。",
+          "list": "额外追踪:每{interval, select, year {年} other {月}} {list}。",
+          "next": "每{interval, select, year {年} other {月}}再增加 {more},即可对超出 {from} 的部分享 <b>{percent}% 折扣</b>。",
+          "top": "您已达到最高档位。",
+          "drops": "此更改会将您的折扣从 {from}% 降至 {to}%,因此每 100 个 slots 的价格将上涨。",
+          "steps": "批量折扣档位",
+          "stepsLead": "每一档的折扣仅适用于超出上一档的部分:",
+          "step": "超过 {from}/{interval, select, year {年} other {月}} 的部分享 {percent}% 折扣",
+          "yours": "· 当前",
+          "nextTag": "· 下一档"
+        },
+        "unit": "<b>1 个 slot</b> = 在该平台的 1 个地区每天追踪 1 个 Prompt。",
+        "columns": {
+          "platform": "平台",
+          "included": "您的套餐包含",
+          "extra": "额外 slots",
+          "price": "每 100 个 slots 每{interval, select, year {年} other {月}}价格",
+          "cost": "您的{interval, select, year {年度} other {月度}}费用"
+        },
+        "unlimited": "无限制",
+        "fewer": "减少 100 个 {platform} slots",
+        "more": "增加 100 个 {platform} slots",
+        "extraOn": "{platform} 的额外 slots",
+        "was": "原为 {slots}",
+        "undo": "撤销",
+        "footer": "价格取决于各平台的追踪成本:某些回答需要更多处理(例如 Perplexity)。年付:免费赠送 2 个月。"
+      },
       "tracking": {
         "title": "额外追踪",
         "description": "在您套餐的引擎上每天追踪更多 Prompt 地区。一次只能选择一个档位，可随时更改或移除。",
@@ -18405,8 +18738,7 @@
         "none": "无",
         "tier": "+{units} 个 Prompt 地区",
         "price": "{price}/{interval, select, year {年} other {月}}",
-        "contactSales": "联系销售",
-        "yearly": "年付价格：免费赠送 2 个月。"
+        "contactSales": "联系销售"
       },
       "brands": {
         "title": "额外品牌",
@@ -18414,7 +18746,7 @@
         "count": "额外 {count} 个",
         "fewer": "减少一个品牌",
         "more": "增加一个品牌",
-        "note": "品牌数量不能少于您现有的数量：请先在“品牌”中移除一个。"
+        "limit": "您的套餐包含 {base} 个品牌。新上限为 <b>{limit}</b>。"
       },
       "topUp": {
         "title": "AI 用量加购",
@@ -18423,10 +18755,12 @@
         "label": "AI 用量加购",
         "none": "无",
         "option": "+{multiplier}倍",
-        "adds": "本月 AI 用量的 {multiplier}× · +{briefs} 份简报 · +{opportunities} 个机会"
+        "usage": "{multiplier} 倍 AI 用量",
+        "adds": "本月 AI 用量的 {multiplier}× · +{briefs} 份简报 · +{opportunities} 个机会",
+        "alsoAdds": "本月还将额外增加 {briefs} 份简报和 {opportunities} 个机会。",
+        "once": "一次性 {price}"
       },
       "summary": "{prompts} 个 Prompt 地区 · {brands} 个品牌",
-      "nothing": "请在上方选择要更改的内容。",
       "review": "查看并付款",
       "reviewing": "正在核对价格…",
       "dialog": {
@@ -18437,20 +18771,25 @@
         "brands": "{count, plural, =0 {无额外品牌} other {# 个额外品牌}}",
         "topUp": "AI 用量加购 +{multiplier}倍，一次性付款",
         "dueToday": "今日应付",
-        "dueTodayNote": "额外追踪和品牌按本周期剩余时间计费，加购按全额计费。",
+        "dueTodayNote": "slots、额外追踪和品牌按本周期剩余时间计费,充值包按全额计费。",
+        "slots": "{platform} slots",
+        "slotsValue": "{slots}(新增 {extra})",
+        "volumeDiscount": "批量折扣({percent}%)",
+        "discountValue": "每{interval, select, year {年} other {月}}−{off}",
         "total": "自下次续订起",
         "totalValue": "每{interval, select, year {年} other {月}} {price}",
-        "credit": "降低套餐档位或减少品牌后,剩余金额将作为余额抵扣您后续的账单。",
+        "credit": "减少 slots、降低档位或减少品牌后,剩余金额将作为抵扣额用于后续账单。",
         "pay": "支付 {price}",
         "confirm": "确认",
         "cancel": "取消",
-        "processing": "处理中…"
+        "processing": "处理中…",
+        "slotsWaiting": "{platform}:最新的 {count} 个 Prompt 地区将等待 slot。不会删除任何内容;再次添加 slots 即可继续追踪。"
       },
       "done": "您的附加项已更新。充值将在付款确认后立即生效。",
       "states": {
         "not_admin": "只有管理员可以更改附加项。请联系您工作区的管理员。",
         "starter": "附加项包含在 Growth 套餐中。升级到 Growth 即可添加追踪、品牌和 AI 用量。",
-        "enterprise": "您的限额由合同约定。如需更多,请联系您的客户经理。",
+        "enterprise": "您的其他限额由合同约定。如需更多,请联系您的客户经理。",
         "trial": "套餐开始后即可购买附加项。",
         "no_plan": "套餐生效期间可购买附加项。",
         "ending": "您的套餐即将结束。请保留套餐以更改其附加项。"
@@ -18468,7 +18807,23 @@
         "payment_failed": "付款未成功。",
         "failed": "无法更改您的附加项。请重试。"
       },
-      "readFailed": "无法读取您的附加项。请稍后重试。"
+      "readFailed": "无法读取您的附加项。请稍后重试。",
+      "perInterval": "{price}/{interval, select, year {年} other {月}}",
+      "cart": {
+        "title": "您的附加项",
+        "onePayment": "一次性付款",
+        "plan": "{plan} 套餐",
+        "slots": "{platform} 额外追踪",
+        "slotsCount": "{slots} 个 slots",
+        "remove": "移除 {item}",
+        "discount": "额外追踪享 {percent}% 批量折扣,已计入上方价格。",
+        "discountDrops": "您的批量折扣将从 {from}% 降至 {to}%,因此上方价格将上涨。",
+        "brands": "{count, plural, other {# 个品牌}} · 每个 {price}",
+        "topUp": "{multiplier}倍 AI 用量 · 截至 {date}",
+        "total": "{interval, select, year {年度} other {月度}}总计（自下次续订起）<b>{price}</b>",
+        "undoAll": "撤销所有更改",
+        "dueToday": "今日应付：本周期剩余时间内新增项目的费用，详见“核对并支付”。"
+      }
     },
     "cancelsOn": "订阅将于 {date} 结束",
     "changePlan": "更改方案",

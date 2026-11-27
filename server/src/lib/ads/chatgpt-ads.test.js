@@ -5,6 +5,9 @@ import {
   chatGptAdsBase,
   cleanKey,
   fetchAdAccount,
+  fetchCampaignDays,
+  fetchCampaignStatuses,
+  spendMicros,
 } from './chatgpt-ads.js';
 
 /**
@@ -87,5 +90,67 @@ describe('fetchAdAccount', () => {
     await expect(fetchAdAccount(KEY, { fetchImpl: fakeFetch(200, {}), env: {} })).rejects.toThrow(
       ChatGptAdsUnavailableError,
     );
+  });
+});
+
+describe('fetchCampaignDays', () => {
+  it('asks insights for daily campaign rows in the window and follows the cursor', async () => {
+    const pages = [
+      {
+        data: [{ campaign_id: 'c1', readable_time: '2026-11-20', spend: 1.5 }],
+        has_more: true,
+        last_id: 'p1',
+      },
+      {
+        data: [{ campaign_id: 'c2', readable_time: '2026-11-21', spend: '0.25' }],
+        has_more: false,
+        last_id: 'p2',
+      },
+    ];
+    let i = 0;
+    const fetchImpl = vi.fn(async () => ({ status: 200, ok: true, json: async () => pages[i++] }));
+    const rows = await fetchCampaignDays(
+      KEY,
+      { since: '2026-11-15', until: '2026-11-21' },
+      { fetchImpl },
+    );
+    expect(rows.map((r) => [r.campaignId, r.day, r.costMicros])).toEqual([
+      ['c1', '2026-11-20', 1_500_000],
+      ['c2', '2026-11-21', 250_000],
+    ]);
+    const first = new URL(fetchImpl.mock.calls[0][0]);
+    expect(first.pathname).toBe('/v1/ad_account/insights');
+    expect(JSON.parse(first.searchParams.get('time_ranges[]'))).toEqual({
+      type: 'date_range',
+      since: '2026-11-15',
+      until: '2026-11-21',
+    });
+    expect(first.searchParams.get('aggregation_level')).toBe('campaign');
+    expect(first.searchParams.get('time_granularity')).toBe('daily');
+    expect(new URL(fetchImpl.mock.calls[1][0]).searchParams.get('after')).toBe('p1');
+    expect(fetchImpl.mock.calls.every(([, init]) => init.method === 'GET')).toBe(true);
+  });
+
+  it('turns spend into micros, 0 for anything that is not a positive number', () => {
+    expect(spendMicros(18.42)).toBe(18_420_000);
+    expect(spendMicros('x')).toBe(0);
+    expect(spendMicros(-1)).toBe(0);
+  });
+});
+
+describe('fetchCampaignStatuses', () => {
+  it('maps each campaign id to its status', async () => {
+    const fetchImpl = fakeFetch(200, {
+      data: [
+        { id: 'c1', status: 'active' },
+        { id: 'c2', status: 'archived' },
+      ],
+      has_more: false,
+    });
+    const statuses = await fetchCampaignStatuses(KEY, { fetchImpl });
+    expect([...statuses]).toEqual([
+      ['c1', 'active'],
+      ['c2', 'archived'],
+    ]);
   });
 });

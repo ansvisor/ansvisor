@@ -7,7 +7,8 @@ describe('platformName', () => {
     expect(platformName('google-aio')).toBe('Google AI Overviews');
     expect(platformName('google-aimode')).toBe('Google AI Mode');
     expect(platformName('chatgpt-web')).toBe('ChatGPT');
-    expect(platformName('copilot-web')).toBe('Microsoft Copilot');
+    expect(platformName('copilot-web')).toBe('Bing AI Mode');
+    expect(platformName('copilot-app')).toBe('Microsoft Copilot');
   });
 
   it('tells an API model apart from the app of the same engine', () => {

@@ -89,9 +89,15 @@ export const SKILL_ORDER = [
   'traffic',
   // Customers and revenue from AI visits: what brings them, and what to set up to measure it.
   'ai-revenue',
+  // AGENTS plan §8: the Shopping Feed Advisor's, what the feed misses for AI shopping answers.
+  'feed-advisor',
+  // AGENTS plan §8: the Crawler & Technical Fixer's, what keeps AI crawlers out of the site.
+  'tech-fix',
   // Ads Phase 0 PR 15: only with Ads on (flagged.ts ADS_SKILLS).
   'earn-or-pay',
   'ad-drafts',
+  // Ads Phase 1 P3: Google spend matched to the prompts, only with Ads on.
+  'paid-overlap',
   // AEO Operator plan §4.2 step 4: the Operator's own, agent-only, with CHAT_OPERATOR on.
   'operator',
 ] as const;

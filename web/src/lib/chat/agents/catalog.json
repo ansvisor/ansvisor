@@ -307,7 +307,11 @@
       "skills": [
         "shopping"
       ],
-      "triggers": [],
+      "triggers": [
+        {
+          "kind": "catalog_synced"
+        }
+      ],
       "mode": "auto",
       "connections": [
         {
@@ -315,10 +319,8 @@
           "required": true
         }
       ],
-      "status": "soon",
-      "needs": [
-        "catalog_trigger"
-      ]
+      "status": "ready",
+      "needs": []
     },
     {
       "id": "localization",
@@ -329,13 +331,15 @@
       "skills": [
         "translate"
       ],
-      "triggers": [],
+      "triggers": [
+        {
+          "kind": "page_published"
+        }
+      ],
       "mode": "auto",
       "connections": [],
-      "status": "soon",
-      "needs": [
-        "publish_trigger"
-      ]
+      "status": "ready",
+      "needs": []
     },
     {
       "id": "aeo-operator",
@@ -367,14 +371,14 @@
         "aeo",
         "developers"
       ],
-      "skills": [],
+      "skills": [
+        "tech-fix"
+      ],
       "triggers": [],
       "mode": "ask_first",
       "connections": [],
-      "status": "soon",
-      "needs": [
-        "ship_as_pr"
-      ]
+      "status": "ready",
+      "needs": []
     },
     {
       "id": "third-party-sources",
@@ -468,6 +472,7 @@
       "roles": [],
       "skills": [
         "earn-or-pay",
+        "paid-overlap",
         "ad-drafts"
       ],
       "triggers": [
@@ -536,7 +541,9 @@
       ],
       "industries": [],
       "roles": [],
-      "skills": [],
+      "skills": [
+        "feed-advisor"
+      ],
       "triggers": [
         {
           "kind": "schedule",
@@ -545,11 +552,14 @@
         }
       ],
       "mode": "auto",
-      "connections": [],
-      "status": "soon",
-      "needs": [
-        "catalog_read"
-      ]
+      "connections": [
+        {
+          "key": "catalog",
+          "required": true
+        }
+      ],
+      "status": "ready",
+      "needs": []
     },
     {
       "id": "seasonal-prompt-planner",

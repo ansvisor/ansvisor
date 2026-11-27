@@ -5,11 +5,10 @@
 
 import { runPrompt, analyzeSentimentAI } from '../lib/ai-tracker.js';
 import {
-  isLegacyChatgptTask,
-  pollScraperResult,
-  submitPromptTask,
-  UNAVAILABLE_PLATFORMS,
-} from '../lib/cloro-scraper.js';
+  providerFor,
+  supportedCountries as providerCountryLists,
+  unavailablePlatforms,
+} from '../lib/answer-providers/index.js';
 import { chatgptFanoutDue, chatgptFanoutMode } from '../lib/chatgpt-fanout.js';
 import { parseResponse, countBrandMentions } from '../lib/response-parser.js';
 import supabaseAdmin from '../config/supabase.js';
@@ -22,14 +21,16 @@ import { refreshPromptClusters } from '../lib/prompt-clusters.js';
 import { refreshSitePages } from '../lib/site-pages.js';
 import { updateTargetUrlStats } from '../lib/target-url-stats.js';
 import { persistCitationRows } from '../lib/citation-rows.js';
+import { persistShoppingCards, resultRow } from '../lib/cloro-result-handler.js';
 import { isUnknownCity, locationsForModels, locationsForScraper } from '../lib/locations.js';
-import { loadSupportedCountries, supportedLocations } from '../lib/cloro-countries.js';
+import { supportedLocations } from '../lib/cloro-countries.js';
 import { settleTrackingRun } from '../lib/run-settlement.js';
 import {
   FIRST_RUN_LATE_POLL_MS,
   isFirstRun,
   progressiveRollups,
 } from '../lib/first-run-rollups.js';
+import { slottedPlatforms } from '../config/tracking-slots.js';
 import logger from '../lib/logger.js';
 
 function resolveModelPlatform(model) {
@@ -44,14 +45,39 @@ function resolveModelPlatform(model) {
  * Prompts keep whatever platform ids they were saved with, so the stored array
  * cannot be trusted at run time: a brand may have turned Shopping off since,
  * and a platform may be down. Both are filtered here rather than at the picker,
- * because every id that survives becomes a paid Cloro submission.
+ * because every id that survives becomes a paid submission to the answer
+ * provider.
+ *
+ * `slotted` (the cloud) is the set of platforms the workspace's plan and
+ * bought tracking slots cover (slottedPlatforms): a platform outside it is
+ * never run, whatever the prompt says. ChatGPT Shopping runs beside ChatGPT
+ * and has no slots of its own. Null or absent: nothing is limited (self-host).
  */
-export function runnablePlatforms(platforms, { shoppingEnabled } = {}) {
+export function runnablePlatforms(platforms, { shoppingEnabled, slotted } = {}) {
   return (platforms ?? []).filter(
     (platform) =>
-      !UNAVAILABLE_PLATFORMS.includes(platform) &&
-      (shoppingEnabled || platform !== 'chatgpt-shopping'),
+      !unavailablePlatforms().includes(platform) &&
+      (shoppingEnabled || platform !== 'chatgpt-shopping') &&
+      (!slotted || platform === 'chatgpt-shopping' || slotted.has(platform)),
   );
+}
+
+/**
+ * The organization row the worker plans a run with: its plan, overrides and
+ * bought tracking slots. Before 00564 is applied add_on_slots doesn't exist;
+ * the row is read again without it, so a deploy that runs ahead of the
+ * migration keeps tracking (with only the plan's own platforms).
+ */
+export async function loadOrgPlanRow(orgId) {
+  const read = (columns) =>
+    supabaseAdmin.from('organizations').select(columns).eq('id', orgId).single();
+  const { data, error } = await read('plan, plan_overrides, add_on_slots');
+  if (!error) return data;
+  if (/add_on_slots/.test(error.message ?? '')) {
+    const again = await read('plan, plan_overrides');
+    return again.data ? { ...again.data, add_on_slots: {} } : null;
+  }
+  return null;
 }
 
 /**
@@ -206,21 +232,23 @@ export function scraperTasksFor(prompts, { platformsFor, locationsFor, chatgptFa
  * polling has no pending row.
  */
 export async function pollTrackingTask({ taskId, scraperId, legacy, meta }) {
+  const provider = providerFor(scraperId);
   try {
-    return await pollScraperResult(taskId, scraperId);
+    // The asked place: Gemini on Anakin may answer from another one.
+    return await provider.pollScraperResult(taskId, scraperId, { region: meta.region });
   } catch (err) {
-    if (!(err?.taskFailed && isLegacyChatgptTask({ scraperId, legacy }))) throw err;
+    if (!(err?.taskFailed && provider.isLegacyChatgptTask({ scraperId, legacy }))) throw err;
     logger.warn(
       { err, taskId, scraperId, promptId: meta.prompt.id },
       'chatgpt fan-out task failed at cloro; submitting it again without fan-out',
     );
-    const again = await submitPromptTask({
+    const again = await provider.submitPromptTask({
       promptText: meta.prompt.text,
       promptId: meta.prompt.id,
       scraperId,
       region: meta.region,
     });
-    return pollScraperResult(again.taskId, scraperId);
+    return provider.pollScraperResult(again.taskId, scraperId, { region: meta.region });
   }
 }
 
@@ -336,17 +364,18 @@ export async function processTrackingJob({ brandId, promptId, promptIds, source,
   // every model is allowed (self-host, or a plan without the restriction).
   let allowedModels = null;
   let plan = null;
+  // Cloud: the platforms the plan and the workspace's tracking slots cover
+  // (00564). A prompt can still list one it has no slots for (a plan change,
+  // an older save), so it's filtered here: every platform run is paid.
+  let slotted = null;
   if (isCloud()) {
-    const { data: org } = await supabaseAdmin
-      .from('organizations')
-      .select('plan, plan_overrides')
-      .eq('id', brand.organization_id)
-      .single();
+    const org = await loadOrgPlanRow(brand.organization_id);
     plan = applyPlanOverrides(getPlan(org?.plan), org);
     allowedModels = plan.limits.allowedModels ?? null;
     if (allowedModels) {
       logger.info({ brandId, allowedModels }, 'api-model tracking plan-gated for this org');
     }
+    slotted = slottedPlatforms(plan, org?.add_on_slots);
   }
   // ChatGPT Shopping, like the models, only where the plan shows its results.
   const shoppingEnabled = shoppingTracked(brand, plan);
@@ -358,7 +387,8 @@ export async function processTrackingJob({ brandId, promptId, promptIds, source,
     return allowedModels ? models.filter((m) => allowedModels.includes(m)) : models;
   };
 
-  const allowedPlatformsFor = (prompt) => runnablePlatforms(prompt.platforms, { shoppingEnabled });
+  const allowedPlatformsFor = (prompt) =>
+    runnablePlatforms(prompt.platforms, { shoppingEnabled, slotted });
 
   // A prompt's tracked locations (#691): country codes, US state codes
   // (`US-CA`) and city codes (`TR~ISTANBUL`, PROMPT-015d) alike. No locations
@@ -375,10 +405,11 @@ export async function processTrackingJob({ brandId, promptId, promptIds, source,
     logger.warn({ brandId, codes: unknownCities }, 'skipping city codes no city list names');
   }
 
-  // The countries each engine answers from (PROMPT-015e, read daily): an
-  // engine isn't asked in a country it doesn't support, which would fail and
-  // cost a task. Nothing is skipped when no list was read.
-  const supportedCountries = await loadSupportedCountries().catch((err) => {
+  // The countries each engine answers from on the run's answer provider
+  // (PROMPT-015e, Cloro's read daily): an engine isn't asked in a country it
+  // doesn't support, which would fail and cost a task. Nothing is skipped
+  // when no list was read, nor on a provider that lists none.
+  const supportedCountries = await providerCountryLists().catch((err) => {
     logger.error({ err, brandId }, 'engine country lists unreadable; nothing skipped');
     return new Map();
   });
@@ -445,6 +476,7 @@ export async function processTrackingJob({ brandId, promptId, promptIds, source,
       createdAt: inserted.created_at,
       citations: row.citations,
     });
+    return inserted;
   }
 
   // 6. Phase 1: Collect & run all scraper (platform) tasks first. A prompt's
@@ -459,7 +491,15 @@ export async function processTrackingJob({ brandId, promptId, promptIds, source,
       : null,
   });
 
-  const webhookUrl = process.env.CLORO_WEBHOOK_URL;
+  // Each task goes to its platform's provider (PLATFORM_PROVIDER, or its
+  // PLATFORM_PROVIDER_OVERRIDES entry). The run waits on webhooks only when
+  // every provider it sends to has one; otherwise it polls every task, so
+  // one drain loop or one polling pass covers the whole run.
+  const taskProviders = scraperTasks.map((t) => providerFor(t.scraperId));
+  const runProviders = [...new Set(taskProviders)];
+  const providerLabel = runProviders.map((p) => p.name).join('+') || providerFor(null).name;
+  const webhookUrls = new Map(runProviders.map((p) => [p, p.webhookUrl()]));
+  const useWebhooks = runProviders.length > 0 && runProviders.every((p) => webhookUrls.get(p));
 
   if (scraperTasks.length > 0) {
     logger.info(
@@ -467,9 +507,10 @@ export async function processTrackingJob({ brandId, promptId, promptIds, source,
         brandId,
         count: scraperTasks.length,
         chatgptFanout: scraperTasks.filter((t) => t.legacy).length,
-        mode: webhookUrl ? 'webhook' : 'polling',
+        mode: useWebhooks ? 'webhook' : 'polling',
+        provider: providerLabel,
       },
-      'submitting scraper tasks to cloro',
+      'submitting scraper tasks',
     );
 
     if (job) {
@@ -478,24 +519,27 @@ export async function processTrackingJob({ brandId, promptId, promptIds, source,
         total: totalTasks,
         promptText: 'Preparing platform scans...',
         model: null,
-        platform: 'cloro',
+        platform: providerLabel,
       });
     }
 
     // Submit all tasks concurrently
     const submissions = await Promise.allSettled(
-      scraperTasks.map((t) =>
-        submitPromptTask({
-          promptText: t.prompt.text,
-          promptId: t.prompt.id,
-          scraperId: t.scraperId,
-          region: t.region,
-          legacy: t.legacy,
-          webhookUrl,
-        }).then((res) => ({
-          ...res,
-          meta: t,
-        })),
+      scraperTasks.map((t, i) =>
+        taskProviders[i]
+          .submitPromptTask({
+            promptText: t.prompt.text,
+            promptId: t.prompt.id,
+            scraperId: t.scraperId,
+            region: t.region,
+            legacy: t.legacy,
+            webhookUrl: useWebhooks ? webhookUrls.get(taskProviders[i]) : null,
+          })
+          .then((res) => ({
+            ...res,
+            meta: t,
+            provider: taskProviders[i].name,
+          })),
       ),
     );
 
@@ -517,19 +561,21 @@ export async function processTrackingJob({ brandId, promptId, promptIds, source,
       }
     }
 
-    if (webhookUrl) {
+    if (useWebhooks) {
       // Webhook mode: persist (taskId → prompt) mapping; the /cloro/callback
       // endpoint will pick up results asynchronously when Cloro pushes them.
       if (submitted.length > 0) {
         // `legacy` (00378): the task went to ChatGPT's legacy interface, so
         // the callback sends it again without it if Cloro fails it.
-        const pendingRows = submitted.map(({ taskId, scraperId, meta, legacy }) => ({
+        const pendingRows = submitted.map(({ taskId, scraperId, meta, legacy, provider }) => ({
           task_id: taskId,
           prompt_id: meta.prompt.id,
           brand_id: brandId,
           scraper_id: scraperId,
           region: meta.region,
           legacy: legacy === true,
+          // Whose task it is (00562): each provider's webhook takes its own.
+          provider,
         }));
 
         const { error: pendingErr } = await supabaseAdmin
@@ -719,7 +765,7 @@ export async function processTrackingJob({ brandId, promptId, promptIds, source,
                       : `Finishing up — waiting on the last ${pending} answers`
                     : `Receiving AI answers — ${pending} still in progress...`,
               model: null,
-              platform: 'cloro',
+              platform: providerLabel,
             });
           }
 
@@ -826,24 +872,28 @@ export async function processTrackingJob({ brandId, promptId, promptIds, source,
               competitors,
             );
 
-            await insertResult({
-              prompt_id: meta.prompt.id,
-              brand_id: brandId,
+            // The same row and shopping cards as the webhook path
+            // (handleScraperResult), so a polled answer's cards reach
+            // Product Visibility too.
+            const inserted = await insertResult(
+              resultRow({
+                aiResponse,
+                scraperId: meta.scraperId,
+                promptId: meta.prompt.id,
+                brandId,
+                region: meta.region,
+                metrics,
+              }),
+            );
+            await persistShoppingCards({
+              promptResultId: inserted.id,
+              brandId,
               platform: meta.scraperId,
-              response: aiResponse.text,
-              citations: aiResponse.citations,
-              mention_count: metrics.mentionCount,
-              citation_count: metrics.citationCount,
-              sentiment: metrics.sentiment,
-              visibility_score: metrics.visibilityScore,
-              model_used: aiResponse.model,
               region: meta.region,
-              competitor_mentions: metrics.competitorMentions,
-              mention_position: metrics.mentionPosition,
-              mentioned_entity_count: metrics.mentionedEntityCount,
-              search_queries: Array.isArray(aiResponse.search_queries)
-                ? aiResponse.search_queries
-                : [],
+              rawCards: aiResponse.shopping_cards ?? [],
+              rawInlineProducts: aiResponse.inline_products ?? [],
+              brandInfo: { brandId, brandName: brandInfo.brandName, domains: brandInfo.domains },
+              competitors,
             });
 
             logger.debug({ taskId, scraperId }, 'scraper task result saved');
@@ -858,7 +908,7 @@ export async function processTrackingJob({ brandId, promptId, promptIds, source,
               total: totalTasks,
               promptText: meta.prompt.text.slice(0, 80),
               model: scraperId,
-              platform: 'cloro',
+              platform: providerLabel,
             });
           }
         }),

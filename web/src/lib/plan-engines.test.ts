@@ -13,6 +13,18 @@ const ALL_SCRAPER_IDS = ALL_SCRAPERS.map((s) => s.id);
 const ALL_MODEL_IDS = ALL_MODELS.map((m) => m.id);
 
 const STARTER_SCRAPER_IDS = ['chatgpt-web', 'gemini-web'];
+// Growth's and Enterprise's own platforms (00564): the five standard engines
+// and ChatGPT Shopping; others run only where tracking slots were bought.
+const GROWTH_SCRAPER_IDS = ALL_SCRAPER_IDS.filter((id) =>
+  [
+    'chatgpt-web',
+    'chatgpt-shopping',
+    'gemini-web',
+    'google-aio',
+    'google-aimode',
+    'copilot-web',
+  ].includes(id),
+);
 
 /**
  * getPlan() short-circuits to the self-hosted plan unless the instance is
@@ -41,11 +53,12 @@ describe('getActiveEngineIdsForPlan', () => {
     });
   });
 
-  it('gives Growth every scraper but still no API models', () => {
+  it('gives Growth its own platforms, never Grok or Perplexity, and no API models', () => {
     useCloud(true);
 
+    expect(GROWTH_SCRAPER_IDS).toHaveLength(6);
     expect(getActiveEngineIdsForPlan('growth')).toEqual({
-      platforms: ALL_SCRAPER_IDS,
+      platforms: GROWTH_SCRAPER_IDS,
       models: [],
     });
   });
@@ -56,7 +69,7 @@ describe('getActiveEngineIdsForPlan', () => {
     // alignPromptsToPlanForOrg layers organizations.plan_overrides.allowedModels
     // on top of this, so the plan-level answer stays "no models".
     expect(getActiveEngineIdsForPlan('enterprise')).toEqual({
-      platforms: ALL_SCRAPER_IDS,
+      platforms: GROWTH_SCRAPER_IDS,
       models: [],
     });
   });
@@ -109,7 +122,7 @@ describe('getActiveEngineIdsForPlan', () => {
     first.models.push('mutated');
 
     expect(getActiveEngineIdsForPlan('growth')).toEqual({
-      platforms: ALL_SCRAPER_IDS,
+      platforms: GROWTH_SCRAPER_IDS,
       models: [],
     });
   });

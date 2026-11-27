@@ -91,6 +91,8 @@ export type ActionKind =
   | 'fix_structured_data'
   // Canonical tags missing or pointing where they shouldn't (F14, AC plan P-11).
   | 'fix_canonical_tags'
+  // Google ads on prompts AI already picks the brand for (F15, Ads Phase 1 P4).
+  | 'review_paid_overlap'
   | 'fix_content_gaps'
   | 'fix_outdated_content'
   | 'fix_entity_signals'
@@ -221,6 +223,18 @@ export const ACTION_DISMISS_REASONS = [
 ] as const;
 export type ActionDismissReason = (typeof ACTION_DISMISS_REASONS)[number];
 
+/**
+ * Why a dismissed action closed, as History says it: a person's reason, or
+ * `replaced` when the nightly pass replaced it with a new one of its kind
+ * after it went stale untouched (00563). Never offered to a person.
+ */
+export type ActionClosedReason = ActionDismissReason | 'replaced';
+
+/** A stored dismiss reason as History reads it: a person's, or `replaced`; null otherwise. */
+export function closedReasonOf(value: unknown): ActionClosedReason | null {
+  return value === 'replaced' ? 'replaced' : dismissReasonOf(value);
+}
+
 /** A stored dismiss reason, if it is one of ACTION_DISMISS_REASONS; null otherwise. */
 export function dismissReasonOf(value: unknown): ActionDismissReason | null {
   return (ACTION_DISMISS_REASONS as readonly unknown[]).includes(value)
@@ -319,6 +333,7 @@ export const ACTION_KINDS: readonly ActionKind[] = [
   'fix_crawler_access',
   'fix_structured_data',
   'fix_canonical_tags',
+  'review_paid_overlap',
   'fix_content_gaps',
   'fix_outdated_content',
   'fix_entity_signals',

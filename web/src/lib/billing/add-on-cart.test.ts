@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { addOnsThroughPlanChange, currentAddOns, itemChanges, type CartItem } from './add-on-cart';
+import {
+  addOnsThroughPlanChange,
+  currentAddOns,
+  currentSlotItems,
+  itemChanges,
+  slotItemChanges,
+  type CartItem,
+} from './add-on-cart';
 import type { RecurringAddOnRow } from './add-on-sync';
 
 /** The item changes a Growth workspace's add-on pick makes on its subscription (00546). */
@@ -142,5 +149,103 @@ describe('addOnsThroughPlanChange', () => {
     expect(
       addOnsThroughPlanChange(items, noYear, { planId: 'growth', interval: 'year' }).missing,
     ).toEqual(['si_brand']);
+  });
+});
+
+describe('tracking slots (00564)', () => {
+  const slotRow = (platform: string, billing: 'monthly' | 'yearly' = 'monthly') => {
+    const stripeId = platform.replace(/-/g, '_');
+    const suffix = billing === 'monthly' ? 'month' : 'year';
+    return {
+      id: `slots_${stripeId}_${suffix}`,
+      kind: 'slots' as const,
+      billing,
+      active: true,
+      stripe_price_id: null,
+      stripe_lookup_key: `addon_slots_${stripeId}_${suffix}`,
+      grant_prompts: null,
+      grant_brands: null,
+      platform,
+      grant_slots: 100,
+    };
+  };
+  const slotItem = (platform: string, units: number, billing: 'monthly' | 'yearly' = 'monthly') => {
+    const row = slotRow(platform, billing);
+    return {
+      id: `si_${row.id}`,
+      quantity: units,
+      price: {
+        id: `price_${row.id}`,
+        lookup_key: row.stripe_lookup_key,
+        metadata: { addon: 'slots', platform: platform.replace(/-/g, '_') },
+      },
+    } as CartItem;
+  };
+  const ROWS = [
+    slotRow('claude-web'),
+    slotRow('claude-web', 'yearly'),
+    slotRow('grok-web'),
+    slotRow('grok-web', 'yearly'),
+  ];
+
+  it('reads the slot items by platform', () => {
+    const current = currentSlotItems([plan, tracking(100), slotItem('claude-web', 3)], ROWS);
+    expect([...current.keys()]).toEqual(['claude-web']);
+    expect(current.get('claude-web')?.units).toBe(3);
+  });
+
+  it('adds, resizes and removes slot items, each carrying the volume coupon', () => {
+    const current = currentSlotItems([slotItem('claude-web', 3), slotItem('grok-web', 1)], ROWS);
+    const changes = slotItemChanges(
+      current,
+      new Map([
+        ['claude-web', { priceId: 'price_slots_claude_web_month', units: 8 }],
+        ['naver-web', { priceId: 'price_naver', units: 2 }],
+      ]),
+      'addon_slots_off_0125',
+    );
+    const coupon = [{ coupon: 'addon_slots_off_0125' }];
+    expect(changes).toEqual([
+      { id: 'si_slots_claude_web_month', quantity: 8, discounts: coupon },
+      { id: 'si_slots_grok_web_month', deleted: true },
+      { price: 'price_naver', quantity: 2, discounts: coupon },
+    ]);
+  });
+
+  it('clears the coupon when no discount is left, and changes nothing when no units do', () => {
+    const current = currentSlotItems([slotItem('claude-web', 3)], ROWS);
+    expect(
+      slotItemChanges(
+        current,
+        new Map([['claude-web', { priceId: 'price_slots_claude_web_month', units: 1 }]]),
+        null,
+      ),
+    ).toEqual([{ id: 'si_slots_claude_web_month', quantity: 1, discounts: '' }]);
+    expect(
+      slotItemChanges(
+        current,
+        new Map([['claude-web', { priceId: 'price_slots_claude_web_month', units: 3 }]]),
+        'addon_slots_off_0500',
+      ),
+    ).toEqual([]);
+  });
+
+  it('keeps slots through a period change on Growth and Enterprise, on the same platform', () => {
+    const items = [plan, slotItem('claude-web', 3), slotItem('grok-web', 1)];
+    for (const planId of ['growth', 'enterprise']) {
+      const result = addOnsThroughPlanChange(items, ROWS, { planId, interval: 'year' });
+      expect(result.removals).toEqual([]);
+      expect(result.swaps.map((s) => [s.itemId, s.row.id])).toEqual([
+        ['si_slots_claude_web_month', 'slots_claude_web_year'],
+        ['si_slots_grok_web_month', 'slots_grok_web_year'],
+      ]);
+    }
+  });
+
+  it('ends slots on Starter', () => {
+    const items = [plan, slotItem('claude-web', 3)];
+    expect(
+      addOnsThroughPlanChange(items, ROWS, { planId: 'starter', interval: 'month' }).removals,
+    ).toEqual(['si_slots_claude_web_month']);
   });
 });

@@ -68791,6 +68791,152 @@ comment on function public.action_scorecard(uuid, timestamptz, text) is
 notify pgrst, 'reload schema';
 
 -- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00554_notification_preferences.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00554: a person's own e-mail choices (Settings › Notifications, "Your e-mails")
+-- ============================================================================
+-- Until now the Daily Pulse (00036) and the AI Traffic weekly digest (00187)
+-- were set per brand, for everyone: pulse_settings' frequency and recipient
+-- list. Now each person picks the e-mails they get and how often; the brand's
+-- pulse_settings stay for people outside the workspace (its recipients) and
+-- for teammates who haven't saved their own choices yet.
+--
+--   * one row per person, workspace, e-mail kind and brand scope: brand_id
+--     null is "All my brands", a brand's row overrides it for that brand.
+--     Account e-mails (AI usage) only ever have the null row.
+--   * frequency: the choice, from the kind's own list (the web checks which
+--     fit a kind): instant, daily, weekly, notable, on or off.
+--   * delivery: brand e-mails one per brand, or all brands in one e-mail.
+--     The person's choice, the same on each of their rows.
+--
+-- Nothing is copied here. A person with no rows gets what pulse_settings gives
+-- them today (the web shows it as their starting choices, the senders send
+-- by it), so nobody's e-mail changes until they save their own.
+--
+-- A person reads and writes only their own rows, in their own workspace, and
+-- a brand's row only for a brand they can reach (brand access, 00388).
+-- save_notification_preferences replaces a person's rows in one go.
+
+create table if not exists public.notification_preferences (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users (id) on delete cascade,
+  organization_id uuid not null references public.organizations (id) on delete cascade,
+  kind text not null,
+  -- Null: All my brands.
+  brand_id uuid references public.brands (id) on delete cascade,
+  frequency text not null,
+  delivery text not null default 'per_brand',
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  constraint notification_preferences_kind_check check (
+    kind in (
+      'daily_pulse',
+      'traffic_digest',
+      'critical_action',
+      'due_actions',
+      'weekly_actions',
+      'run_finished',
+      'audit_finished',
+      'score_dropped',
+      'drafts_review',
+      'ai_usage'
+    )
+  ),
+  constraint notification_preferences_frequency_check check (
+    frequency in ('instant', 'daily', 'weekly', 'notable', 'on', 'off')
+  ),
+  constraint notification_preferences_delivery_check check (
+    delivery in ('per_brand', 'combined')
+  ),
+  constraint notification_preferences_scope_key unique nulls not distinct (
+    user_id, organization_id, kind, brand_id
+  )
+);
+
+-- The senders read a workspace's rows: who saved, and their choices.
+create index if not exists notification_preferences_org_kind_idx
+  on public.notification_preferences (organization_id, kind);
+
+create index if not exists notification_preferences_brand_idx
+  on public.notification_preferences (brand_id)
+  where brand_id is not null;
+
+drop trigger if exists trg_notification_preferences_updated_at on public.notification_preferences;
+create trigger trg_notification_preferences_updated_at
+  before update on public.notification_preferences
+  for each row execute function public.handle_updated_at();
+
+alter table public.notification_preferences enable row level security;
+revoke all on table public.notification_preferences from anon, authenticated;
+grant select, insert, update, delete on table public.notification_preferences to authenticated;
+grant all on table public.notification_preferences to service_role;
+
+drop policy if exists "notification_preferences: own rows" on public.notification_preferences;
+create policy "notification_preferences: own rows"
+  on public.notification_preferences
+  for all
+  to authenticated
+  using (
+    user_id = auth.uid()
+    and organization_id in (select p.organization_id from public.profiles p where p.id = auth.uid())
+    and (brand_id is null or brand_id in (select public.user_brand_ids()))
+  )
+  with check (
+    user_id = auth.uid()
+    and organization_id in (select p.organization_id from public.profiles p where p.id = auth.uid())
+    and (
+      brand_id is null
+      or brand_id in (
+        select b.id from public.brands b
+        where b.organization_id = notification_preferences.organization_id
+          and public.can_access_brand(b.id)
+      )
+    )
+  );
+
+-- Replaces the caller's rows in their workspace with p_rows, in one go:
+-- [{"kind", "brand_id" (or null), "frequency", "delivery"}]. Runs as the
+-- caller, so the policy above checks every row.
+create or replace function public.save_notification_preferences(p_rows jsonb)
+returns void
+language plpgsql
+security invoker
+set search_path = public
+as $$
+declare
+  v_org uuid;
+begin
+  select organization_id into v_org from public.profiles where id = auth.uid();
+  if v_org is null then
+    raise exception 'No organization';
+  end if;
+  if jsonb_typeof(p_rows) <> 'array' or jsonb_array_length(p_rows) > 500 then
+    raise exception 'Invalid preferences';
+  end if;
+
+  delete from public.notification_preferences
+  where user_id = auth.uid() and organization_id = v_org;
+
+  insert into public.notification_preferences (user_id, organization_id, kind, brand_id, frequency, delivery)
+  select auth.uid(), v_org, r.kind, r.brand_id, r.frequency, coalesce(r.delivery, 'per_brand')
+  from jsonb_to_recordset(p_rows) as r(kind text, brand_id uuid, frequency text, delivery text);
+end;
+$$;
+
+revoke all on function public.save_notification_preferences(jsonb) from public, anon;
+grant execute on function public.save_notification_preferences(jsonb) to authenticated;
+
+comment on table public.notification_preferences is
+  'A person''s own e-mail choices (00554, Settings › Notifications): per kind, for All my brands (brand_id null) or one brand, how often, and one e-mail per brand or all in one. No rows: what pulse_settings gives them, until they save.';
+comment on column public.notification_preferences.brand_id is
+  'Null: All my brands. A brand''s row overrides it for that brand.';
+comment on column public.notification_preferences.frequency is
+  'instant, daily, weekly, notable, on or off, from the kind''s own list.';
+comment on column public.notification_preferences.delivery is
+  'Brand e-mails one per brand (per_brand) or all brands in one (combined): the person''s choice, the same on each of their rows.';
+
+-- ─────────────────────────────────────────────────────────────────────────
 -- migrations/00555_translation_suggestions.sql
 -- ─────────────────────────────────────────────────────────────────────────
 -- ============================================================================
@@ -68854,28 +69000,129 @@ comment on table public.translation_suggestions is
   'Suggested better translations of the interface (LOC-009): a person reads their own rows by RLS; the app inserts after its checks and staff review with the service role. Accepting only marks the row; messages/<locale>.json and the glossary are changed by hand.';
 
 -- ─────────────────────────────────────────────────────────────────────────
--- migrations/00557_ai_bot_netlify_log_drain.sql
+-- migrations/00556_notification_sends.sql
 -- ─────────────────────────────────────────────────────────────────────────
 -- ============================================================================
--- 00557: Netlify log drain for AI bot traffic (#2167)
+-- 00556: which notification e-mail went to whom (Settings › Notifications)
 -- ============================================================================
--- A Netlify log drain (Enterprise plans) posts JSON or NDJSON request logs to
--- /bots/ingest with the connection's Authorization bearer secret. Its records
--- are read by server/src/lib/bot-log-formats.js; the existing verification
--- pipeline still checks the user agent and published source IP ranges before
--- storage.
+-- The e-mails people choose in "Your e-mails" (00554) beyond the Daily Pulse
+-- and the AI Traffic digest: a new Critical action, drafts waiting for review,
+-- and the later kinds. Each sender claims a row here before it sends, so a
+-- person gets each e-mail once, however often the sender runs or however
+-- many server instances run it.
+--
+--   * kind: the e-mail, as notification_preferences names it.
+--   * subject: what the e-mail is about, the sender's own key: an action
+--     ("action:<id>"), a day's or a week's summary of a brand
+--     ("daily:2026-11-20:<brand id>"). Unique per kind, person and subject.
+--   * sent_at: set once the e-mail went out; a claim without it is a send
+--     that failed after its claim, kept so it isn't sent twice.
+--
+-- Only the server reads and writes it (the service role): RLS on, no policy.
+-- Schema only: it starts empty.
 
-alter table public.ai_bot_connections
-  drop constraint if exists ai_bot_connections_kind_check;
-alter table public.ai_bot_connections
-  add constraint ai_bot_connections_kind_check check (
-    kind in (
-      'cloudflare_worker', 'cloudflare_logpush', 'vercel_drain',
-      'log_webhook', 'log_upload', 'fastly_log_stream', 'netlify_log_drain'
-    )
-  );
+create table if not exists public.notification_sends (
+  id uuid primary key default gen_random_uuid(),
+  kind text not null
+    constraint notification_sends_kind_format check (kind ~ '^[a-z_]{1,40}$'),
+  user_id uuid not null references auth.users (id) on delete cascade,
+  brand_id uuid references public.brands (id) on delete cascade,
+  subject text not null
+    constraint notification_sends_subject_length check (char_length(subject) between 1 and 200),
+  sent_at timestamptz,
+  created_at timestamptz not null default now(),
+  constraint notification_sends_once unique (kind, user_id, subject)
+);
 
-notify pgrst, 'reload schema';
+create index if not exists notification_sends_brand_idx
+  on public.notification_sends (brand_id)
+  where brand_id is not null;
+
+alter table public.notification_sends enable row level security;
+revoke all on table public.notification_sends from anon, authenticated;
+grant all on table public.notification_sends to service_role;
+
+comment on table public.notification_sends is
+  'Notification e-mails sent (00556): one row per kind, person and subject, claimed before sending so each goes once. Server only.';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00558_chat_agent_event_triggers.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- Chat (00558): two event triggers for agents, beside When a brand is added
+-- (00482):
+--   * page_published: a Content page went live in the brand's CMS (Send to
+--     CMS, content-published.js). The API server tells the web once the
+--     page is live; pages an agent's run made don't fire it, so an agent
+--     that writes pages never starts itself again.
+--   * catalog_synced: a sync of one of the brand's product catalog sources
+--     finished and changed its products (catalog/sources.js).
+-- Each fires an active agent whose scope has the brand, once per agent and
+-- event, with the noise rules every event trigger has (cooldown, daily
+-- limit, AI limit). The run acts as the agent's owner, as every triggered
+-- run does (CHAT-21 §H item 38). Schema only: nothing is backfilled.
+--
+-- DEPLOY THE WEB FIRST, THEN APPLY THIS. The claims' primary key gains
+-- `ref` below. The web before this PR claims a brand added with
+-- "on conflict (agent_id, kind, brand_id)", which no longer matches a
+-- constraint once this is in: its brand_added fires would fail until the
+-- new web is live. The new web claims on the primary key, whichever it is
+-- (agent-triggers.ts claimOnce), so it works before and after this file.
+
+-- ─── The kinds ──────────────────────────────────────────────────────────────
+
+-- A trigger of the new kinds. Their settings are empty: they have none.
+alter table public.chat_agent_triggers
+  drop constraint if exists chat_agent_triggers_kind_check;
+alter table public.chat_agent_triggers
+  add constraint chat_agent_triggers_kind_check
+    check (
+      kind in (
+        'schedule', 'signal', 'kpi', 'watch_rule', 'brand_added', 'page_published', 'catalog_synced'
+      )
+    );
+
+-- A run they started. Every kind 00482 allows stays.
+alter table public.chat_agent_runs
+  drop constraint if exists chat_agent_runs_trigger_kind_check;
+alter table public.chat_agent_runs
+  add constraint chat_agent_runs_trigger_kind_check
+    check (
+      trigger_kind in (
+        'schedule', 'signal', 'kpi', 'watch_rule', 'brand_added', 'page_published',
+        'catalog_synced', 'manual', 'action', 'agent'
+      )
+    );
+
+-- ─── Once per agent and event ───────────────────────────────────────────────
+
+-- 00482's claims, one per agent, kind and brand, now also by the event
+-- that fired: a page's send, a catalog source's sync. A brand added has
+-- one event per brand, its ref ''. The table holds a row per fire so far:
+-- small, so the new key builds at once.
+alter table public.chat_agent_trigger_claims
+  add column if not exists ref text not null default '';
+
+alter table public.chat_agent_trigger_claims
+  drop constraint if exists chat_agent_trigger_claims_ref_check;
+alter table public.chat_agent_trigger_claims
+  add constraint chat_agent_trigger_claims_ref_check check (char_length(ref) <= 200);
+
+alter table public.chat_agent_trigger_claims
+  drop constraint if exists chat_agent_trigger_claims_kind_check;
+alter table public.chat_agent_trigger_claims
+  add constraint chat_agent_trigger_claims_kind_check
+    check (kind in ('brand_added', 'page_published', 'catalog_synced'));
+
+alter table public.chat_agent_trigger_claims
+  drop constraint if exists chat_agent_trigger_claims_pkey;
+alter table public.chat_agent_trigger_claims
+  add constraint chat_agent_trigger_claims_pkey primary key (agent_id, kind, brand_id, ref);
+
+comment on column public.chat_agent_trigger_claims.ref is
+  'Chat (00558): the event that fired: a send''s id (page_published), a catalog source''s id and sync time (catalog_synced); '''' for brand_added, whose event is the brand itself.';
+
+comment on table public.chat_agent_trigger_claims is
+  'Chat (00482, 00558): the fires an agent''s event trigger makes once (brand_added: once per brand; page_published, catalog_synced: once per event), one row per agent, kind, brand and event, so an event never fires the same agent twice. Readable where the agent and the brand are; the server writes.';
 
 -- ─────────────────────────────────────────────────────────────────────────
 -- migrations/00559_chat_files_pptx.sql
@@ -69039,6 +69286,458 @@ grant all on table public.ads_account_keys to service_role;
 grant all on table public.ads_campaign_daily to service_role;
 grant all on table public.ads_search_term_daily to service_role;
 -- No grant and no policy for a session (anon, authenticated): it reads no row.
+
+notify pgrst, 'reload schema';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00561_ads_search_term_totals.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00561: Ads' search-term totals for a date range (Phase 1, P2)
+-- ============================================================================
+-- Function only: no table changes and no rows written, so it applies in
+-- seconds.
+--
+-- The Overlap view (lib/ads/paid.js) matches the Google search terms a brand
+-- paid for to its tracked prompts. Each term's days are summed here, so the
+-- server reads one row per term and account instead of one per day and
+-- campaign. Only terms that cost something come back: a term without cost
+-- tells nothing about what the brand pays.
+--
+-- The server passes only ad accounts of the brand it has checked against the
+-- caller's organization. The function runs as its caller (security invoker),
+-- and only the service role may call it, like the tables it reads (00560).
+
+create or replace function public.ads_search_term_totals(
+  p_account_ids uuid[],
+  p_from date,
+  p_to date
+)
+returns table (
+  account_id uuid,
+  search_term text,
+  impressions bigint,
+  clicks bigint,
+  cost_micros bigint,
+  conversions numeric
+)
+language sql
+stable
+security invoker
+set search_path = public
+as $$
+  select
+    d.account_id,
+    d.search_term,
+    sum(d.impressions)::bigint,
+    sum(d.clicks)::bigint,
+    sum(d.cost_micros)::bigint,
+    sum(d.conversions)
+  from public.ads_search_term_daily d
+  where d.account_id = any (p_account_ids)
+    and d.day between p_from and p_to
+  group by d.account_id, d.search_term
+  having sum(d.cost_micros) > 0
+  order by d.account_id, d.search_term;
+$$;
+
+comment on function public.ads_search_term_totals(uuid[], date, date) is
+  'Ads Phase 1 (00561): each Google search term''s impressions, clicks, cost and conversions over a date range, per account, for terms that cost something. Service role only.';
+
+revoke all on function public.ads_search_term_totals(uuid[], date, date) from public, anon, authenticated;
+grant execute on function public.ads_search_term_totals(uuid[], date, date) to service_role;
+
+notify pgrst, 'reload schema';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00562_cloro_pending_tasks_provider.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00562: which answer provider each pending task was submitted to
+-- ============================================================================
+-- cloro_pending_tasks holds the tasks a run waits on, for Cloro and Anakin
+-- alike (answer-providers/index.js). Each provider's webhook
+-- (routes/cloro-callback.js, routes/anakin-callback.js) looks a delivery up
+-- here by task id, so the row says whose task it is, and a webhook leaves
+-- another provider's task alone. Rows from before this file, and rows
+-- written without it, are Cloro's: null reads as 'cloro'.
+--
+-- Schema only: a nullable column with no default rewrites nothing, and the
+-- table holds one run's tasks at a time.
+
+alter table public.cloro_pending_tasks
+  add column if not exists provider text
+    check (provider is null or provider in ('cloro', 'anakin'));
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00563_action_replaced_when_stale.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00563: a stale action replaced by a new one of its kind
+-- ============================================================================
+-- An action nobody worked on held its kind's only active slot for good: the
+-- nightly pass linked new signals to it, and the brand was told nothing new
+-- until someone closed it. Now, once an action is stale (still New, nobody's
+-- event for 30 days, 00432) and its kind still fires, the pass dismisses it
+-- with dismiss_reason 'replaced' and opens a new action from tonight's
+-- signals (server/src/lib/action-center/generate.js).
+--
+--   * actions.dismiss_reason also takes 'replaced'. People never choose it:
+--     the dismiss dialog offers the four reasons of 00366.
+--   * action_scorecard leaves replaced actions out: nobody closed them, so
+--     they are neither a result nor a turned-down action, and the priority
+--     score's past success (learning B4) reads the same function.
+--
+-- Constraint and function only; nothing is backfilled. It applies in seconds.
+
+alter table public.actions
+  drop constraint if exists actions_dismiss_reason_check;
+
+alter table public.actions
+  add constraint actions_dismiss_reason_check
+  check (
+    dismiss_reason is null
+    or dismiss_reason in ('not_relevant', 'already_done', 'wrong_data', 'not_now', 'replaced')
+  );
+
+comment on column public.actions.dismiss_reason is
+  'Why the action was dismissed (00366, learning A5): not_relevant, already_done, wrong_data or not_now from a person, or replaced when the nightly pass replaced it after it went stale (00563); null when no reason was given or the action is not dismissed.';
+
+create or replace function public.action_scorecard(
+  p_brand_id uuid,
+  p_since timestamptz default null,
+  p_by text default 'kind'
+)
+returns table (
+  kind text,
+  completed integer,
+  improved integer,
+  mixed integer,
+  no_change integer,
+  declined integer,
+  not_measurable integer,
+  pending integer,
+  final integer,
+  median_change numeric,
+  dismissed integer,
+  dismiss_reasons jsonb
+)
+language sql
+stable
+security invoker
+set search_path to 'public'
+as $$
+  with closed as (
+    select case
+             when p_by = 'play'
+               then coalesce(a.validation->>'play', a.payload->'play'->>'id')
+             else a.kind
+           end as kind,
+           a.status,
+           a.outcome,
+           a.dismiss_reason,
+           a.validation->>'final' = 'true' as is_final,
+           -- The relative change in its main metric (learning A4), when the
+           -- metric was read before and after and had a before to scale by.
+           (select (m->>'after')::numeric / nullif((m->>'before')::numeric, 0) - 1
+              from jsonb_array_elements(
+                     case when jsonb_typeof(a.validation->'metrics') = 'array'
+                          then a.validation->'metrics' else '[]'::jsonb end
+                   ) as m
+             where m->>'metric' = a.validation->>'primary'
+               and jsonb_typeof(m->'before') = 'number'
+               and jsonb_typeof(m->'after') = 'number'
+             limit 1) as change
+      from public.actions a
+     where a.brand_id = p_brand_id
+       and a.deleted_at is null
+       and a.status in ('completed', 'dismissed')
+       -- Replaced by the nightly pass after it went stale (00563): nobody
+       -- closed it, so it is neither a result nor a turned-down action.
+       and a.dismiss_reason is distinct from 'replaced'
+       -- Closed in the range (UX audit AC-61, decision D13): a completed
+       -- action by when it was completed, a dismissed one by its last change
+       -- (dismissing sets no completed_at), as History's list reads them.
+       and (
+         p_since is null
+         or case
+              when a.status = 'completed' then coalesce(a.completed_at, a.updated_at)
+              else a.updated_at
+            end >= p_since
+       )
+       and p_by in ('kind', 'play')
+  )
+  select c.kind,
+         count(*) filter (where c.status = 'completed')::integer,
+         count(*) filter (where c.status = 'completed' and c.outcome = 'improved')::integer,
+         count(*) filter (where c.status = 'completed' and c.outcome = 'mixed')::integer,
+         count(*) filter (where c.status = 'completed' and c.outcome = 'no_meaningful_change')::integer,
+         count(*) filter (where c.status = 'completed' and c.outcome = 'declined')::integer,
+         count(*) filter (where c.status = 'completed' and c.outcome = 'not_measurable')::integer,
+         count(*) filter (
+           where c.status = 'completed'
+             and (c.outcome is null or c.outcome = 'pending_measurement')
+         )::integer,
+         count(*) filter (where c.status = 'completed' and c.is_final)::integer,
+         -- The median, so one small page that went from 1 to 20 doesn't
+         -- read as the kind's typical result. Over the results with a
+         -- verdict only.
+         round(
+           (percentile_cont(0.5) within group (order by c.change) filter (
+             where c.status = 'completed'
+               and c.outcome in ('improved', 'mixed', 'no_meaningful_change', 'declined')
+           ))::numeric,
+           4
+         ),
+         count(*) filter (where c.status = 'dismissed')::integer,
+         coalesce(
+           (select jsonb_object_agg(r.reason, r.n)
+              from (select coalesce(d.dismiss_reason, 'none') as reason, count(*) as n
+                      from closed d
+                     where d.kind = c.kind and d.status = 'dismissed'
+                     group by 1) as r),
+           '{}'::jsonb
+         )
+    from closed c
+   -- By play, the actions opened without one aren't a group.
+   where c.kind is not null
+   group by c.kind;
+$$;
+
+comment on function public.action_scorecard(uuid, timestamptz, text) is
+  'A brand''s actions closed since a day (completed by completed_at, dismissed by updated_at; 00553, AC-61), by kind or (p_by ''play'') by the play they were opened with: completed, results, median change in the main metric, dismissed and why (00368, learning B3; 00484, AC plan P-4); actions replaced after going stale left out (00563). RLS applies to the caller.';
+
+notify pgrst, 'reload schema';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00564_tracking_slots.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00564: Tracking slots per platform
+-- ============================================================================
+-- Owner's decision (26–27 Nov 2026): a workspace buys extra tracking per
+-- platform. A slot is one prompt tracked in one location on one platform,
+-- every day. Plans include slots on their own platforms (web
+-- config/tracking-slots.ts); extra slots are sold on 13 platforms in units of
+-- 100, monthly or yearly (10 × monthly), by Growth and Enterprise workspaces
+-- themselves. Schema, the catalog's seed rows and one read only; no table is
+-- rewritten and nothing is backfilled.
+--
+--   * add_on_products takes a kind 'slots', one row per platform and
+--     interval: platform is the platform id prompts run on, grant_slots the
+--     slots one unit adds (100). stripe_lookup_key names the Stripe price
+--     (addon_slots_<platform>_month|_year, the same keys in the sandbox and
+--     live). The rows are seeded inactive: staff turn them on once the
+--     prices exist in that Stripe account.
+--   * The Extra tracking tiers (00546) are retired: none was ever bought and
+--     slots replace them. Their rows stay, inactive, so any history still
+--     reads.
+--   * organizations.add_on_slots: the extra slots the subscription adds, per
+--     platform ({"chatgpt-web": 600}): a mirror of its slot items, written by
+--     the Stripe webhook and the billing actions, held server side by the
+--     trigger that holds add_on_prompts and add_on_brands.
+--   * prompts.waiting_platforms: platforms a prompt is set to run on that are
+--     over their slots. The newest prompt locations wait; nothing is deleted.
+--     A platform is in platforms or here, never both (the check is added
+--     NOT VALID so this stays fast; it is validated once existing rows are
+--     checked).
+--   * org_platform_slot_usage: active prompt locations per platform for one
+--     organization, the unit slots are counted in. The same membership rule
+--     and demo-brand exclusion as org_prompt_location_usage (00390).
+
+-- ─── The catalog ────────────────────────────────────────────────────────────
+
+alter table public.add_on_products
+  add column if not exists platform text
+    check (platform ~ '^[a-z][a-z0-9-]{1,40}$'),
+  add column if not exists grant_slots integer check (grant_slots > 0);
+
+alter table public.add_on_products
+  drop constraint if exists add_on_products_kind_check,
+  drop constraint if exists add_on_products_recurring_billing_check,
+  drop constraint if exists add_on_products_slots_check;
+
+alter table public.add_on_products
+  add constraint add_on_products_kind_check
+    check (kind in ('ai', 'storage', 'tracking', 'brand', 'ai_topup', 'slots')),
+  add constraint add_on_products_recurring_billing_check
+    check (
+      kind not in ('tracking', 'brand', 'slots')
+      or (billing in ('monthly', 'yearly') and valid_months is null)
+    ),
+  -- A slots row names its platform and the slots one unit adds; no other
+  -- kind carries either.
+  add constraint add_on_products_slots_check
+    check (
+      (kind = 'slots') = (platform is not null)
+      and (kind = 'slots') = (grant_slots is not null)
+    );
+
+-- One price per platform and interval.
+create unique index if not exists add_on_products_slots_platform_billing_idx
+  on public.add_on_products (platform, billing)
+  where kind = 'slots';
+
+comment on column public.add_on_products.platform is
+  'kind = slots: the platform id the slots are for (prompts.platforms), e.g. chatgpt-web (00564).';
+comment on column public.add_on_products.grant_slots is
+  'kind = slots: the slots one unit adds, 100 (00564).';
+
+-- The slots on sale (owner's prices, 26 Nov 2026: per 100 slots a month $15
+-- standard, $45 ChatGPT with ads and Meta AI, $60 Perplexity, Claude, Grok
+-- and Microsoft Copilot; yearly = 10 × monthly). Seeded inactive. Run again,
+-- it leaves them as staff may have changed them.
+insert into public.add_on_products
+  (id, kind, name, price_cents, billing, platform, grant_slots, stripe_lookup_key,
+   sale, plans, active, sort)
+select
+  'slots_' || s.stripe_id || '_' || i.suffix,
+  'slots',
+  s.name || ' tracking slots',
+  s.cents * i.factor,
+  i.billing,
+  s.platform,
+  100,
+  'addon_slots_' || s.stripe_id || '_' || i.suffix,
+  'self_serve',
+  '{growth,enterprise}',
+  false,
+  s.sort
+from (
+  values
+    ('chatgpt-web', 'chatgpt_web', 'ChatGPT', 1500, 1),
+    ('gemini-web', 'gemini_web', 'Gemini', 1500, 2),
+    ('google-aio', 'google_aio', 'Google AI Overviews', 1500, 3),
+    ('google-aimode', 'google_aimode', 'Google AI Mode', 1500, 4),
+    ('copilot-web', 'copilot_web', 'Bing AI Mode', 1500, 5),
+    ('naver-web', 'naver_web', 'Naver', 1500, 6),
+    ('wenxin-web', 'wenxin_web', 'Wenxin', 1500, 7),
+    ('chatgpt-ads', 'chatgpt_ads', 'ChatGPT with ads', 4500, 8),
+    ('meta-ai-web', 'meta_ai_web', 'Meta AI', 4500, 9),
+    ('perplexity-web', 'perplexity_web', 'Perplexity', 6000, 10),
+    ('claude-web', 'claude_web', 'Claude', 6000, 11),
+    ('grok-web', 'grok_web', 'Grok', 6000, 12),
+    ('copilot-app', 'copilot_app', 'Microsoft Copilot', 6000, 13)
+) as s(platform, stripe_id, name, cents, sort)
+cross join (
+  values ('month', 'monthly', 1), ('year', 'yearly', 10)
+) as i(suffix, billing, factor)
+on conflict (id) do nothing;
+
+-- The Extra tracking tiers are retired (none was bought; slots replace them).
+update public.add_on_products
+set active = false
+where kind = 'tracking' and active;
+
+-- ─── What a workspace's subscription adds ───────────────────────────────────
+
+alter table public.organizations
+  add column if not exists add_on_slots jsonb not null default '{}'::jsonb
+    check (jsonb_typeof(add_on_slots) = 'object');
+
+comment on column public.organizations.add_on_slots is
+  'Extra tracking slots the plan''s subscription adds, per platform ({"chatgpt-web": 600}): a mirror of its slot items, written by the Stripe webhook and the billing actions; server only (00564).';
+
+-- The server's columns, held as 00546 holds them, add_on_slots with them.
+create or replace function public.guard_organization_add_on_columns()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+begin
+  if (select rolbypassrls from pg_catalog.pg_roles where rolname = current_user) then
+    return new;
+  end if;
+
+  if (tg_op = 'INSERT' and (new.add_on_prompts is distinct from 0
+                            or new.add_on_brands is distinct from 0
+                            or new.add_on_slots is distinct from '{}'::jsonb))
+     or (tg_op = 'UPDATE' and (new.add_on_prompts is distinct from old.add_on_prompts
+                               or new.add_on_brands is distinct from old.add_on_brands
+                               or new.add_on_slots is distinct from old.add_on_slots))
+  then
+    raise exception 'organization column is managed server-side and cannot be set from the client'
+      using errcode = '42501';
+  end if;
+
+  return new;
+end;
+$$;
+
+-- ─── Platforms waiting for a slot ───────────────────────────────────────────
+
+alter table public.prompts
+  add column if not exists waiting_platforms text[] not null default '{}';
+
+alter table public.prompts
+  drop constraint if exists prompts_waiting_platforms_disjoint;
+
+alter table public.prompts
+  add constraint prompts_waiting_platforms_disjoint
+    check (not (platforms && waiting_platforms)) not valid;
+
+comment on column public.prompts.waiting_platforms is
+  'Platforms this prompt is set to run on that are over the workspace''s tracking slots (00564): they wait, newest locations first, and run again once someone adds them back. Never also in platforms.';
+
+-- ─── Slots used, per platform ───────────────────────────────────────────────
+-- The unit slots are counted in: each active prompt's locations (one per
+-- region, minimum one) on each platform it runs on. Account-wide, for the
+-- organization's members and the server; nothing for anyone else.
+
+create or replace function public.org_platform_slot_usage(p_organization_id uuid)
+returns table (platform text, slots bigint)
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select pl.platform, sum(greatest(coalesce(array_length(p.regions, 1), 0), 1))::bigint
+  from public.prompts p
+  join public.prompt_sets ps on ps.id = p.prompt_set_id
+  join public.brands b on b.id = ps.brand_id
+  cross join lateral unnest(p.platforms) as pl(platform)
+  where b.organization_id = p_organization_id
+    and not b.is_demo
+    and p.is_active
+    and (
+      coalesce(auth.role(), '') = 'service_role'
+      or exists (
+        select 1 from public.profiles pf
+        where pf.id = auth.uid() and pf.organization_id = p_organization_id
+      )
+    )
+  group by pl.platform;
+$$;
+
+revoke all on function public.org_platform_slot_usage(uuid) from public, anon;
+grant execute on function public.org_platform_slot_usage(uuid) to authenticated, service_role;
+
+comment on function public.org_platform_slot_usage(uuid) is
+  'Active prompt locations per platform for one organization (00564): the unit tracking slots are counted in. Paused prompts, waiting platforms and the demo brand don''t count. Security definer: the whole organization for its members and the server, nothing for anyone else.';
+
+notify pgrst, 'reload schema';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00565_ai_bot_netlify_log_drain.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00565: Netlify log drain for AI bot traffic (#2167)
+-- ============================================================================
+-- A Netlify log drain (Enterprise plans) posts JSON or NDJSON request logs to
+-- /bots/ingest with the connection's Authorization bearer secret. Its records
+-- are read by server/src/lib/bot-log-formats.js; the existing verification
+-- pipeline still checks the user agent and published source IP ranges before
+-- storage.
+
+alter table public.ai_bot_connections
+  drop constraint if exists ai_bot_connections_kind_check;
+alter table public.ai_bot_connections
+  add constraint ai_bot_connections_kind_check check (
+    kind in (
+      'cloudflare_worker', 'cloudflare_logpush', 'vercel_drain',
+      'log_webhook', 'log_upload', 'fastly_log_stream', 'netlify_log_drain'
+    )
+  );
 
 notify pgrst, 'reload schema';
 

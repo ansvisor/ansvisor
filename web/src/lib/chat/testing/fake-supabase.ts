@@ -33,8 +33,21 @@ export interface FakeSupabase {
    */
   maxRows?: number;
   from(table: string): Builder;
-  rpc(name: string, args?: Record<string, unknown>): Promise<Result>;
+  // Typed as a plain promise so a test can still stub it with an async
+  // function; the fake itself returns an RpcBuilder.
+  rpc(name: string, args?: Record<string, unknown>): PromiseLike<Result>;
 }
+
+/** A function's rows, ordered and sliced as PostgREST does (and cut at maxRows). */
+interface RpcBuilder extends PromiseLike<Result> {
+  order(column: string, options?: { ascending?: boolean }): RpcBuilder;
+  range(from: number, to: number): RpcBuilder;
+}
+
+/** Primary keys other than `id`, for an upsert that names no onConflict. */
+const PRIMARY_KEYS: Record<string, string> = {
+  chat_agent_trigger_claims: 'agent_id,kind,brand_id,ref',
+};
 
 interface Builder extends PromiseLike<Result> {
   select(columns?: string, options?: { count?: 'exact'; head?: boolean }): Builder;
@@ -139,13 +152,46 @@ export function createFakeSupabase(): FakeSupabase {
     failures: {},
     log: [],
     rpcs: {},
-    async rpc(name, args = {}) {
-      await tick();
-      fake.log.push([name, 'rpc']);
-      const fn = fake.rpcs[name];
-      // As PostgREST answers a function it doesn't know (a migration not applied yet).
-      if (!fn) return { data: null, error: { code: 'PGRST202', message: `No function ${name}` } };
-      return { data: await fn(args), error: null };
+    rpc(name, args = {}) {
+      const sorts: { column: string; ascending: boolean }[] = [];
+      let slice: [number, number] | null = null;
+      const run = async (): Promise<Result> => {
+        await tick();
+        fake.log.push([name, 'rpc']);
+        const fn = fake.rpcs[name];
+        // As PostgREST answers a function it doesn't know (a migration not applied yet).
+        if (!fn) return { data: null, error: { code: 'PGRST202', message: `No function ${name}` } };
+        const data = await fn(args);
+        if (!Array.isArray(data) || (sorts.length === 0 && !slice && fake.maxRows === undefined)) {
+          return { data, error: null } as Result;
+        }
+        let rows = [...(data as Row[])];
+        if (sorts.length) {
+          rows.sort((a, b) => {
+            for (const { column, ascending } of sorts) {
+              const [x, y] = [a[column], b[column]] as [never, never];
+              if (x === y) continue;
+              return (x < y ? -1 : 1) * (ascending ? 1 : -1);
+            }
+            return 0;
+          });
+        }
+        if (slice) rows = rows.slice(slice[0], slice[1] + 1);
+        if (fake.maxRows !== undefined) rows = rows.slice(0, fake.maxRows);
+        return { data: rows, error: null } as Result;
+      };
+      const builder: RpcBuilder = {
+        order(column, options) {
+          sorts.push({ column, ascending: options?.ascending ?? true });
+          return builder;
+        },
+        range(from, to) {
+          slice = [from, to];
+          return builder;
+        },
+        then: (resolve, reject) => run().then(resolve, reject),
+      };
+      return builder;
     },
     from(table) {
       let kind: 'select' | 'insert' | 'upsert' | 'update' | 'delete' = 'select';
@@ -266,7 +312,10 @@ export function createFakeSupabase(): FakeSupabase {
           kind = 'upsert';
           payload = rowsIn;
           conflict = {
-            columns: (options?.onConflict ?? 'id').split(',').map((c) => c.trim()),
+            // No onConflict: the table's primary key, as PostgREST does.
+            columns: (options?.onConflict ?? PRIMARY_KEYS[table] ?? 'id')
+              .split(',')
+              .map((c) => c.trim()),
             ignore: options?.ignoreDuplicates ?? false,
           };
           return builder;

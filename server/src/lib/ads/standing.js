@@ -1,8 +1,10 @@
 import supabaseAdmin from '../../config/supabase.js';
 import { selectInChunks } from '../chunked-in.js';
+import { logger } from '../logger.js';
 import { readAllRpcRows } from '../rpc-pages.js';
 import { earnOrPay } from './decision.js';
 import { intentClass } from './intent.js';
+import { readPaid } from './paid.js';
 
 /**
  * Each buying-intent prompt's standing (ADS-01 §2, §3.2) and the earn-or-pay
@@ -20,7 +22,11 @@ import { intentClass } from './intent.js';
  *   most answers; else none.
  * - Volume: the largest total_google_volume of the prompt's rows, with that
  *   row's est_ai_volume (AI prompts a month, estimated from it); the intent
- *   is the newest row's. Paid isn't measured yet (null), and the rule says so.
+ *   is the newest row's.
+ * - We pay: Google spend on the search terms matched to the prompt in the
+ *   period (paid.js), true or false once a Google account has been read;
+ *   null (not measured) before. A rival's ads aren't captured yet (null),
+ *   and the rule says so.
  */
 
 export const ADS_PERIODS = Object.freeze({ '7d': 7, '30d': 30, '90d': 90 });
@@ -49,10 +55,21 @@ function byPrompt(rows) {
 }
 
 /**
- * @param {{ brandId: string, orgId: string, period?: string, thresholds?: object, now?: Date }} input
- * @returns {Promise<{ rows: object[], notAnalysed: number }>}
+ * @param {{ brandId: string, orgId: string, period?: string, thresholds?: object, now?: Date,
+ *   paidBefore?: boolean }} input
+ *   paidBefore: also read the Google spend of the period before (the paid
+ *   watch, paid-watch.js), matched over the same prompts, as `paidBefore`.
+ * @returns {Promise<{ rows: object[], notAnalysed: number,
+ *   paid: { measured: boolean, unmatched: Array<{ currencyCode: string | null, amount: number }> } }>}
  */
-export async function readStanding({ brandId, orgId, period, thresholds, now = new Date() }) {
+export async function readStanding({
+  brandId,
+  orgId,
+  period,
+  thresholds,
+  now = new Date(),
+  paidBefore = false,
+}) {
   const days = ADS_PERIODS[period] ?? ADS_PERIODS['30d'];
   const window = {
     p_brand_id: brandId,
@@ -96,7 +113,7 @@ export async function readStanding({ brandId, orgId, period, thresholds, now = n
     (ids) =>
       supabaseAdmin
         .from('prompt_volumes')
-        .select('prompt_id, intent, total_google_volume, est_ai_volume')
+        .select('prompt_id, intent, keywords, total_google_volume, est_ai_volume')
         .in('prompt_id', ids)
         .order('fetched_at', { ascending: false }),
   );
@@ -104,23 +121,57 @@ export async function readStanding({ brandId, orgId, period, thresholds, now = n
   for (const v of must(volumes, 'prompt_volumes')) {
     const volume = v.total_google_volume == null ? null : Number(v.total_google_volume);
     const estAi = volume === null || v.est_ai_volume == null ? null : Number(v.est_ai_volume);
-    const known = demand.get(v.prompt_id) ?? { intent: v.intent, volume, estAi };
-    if (volume !== null && !(known.volume >= volume)) Object.assign(known, { volume, estAi });
+    const keywords = Array.isArray(v.keywords) ? v.keywords : [];
+    const known = demand.get(v.prompt_id) ?? { intent: v.intent, volume, estAi, keywords };
+    if (volume !== null && !(known.volume >= volume)) {
+      Object.assign(known, { volume, estAi, keywords });
+    }
     demand.set(v.prompt_id, known);
   }
 
   const kinds = prompts.map((p) => intentClass(demand.get(p.id)?.intent, thresholds));
   const notAnalysed = kinds.filter((kind) => kind === 'not_analysed').length;
   const buying = prompts.filter((_, i) => kinds[i] === 'buying');
-  if (buying.length === 0) return { rows: [], notAnalysed };
-  const positions = competitors.length
-    ? await rpc('ae_competitor_positions', {
-        ...window,
-        p_competitor_ids: competitors.map((c) => c.id),
-        p_limit: Math.min(20_000, prompts.length * 8),
-      })
-    : [];
+  if (buying.length === 0)
+    return { rows: [], notAnalysed, paid: { measured: false, unmatched: [] } };
+  const paidPrompts = buying.map((p) => ({
+    promptId: p.id,
+    text: p.text,
+    keywords: demand.get(p.id)?.keywords ?? [],
+  }));
+  const [positions, paid] = await Promise.all([
+    competitors.length
+      ? rpc('ae_competitor_positions', {
+          ...window,
+          p_competitor_ids: competitors.map((c) => c.id),
+          p_limit: Math.min(20_000, prompts.length * 8),
+        })
+      : [],
+    readPaid({
+      orgId,
+      brandId,
+      from: window.p_cur_from,
+      to: window.p_cur_to,
+      prompts: paidPrompts,
+    }).catch((err) => {
+      // Paid reads as not measured, as before Google was connected: the
+      // page's earned side still answers.
+      logger.warn({ brandId, err: err.message }, '[ads] paid spend unread');
+      return { measured: false, byPrompt: new Map(), unmatched: [] };
+    }),
+  ]);
 
+  // The period before, over the same prompts: a term goes to the same prompt in both.
+  const before =
+    paidBefore && paid.measured
+      ? await readPaid({
+          orgId,
+          brandId,
+          from: window.p_prev_from,
+          to: window.p_prev_to,
+          prompts: paidPrompts,
+        })
+      : null;
   const statsOf = new Map(stats.map((s) => [s.prompt_id, s]));
   const [namedOf, positionsOf] = [byPrompt(named), byPrompt(positions)];
   const topicName = new Map(topics.map((t) => [t.id, t.name]));
@@ -155,7 +206,7 @@ export async function readStanding({ brandId, orgId, period, thresholds, now = n
       ourPosition: ours.length ? Math.min(...ours) : null,
       leader,
       rivalPays: null,
-      wePay: null,
+      wePay: paid.measured ? paid.byPrompt.has(p.id) : null,
       volume: demand.get(p.id)?.volume ?? null,
       engines: p.platforms ?? [],
     };
@@ -170,9 +221,11 @@ export async function readStanding({ brandId, orgId, period, thresholds, now = n
       estAiVolume: demand.get(p.id).estAi,
       weNamed,
       leaderName: competitorName.get(leader) ?? null,
+      paid: paid.byPrompt.get(p.id) ?? null,
+      ...(before ? { paidBefore: before.byPrompt.get(p.id) ?? null } : {}),
       standing,
       ...earnOrPay(standing, thresholds),
     };
   });
-  return { rows, notAnalysed };
+  return { rows, notAnalysed, paid: { measured: paid.measured, unmatched: paid.unmatched } };
 }

@@ -36,8 +36,10 @@ const UNPAID: Overview = {
   locked: 0,
   paidMeasured: false,
   bar: { earned: 5, earnedPaid: null, paidOnly: null, neither: 7 },
+  spend: null,
   paidSov: null,
   signups: 9,
+  cost: null,
 };
 
 let container: HTMLDivElement;
@@ -99,7 +101,7 @@ describe('AdsOverview', () => {
     ]);
     expect(sum()).toBe(UNPAID.total);
     expect(container.textContent).toContain(
-      "Paid isn't measured yet, so the bar shows only earned and neither.",
+      "Paid isn't measured until a Google Ads account is connected and read, so the bar shows only earned and neither.",
     );
     expect(kpis()[1]).toBe(
       "Covered (earned or paid)42%5 of 12 prompts, earned only: paid isn't measured yet",
@@ -116,6 +118,30 @@ describe('AdsOverview', () => {
     expect(sum()).toBe(UNPAID.total);
     expect(kpis()[1]).toBe('Covered (earned or paid)75%9 of 12 prompts');
     expect(container.textContent).not.toContain("Paid isn't measured");
+    expect(container.querySelector('[data-slot="ads-spend"]')).toBeNull();
+  });
+
+  it('says what was paid on Google: on prompts AI cites you for first, then the rest', async () => {
+    await render({
+      ...UNPAID,
+      paidMeasured: true,
+      bar: { earned: 4, earnedPaid: 3, paidOnly: 2, neither: 3 },
+      spend: {
+        overlap: [{ currencyCode: 'USD', amount: 15 }],
+        matched: [
+          { currencyCode: 'USD', amount: 35.5 },
+          { currencyCode: 'EUR', amount: 2 },
+        ],
+        unmatched: [{ currencyCode: 'USD', amount: 7 }],
+      },
+    });
+    const spend = container.querySelector('[data-slot="ads-spend"]')!;
+    expect([...spend.querySelectorAll('p')].map((p) => p.textContent)).toEqual([
+      'Paid on Google for prompts AI already cites you for: $15.00',
+      'On all your tracked prompts: $35.50 + €2.00',
+      'On search terms that match no tracked prompt: $7.00',
+      "From your Google Ads search terms. ChatGPT Ads spend is on Campaigns: it doesn't say which question an ad showed on.",
+    ]);
   });
 
   it('says Not measured for Paid SoV and the cost per signup, and counts the signups', async () => {
@@ -124,11 +150,34 @@ describe('AdsOverview', () => {
       "Paid SoVNot measuredSponsored ads in AI answers aren't captured yetWho pays per prompt",
     );
     expect(kpis()[3]).toBe(
-      'Cost per AI-assisted signupNot measuredNeeds a connected ad account9 AI-assisted signups in this period',
+      'Cost per AI-assisted signupNot measuredNeeds an ad account connected and read in Connections9 AI-assisted signups in this period',
     );
     await render({ ...UNPAID, signups: null });
     expect(container.querySelector('[data-slot="ads-signups"]')?.textContent).toBe(
       'AI-assisted signups: not measured',
+    );
+  });
+
+  it('shows the cost per signup once an ad account is read: one currency only, with signups', async () => {
+    const usd = (amount: number) => ({ currencyCode: 'USD', amount });
+    await render({ ...UNPAID, cost: { spend: [usd(90)], perSignup: usd(10) } });
+    expect(kpis()[3]).toBe(
+      'Cost per AI-assisted signup$10.00$90.00 ad spend ÷ 9 AI-assisted signups9 AI-assisted signups in this period',
+    );
+    await render({ ...UNPAID, signups: 0, cost: { spend: [usd(90)], perSignup: null } });
+    expect(kpis()[3]).toContain('No signups yet$90.00 ad spend in this period');
+    await render({ ...UNPAID, signups: null, cost: { spend: [usd(90)], perSignup: null } });
+    expect(kpis()[3]).toContain('Not measured$90.00 ad spend in this period');
+    // Read, nothing spent: never "No signups yet" while there are signups.
+    await render({ ...UNPAID, cost: { spend: [], perSignup: null } });
+    expect(kpis()[3]).toContain(
+      'No ad spendThe connected ad accounts spent nothing in this period9 AI-assisted signups',
+    );
+    expect(kpis()[3]).not.toContain('No signups yet');
+    const two = [usd(90), { currencyCode: 'EUR', amount: 5 }];
+    await render({ ...UNPAID, cost: { spend: two, perSignup: null } });
+    expect(kpis()[3]).toContain(
+      "Several currencies$90.00 + €5.00 ad spend: amounts in different currencies aren't added",
     );
   });
 

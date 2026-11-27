@@ -98,10 +98,14 @@ describe('the preset files', () => {
       'fanout-gap-filler',
       'prompt-portfolio',
       'onboarding-help',
+      'shopping-readiness',
+      'localization',
       'aeo-operator',
+      'technical-fixer',
       'agency-reporter',
       'paid-opportunity',
       'product-answer-pages',
+      'shopping-feed-advisor',
       'seasonal-prompt-planner',
       'feature-question-coverage',
       'alternatives-comparison-pages',
@@ -115,7 +119,7 @@ describe('the preset files', () => {
       'unmet-needs-miner',
       'market-source-finder',
     ]);
-    expect(AGENT_PRESETS.filter((preset) => preset.status === 'soon')).toHaveLength(13);
+    expect(AGENT_PRESETS.filter((preset) => preset.status === 'soon')).toHaveLength(9);
   });
 
   it('have the business-type packs: three agents for each type, in the plan’s order', () => {
@@ -389,7 +393,7 @@ describe('a ready preset', () => {
 
   it('is found by its id; a soon one, or no id, is not', () => {
     expect(readyPreset('weekly-report')?.id).toBe('weekly-report');
-    expect(readyPreset('localization')).toBeNull();
+    expect(readyPreset('ticket-loop')).toBeNull();
     expect(readyPreset('nope')).toBeNull();
     expect(readyPreset(null)).toBeNull();
   });
@@ -401,10 +405,10 @@ describe('the Paid Opportunity agent (Ads Phase 0 PR 18)', () => {
   const viewer = { siteType: null, workAreas: [] };
   afterEach(() => vi.unstubAllEnvs());
 
-  it('reads earn or pay, then drafts ads, on Mondays as AI Ads Watch would, asking before changes', () => {
+  it('reads earn or pay and the paid overlap, then drafts ads, on Mondays as AI Ads Watch would, asking before changes', () => {
     expect(paid).toMatchObject({
       goal: 'visibility',
-      skills: ['earn-or-pay', 'ad-drafts'],
+      skills: ['earn-or-pay', 'paid-overlap', 'ad-drafts'],
       triggers: [{ kind: 'schedule', repeat: 'MO', time: '09:00' }],
       mode: 'auto',
       connections: [],
@@ -502,7 +506,7 @@ describe('a soon preset', () => {
   });
 
   it('is refused as a file when it needs nothing, as a ready one that needs something is', () => {
-    const base = AGENT_PRESETS.find((preset) => preset.id === 'localization')!;
+    const base = AGENT_PRESETS.find((preset) => preset.id === 'ticket-loop')!;
     expect(() => buildPresetCatalog([{ file: 'x.json', json: { ...base, needs: [] } }])).toThrow(
       /needs/,
     );
@@ -734,12 +738,13 @@ describe('the filters', () => {
   it('put the packs for an e-commerce brand and a product person first in the catalog', () => {
     const viewer = { siteType: 'ecommerce', workAreas: ['product'] };
     const ready = filterPresets(AGENT_PRESETS, {}, viewer).filter((p) => p.status === 'ready');
-    expect(ready.slice(0, 3).map((p) => [p.id, presetFit(p, viewer)])).toEqual([
+    expect(ready.slice(0, 4).map((p) => [p.id, presetFit(p, viewer)])).toEqual([
       ['product-answer-pages', 'siteType'],
+      ['shopping-feed-advisor', 'siteType'],
       ['seasonal-prompt-planner', 'siteType'],
       ['unmet-needs-miner', 'role'],
     ]);
-    expect(ready[3].id).toBe('visibility-watch');
+    expect(ready[4].id).toBe('visibility-watch');
   });
 });
 
@@ -792,6 +797,7 @@ describe('the agents setup recommends (AGENTS plan §8)', () => {
     // An e-commerce brand and a product person.
     expect(ids({ siteType: 'ecommerce', workAreas: ['product'] })).toEqual([
       ['product-answer-pages', 'siteType'],
+      ['shopping-feed-advisor', 'siteType'],
       ['seasonal-prompt-planner', 'siteType'],
       ['unmet-needs-miner', 'role'],
     ]);

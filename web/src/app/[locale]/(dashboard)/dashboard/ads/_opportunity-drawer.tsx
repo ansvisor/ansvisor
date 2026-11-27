@@ -18,6 +18,7 @@ import {
 } from '@/lib/ads/api';
 import type { AdsPeriod } from '@/lib/ads/tabs';
 import { formatDate, formatNumber } from '@/lib/format';
+import { spendAmount, spendText } from '@/lib/ads/spend';
 import { regionLabel } from '@/lib/region';
 import { AdsDoBoth, useAdsHalf } from './_do-both';
 import { AdsEarnCard } from './_earn-card';
@@ -32,6 +33,44 @@ function Heading({ children }: { children: ReactNode }) {
     <h3 className="mt-5 mb-2 text-xs font-medium tracking-wide text-muted-foreground uppercase">
       {children}
     </h3>
+  );
+}
+
+/**
+ * What the brand paid on Google for the prompt's matched search terms in the
+ * period (server lib/ads/paid.js): the spend, clicks and costliest terms, or
+ * that nothing matched. Nothing while Google isn't read (wePay null).
+ */
+function AdsPaidOnGoogle({ row }: { row: AdsOpportunity }) {
+  const t = useTranslations('ads.drawer.paid');
+  if (row.wePay === null || row.wePay === undefined) return null;
+  const paid = row.paid;
+  return (
+    <section data-slot="ads-paid">
+      <Heading>{t('title')}</Heading>
+      {paid ? (
+        <div className="space-y-2">
+          <p className="font-medium">
+            {t('spend', { amount: spendText(paid.spend), clicks: paid.clicks })}
+          </p>
+          <p className="text-xs text-muted-foreground">{t('terms', { count: paid.termCount })}</p>
+          <ul className="space-y-1" data-slot="ads-paid-terms">
+            {paid.terms.map((term) => (
+              <li
+                key={`${term.term}/${term.currencyCode}`}
+                className="flex items-baseline gap-3 rounded-lg border px-3 py-1.5 text-xs"
+              >
+                <span className="min-w-0 flex-1 truncate">{term.term}</span>
+                <span className="tabular-nums">{spendAmount(term)}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : (
+        <p className="text-muted-foreground">{t('none')}</p>
+      )}
+      <p className="mt-2 text-xs text-muted-foreground">{t('note')}</p>
+    </section>
   );
 }
 
@@ -100,6 +139,7 @@ export function AdsOpportunityDrawer({
           name: row.leaderName ?? tRows('leaderRival'),
           volume: num(r.volume),
           threshold: num(r.threshold),
+          wePay: r.wePay === false ? 'false' : 'true',
         })
       : null;
   const reasons = (row.reasons ?? []).map(reason).filter((r) => r !== null);
@@ -179,6 +219,7 @@ export function AdsOpportunityDrawer({
               </ul>
             )}
             {/* Sponsored units show here once PR 16/17 store them; never before, never estimated. */}
+            <AdsPaidOnGoogle row={row} />
 
             {detail && detail.fanOuts.length > 0 && (
               <>

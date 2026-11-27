@@ -9,6 +9,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const readStanding = vi.fn();
 const readsEveryOpportunity = vi.fn();
 const rpc = vi.fn();
+const readCampaigns = vi.fn();
+vi.mock('./campaigns.js', () => ({ readCampaigns: (...a) => readCampaigns(...a) }));
 vi.mock('./standing.js', async (importOriginal) => ({
   ...(await importOriginal()),
   readStanding: (...a) => readStanding(...a),
@@ -20,7 +22,7 @@ vi.mock('./opportunities.js', () => ({
 }));
 vi.mock('../../config/supabase.js', () => ({ default: { rpc: (...a) => rpc(...a) } }));
 
-const { readOverview } = await import('./overview.js');
+const { costPerSignup, readOverview } = await import('./overview.js');
 
 const row = (promptId, weCited, wePay = null) => ({ promptId, standing: { weCited, wePay } });
 const read = async (rows, notAnalysed = 0) => {
@@ -37,9 +39,54 @@ beforeEach(() => {
     { goal: 'signup', count: 7 },
   ];
   rpc.mockReset().mockResolvedValue({ data: { enabled: true, goals }, error: null });
+  readCampaigns.mockReset().mockResolvedValue({ accounts: [], campaigns: [] });
+});
+
+describe('costPerSignup', () => {
+  const usd = (amount) => ({ currencyCode: 'USD', amount });
+  it('divides one currency by the signups; several currencies or no signup give none', () => {
+    expect(costPerSignup(null, 7)).toBeNull();
+    expect(costPerSignup([usd(100)], 8)).toEqual({ spend: [usd(100)], perSignup: usd(12.5) });
+    const two = [usd(100), { currencyCode: 'EUR', amount: 5 }];
+    expect(costPerSignup(two, 8)).toEqual({ spend: two, perSignup: null });
+    expect(costPerSignup([usd(100)], 0).perSignup).toBeNull();
+    expect(costPerSignup([usd(100)], null).perSignup).toBeNull();
+    expect(costPerSignup([], 3)).toEqual({ spend: [], perSignup: null });
+  });
 });
 
 describe('readOverview', () => {
+  it('reads the cost per signup from the read ad accounts’ campaigns; none before a read', async () => {
+    expect((await read([])).cost).toBeNull();
+    expect(readCampaigns).toHaveBeenCalledWith(
+      { orgId: 'o1', brandId: 'b1', period: '7d' },
+      { now: expect.any(Date) },
+    );
+    readCampaigns.mockResolvedValue({
+      accounts: [{ status: 'active', syncedThrough: '2026-11-22' }],
+      campaigns: [
+        { currencyCode: 'USD', spend: 40 },
+        { currencyCode: 'USD', spend: 30 },
+      ],
+    });
+    expect((await read([])).cost).toEqual({
+      spend: [{ currencyCode: 'USD', amount: 70 }],
+      perSignup: { currencyCode: 'USD', amount: 10 },
+    });
+    // Connected but never read, or disconnected: not measured.
+    readCampaigns.mockResolvedValue({
+      accounts: [
+        { status: 'active', syncedThrough: null },
+        { status: 'disconnected', syncedThrough: '2026-11-01' },
+      ],
+      campaigns: [],
+    });
+    expect((await read([])).cost).toBeNull();
+    // A failed read is not measured either, and the Overview still answers.
+    readCampaigns.mockRejectedValue(new Error('ads_accounts read: 500'));
+    expect((await read([])).cost).toBeNull();
+  });
+
   it('while paid is not measured, puts each prompt in earned or neither (§9.2)', async () => {
     const overview = await read([row('p1', true), row('p2', false), row('p3', true)], 2);
     expect(readStanding).toHaveBeenCalledWith(
@@ -69,6 +116,29 @@ describe('readOverview', () => {
     ]);
     expect(overview.bar).toEqual({ earned: 1, earnedPaid: 2, paidOnly: 1, neither: 1 });
     expect(sum(overview.bar)).toBe(overview.total);
+  });
+
+  it('says what was paid on Google per currency: overlap, all matched, unmatched', async () => {
+    const paid = (...spend) => ({ spend });
+    const usd = (amount) => ({ currencyCode: 'USD', amount });
+    readStanding.mockResolvedValue({
+      rows: [
+        { ...row('p1', true, true), paid: paid(usd(10.5), { currencyCode: 'EUR', amount: 2 }) },
+        { ...row('p2', true, true), paid: paid(usd(4.5)) },
+        { ...row('p3', false, true), paid: paid(usd(20)) },
+        row('p4', true, false),
+      ],
+      notAnalysed: 0,
+      paid: { measured: true, unmatched: [usd(7)] },
+    });
+    const overview = await readOverview({ brand: { id: 'b1' }, orgId: 'o1', period: '30d' });
+    expect(overview.spend).toEqual({
+      overlap: [usd(15), { currencyCode: 'EUR', amount: 2 }],
+      matched: [usd(35), { currencyCode: 'EUR', amount: 2 }],
+      unmatched: [usd(7)],
+    });
+    // Not measured: no spend at all, never 0.
+    expect((await read([row('p1', true)])).spend).toBeNull();
   });
 
   it('keeps the whole Overview on Starter, and counts the Opportunities rows it locks', async () => {

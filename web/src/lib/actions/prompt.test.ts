@@ -37,7 +37,19 @@ let brandReadError: string | null = null;
 /** When set, each heavy read takes a moment, counted while it runs. */
 let slowReads: { running: number; most: number } | null = null;
 /** The prompts a bulk location change reads, and what it writes back. */
-let bulkRows: { id: string; regions: string[]; is_active: boolean; tags?: string[] }[] = [];
+let bulkRows: {
+  id: string;
+  regions: string[];
+  is_active: boolean;
+  tags?: string[];
+  platforms?: string[];
+  waiting_platforms?: string[];
+  models?: string[];
+}[] = [];
+/** Slots in use per platform, as org_platform_slot_usage answers (00564). */
+let slotUsageRows: { platform: string; slots: number }[] = [];
+const capacity = vi.hoisted(() => ({ settleSlots: vi.fn() }));
+vi.mock('@/lib/prompt-capacity', () => capacity);
 let appliedLocations: unknown[] = [];
 /** Ids whose tag writes RLS turns away: the update matches no row. */
 let blockedTagWrites = new Set<string>();
@@ -99,6 +111,7 @@ vi.mock('@/lib/supabase/server', () => ({
         if (fn === 'prompt_position_summaries') {
           return { data: positionData.slice(0, 1000), error: null };
         }
+        if (fn === 'org_platform_slot_usage') return { data: slotUsageRows, error: null };
         if (fn === 'apply_prompt_locations') {
           appliedLocations.push(args?.p_updates);
           return { data: args?.p_updates?.length ?? 0, error: null };
@@ -181,6 +194,7 @@ vi.mock('@/lib/supabase/server', () => ({
 }));
 
 const {
+  bulkUpdatePromptPlatforms,
   bulkUpdatePromptLocations,
   bulkUpdatePromptTags,
   getPromptLocationMatrix,
@@ -410,6 +424,86 @@ describe('bulkUpdatePromptTags (#2378)', () => {
 
     expect(writes).toHaveLength(2);
     expect(result).toEqual({ updated: 0, unchanged: 0, blocked: 0 });
+  });
+});
+
+describe('bulkUpdatePromptPlatforms (00564)', () => {
+  // Growth with 300 Claude slots bought: ChatGPT 250, Claude 300, Grok none.
+  const growthWithClaude = (): Plan => ({
+    ...PLANS.growth,
+    slots: {
+      'chatgpt-web': 250,
+      'gemini-web': 250,
+      'google-aio': 250,
+      'google-aimode': 250,
+      'copilot-web': 250,
+      'claude-web': 300,
+    },
+  });
+
+  beforeEach(() => {
+    writes = [];
+    blockedTagWrites = new Set();
+    capacity.settleSlots.mockClear();
+    plan = growthWithClaude();
+    slotUsageRows = [{ platform: 'claude-web', slots: 296 }];
+    bulkRows = [
+      { id: 'p1', regions: ['US', 'GB'], is_active: true, platforms: ['chatgpt-web'] },
+      {
+        id: 'p2',
+        regions: ['US'],
+        is_active: true,
+        platforms: ['chatgpt-web'],
+        waiting_platforms: ['claude-web'],
+      },
+    ];
+  });
+
+  it('adds a platform with free slots, runs a waiting one again, and settles', async () => {
+    const result = await bulkUpdatePromptPlatforms(['p1', 'p2'], 'add', ['claude-web']);
+
+    expect(result).toEqual({ updated: 2, unchanged: 0, blocked: 0 });
+    expect(writes).toEqual([
+      { platforms: ['chatgpt-web', 'claude-web'], waiting_platforms: [] },
+      { platforms: ['chatgpt-web', 'claude-web'], waiting_platforms: [] },
+    ]);
+    expect(capacity.settleSlots).toHaveBeenCalled();
+  });
+
+  it('refuses the whole change when a platform has too few free slots', async () => {
+    slotUsageRows = [{ platform: 'claude-web', slots: 298 }];
+    const result = await bulkUpdatePromptPlatforms(['p1', 'p2'], 'add', ['claude-web']);
+
+    expect(result).toMatchObject({ code: 'slots' });
+    expect('error' in result && result.error).toContain('Claude needs 3 slots and has 2 free.');
+    expect(writes).toEqual([]);
+  });
+
+  it('refuses a platform the plan has no slots for', async () => {
+    const result = await bulkUpdatePromptPlatforms(['p1'], 'add', ['grok-web']);
+
+    expect(result).toMatchObject({ code: 'plan_limit' });
+    expect(writes).toEqual([]);
+  });
+
+  it('removes a platform, never leaving a prompt with nothing to run', async () => {
+    bulkRows = [
+      { id: 'p1', regions: ['US'], is_active: true, platforms: ['chatgpt-web', 'claude-web'] },
+      { id: 'p2', regions: ['US'], is_active: true, platforms: ['claude-web'] },
+    ];
+    const result = await bulkUpdatePromptPlatforms(['p1', 'p2'], 'remove', ['claude-web']);
+
+    expect(result).toEqual({ updated: 1, unchanged: 0, blocked: 1 });
+    expect(writes).toEqual([{ platforms: ['chatgpt-web'], waiting_platforms: [] }]);
+    expect(capacity.settleSlots).not.toHaveBeenCalled();
+  });
+
+  it('takes no unknown platform and no ChatGPT Shopping', async () => {
+    const result = await bulkUpdatePromptPlatforms(['p1'], 'add', [
+      'chatgpt-shopping',
+      'not-a-platform',
+    ]);
+    expect(result).toEqual({ error: 'Select at least one platform.' });
   });
 });
 

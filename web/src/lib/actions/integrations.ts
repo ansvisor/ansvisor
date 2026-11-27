@@ -9,7 +9,9 @@ import { assertWritable } from '@/lib/subscription-guard';
 export type IntegrationProvider =
   | 'google-search-console'
   | 'google-analytics'
-  | 'google-merchant-center';
+  | 'google-merchant-center'
+  // Ads' Google Ads card signs in with it (Ads Phase 1, G2), behind ADS_ENABLED.
+  | 'google-ads';
 
 export type IntegrationStatus = 'not_configured' | 'not_connected' | 'connected';
 

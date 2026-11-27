@@ -26,11 +26,11 @@ Explain whether the brand should earn the AI answer to a buying-intent prompt wi
 
 1. Find the prompt or topic the person means among the rows. When it isn't there, say it isn't a buying-intent prompt this plan shows; when rows are locked, say how many more the plan doesn't show, and never guess them.
 2. For each prompt: its decision (Earn, Pay, Earn + pay or Overlap), why in one line from its reasons, who AI picks first, the brand's position (or that it isn't named), Google searches a month, and where ads can show. A decision a person set comes first, with the rule's recommendation beside it.
-3. Paid data that isn't captured yet (who pays, the brand's own ads, spend) is "Not measured": say so, never guess it. Spend and campaigns come once an ad account is connected.
+3. Paid data that isn't captured is "Not measured": say so, never guess it. Whether competitors pay isn't measured yet. The brand's own Google spend is measured once a Google Ads account is read: a row's `wePay` and `paid` (spend, clicks, costliest search terms) say what was paid on Google for the prompt; `wePay` null means not measured yet. Campaigns and spend show once an ad account is connected.
 4. Suggest one next step:
    - Earn, or Earn + pay: **Send to Action Center**, the fix on the page that would earn the answer. When an action already covers the prompt, name it instead. Ask once; on a yes, call `create_action` once, with the prompt, the page and 1 to 3 tasks. When it answers `duplicate`, link the action it names and never create one anyway.
    - Pay, or Earn + pay: **ad drafts** from the brand's approved facts, with the Ad drafts skill (/ad-drafts).
-   - Overlap: the brand earns the answer and pays for it too; whether the ad saves anything is checked once an ad account is connected.
+   - Overlap, or AI cites the brand where it pays on Google: what that costs is the Paid overlap skill's (/paid-overlap).
 5. Name every action by its title with its code, which the app links: **Fix the pricing comparison on /pricing** (AC-12). Never a code alone.
 
 ## Each week

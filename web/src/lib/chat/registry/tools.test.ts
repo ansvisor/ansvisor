@@ -145,6 +145,9 @@ vi.mock('@/lib/mcp/content-plan', async (importOriginal) =>
 vi.mock('@/lib/mcp/catalog', async (importOriginal) =>
   tracked.all('mcp/catalog', await importOriginal<Record<string, unknown>>()),
 );
+vi.mock('@/lib/mcp/crawler-access', async (importOriginal) =>
+  tracked.all('mcp/crawler-access', await importOriginal<Record<string, unknown>>()),
+);
 vi.mock('@/lib/mcp/product-visibility', async (importOriginal) =>
   tracked.all('mcp/product-visibility', await importOriginal<Record<string, unknown>>()),
 );
@@ -173,6 +176,7 @@ vi.mock('@/lib/mcp/visibility-extra-reads', async (importOriginal) =>
 );
 vi.mock('@/lib/mcp/ads-reads', () => ({
   getAdsOpportunitiesFor: tracked.track('mcp/ads-reads.getAdsOpportunitiesFor'),
+  getAdsPaidOverlapFor: tracked.track('mcp/ads-reads.getAdsPaidOverlapFor'),
 }));
 vi.mock('@/lib/actions/ads-drafts', () => ({
   saveAdDrafts: tracked.track('actions/ads-drafts.saveAdDrafts'),
@@ -1522,11 +1526,11 @@ describe('registryCatalog', () => {
   });
 
   it("lists Ads' rows on no page until ADS_ENABLED is on (Ads Phase 0 PR 15)", () => {
-    const ads = ['adsOpportunities', 'adDrafts'];
+    const ads = ['adsOpportunities', 'adsPaidOverlap', 'adDrafts'];
     const keys = () => registryCatalog().map((entry) => entry.key);
     vi.stubEnv('ADS_ENABLED', '');
     expect(keys().filter((key) => ads.includes(key))).toEqual([]);
-    expect(listedTools().length).toBe(CHAT_TOOLS.length - 2);
+    expect(listedTools().length).toBe(CHAT_TOOLS.length - 3);
     vi.stubEnv('ADS_ENABLED', 'true');
     expect(keys().filter((key) => ads.includes(key))).toEqual(ads);
     expect(listedTools()).toBe(CHAT_TOOLS);

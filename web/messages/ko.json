@@ -277,6 +277,7 @@
       "label": "아직 브랜드가 추적되지 않고 있습니다"
     },
     "actions": {
+      "changePlatforms": "플랫폼을 변경하려면 플랜이 필요합니다",
       "addPrompts": "Prompt를 추가하려면 요금제가 필요합니다",
       "removeLocations": "위치를 제거하려면 요금제가 필요합니다",
       "editPrompts": "Prompt를 수정하려면 요금제가 필요합니다",
@@ -622,6 +623,8 @@
       "slow": "평소보다 오래 걸리고 있습니다.",
       "ready": "준비 완료. Prompts 여는 중…",
       "failed": "데모를 준비하지 못했습니다. 연결 상태를 확인하고 다시 시도해 주세요.",
+      "stuck": "데모가 준비되었지만 페이지가 열리지 않았습니다. 다시 열거나, 닫고 나중에 다시 시도하세요.",
+      "open": "데모 열기",
       "retry": "다시 시도",
       "close": "닫기"
     }
@@ -1881,6 +1884,10 @@
         "title": "{targets}의 높은 AI 전환율",
         "description": "이 페이지들은 AI 트래픽을 사이트 평균보다 훨씬 높은 비율로 주요 이벤트로 전환하고 있습니다."
       },
+      "paid_overlap": {
+        "title": "AI가 이미 귀하를 추천하는 {targets}의 Google 광고 지출 증가",
+        "description": "AI가 이러한 구매 관련 프롬프트의 답변에서 이미 귀하를 추천하고 있으며, 해당 검색어에 대해 Google에 지불하는 비용이 지난 30일 대비 증가했습니다."
+      },
       "bridge_link_gap": {
         "title": "{targets}을(를) 전환율이 높은 페이지로 연결",
         "description": "AI가 독자를 이 페이지로 유입시키고 있지만 전환율은 낮습니다. 동일한 주제의 전환율이 높은 페이지에는 AI 트래픽이 거의 없습니다."
@@ -2478,6 +2485,8 @@
           "task_review_withdrawn": "실행 취소로 검토 준비 상태 회수됨: {task}{title}",
           "cancelled": "{by}님이 Chat에서 취소함 · 실행 취소",
           "reopened": "액션 다시 열림 — 조건이 다시 발생함",
+          "replaced": "같은 종류의 더 새로운 액션으로 대체되었습니다: 30일 동안 아무도 진행하지 않았습니다",
+          "replaces": "30일 동안 아무도 진행하지 않은 같은 종류의 이전 액션 대신 열렸습니다",
           "signals_linked": "{count, plural, other {#개의 새로운 시그널}} 연결됨",
           "status_changed": "상태가 {to}(으)로 변경됨",
           "assigned": "담당자 변경됨",
@@ -3325,6 +3334,12 @@
         "description": "이러한 출처는 답변에서 귀하의 브랜드를 다룰 때 인용되며, 귀하의 페이지를 직접 참조하도록 유도할 수 있습니다.",
         "goal": "서드파티 언급을 내 애셋으로 연결되는 인용으로 전환하세요."
       },
+      "review_paid_overlap": {
+        "title": "AI가 이미 귀하를 추천하는 {targets}의 Google 광고 검토",
+        "titleGeneric": "AI가 이미 귀하를 추천하는 검색어의 Google 광고 검토",
+        "description": "AI가 이러한 구매 관련 프롬프트 답변에서 이미 귀하를 추천하고 있으며, 해당 검색어에 대한 Google 광고 지출이 증가하고 있습니다. 이미 유입될 클릭에 불필요한 비용을 지불하고 있을 수 있습니다.",
+        "goal": "클릭이 추가되는 광고에만 비용을 지출하고 AI 답변 점유율은 유지하세요."
+      },
       "bridge_links": {
         "title": "{targets}을(를) 전환율이 높은 페이지로 링크하기",
         "titleGeneric": "AI가 방문한 페이지를 전환율이 높은 페이지로 링크하기",
@@ -3789,6 +3804,8 @@
       "prioritize_targets_target": "영향도에 따라 {targets}의 우선순위 지정",
       "review_link_plan": "추가할 링크 검토",
       "review_link_plan_target": "{targets}에 추가할 링크 검토",
+      "review_paid_overlap": "해당 검색어의 Google 광고 검토",
+      "review_paid_overlap_target": "{targets}의 Google 광고 검토",
       "define_validation_baseline": "측정 기준이 될 기준선 기록",
       "define_validation_baseline_target": "{targets}의 기준선 기록",
       "create_content_brief": "콘텐츠 브리프 작성",
@@ -3900,6 +3917,7 @@
       "strengthen_entity_content": "페이지가 프로필 내용대로 브랜드를 설명하고 있으며, 다시 가져왔을 때 확인되는 경우",
       "add_internal_links": "해당 페이지로 연결되어야 하는 페이지들의 링크가 연결되고 다시 가져와졌을 때",
       "review_link_plan": "각 링크와 앵커 텍스트가 승인되거나 변경되어 직접 확인했을 때",
+      "review_paid_overlap": "Google Ads에서 각 검색어의 광고가 유지, 감액 또는 일시중지됨: 확인 완료",
       "improve_cta_path": "페이지에 콜투액션(CTA)이 적용되어 직접 확인했을 때",
       "publish_content": "페이지가 해당 주소에 게시되고 가져왔을 때 정상 응답할 때",
       "fix_crawler_access": "robots.txt 및 페이지에서 AI 크롤러의 접근을 허용하고 다시 가져와졌을 때",
@@ -4046,6 +4064,7 @@
         "whatHappened": "어떤 결과가 있었나요?",
         "triggeredBy": "{count, plural, other {#개 신호}}에서 통합됨",
         "dismissedBecause": "무시됨: {reason}.",
+        "replaced": "같은 종류의 더 새로운 액션으로 대체되었습니다. 30일 동안 아무도 이 액션을 진행하지 않아 새로운 발견으로 새 액션이 열렸습니다.",
         "readings": "종료 후 확인된 수치: {list}.",
         "reading": "{day}일차, {outcome}",
         "finalOn": "최종 수치 측정일은 {day}일차입니다.",
@@ -4097,7 +4116,10 @@
         "actions": "작업",
         "scorecard": "스코어카드",
         "kpis": "KPI",
-        "label": "내역 보기"
+        "label": "내역 보기",
+        "actionsHint": "진행 중이거나 종료된 각 액션을 하나씩 보여 드립니다. 액션의 목표와 이후 측정된 결과를 확인하세요.",
+        "scorecardHint": "액션 유형별 전체 성과입니다. 완료된 수, 성공률, 변화량 중앙값을 확인하세요.",
+        "kpisHint": "브랜드의 목표와 각 목표의 달성 정도입니다."
       },
       "scorecard": {
         "note": "이 브랜드에서 수행된 자체 작업만을 바탕으로 각 작업 유형이 거둔 성과입니다. 결과는 현재까지의 수치이며, 작업이 종료되고 1개월 후에 최종 확정됩니다. 중앙값 변화는 각 작업의 주요 지표를 기준으로 합니다.",
@@ -4469,6 +4491,10 @@
       "name": "카탈로그 소스 읽기",
       "step": "카탈로그 읽기"
     },
+    "catalogFeedGaps": {
+      "name": "피드 누락 항목 읽기",
+      "step": "제품 · 피드 누락 항목 읽기"
+    },
     "contentPlan": {
       "name": "콘텐츠 계획 읽기",
       "step": "콘텐츠 계획 읽기"
@@ -4488,6 +4514,10 @@
     "siteAuditQuota": {
       "name": "이번 달 남은 사이트 감사 횟수 확인",
       "step": "사이트 감사 확인"
+    },
+    "crawlerAccess": {
+      "name": "AI 크롤러 문제 읽기",
+      "step": "사이트 감사 · 크롤러 읽기"
     },
     "goToPage": {
       "name": "페이지로 이동",
@@ -4782,6 +4812,10 @@
     "adsOpportunities": {
       "name": "광고 기회 읽기",
       "step": "광고 기회 읽기 완료"
+    },
+    "adsPaidOverlap": {
+      "name": "유료 중복 조회",
+      "step": "유료 중복 조회 중"
     },
     "adDrafts": {
       "name": "광고 초안 저장",
@@ -6182,7 +6216,6 @@
       "home": "홈",
       "inbox": "받은편지함",
       "inboxLabel": "수신함 · {needsYou, plural, other {확인 필요 #개}}",
-      "inboxLabelNeedsYou": "받은편지함 · {count, plural, other {#개 항목}} · {needsYou, plural, other {#개 확인 필요}}",
       "skills": "스킬",
       "activity": "활동",
       "capabilities": "채팅 기능 안내",
@@ -6632,10 +6665,7 @@
       "landsWithSuggestions": "에이전트 결과와 일일 제안이 여기에 표시됩니다.",
       "nothingNeedsYou": "확인이 필요한 항목이 없습니다.",
       "summary": {
-        "needsYou": "{count, plural, other {#건 확인 필요}}",
-        "running": "{count}개 실행 중",
-        "doneToday": "오늘 {count}개 완료",
-        "suggestions": "이번 주 제안 {count, plural, other {#개}}"
+        "needsYou": "{count, plural, other {#건 확인 필요}}"
       },
       "empty": "확인이 필요한 항목이 없습니다. 에이전트 결과가 여기에 표시됩니다.",
       "tabs": {
@@ -7746,7 +7776,9 @@
         "signal": "시그널 생성됨",
         "kpi": "KPI 변경됨",
         "watch_rule": "감시 규칙",
-        "brand_added": "브랜드 추가됨"
+        "brand_added": "브랜드 추가됨",
+        "page_published": "페이지 게시됨",
+        "catalog_synced": "카탈로그 동기화됨"
       },
       "daily": "매일 {time}",
       "weekdays": "주중 {time}",
@@ -7761,13 +7793,17 @@
       "kpiAny": "KPI",
       "watchRule": "감시 규칙",
       "brandAdded": "브랜드가 추가될 때",
+      "pagePublished": "페이지가 게시될 때",
+      "catalogSynced": "카탈로그가 동기화될 때",
       "manualOnly": "수동 전용",
       "more": "+{count}",
       "firesWhen": {
         "signal": "Action Center에서 일치하는 시그널을 찾을 때 실행됩니다",
         "kpi": "KPI가 임계값을 넘을 때 실행됩니다",
         "watch_rule": "해당 감시 규칙이 실행될 때 실행됩니다",
-        "brand_added": "워크스페이스에 브랜드가 추가될 때마다 한 번씩 실행됩니다"
+        "brand_added": "워크스페이스에 브랜드가 추가될 때마다 한 번씩 실행됩니다",
+        "page_published": "브랜드의 CMS에서 페이지가 라이브될 때마다 한 번 실행됩니다",
+        "catalog_synced": "제품이 변경되는 카탈로그 동기화마다 한 번 실행됩니다"
       },
       "timeZone": "{zone} 시간",
       "off": "꺼짐 · 실행되지 않음",
@@ -7867,6 +7903,8 @@
         "trigger": "트리거",
         "signal": "시그널",
         "slot": "예정 시각",
+        "page": "페이지 게시됨",
+        "catalog": "카탈로그 소스 동기화됨",
         "earlier": "이전 실행",
         "action": "조치"
       },
@@ -7908,6 +7946,8 @@
       "kpi": "KPI 변경됨",
       "watch_rule": "모니터링 규칙",
       "brand_added": "브랜드 추가됨",
+      "page_published": "페이지 게시됨",
+      "catalog_synced": "카탈로그 동기화됨",
       "manual": "수동",
       "action": "작업에서 에이전트 실행",
       "agent": "다른 에이전트에 의해 호출됨"
@@ -7983,8 +8023,11 @@
       "seasonal": "시즌별 Prompts",
       "traffic": "AI 트래픽 및 가입",
       "ai-revenue": "AI 유입 고객 및 수익",
+      "feed-advisor": "쇼핑 피드 누락 항목",
+      "tech-fix": "크롤러 및 기술 수정",
       "earn-or-pay": "수익 또는 지출",
       "ad-drafts": "광고 초안",
+      "paid-overlap": "유료 중복",
       "operator": "AEO Operator"
     },
     "form": {
@@ -8051,7 +8094,9 @@
           "signal": "신호 생성 시",
           "kpi": "KPI 변경 시",
           "watch_rule": "모니터링 규칙",
-          "brand_added": "브랜드 추가 시"
+          "brand_added": "브랜드 추가 시",
+          "page_published": "페이지가 게시될 때",
+          "catalog_synced": "카탈로그가 동기화될 때"
         },
         "notes": {
           "manual": "채팅 또는 액션에서 실행",
@@ -8059,7 +8104,9 @@
           "signal": "새로운 액션 센터 신호",
           "kpi": "KPI가 임계값을 넘어설 때",
           "watch_rule": "조건(WHEN) · 대상(FOR) · 실행(THEN)",
-          "brand_added": "새 브랜드당 1회 · 모든 브랜드 필요"
+          "brand_added": "새 브랜드당 1회 · 모든 브랜드 필요",
+          "page_published": "CMS에서 라이브되는 페이지마다 한 번",
+          "catalog_synced": "제품이 변경되는 동기화마다 한 번"
         },
         "watchRuleNone": "모니터링 규칙에서 설정: THEN 조건에서 에이전트를 실행합니다",
         "list": "트리거",
@@ -8123,6 +8170,8 @@
         },
         "watchRuleWhen": "모니터링 규칙이 실행될 때",
         "brandAddedWhen": "워크스페이스에 브랜드가 추가될 때(브랜드당 1회)",
+        "pagePublishedWhen": "브랜드의 CMS에서 페이지가 라이브될 때, 페이지마다 한 번",
+        "catalogSyncedWhen": "브랜드의 제품 카탈로그 동기화로 제품이 변경될 때, 동기화마다 한 번",
         "runAgent": "에이전트 실행"
       },
       "scope": {
@@ -8589,7 +8638,7 @@
       },
       "paid-opportunity": {
         "name": "유료 기회 분석",
-        "description": "매주 콘텐츠로 확보할 구매 Prompts와 유료로 진행할 Prompts를 제안하고, 경쟁업체의 브랜드 키워드 입찰 등 변경 사항을 표시하며, Ansvisor에서 광고 문안을 작성합니다."
+        "description": "매주 콘텐츠로 획득하거나 광고비를 지불할 구매 프롬프트를 안내하고, 경쟁업체의 브랜드 키워드 광고 등 변경사항을 표시하며, AI가 이미 귀하를 인용 중인 Google 광고 비용을 확인하고 Ansvisor에서 광고 초안을 작성합니다."
       },
       "ai-ads-watch": {
         "name": "AI 광고 모니터링",
@@ -15376,7 +15425,14 @@
       "sov": "유료 SoV",
       "sovNote": "AI 답변 내 스폰서 광고는 아직 수집되지 않습니다",
       "cost": "AI 유입 가입당 비용",
-      "costNote": "연결된 광고 계정 필요",
+      "costNote": "연결 메뉴에서 광고 계정을 연결하고 데이터를 불러와야 합니다",
+      "costOf": "광고 지출 {spend} ÷ {count, plural, other {AI 지원 가입 #건}}",
+      "costSpend": "해당 기간 광고 지출 {spend}",
+      "costNoSignups": "아직 가입자 없음",
+      "costNoSpend": "광고비 없음",
+      "costNoSpendNote": "연결된 광고 계정이 이 기간에 지출하지 않았습니다",
+      "costCurrencies": "여러 통화",
+      "costCurrenciesNote": "광고 지출 {spend}: 통화가 서로 다른 금액은 합산되지 않아 가입당 단일 비용이 제공되지 않습니다",
       "signups": "이 기간 동안 {count, plural, other {#건의 AI 지원 가입}}",
       "signupsNotMeasured": "AI 유입 가입: 측정되지 않음",
       "barTitle": "수익 또는 지출 · {count, plural, other {#개 Prompt}}",
@@ -15385,7 +15441,11 @@
       "earnedPaid": "오가닉 + 유료",
       "paidOnly": "유료만",
       "neither": "해당 없음",
-      "paidNotMeasured": "유료는 아직 측정되지 않아 막대그래프에 오가닉 및 해당 없음만 표시됩니다.",
+      "paidNotMeasured": "Google Ads 계정을 연결하여 불러올 때까지 유료 광고가 측정되지 않으므로, 그래프에는 자연 유입 및 둘 다 미해당만 표시됩니다.",
+      "spendOverlap": "AI가 이미 귀하를 인용하는 프롬프트에 지출된 Google 광고비: {amount}",
+      "spendMatched": "모든 추적 프롬프트 합계: {amount}",
+      "spendUnmatched": "추적되지 않은 검색어 지출: {amount}",
+      "spendNote": "Google Ads 검색어 기준입니다. ChatGPT Ads 지출은 캠페인 탭에 표시되며, 어떤 질문에 광고가 노출되었는지는 제공되지 않습니다.",
       "openPrompts": "{count, plural, other {#개의 열린 Prompt}} 보기",
       "locked": "기회 항목의 {count, plural, other {#개 추가 Prompt}}는 {plan} 플랜부터 포함됩니다.",
       "openSov": "Prompt별 광고 집행 주체"
@@ -15462,7 +15522,7 @@
         "volume_at_least": "월간 Google 검색 수 {volume}회 (최소 {threshold}회 이상)",
         "volume_below": "월간 Google 검색 수 {volume}회 ({threshold}회 미만)",
         "volume_not_measured": "Google 검색 수가 아직 측정되지 않음",
-        "paid_not_measured": "광고 지출 주체가 아직 측정되지 않음",
+        "paid_not_measured": "{wePay, select, false {경쟁업체의 광고비 지출 여부가 아직 측정되지 않았습니다} other {광고비 지출 주체가 아직 측정되지 않았습니다}}",
         "no_ad_channel": "추적 중인 AI 플랫폼에 도달하는 광고 채널이 없음"
       },
       "answers": "오늘의 AI 답변",
@@ -15472,6 +15532,13 @@
       "cites": "인용: {domains}",
       "fanOuts": "Fan-out 쿼리",
       "keywords": "시드 키워드",
+      "paid": {
+        "title": "해당 프롬프트의 Google 광고",
+        "spend": "해당 기간 {clicks, plural, other {클릭수 #회}}당 {amount}",
+        "terms": "{count, plural, other {검색어 #개 일치}}, 비용이 높은 순:",
+        "none": "해당 기간에 일치하는 Google 광고 지출이 없습니다.",
+        "note": "검색어는 단어 일치를 통해 프롬프트와 매칭됩니다. ChatGPT Ads 지출은 어떤 질문에 광고가 노출되었는지 제공되지 않아 매칭되지 않습니다."
+      },
       "failed": "답변을 불러오지 못했습니다. 창을 닫고 다시 열어주세요.",
       "earn": {
         "title": "확보 · 답변 개선하기",
@@ -15546,14 +15613,31 @@
         "channel": "채널",
         "status": "상태",
         "spend": "지출액",
-        "signups": "AI 지원 가입 수",
-        "cost": "가입당 비용"
+        "clicks": "클릭수",
+        "cpc": "CPC",
+        "conversions": "전환수",
+        "costPerConversion": "전환당 비용"
       },
-      "empty": "광고 계정 연결 · 출시 예정",
-      "emptyNote": "여기에 캠페인이 표시되며, 초기에는 읽기 전용으로 제공됩니다.",
+      "channels": {
+        "google": "Google Ads",
+        "chatgpt": "ChatGPT Ads"
+      },
+      "statuses": {
+        "active": "게재 중",
+        "paused": "일시중지됨",
+        "ended": "종료됨"
+      },
+      "empty": "아직 연결된 광고 계정이 없습니다",
+      "emptyNote": "Google Ads 또는 ChatGPT Ads를 연결하면 캠페인을 읽기 전용으로 확인할 수 있습니다.",
+      "openConnections": "연결 열기",
+      "failed": "캠페인을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.",
+      "firstRead": "연결 후 하루 이내에 첫 번째 수치가 도착합니다.",
+      "noneInPeriod": "이 기간에 실행된 캠페인이 없습니다.",
+      "attention": "{count, plural, other {#개 광고 계정에 확인이 필요합니다.}}",
+      "currencyNote": "각 캠페인은 해당 광고 계정의 통화로 표시됩니다. 수치는 하루에 한 번 읽어옵니다.",
       "safety": {
         "title": "안전 정책",
-        "note": "에이전트가 아닌 Ansvisor에 의해 강제 적용됩니다. 현재 광고 계정에는 아무것도 반영되지 않습니다.",
+        "note": "에이전트가 아닌 Ansvisor가 직접 적용합니다. 현재 Ansvisor는 광고 계정을 읽기만 합니다.",
         "click": "모든 모드에서 활성화, 일시 중지, 예산 또는 입찰가 변경 시 담당자의 클릭 및 확인이 필요합니다.",
         "agents": "에이전트는 절대로 비용을 지출하지 않습니다. 에이전트는 변경 사항을 제안할 뿐이며, 적용은 담당자만 할 수 있습니다.",
         "cap": "관리자가 채널별 월간 한도를 설정합니다. 지난 24시간 동안의 변경 사항을 합산하여 한도를 초과하는 변경은 차단됩니다.",
@@ -15561,7 +15645,6 @@
       }
     },
     "connections": {
-      "soon": "출시 예정",
       "later": "추후 출시 예정",
       "notify": "알림 받기",
       "notified": "알림 신청 완료",
@@ -15575,6 +15658,79 @@
       },
       "manage": "관리",
       "connect": "연결",
+      "adminConnects": "관리자가 연결할 수 있습니다",
+      "accountStatus": {
+        "active": "연결됨",
+        "error": "확인 필요",
+        "disconnected": "연결 해제됨"
+      },
+      "sync": {
+        "syncedAt": "{when} 수치 읽음",
+        "pending": "하루 이내 첫 읽기: 최근 90일 데이터",
+        "error": {
+          "key_refused": "ChatGPT Ads에서 키를 거부했습니다. 새 키를 붙여넣으세요.",
+          "key_missing": "키가 없습니다. 계정을 다시 연결해 주세요.",
+          "signin_gone": "Google Ads 로그인이 만료되었습니다. Google Ads를 다시 연결해 주세요.",
+          "upstream": "광고 플랫폼의 응답이 없습니다. Ansvisor가 하루 이내에 다시 시도합니다.",
+          "failed": "수치를 읽어오지 못했습니다. Ansvisor가 하루 이내에 다시 시도합니다."
+        }
+      },
+      "chatgpt": {
+        "connect": "연결",
+        "addAnother": "계정 추가",
+        "dialogTitle": "ChatGPT Ads 연결",
+        "dialogLine": "ChatGPT Ads 매니저의 Ads API 키를 붙여넣으세요. 키 하나당 하나의 광고 계정에 연결되므로, 계정마다 키를 하나씩 추가하세요.",
+        "keyLabel": "Ads API 키",
+        "keyNote": "Ansvisor는 ChatGPT Ads에서 키를 확인한 후 암호화하여 저장합니다. 읽기 전용으로만 사용됩니다.",
+        "cancel": "취소",
+        "save": "연결",
+        "checking": "확인 중…",
+        "connectedToast": "{name}에 연결되었습니다.",
+        "accountLine": "ChatGPT Ads 계정 · {currency}",
+        "accountLineNoCurrency": "ChatGPT Ads 계정",
+        "billing": "ChatGPT Ads 매니저",
+        "error": {
+          "invalid_key": "ChatGPT Ads에서 이 키를 수락하지 않았습니다. 키를 확인한 후 다시 시도해 주세요.",
+          "upstream": "ChatGPT Ads의 응답이 없습니다. 1분 후 다시 시도해 주세요.",
+          "other": "연결하지 못했습니다. 다시 시도해 주세요."
+        }
+      },
+      "google": {
+        "name": "Google Ads",
+        "connect": "연결",
+        "addAnother": "계정 추가",
+        "billing": "Google Ads",
+        "pickTitle": "Google Ads 계정 선택",
+        "pickLine": "Google 로그인으로 접근할 수 있는 계정 목록입니다. Ansvisor는 선택한 계정의 정보를 읽기만 하며, 캠페인이나 예산을 절대 변경하지 않습니다.",
+        "noCustomers": "이 Google 로그인으로 접근할 수 있는 Google Ads 계정이 없습니다. 광고를 관리하는 Google 계정으로 로그인해 주세요.",
+        "unnamed": "이름 없는 계정",
+        "more": "{count, plural, other {#개의 계정이 더 있습니다.}}",
+        "why": {
+          "connected": "연결됨",
+          "manager": "매니저 계정",
+          "unavailable": "사용할 수 없음",
+          "test": "테스트 계정"
+        },
+        "cancel": "취소",
+        "save": "{count, plural, =0 {연결} other {#개 계정 연결}}",
+        "connectedToast": "{count, plural, other {Google Ads 계정 #개를 연결했습니다.}}",
+        "error": {
+          "not_configured": "이 서버에 아직 Google Ads가 설정되지 않았습니다.",
+          "not_connected": "먼저 Google Ads에 로그인한 후 다시 시도해 주세요.",
+          "not_accessible": "이 Google 로그인으로는 더 이상 해당 계정에 접근할 수 없습니다. 창을 닫고 다시 연결해 주세요.",
+          "manager_account": "매니저 계정에는 자체 캠페인이 없습니다. 하위 계정을 선택해 주세요.",
+          "upstream": "Google Ads의 응답이 없습니다. 잠시 후 다시 시도해 주세요.",
+          "other": "연결할 수 없습니다. 다시 시도해 주세요."
+        }
+      },
+      "account": {
+        "disconnect": "연결 해제",
+        "disconnectTitle": "{name} 연결을 해제하시겠습니까?",
+        "disconnectLine": "Ansvisor가 이 계정을 위해 보관하던 데이터(키(있는 경우) 및 읽어온 수치)를 삭제합니다. {billing}에서 광고는 계속 게재됩니다.",
+        "disconnectedToast": "{name} 연결을 해제했습니다.",
+        "disconnectFailed": "연결을 해제할 수 없습니다. 다시 시도해 주세요.",
+        "cancel": "취소"
+      },
       "platforms": {
         "chatgpt": {
           "name": "ChatGPT Ads",
@@ -15609,6 +15765,31 @@
     }
   },
   "prompts": {
+    "bulkPlatforms": {
+      "bulkButton": "플랫폼",
+      "bulkAdd": "플랫폼 추가",
+      "bulkRemove": "플랫폼 제거",
+      "modes": "추가 또는 제거",
+      "modeAdd": "추가",
+      "modeRemove": "제거",
+      "platforms": "플랫폼",
+      "title": "플랫폼 추가",
+      "lead": "선택한 Prompt {count}개를 더 많은 플랫폼에서 추적합니다. Prompt 위치마다 각 플랫폼에서 추적 slot을 하나씩 사용합니다. Prompt가 대기 중인 플랫폼은 다시 실행됩니다.",
+      "removeTitle": "플랫폼 제거",
+      "removeLead": "선택한 Prompt {count}개의 일부 플랫폼 추적을 중지합니다. 해당 slot은 다시 사용할 수 있게 됩니다.",
+      "none": "추가할 플랫폼이 없습니다. 더 많은 플랫폼에서 추적하려면 설정 › 결제에서 추적 slot을 추가하세요.",
+      "removeNone": "선택한 Prompt가 실행 중인 플랫폼 중 제거할 수 있는 플랫폼이 없습니다.",
+      "free": "{count}개 사용 가능",
+      "previewAdd": "{count, plural, other {Prompt #개가 변경됩니다}} · {unchanged}개는 이미 적용됨",
+      "previewRemove": "{count, plural, other {Prompt #개가 변경됩니다}} · {unchanged}개는 해당 플랫폼이 없음 · {blocked}개는 남는 플랫폼이 없게 됨",
+      "short": "{platform}에 slot {needed}개가 필요하지만 사용 가능한 slot은 {free}개입니다.",
+      "addSlots": "slot 추가",
+      "save": "{count, plural, other {Prompt #개}}에 추가",
+      "removeSave": "{count, plural, other {Prompt #개}}에서 제거",
+      "done": "{count, plural, other {Prompt #개에 플랫폼을 추가했습니다}}",
+      "removed": "{count, plural, other {Prompt #개에서 플랫폼을 제거했습니다}}",
+      "saveFailed": "플랫폼을 변경하지 못했습니다. 다시 시도해 주세요."
+    },
     "waiting": {
       "resultTitle": "{added}개 추가됨, {waiting}개 대기 중",
       "savedTitle": "{count, plural, other {#개의 Prompts가 저장되었지만 아직 추적되지 않음}}",
@@ -15992,6 +16173,13 @@
       "bulkTitle": "{count, plural, other {아직 답변이 없는 선택된 Prompt #개 추적 시작}}"
     },
     "usage": {
+      "slots": {
+        "title": "추적 slot",
+        "add": "slot 추가",
+        "usage": "{used} / {limit}",
+        "unlimited": "{used} · 제한 없음",
+        "meter": "{platform} slot 사용량"
+      },
       "panelLabel": "Prompt 사용량",
       "planAndUsage": "요금제 및 사용량",
       "hide": "숨기기",
@@ -16074,7 +16262,7 @@
       "enginesLegend": "색상 표시: 이 기간 동안 해당 Prompt에 대해 검색어를 공유함. 흐리게 표시: 추적되었으나 검색어를 공유하지 않음.",
       "engineEmptyTitle": "{range} 동안 {engine} 검색어 없음",
       "engineEmptyBody": "{engine}은(는) 일반적으로 답변의 기반이 된 검색어를 공유합니다. 더 긴 기간을 선택해 보세요.",
-      "sourceNote": "Perplexity는 더 이상 추적되지 않으며 Copilot은 검색어를 공유하지 않으므로, 이 데이터는 검색어를 간헐적으로 공유하는 ChatGPT에서만 가져옵니다. 이전보다 검색어 수가 적습니다.",
+      "sourceNote": "Perplexity는 더 이상 추적되지 않으며 Bing AI Mode는 검색어를 공유하지 않으므로, 이 검색어는 ChatGPT에서만 가져옵니다. ChatGPT도 일부 날짜에만 공유합니다. 이전보다 수가 적습니다.",
       "emptyTitle": "아직 수집된 fan-out이 없습니다",
       "emptyBody": "ChatGPT의 검색어는 일부 날짜에만 샘플링되며, ChatGPT API는 검색을 수행할 때 이를 공유합니다. Google AI Overviews, AI Mode 및 Gemini는 이를 공유하지 않습니다. 해당 엔진이 내 Prompt에 대해 실행되면 검색어가 여기에 표시됩니다.",
       "coverageTooltip": "이 기간 동안 추적된 {total}개의 답변 중 {withFanout}개에 엔진이 실행한 검색어가 포함되어 있습니다. ChatGPT의 검색어는 일부 날짜에만 샘플링되며, ChatGPT API는 검색을 수행할 때 이를 공유합니다."
@@ -18229,24 +18417,139 @@
       }
     },
     "notifications": "알림",
-    "notificationsDescription": "각 브랜드는 두 가지 이메일을 보낼 수 있습니다. 추적 실행 후 발송되는 Daily Pulse와 매주 월요일 발송되는 AI Traffic 주간 요약입니다. 두 이메일 모두 해당 브랜드의 Daily Pulse 수신자에게 전달됩니다.",
-    "pulseSection": "Daily Pulse",
-    "pulseSectionDescription": "추적 실행 후 브랜드별로 하이라이트와 경고를 담은 짧은 요약을 보냅니다. 발송 빈도와 수신자를 선택하세요.",
-    "pulseFrequencyLabel": "{brand}의 Daily Pulse 발송 빈도",
+    "yourEmails": {
+      "title": "내 이메일",
+      "description": "Ansvisor가 보내는 이메일의 종류와 빈도를 선택하세요. 본인에게만 적용되며, 팀원마다 각자 설정합니다.",
+      "carriedOver": "현재 받고 계신 이메일입니다. 저장하면 내 설정으로 유지됩니다.",
+      "for": "대상",
+      "scopeAll": "내 모든 브랜드 ({count})",
+      "deliveryHint": "브랜드 이메일은 브랜드별로 각각 받거나 하나의 이메일로 함께 받을 수 있습니다:",
+      "delivery_per_brand": "브랜드별로 이메일 1통",
+      "delivery_combined": "모든 브랜드를 이메일 1통으로 (출시 예정)",
+      "brandOnly": "{brand}에만 설정",
+      "useAll": "'내 모든 브랜드' 설정 사용",
+      "notableNote": "첫 번째 펄스를 보내드린 후에는 주목할 만한 일이 있을 때만 보내드립니다.",
+      "comingSoon": "출시 예정",
+      "comingSoonHint": "'출시 예정'으로 표시된 이메일은 저장하신 설정을 유지하며, 준비되면 발송이 시작됩니다.",
+      "admins": "관리자",
+      "groups": {
+        "visibility": "브랜드 가시성",
+        "traffic": "AI 트래픽",
+        "actions": "액션 센터",
+        "agents": "에이전트 및 채팅",
+        "audit": "사이트 감사",
+        "content": "콘텐츠",
+        "account": "계정"
+      },
+      "kinds": {
+        "daily_pulse": {
+          "name": "일간 펄스",
+          "description": "각 브랜드가 AI 답변에 어떻게 노출되었는지 알려드립니다: 가시성 점수, 언급, 인용, 주요 소식과 경고."
+        },
+        "traffic_digest": {
+          "name": "주간 요약",
+          "description": "지난주 AI 방문을 한 줄로 요약하고 상위 3개 변화를 알려드립니다. 매주 월요일."
+        },
+        "critical_action": {
+          "name": "새 긴급 액션",
+          "description": "내 브랜드에 긴급 우선순위의 새 액션이 생겼습니다."
+        },
+        "due_actions": {
+          "name": "기한 초과 및 오늘 마감",
+          "description": "내게 할당된 액션과 작업 중 마감일이 되었거나 지연된 항목입니다."
+        },
+        "weekly_actions": {
+          "name": "주간 액션 요약",
+          "description": "완료된 일, 진행 중인 일, 다음 할 일을 알려드립니다. 매주 월요일."
+        },
+        "run_finished": {
+          "name": "실행 완료",
+          "description": "내가 시작한 에이전트 실행이 완료되었으며, 수행한 작업을 알려드립니다."
+        },
+        "audit_finished": {
+          "name": "감사 완료",
+          "description": "일괄 또는 예약된 감사가 완료되었으며, 점수를 알려드립니다."
+        },
+        "score_dropped": {
+          "name": "점수 하락",
+          "description": "페이지 점수가 마지막 감사 이후 5점 이상 떨어졌습니다."
+        },
+        "drafts_review": {
+          "name": "검토 대기 중인 초안",
+          "description": "내 브랜드용으로 작성된 초안 중 게시 전에 검토가 필요한 항목입니다."
+        },
+        "ai_usage": {
+          "name": "AI 사용량",
+          "description": "월간 AI 한도의 80%와 100%에 도달했을 때 알려드립니다."
+        }
+      },
+      "links": {
+        "approvals": {
+          "name": "승인 대기 중",
+          "description": "에이전트 또는 채팅 실행이 무언가를 변경하거나 게시하기 전에 사용자의 승인이 필요합니다. '에이전트가 필요할 때 알림'에서 설정하세요.",
+          "link": "채팅 설정"
+        },
+        "scheduled": {
+          "name": "예약된 작업",
+          "description": "각 작업은 작업에 설정된 대로 이메일을 보냅니다.",
+          "link": "작업 열기"
+        },
+        "billing": {
+          "name": "결제 및 보안",
+          "description": "청구서, 결제 문제, 로그인 알림입니다. 항상 발송됩니다.",
+          "locked": "항상 켜짐"
+        }
+      },
+      "options": {
+        "pulse": {
+          "daily": "매일",
+          "weekly": "매주",
+          "notable": "주목할 만한 경우에만",
+          "off": "끔"
+        },
+        "instant": {
+          "instant": "즉시",
+          "daily": "일일 요약",
+          "off": "끔"
+        },
+        "digest": {
+          "daily": "일일 요약",
+          "weekly": "주간 요약",
+          "off": "끔"
+        },
+        "weekly": {
+          "weekly": "매주 월요일",
+          "off": "끔"
+        },
+        "onoff": {
+          "on": "켜짐",
+          "off": "끔"
+        }
+      },
+      "save": "변경 사항 저장",
+      "saved": "이메일 설정이 저장되었습니다",
+      "saveFailed": "이메일 설정을 저장하지 못했습니다. 다시 시도해 주세요.",
+      "loadFailed": "이메일 설정을 불러오지 못했습니다.",
+      "turnOffAll": "선택 이메일 모두 끄기",
+      "turnedOff": "선택 이메일이 모두 끔으로 설정되었습니다. 유지하려면 변경 사항을 저장하세요."
+    },
+    "outsideEmails": {
+      "title": "워크스페이스 외부 사용자에게 보내기",
+      "description": "Ansvisor 시트가 없는 클라이언트나 매니저도 브랜드 요약을 받을 수 있습니다. 승인 이메일이나 계정 이메일은 받지 않습니다.",
+      "sends": "Daily Pulse · AI Traffic 주간 요약",
+      "recipients": "수신자",
+      "placeholder": "client@example.com, boss@example.com",
+      "hint": "쉼표로 구분합니다. 자신의 이메일 설정을 저장하지 않은 팀원은 이전처럼 이 브랜드의 이메일을 계속 받습니다. 이 목록이 비어 있으면 모든 팀원이, 아니면 목록에 있는 팀원만 받습니다.",
+      "frequency": "Daily Pulse",
+      "frequencyNote": "브랜드의 Slack 채널과 웹훅, 그리고 자신의 설정을 저장하지 않은 팀원에게도 적용됩니다.",
+      "digest": "AI Traffic 주간 요약도 보내기",
+      "digestPulseOff": "이 Daily Pulse가 꺼져 있으면 주간 요약은 발송되지 않습니다."
+    },
     "pulseFrequency_daily": "매일",
     "pulseFrequency_weekly": "매주",
     "pulseFrequency_notable": "주요 변동 시에만",
-    "pulseFrequency_notableNote": "첫 Pulse 수신 후, 주목할 만한 변동이 발생할 때만 발송됩니다.",
     "pulseFrequency_off": "끄기",
-    "pulseRecipients": "수신자",
-    "pulseRecipientsPlaceholder": "alex@example.com, sam@example.com",
-    "pulseRecipientsHint": "쉼표로 구분된 이메일 주소입니다. 모든 조직 멤버에게 보내려면 비워 두세요.",
     "pulseRecipientsInvalid": "유효한 이메일 주소가 아닙니다: {emails}. 수정하거나 삭제한 후 저장하세요.",
-    "trafficDigest": "AI Traffic 주간 다이제스트",
-    "trafficDigestDescription": "매주 월요일, 지난주 AI 방문을 한 줄로 요약하고 가장 큰 변화 세 가지를 알려드립니다. 각 브랜드의 Daily Pulse 수신자에게 전달되며, 체크하거나 해제하면 바로 저장됩니다.",
-    "trafficDigestTo": "수신: {emails}",
-    "trafficDigestToEveryone": "모든 조직 멤버에게",
-    "trafficDigestPulseOff": "Daily Pulse가 꺼져 있는 동안에는 발송되지 않습니다. 다시 받으려면 Pulse를 켜세요.",
     "pulseSaved": "알림 설정을 저장했습니다",
     "pulseSaveFailed": "알림 설정을 저장할 수 없습니다. 다시 시도해 주세요.",
     "pulseLoadFailed": "알림 설정을 불러올 수 없습니다.",
@@ -18271,7 +18574,6 @@
       "loading": "언어를 불러오는 중…",
       "moreSoon": "더 많은 언어가 곧 추가될 예정입니다.",
       "preview": "직원 및 테스트 빌드에서는 아직 번역되지 않은 언어도 볼 수 있습니다. 텍스트가 없는 부분은 영문으로 표시됩니다.",
-      "testLanguage": "{language} · 테스트",
       "saved": "언어가 저장되었습니다",
       "saveFailed": "언어를 저장하지 못했습니다. 다시 시도해 주세요.",
       "suggest": {
@@ -18421,7 +18723,38 @@
     },
     "planAddOns": {
       "title": "플랜에 더 추가하기",
-      "description": "Growth 플랜을 위한 추가 트래킹, 추가 브랜드, AI 사용량 충전입니다. 선택한 모든 항목은 등록된 카드로 한 번에 결제됩니다.",
+      "slots": {
+        "title": "추가 추적 크레딧 구매",
+        "description": "{plan} 플랜에는 각 표준 플랫폼당 slot {included}개가 포함되어 있습니다. 원하는 플랫폼에 추가 slot을 선택하세요. 각 항목은 0까지 줄일 수 있습니다.",
+        "descriptionNone": "원하는 플랫폼에 추가 slot을 선택하세요. 각 항목은 0까지 줄일 수 있습니다.",
+        "discount": {
+          "reached": "추가 추적 <b>{percent}% 할인</b>: {interval, select, year {연} other {월}} {list}에서 {off} 할인.",
+          "list": "추가 추적: {interval, select, year {연} other {월}} {list}.",
+          "next": "{interval, select, year {연} other {월}} {more}을(를) 더 추가하면 {from} 초과분에 <b>{percent}% 할인</b>이 적용됩니다.",
+          "top": "최고 단계에 도달했습니다.",
+          "drops": "이 변경으로 할인율이 {from}%에서 {to}%로 낮아져 100 slots당 가격이 올라갑니다.",
+          "steps": "볼륨 할인 단계",
+          "stepsLead": "각 단계의 할인율은 해당 구간을 초과하는 부분에만 적용됩니다:",
+          "step": "{from}/{interval, select, year {년} other {월}} 초과분 {percent}% 할인",
+          "yours": "· 현재 적용",
+          "nextTag": "· 다음 단계"
+        },
+        "unit": "<b>1 slot</b> = 해당 플랫폼의 1개 위치에서 매일 추적되는 Prompt 1개입니다.",
+        "columns": {
+          "platform": "플랫폼",
+          "included": "요금제 포함",
+          "extra": "추가 slots",
+          "price": "{interval, select, year {연간} other {월간}} 100 slots당 가격",
+          "cost": "{interval, select, year {연간} other {월간}} 비용"
+        },
+        "unlimited": "제한 없음",
+        "fewer": "{platform} slots 100개 감소",
+        "more": "{platform} slots 100개 추가",
+        "extraOn": "{platform}의 추가 slots",
+        "was": "이전: {slots}",
+        "undo": "실행 취소",
+        "footer": "가격은 각 플랫폼의 추적 비용에 따라 책정됩니다. 일부 답변(예: Perplexity)은 더 많은 작업이 필요합니다. 연간 결제 시 2개월 무료."
+      },
       "tracking": {
         "title": "추가 트래킹",
         "description": "플랜의 엔진에서 매일 추적되는 Prompt 위치를 더 늘립니다. 한 번에 하나의 단계만 선택할 수 있으며 언제든 변경하거나 제거할 수 있습니다.",
@@ -18429,8 +18762,7 @@
         "none": "없음",
         "tier": "+{units}개 Prompt 위치",
         "price": "{price}/{interval, select, year {년} other {월}}",
-        "contactSales": "영업팀에 문의",
-        "yearly": "연간 요금: 2개월 무료."
+        "contactSales": "영업팀에 문의"
       },
       "brands": {
         "title": "추가 브랜드",
@@ -18438,7 +18770,7 @@
         "count": "{count}개 추가",
         "fewer": "브랜드 1개 줄이기",
         "more": "브랜드 1개 늘리기",
-        "note": "현재 보유한 브랜드 수보다 적게 설정할 수 없습니다. 먼저 브랜드에서 하나를 제거해 주세요."
+        "limit": "요금제에 브랜드 {base}개가 포함되어 있습니다. 새 한도는 <b>{limit}</b>개입니다."
       },
       "topUp": {
         "title": "AI 사용량 충전",
@@ -18447,10 +18779,12 @@
         "label": "AI 사용량 충전 옵션",
         "none": "없음",
         "option": "+{multiplier}배",
-        "adds": "이번 달 AI 사용량의 {multiplier}배 · 브리프 +{briefs}개 · 기회 +{opportunities}개"
+        "usage": "AI 사용량 {multiplier}배",
+        "adds": "이번 달 AI 사용량의 {multiplier}배 · 브리프 +{briefs}개 · 기회 +{opportunities}개",
+        "alsoAdds": "이번 달 브리프 +{briefs}개와 기회 +{opportunities}개도 추가됩니다.",
+        "once": "{price} 1회 결제"
       },
       "summary": "Prompt 위치 {prompts}개 · 브랜드 {brands}개",
-      "nothing": "위에서 변경할 항목을 선택해 주세요.",
       "review": "검토 및 결제",
       "reviewing": "가격 확인 중…",
       "dialog": {
@@ -18461,20 +18795,25 @@
         "brands": "{count, plural, =0 {추가 브랜드 없음} other {추가 브랜드 #개}}",
         "topUp": "AI 사용량 충전 +{multiplier}배, 1회 결제",
         "dueToday": "오늘 결제 금액",
-        "dueTodayNote": "추가 트래킹 및 브랜드의 이번 기간 잔여분과 충전 전액입니다.",
+        "dueTodayNote": "slots, 추가 추적, 브랜드는 이번 결제 기간의 남은 기간分, 충전은 전액이 청구됩니다.",
+        "slots": "{platform} slots",
+        "slotsValue": "{slots} (+{extra} 추가)",
+        "volumeDiscount": "볼륨 할인 ({percent}%)",
+        "discountValue": "−{off}/{interval, select, year {년} other {월}}",
         "total": "다음 갱신부터",
         "totalValue": "{interval, select, year {연} other {월}} {price}",
-        "credit": "더 낮은 등급이나 더 적은 브랜드를 선택하면 다음 청구서에 크레딧이 적용됩니다.",
+        "credit": "slots, 등급 또는 브랜드를 줄이면 차액이 다음 청구서에 크레딧으로 적용됩니다.",
         "pay": "{price} 결제",
         "confirm": "확인",
         "cancel": "취소",
-        "processing": "처리 중…"
+        "processing": "처리 중…",
+        "slotsWaiting": "{platform}: 최신 Prompt 위치 {count}개는 slot이 생길 때까지 대기합니다. 삭제되는 항목은 없으며, slots를 다시 추가하면 추적됩니다."
       },
       "done": "애드온이 업데이트되었습니다. 충전분은 결제가 확인되는 즉시 반영됩니다.",
       "states": {
         "not_admin": "애드온은 관리자만 변경할 수 있습니다. 워크스페이스 관리자에게 문의해 주세요.",
         "starter": "애드온은 Growth 플랜에서 사용할 수 있습니다. Growth로 업그레이드하여 트래킹, 브랜드, AI 사용량을 추가하세요.",
-        "enterprise": "계약에 따라 한도가 정해져 있습니다. 추가가 필요하면 담당 매니저에게 문의해 주세요.",
+        "enterprise": "기타 한도는 계약에 따라 정해집니다. 추가가 필요하면 담당 매니저에게 문의해 주세요.",
         "trial": "애드온은 플랜이 시작된 후에 구매할 수 있습니다.",
         "no_plan": "애드온은 플랜이 활성 상태일 때 구매할 수 있습니다.",
         "ending": "플랜이 종료될 예정입니다. 애드온을 변경하려면 플랜을 유지해 주세요."
@@ -18492,7 +18831,23 @@
         "payment_failed": "결제가 완료되지 않았습니다.",
         "failed": "애드온을 변경하지 못했습니다. 다시 시도해 주세요."
       },
-      "readFailed": "애드온을 불러오지 못했습니다. 나중에 다시 시도해 주세요."
+      "readFailed": "애드온을 불러오지 못했습니다. 나중에 다시 시도해 주세요.",
+      "perInterval": "{price}/{interval, select, year {년} other {월}}",
+      "cart": {
+        "title": "내 추가 항목",
+        "onePayment": "일시불",
+        "plan": "{plan} 요금제",
+        "slots": "{platform} 추가 추적",
+        "slotsCount": "{slots} slots",
+        "remove": "{item} 제거",
+        "discount": "추가 추적에 볼륨 할인 {percent}%가 위 가격에 반영되어 있습니다.",
+        "discountDrops": "볼륨 할인이 {from}%에서 {to}%로 낮아져 위 가격이 올라갑니다.",
+        "brands": "{count, plural, other {브랜드 #개}} · 개당 {price}",
+        "topUp": "AI 사용량 {multiplier}배 · {date}까지",
+        "total": "다음 갱신부터 {interval, select, year {연간} other {월간}} 합계 <b>{price}</b>",
+        "undoAll": "모든 변경 사항 취소",
+        "dueToday": "오늘 결제 금액: 이번 기간의 남은 기간 동안 추가된 항목의 요금이며, 검토 및 결제 화면에 표시됩니다."
+      }
     },
     "cancelsOn": "구독이 {date}에 종료됩니다",
     "changePlan": "플랜 변경",

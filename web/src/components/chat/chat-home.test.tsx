@@ -949,6 +949,42 @@ describe('a chat started from ChatHome', () => {
     expect(urls).toContain('/api/chat/runs');
     expect(host.querySelector('h1')).not.toBeNull();
   });
+
+  it("goes on in the person's What's new chat when they have one, never a new one", async () => {
+    const bodies: unknown[] = [];
+    globalThis.fetch = vi.fn(async (url: string, init?: RequestInit) => {
+      if (url.startsWith('/api/chat/whats-new')) {
+        return Response.json({ ok: true, hasUnread: false, entries: [] });
+      }
+      if (url.startsWith('/api/chat/conversations/ask-again?')) {
+        return Response.json({ ok: true, id: 'chat-wn' });
+      }
+      if (url === '/api/chat/runs') {
+        bodies.push(JSON.parse(String(init?.body)));
+        return new Response('', { headers: { 'x-chat-conversation': 'chat-wn' } });
+      }
+      return Response.json({ ok: false });
+    }) as unknown as typeof fetch;
+    await render(
+      <HomeDraftProvider>
+        <ChatHome firstName="Alex" />
+        <Chat />
+      </HomeDraftProvider>,
+    );
+    await act(async () => undefined);
+    await act(async () =>
+      host.querySelector<HTMLElement>('[data-action="home.whatsNew"]')!.click(),
+    );
+    await act(async () => undefined);
+    expect(sent).toEqual([]);
+    expect(bodies).toEqual([
+      expect.objectContaining({
+        message: 'What’s new in Ansvisor and how can it help me?',
+        conversationId: 'chat-wn',
+      }),
+    ]);
+    expect(nav.push).toHaveBeenCalledWith('/dashboard/chat/chat-wn');
+  });
 });
 
 describe('Agents for you (AGENTS plan §8, #11)', () => {

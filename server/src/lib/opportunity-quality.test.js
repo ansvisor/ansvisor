@@ -14,8 +14,9 @@ describe('untrackedEngines (item 15)', () => {
       'Perplexity',
     ]);
     expect(untrackedEngines('Win citations in Microsoft Copilot answers', tracked)).toEqual([
-      'Microsoft Copilot',
+      'Bing AI Mode',
     ]);
+    expect(untrackedEngines('Get cited in Bing AI Mode', tracked)).toEqual(['Bing AI Mode']);
   });
 
   it('finds none for tracked engines, none named, or tracking not known', () => {

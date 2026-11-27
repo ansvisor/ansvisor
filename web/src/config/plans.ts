@@ -143,6 +143,12 @@ export interface Plan {
   pricing: PlanPricing | null;
   limits: PlanLimits;
   highlighted?: boolean;
+  /**
+   * Tracking slots per platform (00564): the plan's own prompt locations on
+   * each of its platforms plus the slots the workspace bought. Set on a
+   * workspace's plan (plan-row.ts withSlots); absent: no per-platform limit.
+   */
+  slots?: Readonly<Record<string, number>>;
 }
 
 /** GB of Files a workspace keeps in its free trial, whatever its plan (STORAGE-COSTS.md). */

@@ -1,6 +1,8 @@
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { getPlan, type PlanId } from '@/config/plans';
 import { ALL_MODELS, ALL_SCRAPERS } from '@/config/prompt-options';
+import { boughtSlots, promptPlatformsAllowed, sellsSlots, withSlots } from '@/lib/guards/plan-row';
+import { stillWaiting } from '@/lib/prompt-slots';
 
 /**
  * Resolve the scraper + model id sets a plan currently allows.
@@ -23,9 +25,16 @@ export function getActiveEngineIdsForPlan(planId: PlanId | string | null | undef
 } {
   const plan = getPlan((planId ?? 'starter') as PlanId);
 
-  const allowedScrapers = plan.limits.allowedScrapers;
+  // Growth and Enterprise run their own platforms (00564): the five standard
+  // engines and ChatGPT Shopping; another platform runs only where the
+  // workspace bought tracking slots, and alignment keeps it there.
+  const allowedScrapers = sellsSlots(plan.id)
+    ? promptPlatformsAllowed(withSlots(plan, {}))
+    : plan.limits.allowedScrapers
+      ? new Set(plan.limits.allowedScrapers)
+      : null;
   const platforms = allowedScrapers
-    ? ALL_SCRAPERS.filter((s) => allowedScrapers.includes(s.id)).map((s) => s.id)
+    ? ALL_SCRAPERS.filter((s) => allowedScrapers.has(s.id)).map((s) => s.id)
     : ALL_SCRAPERS.map((s) => s.id);
 
   const allowedModels = plan.limits.allowedModels;
@@ -40,9 +49,11 @@ export function getActiveEngineIdsForPlan(planId: PlanId | string | null | undef
  * Rewrite every prompt in an organisation's brands so its `platforms` and
  * `models` arrays match what the given plan allows. Handles both directions:
  *
- *   - **Expansion** (Starter → Growth): Growth has no `allowedScrapers`,
- *     so every prompt's platforms array becomes every engine id. Without
- *     this an upgraded Growth customer keeps tracking only 2 engines (#79).
+ *   - **Expansion** (Starter → Growth): every prompt's platforms become
+ *     Growth's own platforms (the five standard engines and ChatGPT
+ *     Shopping, 00564). Without this an upgraded Growth
+ *     customer keeps tracking only 2 engines (#79). A platform the
+ *     workspace bought tracking slots for stays where it runs (00564).
  *   - **Contraction** (Growth → Starter on downgrade / cancellation):
  *     Starter restricts to `['chatgpt-web', 'gemini-web']`, so prompts
  *     get trimmed down. Without this a downgraded org would keep paying
@@ -101,12 +112,66 @@ export async function alignPromptsToPlanForOrg(
     return { platforms, models, promptCount: 0 };
   }
 
-  const { data: updatedRows, error: updateErr } = await supabaseAdmin
-    .from('prompts')
-    .update({ platforms, models })
-    .in('prompt_set_id', promptSetIds)
-    .select('id');
-  if (updateErr) throw new Error(`prompts update: ${updateErr.message}`);
+  // A platform the workspace bought tracking slots for stays on the prompts
+  // that run it (00564); a platform now among the plan's leaves the waiting
+  // list, as a platform is never in both.
+  const bought = await boughtPlatforms(orgId, planId);
+  const rows: { id: string; platforms: string[] | null; waiting_platforms: string[] | null }[] = [];
+  for (let from = 0; ; from += PAGE) {
+    const { data: page, error: readErr } = await supabaseAdmin
+      .from('prompts')
+      .select('id, platforms, waiting_platforms')
+      .in('prompt_set_id', promptSetIds)
+      .order('id')
+      .range(from, from + PAGE - 1);
+    if (readErr) throw new Error(`prompts lookup: ${readErr.message}`);
+    rows.push(...((page ?? []) as typeof rows));
+    if ((page ?? []).length < PAGE) break;
+  }
 
-  return { platforms, models, promptCount: (updatedRows ?? []).length };
+  const groups = new Map<string, { ids: string[]; platforms: string[]; waiting: string[] }>();
+  for (const row of rows) {
+    const keep = (row.platforms ?? []).filter((p) => bought.has(p) && !platforms.includes(p));
+    const next = [...platforms, ...keep];
+    const waiting = stillWaiting(row.waiting_platforms, next);
+    const key = JSON.stringify([next, waiting]);
+    const group = groups.get(key) ?? { ids: [], platforms: next, waiting };
+    group.ids.push(row.id);
+    groups.set(key, group);
+  }
+
+  let promptCount = 0;
+  for (const group of groups.values()) {
+    for (let i = 0; i < group.ids.length; i += CHUNK) {
+      const { data: updatedRows, error: updateErr } = await supabaseAdmin
+        .from('prompts')
+        .update({ platforms: group.platforms, waiting_platforms: group.waiting, models })
+        .in('id', group.ids.slice(i, i + CHUNK))
+        .select('id');
+      if (updateErr) throw new Error(`prompts update: ${updateErr.message}`);
+      promptCount += (updatedRows ?? []).length;
+    }
+  }
+
+  return { platforms, models, promptCount };
+}
+
+const PAGE = 1000;
+const CHUNK = 200;
+
+/**
+ * The platforms the workspace bought tracking slots for (00564), on a plan
+ * that sells them; none on any other. An unreadable row reads as none.
+ */
+async function boughtPlatforms(
+  orgId: string,
+  planId: PlanId | string | null | undefined,
+): Promise<Set<string>> {
+  if (planId !== 'growth' && planId !== 'enterprise') return new Set();
+  const { data } = await supabaseAdmin
+    .from('organizations')
+    .select('add_on_slots')
+    .eq('id', orgId)
+    .maybeSingle();
+  return new Set(Object.keys(boughtSlots(data?.add_on_slots)));
 }

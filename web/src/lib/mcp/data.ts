@@ -1,6 +1,7 @@
 import { createTranslator } from 'next-intl';
 import messages from '../../../messages/en.json';
 import { supabaseAdmin } from '@/lib/supabase/admin';
+import { readAllRpcRowsParallel } from '@/lib/supabase/rpc-pages';
 import { allowedBrands, brandAccessFor, hasBrandAccess } from '@/lib/brand-access';
 import type { McpAuthContext } from '@/lib/mcp-auth';
 import type { Citation } from '@/types';
@@ -2797,7 +2798,17 @@ async function readCitationAggregates(
     p_topic_ids: params.topicId ? [params.topicId] : undefined,
   };
   const [domainRes, statsRes, answerRes] = await Promise.all([
-    supabaseAdmin.rpc('citations_domains_daily', daily),
+    // Every domain, past PostgREST's 1000 rows (as the page reads them).
+    readAllRpcRowsParallel<DomainDailyRow>((from, to) =>
+      supabaseAdmin
+        .rpc('citations_domains_daily', daily)
+        .order('total_citations', { ascending: false })
+        .order('domain', { ascending: true })
+        .range(from, to),
+    ).then(
+      (data) => ({ data, error: null }),
+      (err: Error) => ({ data: null, error: { message: err.message } }),
+    ),
     supabaseAdmin.rpc('citations_window_stats_daily', daily),
     answersRead,
   ]);
