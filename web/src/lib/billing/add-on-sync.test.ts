@@ -14,7 +14,7 @@ vi.mock('@/lib/supabase/admin', async () => ({
 
 const stripeApi = vi.hoisted(() => ({ retrieve: vi.fn() }));
 vi.mock('@/lib/stripe', () => ({ stripe: { subscriptions: { retrieve: stripeApi.retrieve } } }));
-const capacity = vi.hoisted(() => ({ waitOverCapacity: vi.fn() }));
+const capacity = vi.hoisted(() => ({ waitOverCapacity: vi.fn(), waitOverSlots: vi.fn() }));
 vi.mock('@/lib/prompt-capacity', () => capacity);
 
 const { supabaseAdmin } = await import('@/lib/supabase/admin');
@@ -35,7 +35,16 @@ const BRAND = {
   grant_prompts: null,
   grant_brands: 1,
 };
-const CATALOG = [tier(100), tier(1000), tier(1000, 'year'), BRAND];
+const SLOTS_CLAUDE = {
+  kind: 'slots' as const,
+  stripe_price_id: null,
+  stripe_lookup_key: 'addon_slots_claude_web_month',
+  grant_prompts: null,
+  grant_brands: null,
+  platform: 'claude-web',
+  grant_slots: 100,
+};
+const CATALOG = [tier(100), tier(1000), tier(1000, 'year'), BRAND, SLOTS_CLAUDE];
 
 const planItem = { quantity: 1, price: { id: 'price_growth', lookup_key: null, metadata: {} } };
 const trackingItem = (units: number) => ({
@@ -51,13 +60,43 @@ const brandItem = (quantity: number) => ({
   price: { id: 'price_brand_m', lookup_key: 'addon_brand_month', metadata: { addon: 'brand' } },
 });
 
+const slotItem = (quantity: number, lookupKey: string, platform: string) => ({
+  quantity,
+  price: {
+    id: `price_${lookupKey}`,
+    lookup_key: lookupKey,
+    metadata: { addon: 'slots', platform, units: '100' },
+  },
+});
+
 describe('addOnTotals', () => {
+  it('adds tracking slots per platform: the catalog row’s, else the price’s metadata', () => {
+    expect(
+      addOnTotals(
+        [
+          planItem,
+          slotItem(3, 'addon_slots_claude_web_month', 'claude_web'),
+          // Not in the catalog: its metadata names the platform (Stripe's form or ours).
+          slotItem(2, 'addon_slots_grok_web_month', 'grok_web'),
+          slotItem(1, 'addon_slots_naver_web_month', 'naver-web'),
+          slotItem(1, 'addon_slots_x_month', 'not-a-platform'),
+        ],
+        CATALOG,
+      ),
+    ).toEqual({
+      prompts: 0,
+      brands: 0,
+      slots: { 'claude-web': 300, 'grok-web': 200, 'naver-web': 100 },
+    });
+  });
+
   it('adds the tracking tier’s locations and the extra brands, and nothing for the plan', () => {
     expect(addOnTotals([planItem, trackingItem(1000), brandItem(3)], CATALOG)).toEqual({
       prompts: 1000,
       brands: 3,
+      slots: {},
     });
-    expect(addOnTotals([planItem], CATALOG)).toEqual({ prompts: 0, brands: 0 });
+    expect(addOnTotals([planItem], CATALOG)).toEqual({ prompts: 0, brands: 0, slots: {} });
   });
 
   it('leaves CHAT-18’s storage packs out', () => {
@@ -65,12 +104,12 @@ describe('addOnTotals', () => {
       quantity: 1,
       price: { id: 'price_st25', lookup_key: null, metadata: {} },
     };
-    expect(addOnTotals([planItem, storage], CATALOG)).toEqual({ prompts: 0, brands: 0 });
+    expect(addOnTotals([planItem, storage], CATALOG)).toEqual({ prompts: 0, brands: 0, slots: {} });
   });
 
   it('knows a price by its resolved id too', () => {
     const byId = { quantity: 2, price: { id: 'price_brand_m', metadata: { addon: 'brand' } } };
-    expect(addOnTotals([byId], CATALOG)).toEqual({ prompts: 0, brands: 2 });
+    expect(addOnTotals([byId], CATALOG)).toEqual({ prompts: 0, brands: 2, slots: {} });
   });
 
   it('falls back on Stripe’s metadata for a price the catalog doesn’t hold (set by staff)', () => {
@@ -78,12 +117,12 @@ describe('addOnTotals', () => {
       quantity: 1,
       price: { id: 'price_x', lookup_key: null, metadata: { addon: 'tracking', units: '7500' } },
     };
-    expect(addOnTotals([staff], CATALOG)).toEqual({ prompts: 7500, brands: 0 });
+    expect(addOnTotals([staff], CATALOG)).toEqual({ prompts: 7500, brands: 0, slots: {} });
     const bad = {
       quantity: 1,
       price: { id: 'price_y', lookup_key: null, metadata: { addon: 'tracking', units: 'lots' } },
     };
-    expect(addOnTotals([bad], CATALOG)).toEqual({ prompts: 0, brands: 0 });
+    expect(addOnTotals([bad], CATALOG)).toEqual({ prompts: 0, brands: 0, slots: {} });
   });
 });
 
@@ -135,6 +174,17 @@ describe('syncAddOns', () => {
     expect(stripeApi.retrieve).toHaveBeenCalledWith('sub_1');
     expect(org(ORG)).toMatchObject({ add_on_prompts: 1000, add_on_brands: 2 });
     expect(org(OTHER)).toMatchObject({ add_on_prompts: 100, add_on_brands: 0 });
+  });
+
+  it('writes the tracking slots per platform, and none once they are removed', async () => {
+    stripeApi.retrieve.mockResolvedValue(
+      subscription('active', [planItem, slotItem(6, 'addon_slots_claude_web_month', 'claude_web')]),
+    );
+    await syncAddOns('sub_1');
+    expect(org(ORG)?.add_on_slots).toEqual({ 'claude-web': 600 });
+    stripeApi.retrieve.mockResolvedValue(subscription('active', [planItem]));
+    await syncAddOns('sub_1');
+    expect(org(ORG)?.add_on_slots).toEqual({});
   });
 
   it('writes 0 once the add-ons are removed, or the subscription isn’t active or in trial', async () => {

@@ -7,7 +7,11 @@ import { createClient } from '@/lib/supabase/server';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { getPlan, isCloud } from '@/config/plans';
 import { assertWritable, SubscriptionInactiveError } from '@/lib/subscription-guard';
-import { getOrgLocationUsage } from '@/lib/prompt-locations';
+import { getOrgLocationUsage, getOrgSlotUsage } from '@/lib/prompt-locations';
+import { slotPlatform } from '@/config/tracking-slots';
+import { ORG_PLAN_COLUMNS, planFromOrgRow, boughtSlots } from '@/lib/guards/plan-row';
+import { slotDiscount } from '@/lib/billing/slot-discount';
+import { ensureSlotCoupon } from '@/lib/billing/slot-coupon';
 import { countPlanBrands } from '@/lib/plan-brand-count';
 import {
   ADD_ON_PURCHASE_KEY,
@@ -16,13 +20,19 @@ import {
   loadStripe,
   planItemOf,
 } from '@/lib/billing/add-ons';
-import { addOnTotals, type RecurringAddOnRow } from '@/lib/billing/add-on-sync';
+import {
+  addOnTotals,
+  RECURRING_ADD_ON_KINDS,
+  type RecurringAddOnRow,
+} from '@/lib/billing/add-on-sync';
 import { resolveAddOnPrice } from '@/lib/billing/add-on-prices';
 import {
   currentAddOns,
+  currentSlotItems,
   itemChanges,
+  slotItemChanges,
   type CartItem,
-  type ItemChange,
+  type SlotTarget,
 } from '@/lib/billing/add-on-cart';
 
 /**
@@ -50,12 +60,20 @@ import {
  * cart is one charge; alone, it is a one-line invoice paid at once. Either
  * way a purchase waits as pending and only the webhook grants it once paid.
  *
+ * Tracking slots per platform (00564) are items on the same subscription, on
+ * Growth and on Enterprise (whose other add-ons are its contract's): units
+ * of 100 slots per platform, on the plan's interval only (a monthly plan
+ * buys monthly slots). Their volume discount is a percent coupon on the slot
+ * items alone (slot-discount.ts, slot-coupon.ts), never on the
+ * subscription, and the plan's own coupon moves onto the plan's item as
+ * above, so neither discounts the other's items.
+ *
  * Kept apart from CHAT-18's packs (add-ons.ts): nothing here waits on Chat.
  * Never throws (#1777): every refusal is a reason the page can word.
  *   - not_cloud: billing is Ansvisor Cloud's.
  *   - admin_only: billing is the Admins'.
  *   - not_growth: add-ons are Growth's; `plan` says which plan it is
- *     (Starter: upgrade; Enterprise: its contract).
+ *     (Starter: upgrade; Enterprise: its contract, except tracking slots).
  *   - trial: the free trial can't buy them ("Start my plan now" first).
  *   - no_plan: the plan isn't active (ended, past due, no subscription).
  *   - ending: the plan is set to end; "Keep my plan" first.
@@ -63,7 +81,8 @@ import {
  *   - unavailable: the tier or the brand isn't on sale here (no Stripe
  *     price that fits it, switched off, no Stripe key).
  *   - below_usage: the new limits are under what's in use; `inUse` and
- *     `limits` carry the numbers ("pause N prompt locations first").
+ *     `limits` carry the numbers ("pause N prompt locations first"), and
+ *     `slotsOver` each platform whose slots would be under its use.
  *   - payment_failed: the card was declined; `message` is Stripe's.
  *   - failed: anything else.
  */
@@ -86,6 +105,22 @@ export interface AddOnLimits {
   brands: number;
 }
 
+/** A platform whose slots a change would put under what its prompts use. */
+export interface SlotsOver {
+  platform: string;
+  inUse: number;
+  limit: number;
+}
+
+/** The volume discount on the slots in the cart, per period. */
+export interface SlotsPrice {
+  listCents: number;
+  percentOff: number;
+  discountCents: number;
+  /** The next discount step and the list price still to go before it; null at the top. */
+  next: { percent: number; remainingCents: number } | null;
+}
+
 export interface AddOnChangeRefusal {
   ok: false;
   failure: AddOnChangeFailure;
@@ -93,6 +128,7 @@ export interface AddOnChangeRefusal {
   plan?: string;
   inUse?: AddOnLimits;
   limits?: AddOnLimits;
+  slotsOver?: SlotsOver[];
 }
 
 export interface AddOnChangeInput {
@@ -111,6 +147,12 @@ export interface AddOnChangeInput {
    * before the webhook) never reverts or adds an add-on.
    */
   topUpOnly?: boolean;
+  /**
+   * Tracking slots: units of 100 per platform ({"claude-web": 2}); a
+   * platform at 0 or left out has none. Leave it out to keep the slots the
+   * subscription has.
+   */
+  slots?: Record<string, number>;
 }
 
 export type AddOnChangePreview =
@@ -119,6 +161,10 @@ export type AddOnChangePreview =
       changed: boolean;
       /** The plan's limits with these add-ons. */
       limits: AddOnLimits;
+      /** Tracking slots per platform with these add-ons: the plan's and the bought ones. */
+      slots: Record<string, number>;
+      /** The bought slots' price and volume discount per period. */
+      slotsPrice: SlotsPrice;
       /** Charged now for the rest of this period (a credit when below 0 is kept for later). */
       dueTodayCents: number;
       /** Each period from the next renewal on: the plan and its add-ons. */
@@ -139,6 +185,7 @@ const inputSchema = z.object({
   topUp: z.number().int().min(0).max(100).optional(),
   prorationDate: z.number().int().positive().optional(),
   topUpOnly: z.boolean().optional(),
+  slots: z.record(z.string(), z.number().int().min(0).max(100_000)).optional(),
 });
 
 const refuse = (failure: AddOnChangeFailure, extra: Partial<AddOnChangeRefusal> = {}) =>
@@ -165,6 +212,8 @@ export async function previewAddOnChange(input: AddOnChangeInput): Promise<AddOn
       ok: true,
       changed: cart.changes.length > 0 || !!cart.topUp,
       limits: cart.limits,
+      slots: cart.slots,
+      slotsPrice: cart.slotsPrice,
       // The rest of this period, and the top-up in full.
       dueTodayCents: (preview?.amount_due ?? 0) + (cart.topUp?.row.price_cents ?? 0),
       totalCents: cart.totalCents,
@@ -247,7 +296,11 @@ async function apply(input: AddOnChangeInput): Promise<AddOnChangeResult> {
   );
   const { error } = await supabaseAdmin
     .from('organizations')
-    .update({ add_on_prompts: totals.prompts, add_on_brands: totals.brands })
+    .update({
+      add_on_prompts: totals.prompts,
+      add_on_brands: totals.brands,
+      add_on_slots: totals.slots,
+    })
     .eq('id', cart.organizationId)
     .eq('stripe_subscription_id', cart.subscription.id);
   if (error) console.error('[plan-add-ons] Limits write failed:', error.message);
@@ -359,13 +412,15 @@ interface Cart {
   customerId: string;
   subscription: Stripe.Subscription;
   catalog: CatalogRow[];
-  changes: ItemChange[];
+  changes: Record<string, unknown>[];
   /** The items Stripe is sent: the changes, and the plan's item when a discount moves onto it. */
   items: Record<string, unknown>[];
   discountsMove: boolean;
   /** The AI usage top-up in the cart, with its resolved price. */
   topUp: { row: CatalogRow; priceId: string } | null;
   limits: AddOnLimits;
+  slots: Record<string, number>;
+  slotsPrice: SlotsPrice;
   totalCents: number;
   currency: string;
   interval: 'month' | 'year';
@@ -373,7 +428,7 @@ interface Cart {
 }
 
 const CATALOG_COLUMNS =
-  'id, kind, price_cents, currency, billing, grant_prompts, grant_brands, multiplier, stripe_price_id, stripe_lookup_key, sale, plans, active';
+  'id, kind, price_cents, currency, billing, grant_prompts, grant_brands, platform, grant_slots, multiplier, stripe_price_id, stripe_lookup_key, sale, plans, active';
 
 /** A proration date the preview gave, if it's recent; else now. */
 function prorationDateOf(asked: number | undefined): number {
@@ -407,14 +462,20 @@ async function prepare(raw: AddOnChangeInput): Promise<Cart | AddOnChangeRefusal
 
   const { data: org } = await supabaseAdmin
     .from('organizations')
-    .select(
-      'plan, subscription_status, cancel_at_period_end, stripe_customer_id, stripe_subscription_id',
-    )
+    .select(`${ORG_PLAN_COLUMNS}, cancel_at_period_end, stripe_customer_id, stripe_subscription_id`)
     .eq('id', organizationId)
     .maybeSingle();
   if (!org) return refuse('failed');
   const planId = (org.plan as string | null) ?? 'starter';
-  if (planId !== 'growth') return refuse('not_growth', { plan: planId });
+  // Enterprise buys tracking slots here; its other add-ons are its contract's.
+  const slotsOnly = planId === 'enterprise';
+  if (planId !== 'growth' && !slotsOnly) return refuse('not_growth', { plan: planId });
+  if (slotsOnly && (input.trackingUnits > 0 || input.extraBrands > 0 || input.topUp)) {
+    return refuse('not_growth', { plan: planId });
+  }
+  if (input.slots && Object.keys(input.slots).some((id) => !slotPlatform(id))) {
+    return refuse('unavailable');
+  }
   if (org.subscription_status === 'trialing') return refuse('trial');
   if (org.subscription_status !== 'active' || !org.stripe_subscription_id) {
     return refuse('no_plan');
@@ -438,24 +499,31 @@ async function prepare(raw: AddOnChangeInput): Promise<Cart | AddOnChangeRefusal
   const { data: rows, error } = await supabaseAdmin
     .from('add_on_products')
     .select(CATALOG_COLUMNS)
-    .in('kind', ['tracking', 'brand', 'ai_topup']);
+    .in('kind', [...RECURRING_ADD_ON_KINDS, 'ai_topup']);
   if (error) throw new Error(error.message);
   const catalog = (rows ?? []) as CatalogRow[];
   const recurring = catalog.filter(
-    (r): r is CatalogRow & RecurringAddOnRow => r.kind === 'tracking' || r.kind === 'brand',
+    (r): r is CatalogRow & RecurringAddOnRow => r.kind !== 'ai_topup',
   );
+  // Only the plan's own interval: a monthly plan's add-ons are monthly.
   const forThisPlan = (row: CatalogRow) =>
-    row.active && addOnForPlan(row, 'growth') && addOnInterval(row) === interval;
+    row.active && addOnForPlan(row, planId) && addOnInterval(row) === interval;
 
   const current = currentAddOns(items, recurring);
+  const currentSlots = currentSlotItems(items, recurring);
+  const keptSlots = Object.fromEntries([...currentSlots].map(([id, s]) => [id, s.units]));
   if (input.topUpOnly) {
     input = {
       ...input,
       trackingUnits: current.tracking?.units ?? 0,
       extraBrands: current.brands?.quantity ?? 0,
+      slots: keptSlots,
     };
   }
-  const base = getPlan('growth').limits;
+  if (slotsOnly && (current.tracking || current.brands))
+    return refuse('not_growth', { plan: planId });
+  const slotUnits = input.slots ?? keptSlots;
+  const base = getPlan(planId).limits;
   const limits: AddOnLimits = {
     prompts: base.maxPrompts + input.trackingUnits,
     brands: base.maxBrands + input.extraBrands,
@@ -486,11 +554,93 @@ async function prepare(raw: AddOnChangeInput): Promise<Cart | AddOnChangeRefusal
     if (!brandPriceId) return refuse('unavailable');
   }
 
-  const changes = itemChanges(current, {
-    trackingPriceId,
-    brandPriceId,
-    extraBrands: input.extraBrands,
-  });
+  // Tracking slots: an unchanged platform keeps its price; a new or
+  // changed one must be sold on the plan's interval.
+  const slotTargets = new Map<string, SlotTarget>();
+  let slotListCents = 0;
+  let slotProduct: string | null = null;
+  for (const [platform, units] of Object.entries(slotUnits)) {
+    if (units <= 0) continue;
+    const held = currentSlots.get(platform);
+    const heldPrice = held?.item.price as Stripe.Price | string | undefined;
+    const row = catalog.find(
+      (r) => r.kind === 'slots' && r.platform === platform && forThisPlan(r),
+    );
+    if (held && held.units === units && heldPrice && typeof heldPrice !== 'string') {
+      slotTargets.set(platform, { priceId: heldPrice.id, units });
+      slotListCents += (heldPrice.unit_amount ?? 0) * units;
+      slotProduct ??= idOf(heldPrice.product as string | { id: string });
+      continue;
+    }
+    if (!row || row.sale === 'contact_sales') return refuse('unavailable');
+    const priceId =
+      held && typeof heldPrice !== 'string' && heldPrice?.lookup_key === row.stripe_lookup_key
+        ? heldPrice.id
+        : await resolveAddOnPrice(stripe, row);
+    if (!priceId) return refuse('unavailable');
+    slotTargets.set(platform, { priceId, units });
+    slotListCents += row.price_cents * units;
+  }
+  const discount = slotDiscount(slotListCents, interval);
+  const slotsPrice: SlotsPrice = {
+    listCents: discount.listCents,
+    percentOff: discount.percentOff,
+    discountCents: discount.discountCents,
+    next: discount.next
+      ? { percent: discount.next.step.percent, remainingCents: discount.next.remainingCents }
+      : null,
+  };
+
+  // The slots each platform would have: the plan's own and the bought ones.
+  const plan = planFromOrgRow(org);
+  const held = boughtSlots((org as { add_on_slots?: unknown }).add_on_slots);
+  const slots: Record<string, number> = {};
+  const unitSlots = (platform: string) =>
+    catalog.find((r) => r.kind === 'slots' && r.platform === platform)?.grant_slots ?? 100;
+  for (const platform of new Set([...Object.keys(plan.slots ?? {}), ...Object.keys(slotUnits)])) {
+    const before = plan.slots?.[platform] ?? 0;
+    if (before < 0) {
+      slots[platform] = -1;
+      continue;
+    }
+    const bought = (slotUnits[platform] ?? 0) * unitSlots(platform);
+    slots[platform] = Math.max(0, before - (held[platform] ?? 0)) + bought;
+  }
+
+  const slotUnitsChange =
+    slotTargets.size !== currentSlots.size ||
+    [...slotTargets].some(([platform, t]) => currentSlots.get(platform)?.units !== t.units);
+  let couponId: string | null = null;
+  if (slotUnitsChange && slotsPrice.percentOff > 0) {
+    if (!slotProduct) {
+      const first = [...slotTargets.values()][0];
+      const price = await stripe.prices.retrieve(first.priceId);
+      slotProduct = idOf(price.product as string | { id: string });
+    }
+    if (!slotProduct) return refuse('unavailable');
+    couponId = await ensureSlotCoupon(stripe, slotsPrice.percentOff, slotProduct);
+  }
+
+  const changes = [
+    ...itemChanges(current, {
+      trackingPriceId,
+      brandPriceId,
+      extraBrands: input.extraBrands,
+    }),
+    ...slotItemChanges(currentSlots, slotTargets, couponId),
+  ];
+
+  // Never a platform's slots under what its prompts use.
+  const lowered = [...currentSlots].filter(
+    ([platform, s]) => (slotTargets.get(platform)?.units ?? 0) < s.units,
+  );
+  if (changes.length && lowered.length) {
+    const used = await getOrgSlotUsage(supabase, organizationId);
+    const slotsOver = lowered
+      .map(([platform]) => ({ platform, inUse: used.get(platform) ?? 0, limit: slots[platform] }))
+      .filter((o) => o.limit >= 0 && o.inUse > o.limit);
+    if (slotsOver.length) return refuse('below_usage', { slotsOver });
+  }
 
   // Never below what's in use: a change that lowers a limit under it waits
   // until prompt locations are paused or brands removed.
@@ -515,7 +665,7 @@ async function prepare(raw: AddOnChangeInput): Promise<Cart | AddOnChangeRefusal
   const subscriptionDiscounts = (subscription.discounts ?? [])
     .map((d) => idOf(d as string | { id: string }))
     .filter((d): d is string => !!d);
-  const withAddOns = !!trackingPriceId || input.extraBrands > 0;
+  const withAddOns = !!trackingPriceId || input.extraBrands > 0 || slotTargets.size > 0;
   const discountsMove = changes.length > 0 && withAddOns && subscriptionDiscounts.length > 0;
   const planItemDiscounts = ((planItem as { discounts?: unknown[] }).discounts ?? [])
     .map((d) => idOf(d as string | { id: string }))
@@ -567,7 +717,10 @@ async function prepare(raw: AddOnChangeInput): Promise<Cart | AddOnChangeRefusal
     discountsMove,
     topUp,
     limits,
-    totalCents: planCents + tierCents + brandCents,
+    slots,
+    slotsPrice,
+    totalCents:
+      planCents + tierCents + brandCents + slotsPrice.listCents - slotsPrice.discountCents,
     currency: planItem.price?.currency ?? 'usd',
     interval,
     prorationDate: prorationDateOf(input.prorationDate),
