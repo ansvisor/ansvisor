@@ -81,8 +81,10 @@ import {
  *   - unavailable: the tier or the brand isn't on sale here (no Stripe
  *     price that fits it, switched off, no Stripe key).
  *   - below_usage: the new limits are under what's in use; `inUse` and
- *     `limits` carry the numbers ("pause N prompt locations first"), and
- *     `slotsOver` each platform whose slots would be under its use.
+ *     `limits` carry the numbers ("pause N prompt locations first").
+ *     Tracking slots aren't refused below use: the newest prompt locations
+ *     past a platform's slots wait (00564), and the preview's `slotsWaiting`
+ *     says how many, for Review and pay.
  *   - payment_failed: the card was declined; `message` is Stripe's.
  *   - failed: anything else.
  */
@@ -105,7 +107,7 @@ export interface AddOnLimits {
   brands: number;
 }
 
-/** A platform whose slots a change would put under what its prompts use. */
+/** A platform whose slots a change puts under what its prompts use: the newest locations past them wait. */
 export interface SlotsOver {
   platform: string;
   inUse: number;
@@ -128,7 +130,6 @@ export interface AddOnChangeRefusal {
   plan?: string;
   inUse?: AddOnLimits;
   limits?: AddOnLimits;
-  slotsOver?: SlotsOver[];
 }
 
 export interface AddOnChangeInput {
@@ -165,6 +166,8 @@ export type AddOnChangePreview =
       slots: Record<string, number>;
       /** The bought slots' price and volume discount per period. */
       slotsPrice: SlotsPrice;
+      /** Platforms this change puts under their use: the newest locations past the slots wait. */
+      slotsWaiting: SlotsOver[];
       /** Charged now for the rest of this period (a credit when below 0 is kept for later). */
       dueTodayCents: number;
       /** Each period from the next renewal on: the plan and its add-ons. */
@@ -214,6 +217,7 @@ export async function previewAddOnChange(input: AddOnChangeInput): Promise<AddOn
       limits: cart.limits,
       slots: cart.slots,
       slotsPrice: cart.slotsPrice,
+      slotsWaiting: cart.slotsWaiting,
       // The rest of this period, and the top-up in full.
       dueTodayCents: (preview?.amount_due ?? 0) + (cart.topUp?.row.price_cents ?? 0),
       totalCents: cart.totalCents,
@@ -304,6 +308,16 @@ async function apply(input: AddOnChangeInput): Promise<AddOnChangeResult> {
     .eq('id', cart.organizationId)
     .eq('stripe_subscription_id', cart.subscription.id);
   if (error) console.error('[plan-add-ons] Limits write failed:', error.message);
+  // Fewer slots: the newest prompt locations past them wait now, as the
+  // webhook's sync would do (logged, never thrown: the change is paid).
+  if (cart.slotsChange) {
+    try {
+      const { settleSlots } = await import('@/lib/prompt-capacity');
+      await settleSlots(cart.organizationId, cart.slots);
+    } catch (err) {
+      console.error('[plan-add-ons] Prompts past the slots not set waiting:', err);
+    }
+  }
   return { ok: true, changed: true, limits: cart.limits };
 }
 
@@ -421,6 +435,9 @@ interface Cart {
   limits: AddOnLimits;
   slots: Record<string, number>;
   slotsPrice: SlotsPrice;
+  slotsWaiting: SlotsOver[];
+  /** The slot units change: prompts past the new slots are settled once paid. */
+  slotsChange: boolean;
   totalCents: number;
   currency: string;
   interval: 'month' | 'year';
@@ -630,16 +647,17 @@ async function prepare(raw: AddOnChangeInput): Promise<Cart | AddOnChangeRefusal
     ...slotItemChanges(currentSlots, slotTargets, couponId),
   ];
 
-  // Never a platform's slots under what its prompts use.
+  // A platform's slots can go under what its prompts use: the newest
+  // locations past them wait, and Review and pay says how many.
   const lowered = [...currentSlots].filter(
     ([platform, s]) => (slotTargets.get(platform)?.units ?? 0) < s.units,
   );
+  let slotsWaiting: SlotsOver[] = [];
   if (changes.length && lowered.length) {
     const used = await getOrgSlotUsage(supabase, organizationId);
-    const slotsOver = lowered
+    slotsWaiting = lowered
       .map(([platform]) => ({ platform, inUse: used.get(platform) ?? 0, limit: slots[platform] }))
       .filter((o) => o.limit >= 0 && o.inUse > o.limit);
-    if (slotsOver.length) return refuse('below_usage', { slotsOver });
   }
 
   // Never below what's in use: a change that lowers a limit under it waits
@@ -719,6 +737,8 @@ async function prepare(raw: AddOnChangeInput): Promise<Cart | AddOnChangeRefusal
     limits,
     slots,
     slotsPrice,
+    slotsWaiting,
+    slotsChange: slotUnitsChange,
     totalCents:
       planCents + tierCents + brandCents + slotsPrice.listCents - slotsPrice.discountCents,
     currency: planItem.price?.currency ?? 'usd',
@@ -756,6 +776,10 @@ export interface PlanAddOnsView {
   topUps: { multiplier: number; priceCents: number; briefs: number; opportunities: number }[];
   /** When the plan renews: a top-up lasts until then. */
   renewsOn: string | null;
+  /** The organization's plan, for the cart's first line. */
+  planId: string;
+  /** The plan's price on its period, in cents; null when it couldn't be read. */
+  planPriceCents: number | null;
   /** Tracking slots per platform (00564); null when the plan doesn't sell them or none is on sale. */
   slots: PlanSlotsView | null;
 }
@@ -857,13 +881,19 @@ export async function readPlanAddOns(): Promise<PlanAddOnsRead> {
     // on a yearly plan sees yearly prices); monthly when there's no
     // subscription or it can't be read.
     let interval: 'month' | 'year' = 'month';
+    // The plan's own price, for the cart's first line; null when unread.
+    let planPriceCents: number | null = null;
     if (sellsSlots && org.stripe_subscription_id) {
       try {
         const stripe = await loadStripe();
         if (stripe) {
           const sub = await stripe.subscriptions.retrieve(org.stripe_subscription_id as string);
-          const found = planItemOf(sub.items.data)?.price?.recurring?.interval;
+          const item = planItemOf(sub.items.data);
+          const found = item?.price?.recurring?.interval;
           if (found === 'year') interval = 'year';
+          if (item?.price?.unit_amount != null) {
+            planPriceCents = item.price.unit_amount * (item.quantity ?? 1);
+          }
         }
       } catch (err) {
         if (running === 'open' || running === 'not_admin') throw err;
@@ -926,6 +956,8 @@ export async function readPlanAddOns(): Promise<PlanAddOnsRead> {
         brandPriceCents: brand?.price_cents ?? null,
         topUps,
         renewsOn: (org.subscription_ends_at as string | null) ?? null,
+        planId,
+        planPriceCents,
         slots,
       },
     };
