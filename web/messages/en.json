@@ -4396,6 +4396,7 @@
     "contentImpact": { "name": "Read a live page's impact", "step": "Read Live page" },
     "contentSources": { "name": "Read a draft's sources", "step": "Read Sources" },
     "siteAuditQuota": { "name": "Read Site Audits left this month", "step": "Read Site Audit" },
+    "crawlerAccess": { "name": "Read AI crawler issues", "step": "Read Site Audit · Crawlers" },
     "goToPage": { "name": "Go to a page", "step": "Opened a page" },
     "fanouts": { "name": "Read query fan-outs", "step": "Read Query Fan-outs" },
     "fanoutGaps": { "name": "Read fan-out gaps", "step": "Read fan-out gaps" },
@@ -7687,6 +7688,7 @@
       "traffic": "AI traffic and sign-ups",
       "ai-revenue": "Customers and revenue from AI",
       "feed-advisor": "Shopping feed gaps",
+      "tech-fix": "Crawler and technical fixes",
       "earn-or-pay": "Earn or pay",
       "ad-drafts": "Ad drafts",
       "paid-overlap": "Paid overlap",
@@ -8279,7 +8281,7 @@
       },
       "technical-fixer": {
         "name": "Crawler & Technical Fixer",
-        "description": "Fixes what keeps AI crawlers out and sends the fix to your site’s code as a pull request."
+        "description": "Finds what keeps AI crawlers out of your site and writes the fixes for your developer."
       },
       "third-party-sources": {
         "name": "Third-party Sources",

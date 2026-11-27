@@ -54,6 +54,10 @@
  * feed misses for AI shopping answers, read from its catalog, so the catalog
  * is Required, as for /shopping. Its fixes go to the Action Center with
  * create_action, each on a card.
+ * Then /tech-fix, the Crawler & Technical Fixer's: what keeps AI crawlers out
+ * of the site, from Site Audit's own results, so it uses no connection. Its
+ * fixes go to the Action Center with create_action, each on a card, for a
+ * developer to apply: it never changes the site or opens a pull request.
  *
  * Last, /operator: the AEO Operator's own skill, an agent made of it alone
  * (agent-rules.ts isOperatorSkills), which reads only Ansvisor's own numbers
@@ -141,6 +145,8 @@ export const ANSVISOR_SKILLS: readonly AgentSkill[] = [
   { id: 'ai-revenue', uses: [optional('google_analytics')] },
   // The Shopping Feed Advisor's: it reads the brand's catalog, so it needs one, as /shopping does.
   { id: 'feed-advisor', uses: [required(CATALOG_CONNECTION)] },
+  // The Crawler & Technical Fixer's: Site Audit's own results, no connection.
+  { id: 'tech-fix', uses: [] },
   // Ads Phase 0 PR 15, only with Ads on: Ansvisor's own Ads reads, and drafts saved in it.
   { id: 'earn-or-pay', uses: [] },
   { id: 'ad-drafts', uses: [] },

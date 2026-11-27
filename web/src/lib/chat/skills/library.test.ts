@@ -228,6 +228,11 @@ const ANSVISOR_SKILLS: Record<string, { title: string; description: string }> = 
     description:
       'A weekly list of what your product feed is missing for AI shopping answers, ordered by impact, with the fix for each. Fixes go to the Action Center only on your approval.',
   },
+  'tech-fix': {
+    title: 'Crawler and technical fixes',
+    description:
+      'Finds what keeps AI crawlers out of your site, from your Site Audits, and writes each fix ready for your developer: robots.txt rules, CDN and firewall settings, rendering and tags. Fixes go to the Action Center only on your approval.',
+  },
   'earn-or-pay': {
     title: 'Earn or pay',
     description:
@@ -569,7 +574,7 @@ describe("Ads' skills (Ads Phase 0 PR 15)", () => {
   });
 });
 
-describe("the packs' skills: /content-plan, /seasonal, /traffic and /feed-advisor (AGENTS plan §8)", () => {
+describe("the packs' skills: /content-plan, /seasonal, /traffic, /feed-advisor and /tech-fix (AGENTS plan §8)", () => {
   /** Each skill, its agent, and the only writes it may ask for. */
   const PACKS = [
     {
@@ -585,6 +590,13 @@ describe("the packs' skills: /content-plan, /seasonal, /traffic and /feed-adviso
     { skill: 'traffic', agent: 'ai-traffic-signups', writes: ['create_action'] },
     // The Shopping Feed Advisor's (AGENTS plan §8): the feed's gaps, its fixes sent on a card.
     { skill: 'feed-advisor', agent: 'shopping-feed-advisor', writes: ['create_action'] },
+    // The Crawler & Technical Fixer's (AGENTS plan §8): its fixes on a card, and an audit
+    // only where there is none, on its own card.
+    {
+      skill: 'tech-fix',
+      agent: 'technical-fixer',
+      writes: ['create_action', 'run_site_audit'],
+    },
   ];
   const body = (name: string) => SKILL_LIBRARY.find((skill) => skill.name === name)?.body ?? '';
   const named = (text: string) => [
@@ -632,9 +644,11 @@ describe("the packs' skills: /content-plan, /seasonal, /traffic and /feed-adviso
           expect(['ask', 'ask_full_auto'], at).toContain(tool.defaultPolicy);
         }
       }
-      // Auto, or Ask me first for Seasonal (the owner's choice, as Prompt Portfolio Manager):
-      // either way each write is a card.
-      expect(preset.mode, agent).toBe(agent === 'seasonal-prompt-planner' ? 'ask_first' : 'auto');
+      // Auto, or Ask me first for Seasonal and the Technical Fixer (the owner's choice, as
+      // Prompt Portfolio Manager): either way each write is a card.
+      expect(preset.mode, agent).toBe(
+        ['seasonal-prompt-planner', 'technical-fixer'].includes(agent) ? 'ask_first' : 'auto',
+      );
     }
   });
 
