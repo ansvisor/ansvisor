@@ -785,4 +785,45 @@ describe('tracking slots (00564)', () => {
       await previewAddOnChange({ trackingUnits: 0, extraBrands: 1, slots: { 'claude-web': 3 } }),
     ).toMatchObject({ ok: false, failure: 'not_growth', plan: 'enterprise' });
   });
+  it('shows Billing the slots on sale on the plan’s period, with what is included, bought and used', async () => {
+    org().add_on_slots = { 'claude-web': 300 };
+    usage.slots = new Map([
+      ['chatgpt-web', 120],
+      ['claude-web', 280],
+    ]);
+    const read = await readPlanAddOns();
+    expect(read.ok && read.addOns.slots).toEqual({
+      state: 'open',
+      // Only Claude is on sale monthly here; Naver is yearly only.
+      platforms: [
+        {
+          id: 'claude-web',
+          group: 'signed_in',
+          unitCents: 6000,
+          unitSlots: 100,
+          included: 0,
+          units: 3,
+          inUse: 280,
+        },
+      ],
+    });
+  });
+
+  it('shows Enterprise its slots, and Starter none', async () => {
+    org().plan = 'enterprise';
+    let read = await readPlanAddOns();
+    expect(read.ok && [read.addOns.state, read.addOns.slots?.state]).toEqual([
+      'enterprise',
+      'open',
+    ]);
+    org().plan = 'starter';
+    read = await readPlanAddOns();
+    expect(read.ok && read.addOns.slots).toBeNull();
+  });
+
+  it('shows no slots while none is on sale', async () => {
+    for (const r of db.tables.add_on_products) if (r.kind === 'slots') r.active = false;
+    const read = await readPlanAddOns();
+    expect(read.ok && read.addOns.slots).toBeNull();
+  });
 });

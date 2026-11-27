@@ -47,7 +47,34 @@ const VIEW: PlanAddOnsView = {
     { multiplier: 10, priceCents: 6900, briefs: 100, opportunities: 100 },
   ],
   renewsOn: '2026-11-29T10:00:00.000Z',
+  slots: null,
 };
+
+const SLOTS: NonNullable<PlanAddOnsView['slots']> = {
+  state: 'open',
+  platforms: [
+    {
+      id: 'chatgpt-web',
+      group: 'standard',
+      unitCents: 1500,
+      unitSlots: 100,
+      included: 250,
+      units: 0,
+      inUse: 120,
+    },
+    {
+      id: 'claude-web',
+      group: 'signed_in',
+      unitCents: 6000,
+      unitSlots: 100,
+      included: 0,
+      units: 0,
+      inUse: 0,
+    },
+  ],
+};
+
+const SLOTS_PRICE = { listCents: 0, percentOff: 0, discountCents: 0, next: null };
 
 let container: HTMLDivElement;
 let root: Root;
@@ -111,6 +138,8 @@ describe('the add-ons card', () => {
       currency: 'usd',
       interval: 'month',
       prorationDate: 1_800_000_000,
+      slots: {},
+      slotsPrice: SLOTS_PRICE,
     });
     api.apply.mockResolvedValue({ ok: true, changed: true, limits: { prompts: 1200, brands: 7 } });
     await render();
@@ -183,6 +212,82 @@ describe('the add-ons card', () => {
     window.history.replaceState(null, '', '/dashboard/settings/billing?add=tracking');
     await render({ state: 'not_admin', current: { trackingUnits: 100, extraBrands: 0 } });
     expect(byText('+1,000 prompt locations')?.getAttribute('aria-checked')).not.toBe('true');
+  });
+
+  it('sells tracking slots per platform, with the volume discount worked out as you pick', async () => {
+    await render({ slots: SLOTS });
+    const text = () => container.textContent ?? '';
+    expect(text()).toContain('Tracking slots');
+    expect(text()).toContain('Standard · $15 per 100 a month');
+    expect(text()).toContain('120 of 250 used · 250 included');
+    expect(text()).toContain('Add slots to see your price.');
+
+    const more = document.querySelector<HTMLElement>('[aria-label="100 more Claude slots"]')!;
+    for (let i = 0; i < 9; i++) await click(more);
+    // $540: 5% of the $40 above $500 is $2, 0.37%.
+    expect(text()).toContain('$540 − 0.37% ($2) = $538/mo');
+    expect(text()).toContain('Add $460 more for 10% on the part above $1,000.');
+    expect(text()).toContain('0 of 900 used · 0 included');
+
+    api.preview.mockResolvedValue({
+      ok: true,
+      changed: true,
+      limits: { prompts: 200, brands: 4 },
+      slots: { 'chatgpt-web': 250, 'claude-web': 900 },
+      slotsPrice: { listCents: 54000, percentOff: 0.37, discountCents: 200, next: null },
+      dueTodayCents: 30000,
+      totalCents: 78700,
+      currency: 'usd',
+      interval: 'month',
+      prorationDate: 1_800_000_000,
+    });
+    await click(byText('Review and pay'));
+    expect(api.preview).toHaveBeenCalledWith({
+      trackingUnits: 0,
+      extraBrands: 0,
+      topUp: 0,
+      slots: { 'chatgpt-web': 0, 'claude-web': 9 },
+    });
+    const dialog = document.body.textContent ?? '';
+    expect(dialog).toContain('Claude slots900 (+900 added)');
+    expect(dialog).toContain('Volume discount (0.37%)−$2 a month');
+  });
+
+  it('hides the retired tracking tiers unless the workspace holds one', async () => {
+    await render({ slots: SLOTS, tiers: [] });
+    expect(container.textContent).not.toContain('Extra tracking');
+  });
+
+  it('keeps showing a retired tier to a workspace that holds one', async () => {
+    await render({ slots: SLOTS, tiers: [], current: { trackingUnits: 100, extraBrands: 0 } });
+    expect(container.textContent).toContain('Extra tracking');
+  });
+
+  it('lets Enterprise buy slots alone', async () => {
+    await render({ state: 'enterprise', slots: SLOTS, tiers: [] });
+    const text = container.textContent ?? '';
+    expect(text).toContain('Add tracking slots on any platform.');
+    expect(text).not.toContain('Extra brands');
+    expect(text).not.toContain('AI usage top-up');
+    expect(text).not.toContain('Your contract sets');
+    await click(document.querySelector<HTMLElement>('[aria-label="100 more ChatGPT slots"]')!);
+    expect(byText('Review and pay')?.hasAttribute('disabled')).toBe(false);
+  });
+
+  it('says which platform can’t go below its use', async () => {
+    api.preview.mockResolvedValue({
+      ok: false,
+      failure: 'below_usage',
+      slotsOver: [{ platform: 'claude-web', inUse: 250, limit: 200 }],
+    });
+    const holding = {
+      ...SLOTS,
+      platforms: [{ ...SLOTS.platforms[1], units: 3, inUse: 250 }],
+    };
+    await render({ slots: holding });
+    await click(document.querySelector<HTMLElement>('[aria-label="100 fewer Claude slots"]')!);
+    await click(byText('Review and pay'));
+    expect(container.textContent).toContain("Claude uses 250 slots; it can't go down to 200.");
   });
 
   it('says when it can’t be read', async () => {

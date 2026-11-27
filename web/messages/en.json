@@ -18318,7 +18318,33 @@
     },
     "planAddOns": {
       "title": "Add more to your plan",
-      "description": "Extra tracking, extra brands and AI usage top-ups for your Growth plan. Everything you pick is charged once, to the card on file.",
+      "description": "Tracking slots, extra brands and AI usage top-ups for your Growth plan. Everything you pick is charged once, to the card on file.",
+      "descriptionSlots": "Add tracking slots on any platform. What you pick is charged once, to the card on file.",
+      "slots": {
+        "title": "Tracking slots",
+        "description": "A slot tracks one prompt in one location on one platform, every day. Your plan includes slots on its own platforms; add 100 at a time on any platform.",
+        "groups": {
+          "standard": "Standard · {price} per 100 a {interval, select, year {year} other {month}}",
+          "mid": "ChatGPT Ads and Meta AI · {price} per 100 a {interval, select, year {year} other {month}}",
+          "signed_in": "Signed-in assistants · {price} per 100 a {interval, select, year {year} other {month}}"
+        },
+        "usage": "{used} of {total} used · {included} included",
+        "unlimited": "{used} used · no limit",
+        "notIncluded": "Not in your plan · add 100 to track here",
+        "price": "{price}/{interval, select, year {yr} other {mo}}",
+        "extra": "+{slots}",
+        "fewer": "100 fewer {platform} slots",
+        "more": "100 more {platform} slots",
+        "discount": {
+          "title": "Volume discount",
+          "none": "Add slots to see your price.",
+          "total": "{list} − {percent}% ({off}) = {price}/{interval, select, year {yr} other {mo}}",
+          "steps": "Volume discount steps",
+          "step": "{percent}% above {from}",
+          "next": "Add {more} more for {percent}% on the part above {from}.",
+          "top": "You get the highest step: 20% on the part above it."
+        }
+      },
       "tracking": {
         "title": "Extra tracking",
         "description": "More prompt locations, tracked on your plan's engines every day. One tier at a time; change or remove it any time.",
@@ -18347,6 +18373,7 @@
         "adds": "{multiplier}× this month’s AI usage · +{briefs} briefs · +{opportunities} opportunities"
       },
       "summary": "{prompts} prompt locations · {brands} brands",
+      "summarySlots": "Your tracking slots change.",
       "nothing": "Pick what to change above.",
       "review": "Review and pay",
       "reviewing": "Checking the price…",
@@ -18358,10 +18385,14 @@
         "brands": "{count, plural, =0 {No extra brands} one {# extra brand} other {# extra brands}}",
         "topUp": "AI usage top-up +{multiplier}x, one payment",
         "dueToday": "Due today",
-        "dueTodayNote": "The rest of this period for extra tracking and brands, and a top-up in full.",
+        "dueTodayNote": "The rest of this period for slots, extra tracking and brands, and a top-up in full.",
+        "slots": "{platform} slots",
+        "slotsValue": "{slots} (+{extra} added)",
+        "volumeDiscount": "Volume discount ({percent}%)",
+        "discountValue": "−{off} a {interval, select, year {year} other {month}}",
         "total": "From the next renewal",
         "totalValue": "{price} a {interval, select, year {year} other {month}}",
-        "credit": "A lower tier or fewer brands leaves a credit for your next invoices.",
+        "credit": "Fewer slots, a lower tier or fewer brands leave a credit for your next invoices.",
         "pay": "Pay {price}",
         "confirm": "Confirm",
         "cancel": "Cancel",
@@ -18371,7 +18402,7 @@
       "states": {
         "not_admin": "Only admins change add-ons. Ask an admin of your workspace.",
         "starter": "Add-ons come with the Growth plan. Upgrade to Growth to add tracking, brands and AI usage.",
-        "enterprise": "Your contract sets your limits. Contact your account manager for more.",
+        "enterprise": "Your contract sets your other limits. Contact your account manager for more.",
         "trial": "Add-ons can be bought once your plan has started.",
         "no_plan": "Add-ons can be bought while your plan is active.",
         "ending": "Your plan is set to end. Keep your plan to change its add-ons."
@@ -18387,6 +18418,7 @@
         "unavailable": "This add-on can't be bought right now.",
         "below_usage": "You use {prompts} prompt locations and {brands} brands; the new limits are {limitPrompts} and {limitBrands}. Pause prompts or remove brands first.",
         "payment_failed": "The payment didn't go through.",
+        "slots_below_usage": "{platform} uses {inUse} slots; it can't go down to {limit}. Remove {platform} from some prompts first.",
         "failed": "Couldn't change your add-ons. Try again."
       },
       "readFailed": "Couldn't read your add-ons. Try again later."

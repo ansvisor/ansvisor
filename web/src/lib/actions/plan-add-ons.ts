@@ -8,7 +8,7 @@ import { supabaseAdmin } from '@/lib/supabase/admin';
 import { getPlan, isCloud } from '@/config/plans';
 import { assertWritable, SubscriptionInactiveError } from '@/lib/subscription-guard';
 import { getOrgLocationUsage, getOrgSlotUsage } from '@/lib/prompt-locations';
-import { slotPlatform } from '@/config/tracking-slots';
+import { SLOT_PLATFORMS, slotPlatform, type SlotGroup } from '@/config/tracking-slots';
 import { ORG_PLAN_COLUMNS, planFromOrgRow, boughtSlots } from '@/lib/guards/plan-row';
 import { slotDiscount } from '@/lib/billing/slot-discount';
 import { ensureSlotCoupon } from '@/lib/billing/slot-coupon';
@@ -756,6 +756,29 @@ export interface PlanAddOnsView {
   topUps: { multiplier: number; priceCents: number; briefs: number; opportunities: number }[];
   /** When the plan renews: a top-up lasts until then. */
   renewsOn: string | null;
+  /** Tracking slots per platform (00564); null when the plan doesn't sell them or none is on sale. */
+  slots: PlanSlotsView | null;
+}
+
+/** Settings › Billing's tracking slots: Growth and Enterprise. */
+export interface PlanSlotsView {
+  /** Why the workspace can't change its slots now, or `open` when it can. */
+  state: Exclude<PlanAddOnsState, 'starter' | 'enterprise'>;
+  /** Each platform on sale on the plan's period, in the config's order. */
+  platforms: {
+    id: string;
+    group: SlotGroup;
+    /** One unit's price on the plan's period, in cents. */
+    unitCents: number;
+    /** The slots one unit adds (100). */
+    unitSlots: number;
+    /** The slots the plan includes on it; -1 is no limit. */
+    included: number;
+    /** The units bought now. */
+    units: number;
+    /** Slots its prompts use now. */
+    inUse: number;
+  }[];
 }
 
 export type PlanAddOnsRead =
@@ -763,7 +786,9 @@ export type PlanAddOnsRead =
   | { ok: false; failure: 'not_cloud' | 'failed' };
 
 interface ViewRow {
-  kind: 'tracking' | 'brand' | 'ai_topup';
+  kind: 'tracking' | 'brand' | 'ai_topup' | 'slots';
+  platform: string | null;
+  grant_slots: number | null;
   price_cents: number;
   currency: string;
   billing: 'monthly' | 'yearly' | 'one_time';
@@ -797,41 +822,42 @@ export async function readPlanAddOns(): Promise<PlanAddOnsRead> {
       supabaseAdmin
         .from('organizations')
         .select(
-          'plan, subscription_status, cancel_at_period_end, subscription_ends_at, stripe_subscription_id, add_on_prompts, add_on_brands',
+          `${ORG_PLAN_COLUMNS}, cancel_at_period_end, subscription_ends_at, stripe_subscription_id`,
         )
         .eq('id', organizationId)
         .maybeSingle(),
       supabaseAdmin
         .from('add_on_products')
         .select(
-          'kind, price_cents, currency, billing, grant_prompts, grant_briefs, grant_opportunities, multiplier, sale, plans, active',
+          'kind, price_cents, currency, billing, grant_prompts, grant_briefs, grant_opportunities, multiplier, platform, grant_slots, sale, plans, active',
         )
-        .in('kind', ['tracking', 'brand', 'ai_topup']),
+        .in('kind', ['tracking', 'brand', 'ai_topup', 'slots']),
     ]);
     if (error || !org) return { ok: false, failure: 'failed' };
 
     const planId = (org.plan as string | null) ?? 'starter';
     const status = org.subscription_status as string | null;
+    // How far an active plan lets this person buy (Growth's add-ons, and
+    // Growth's and Enterprise's slots).
+    const running: PlanSlotsView['state'] =
+      status === 'trialing'
+        ? 'trial'
+        : status !== 'active' || !org.stripe_subscription_id
+          ? 'no_plan'
+          : org.cancel_at_period_end
+            ? 'ending'
+            : profile?.role !== 'admin'
+              ? 'not_admin'
+              : 'open';
     const state: PlanAddOnsState =
-      planId === 'enterprise'
-        ? 'enterprise'
-        : planId !== 'growth'
-          ? 'starter'
-          : status === 'trialing'
-            ? 'trial'
-            : status !== 'active' || !org.stripe_subscription_id
-              ? 'no_plan'
-              : org.cancel_at_period_end
-                ? 'ending'
-                : profile?.role !== 'admin'
-                  ? 'not_admin'
-                  : 'open';
+      planId === 'enterprise' ? 'enterprise' : planId !== 'growth' ? 'starter' : running;
+    const sellsSlots = planId === 'growth' || planId === 'enterprise';
 
     // The plan's period, from its Stripe item, whatever the state (a trial
     // on a yearly plan sees yearly prices); monthly when there's no
     // subscription or it can't be read.
     let interval: 'month' | 'year' = 'month';
-    if (planId === 'growth' && org.stripe_subscription_id) {
+    if (sellsSlots && org.stripe_subscription_id) {
       try {
         const stripe = await loadStripe();
         if (stripe) {
@@ -840,7 +866,7 @@ export async function readPlanAddOns(): Promise<PlanAddOnsRead> {
           if (found === 'year') interval = 'year';
         }
       } catch (err) {
-        if (state === 'open' || state === 'not_admin') throw err;
+        if (running === 'open' || running === 'not_admin') throw err;
         console.error('[plan-add-ons] Plan period not read; monthly shown:', err);
       }
     }
@@ -848,6 +874,21 @@ export async function readPlanAddOns(): Promise<PlanAddOnsRead> {
     const catalog = ((rows ?? []) as ViewRow[]).filter(
       (r) => r.active && addOnForPlan(r, 'growth'),
     );
+    const slots = sellsSlots
+      ? await slotsView(
+          ((rows ?? []) as ViewRow[]).filter(
+            (r) =>
+              r.kind === 'slots' &&
+              r.active &&
+              r.sale === 'self_serve' &&
+              addOnForPlan(r, planId) &&
+              addOnInterval(r) === interval,
+          ),
+          org,
+          running,
+          () => getOrgSlotUsage(supabase, organizationId),
+        )
+      : null;
     const onPeriod = (r: ViewRow) => addOnInterval(r) === interval;
     const tiers = catalog
       .filter((r) => r.kind === 'tracking' && onPeriod(r) && r.grant_prompts)
@@ -885,10 +926,46 @@ export async function readPlanAddOns(): Promise<PlanAddOnsRead> {
         brandPriceCents: brand?.price_cents ?? null,
         topUps,
         renewsOn: (org.subscription_ends_at as string | null) ?? null,
+        slots,
       },
     };
   } catch (err) {
     console.error('[plan-add-ons] Read failed:', err);
     return { ok: false, failure: 'failed' };
   }
+}
+
+/** The slots on sale on the plan's period, with what the plan includes, what was bought and what is used. */
+async function slotsView(
+  rows: ViewRow[],
+  org: Parameters<typeof planFromOrgRow>[0] & { add_on_slots?: unknown },
+  state: PlanSlotsView['state'],
+  usage: () => Promise<Map<string, number>>,
+): Promise<PlanSlotsView | null> {
+  if (!rows.length) return null;
+  const plan = planFromOrgRow(org);
+  const bought = boughtSlots(org.add_on_slots);
+  let used = new Map<string, number>();
+  try {
+    used = await usage();
+  } catch (err) {
+    console.error('[plan-add-ons] Slot usage not read:', err);
+  }
+  const platforms: PlanSlotsView['platforms'] = [];
+  for (const config of SLOT_PLATFORMS) {
+    const row = rows.find((r) => r.platform === config.id);
+    if (!row) continue;
+    const unitSlots = row.grant_slots ?? 100;
+    const total = plan.slots?.[config.id] ?? 0;
+    platforms.push({
+      id: config.id,
+      group: config.group,
+      unitCents: row.price_cents,
+      unitSlots,
+      included: total < 0 ? -1 : Math.max(0, total - (bought[config.id] ?? 0)),
+      units: Math.floor((bought[config.id] ?? 0) / unitSlots),
+      inUse: used.get(config.id) ?? 0,
+    });
+  }
+  return platforms.length ? { state, platforms } : null;
 }

@@ -27,6 +27,13 @@ import {
 } from '@/lib/actions/plan-add-ons';
 import { cn } from '@/lib/utils';
 import { formatDate, formatPackPrice } from './add-ons-card';
+import {
+  currentSlotUnits,
+  PlanSlotsSection,
+  slotUnitsChanged,
+  type SlotUnits,
+} from './plan-slots-section';
+import { platformLabel } from '@/config/platform-labels';
 
 /** The tier a deep link asks for: `?add=tracking` preselects the next one up. */
 function askedForMoreTracking(): boolean {
@@ -42,7 +49,8 @@ function askedForMoreTracking(): boolean {
  * picked together and paid once. Review and pay asks Stripe what is due
  * today (previewAddOnChange); Pay applies it (applyAddOnChange). Admins of
  * an active Growth plan buy; everyone else sees why they can't. Shown
- * whatever Chat's flag is.
+ * whatever Chat's flag is. Tracking slots per platform (00564) are in the
+ * same cart, on Growth and Enterprise; Enterprise sees only them.
  */
 export function PlanAddOnsCard() {
   const t = useTranslations('settings.planAddOns');
@@ -62,12 +70,13 @@ export function PlanAddOnsCard() {
 
   // Nothing until it's read, and nothing off the cloud.
   if (!read || (!read.ok && read.failure === 'not_cloud')) return null;
+  const slotsOnly = read.ok && read.addOns.state === 'enterprise' && !!read.addOns.slots;
 
   return (
     <Card id="plan-add-ons" className="scroll-mt-6">
       <CardHeader>
         <CardTitle>{t('title')}</CardTitle>
-        <CardDescription>{t('description')}</CardDescription>
+        <CardDescription>{slotsOnly ? t('descriptionSlots') : t('description')}</CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
         {read.ok ? (
@@ -84,6 +93,10 @@ function PlanAddOnsBody({ addOns, onChange }: { addOns: PlanAddOnsView; onChange
   const t = useTranslations('settings.planAddOns');
   const router = useRouter();
   const open = addOns.state === 'open';
+  const slotsView = addOns.slots;
+  const slotsOpen = slotsView?.state === 'open';
+  // Enterprise buys only slots; its other limits are its contract's.
+  const slotsOnly = addOns.state === 'enterprise' && !!slotsView;
   const money = (cents: number) => formatPackPrice(cents, addOns.currency);
 
   const [units, setUnits] = useState(() => {
@@ -94,6 +107,9 @@ function PlanAddOnsBody({ addOns, onChange }: { addOns: PlanAddOnsView; onChange
   });
   const [brands, setBrands] = useState(addOns.current.extraBrands);
   const [topUp, setTopUp] = useState(0);
+  const [slotUnits, setSlotUnits] = useState<SlotUnits>(() =>
+    slotsView ? currentSlotUnits(slotsView) : {},
+  );
   const [preview, setPreview] = useState<Extract<AddOnChangePreview, { ok: true }> | null>(null);
   const [busy, setBusy] = useState<'preview' | 'apply' | null>(null);
   const [message, setMessage] = useState<string | null>(null);
@@ -105,11 +121,26 @@ function PlanAddOnsBody({ addOns, onChange }: { addOns: PlanAddOnsView; onChange
     document.getElementById('plan-add-ons')?.scrollIntoView?.({ block: 'start' });
   }, []);
 
+  const slotsChanged = !!slotsView && slotUnitsChanged(slotsView, slotUnits);
   const changed =
-    units !== addOns.current.trackingUnits || brands !== addOns.current.extraBrands || topUp > 0;
+    units !== addOns.current.trackingUnits ||
+    brands !== addOns.current.extraBrands ||
+    topUp > 0 ||
+    slotsChanged;
   const limits = { prompts: addOns.base.prompts + units, brands: addOns.base.brands + brands };
 
   function refusal(answer: AddOnChangeRefusal): string {
+    if (answer.failure === 'below_usage' && answer.slotsOver?.length) {
+      return answer.slotsOver
+        .map((over) =>
+          t('errors.slots_below_usage', {
+            platform: platformLabel(over.platform),
+            inUse: formatNumber(over.inUse),
+            limit: formatNumber(over.limit),
+          }),
+        )
+        .join(' ');
+    }
     if (answer.failure === 'below_usage' && answer.inUse && answer.limits) {
       return t('errors.below_usage', {
         prompts: formatNumber(answer.inUse.prompts),
@@ -122,7 +153,13 @@ function PlanAddOnsBody({ addOns, onChange }: { addOns: PlanAddOnsView; onChange
     return answer.message ? `${base} ${answer.message}` : base;
   }
 
-  const input = { trackingUnits: units, extraBrands: brands, topUp };
+  const input = {
+    trackingUnits: units,
+    extraBrands: brands,
+    topUp,
+    // Only what can be bought: slots once their section is open.
+    ...(slotsOpen ? { slots: { ...slotUnits } } : {}),
+  };
 
   async function review() {
     setMessage(null);
@@ -151,77 +188,93 @@ function PlanAddOnsBody({ addOns, onChange }: { addOns: PlanAddOnsView; onChange
 
   const interval = addOns.interval;
   const renews = addOns.renewsOn ? formatDate(addOns.renewsOn) : null;
+  const shownState = slotsOnly ? slotsView.state : addOns.state;
+  // Extra tracking tiers are retired (00564): shown only to a workspace that still holds one.
+  const showTiers = !slotsOnly && (addOns.tiers.length > 0 || addOns.current.trackingUnits > 0);
 
   return (
     <>
-      {!open && (
+      {shownState !== 'open' && (
         <p
           className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-200"
           data-slot="plan-add-ons-state"
         >
-          {t(`states.${addOns.state}`)}
+          {t(`states.${shownState}`)}
         </p>
       )}
 
+      {slotsView && (
+        <PlanSlotsSection
+          view={slotsView}
+          interval={interval}
+          currency={addOns.currency}
+          units={slotUnits}
+          onUnits={(platform, next) => setSlotUnits((u) => ({ ...u, [platform]: next }))}
+          disabled={!slotsOpen}
+        />
+      )}
+
       {/* Extra tracking: one tier, None to remove it. */}
-      <section className="space-y-2">
-        <h3 className="text-sm font-medium">{t('tracking.title')}</h3>
-        <p className="text-sm text-muted-foreground">{t('tracking.description')}</p>
-        <div
-          role="radiogroup"
-          aria-label={t('tracking.label')}
-          className="grid grid-cols-1 gap-2 sm:grid-cols-2"
-        >
-          {[{ units: 0, priceCents: 0, contactSales: false }, ...addOns.tiers].map((tier) => {
-            const selected = units === tier.units;
-            if (tier.contactSales && tier.units !== addOns.current.trackingUnits) {
+      {showTiers && (
+        <section className="space-y-2">
+          <h3 className="text-sm font-medium">{t('tracking.title')}</h3>
+          <p className="text-sm text-muted-foreground">{t('tracking.description')}</p>
+          <div
+            role="radiogroup"
+            aria-label={t('tracking.label')}
+            className="grid grid-cols-1 gap-2 sm:grid-cols-2"
+          >
+            {[{ units: 0, priceCents: 0, contactSales: false }, ...addOns.tiers].map((tier) => {
+              const selected = units === tier.units;
+              if (tier.contactSales && tier.units !== addOns.current.trackingUnits) {
+                return (
+                  <a
+                    key={tier.units}
+                    href={CONTACT_SALES_URL}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center justify-between rounded-lg border px-3 py-2 text-sm text-muted-foreground hover:bg-accent"
+                  >
+                    <span>{t('tracking.tier', { units: formatNumber(tier.units) })}</span>
+                    <span className="text-xs font-medium">{t('tracking.contactSales')}</span>
+                  </a>
+                );
+              }
               return (
-                <a
+                <button
                   key={tier.units}
-                  href={CONTACT_SALES_URL}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center justify-between rounded-lg border px-3 py-2 text-sm text-muted-foreground hover:bg-accent"
+                  type="button"
+                  role="radio"
+                  aria-checked={selected}
+                  disabled={!open}
+                  onClick={() => setUnits(tier.units)}
+                  className={cn(
+                    'flex items-center justify-between rounded-lg border px-3 py-2 text-start text-sm transition-colors disabled:cursor-not-allowed disabled:opacity-60',
+                    selected ? 'border-foreground bg-accent' : 'hover:bg-accent',
+                  )}
                 >
-                  <span>{t('tracking.tier', { units: formatNumber(tier.units) })}</span>
-                  <span className="text-xs font-medium">{t('tracking.contactSales')}</span>
-                </a>
+                  <span className="font-medium">
+                    {tier.units
+                      ? t('tracking.tier', { units: formatNumber(tier.units) })
+                      : t('tracking.none')}
+                  </span>
+                  <span className="tabular-nums text-muted-foreground">
+                    {tier.units
+                      ? t('tracking.price', { price: money(tier.priceCents), interval })
+                      : money(0)}
+                  </span>
+                </button>
               );
-            }
-            return (
-              <button
-                key={tier.units}
-                type="button"
-                role="radio"
-                aria-checked={selected}
-                disabled={!open}
-                onClick={() => setUnits(tier.units)}
-                className={cn(
-                  'flex items-center justify-between rounded-lg border px-3 py-2 text-start text-sm transition-colors disabled:cursor-not-allowed disabled:opacity-60',
-                  selected ? 'border-foreground bg-accent' : 'hover:bg-accent',
-                )}
-              >
-                <span className="font-medium">
-                  {tier.units
-                    ? t('tracking.tier', { units: formatNumber(tier.units) })
-                    : t('tracking.none')}
-                </span>
-                <span className="tabular-nums text-muted-foreground">
-                  {tier.units
-                    ? t('tracking.price', { price: money(tier.priceCents), interval })
-                    : money(0)}
-                </span>
-              </button>
-            );
-          })}
-        </div>
-        {interval === 'year' && (
-          <p className="text-xs text-muted-foreground">{t('tracking.yearly')}</p>
-        )}
-      </section>
+            })}
+          </div>
+          {interval === 'year' && (
+            <p className="text-xs text-muted-foreground">{t('tracking.yearly')}</p>
+          )}
+        </section>
+      )}
 
       {/* Extra brands: a count. */}
-      {addOns.brandPriceCents != null && (
+      {!slotsOnly && addOns.brandPriceCents != null && (
         <section className="space-y-2">
           <h3 className="text-sm font-medium">{t('brands.title')}</h3>
           <p className="text-sm text-muted-foreground">
@@ -257,7 +310,7 @@ function PlanAddOnsBody({ addOns, onChange }: { addOns: PlanAddOnsView; onChange
       )}
 
       {/* AI usage top-up: one payment, until the plan renews. */}
-      {addOns.topUps.length > 0 && (
+      {!slotsOnly && addOns.topUps.length > 0 && (
         <section className="space-y-2">
           <h3 className="text-sm font-medium">{t('topUp.title')}</h3>
           <p className="text-sm text-muted-foreground">
@@ -311,11 +364,13 @@ function PlanAddOnsBody({ addOns, onChange }: { addOns: PlanAddOnsView; onChange
       {/* One cart, one charge. */}
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-muted/40 px-3 py-2">
         <span className="text-sm">
-          {changed
-            ? t('summary', { prompts: formatNumber(limits.prompts), brands: limits.brands })
-            : t('nothing')}
+          {!changed
+            ? t('nothing')
+            : slotsOnly
+              ? t('summarySlots')
+              : t('summary', { prompts: formatNumber(limits.prompts), brands: limits.brands })}
         </span>
-        <Button onClick={review} disabled={!open || !changed || busy != null}>
+        <Button onClick={review} disabled={!(open || slotsOpen) || !changed || busy != null}>
           {busy === 'preview' ? t('reviewing') : t('review')}
         </Button>
       </div>
@@ -333,32 +388,64 @@ function PlanAddOnsBody({ addOns, onChange }: { addOns: PlanAddOnsView; onChange
               <DialogDescription>{t('dialog.credit')}</DialogDescription>
             </DialogHeader>
             <ul className="divide-y rounded-lg border text-sm">
-              <li className="flex justify-between gap-2 px-3 py-2">
-                <span>{t('dialog.tracking')}</span>
-                <span className="tabular-nums text-muted-foreground">
-                  {units
-                    ? t('tracking.tier', { units: formatNumber(units) })
-                    : t('dialog.trackingNone')}
-                </span>
-              </li>
-              <li className="flex justify-between gap-2 px-3 py-2">
-                <span>{t('brands.title')}</span>
-                <span className="text-muted-foreground">
-                  {t('dialog.brands', { count: brands })}
-                </span>
-              </li>
-              {topUp > 0 && (
-                <li className="px-3 py-2">{t('dialog.topUp', { multiplier: topUp })}</li>
+              {slotsView?.platforms
+                .filter((p) => (slotUnits[p.id] ?? 0) !== p.units || p.units > 0)
+                .map((p) => (
+                  <li key={p.id} className="flex justify-between gap-2 px-3 py-2">
+                    <span>{t('dialog.slots', { platform: platformLabel(p.id) })}</span>
+                    <span className="tabular-nums text-muted-foreground">
+                      {t('dialog.slotsValue', {
+                        slots: formatNumber(preview.slots[p.id] ?? 0),
+                        extra: formatNumber((slotUnits[p.id] ?? 0) * p.unitSlots),
+                      })}
+                    </span>
+                  </li>
+                ))}
+              {preview.slotsPrice.discountCents > 0 && (
+                <li className="flex justify-between gap-2 px-3 py-2">
+                  <span>
+                    {t('dialog.volumeDiscount', { percent: preview.slotsPrice.percentOff })}
+                  </span>
+                  <span className="tabular-nums text-emerald-700 dark:text-emerald-400">
+                    {t('dialog.discountValue', {
+                      off: money(preview.slotsPrice.discountCents),
+                      interval: preview.interval,
+                    })}
+                  </span>
+                </li>
               )}
-              <li className="flex justify-between gap-2 px-3 py-2">
-                <span>{t('dialog.newLimits')}</span>
-                <span className="text-muted-foreground">
-                  {t('summary', {
-                    prompts: formatNumber(preview.limits.prompts),
-                    brands: preview.limits.brands,
-                  })}
-                </span>
-              </li>
+              {!slotsOnly && (
+                <>
+                  {showTiers && (
+                    <li className="flex justify-between gap-2 px-3 py-2">
+                      <span>{t('dialog.tracking')}</span>
+                      <span className="tabular-nums text-muted-foreground">
+                        {units
+                          ? t('tracking.tier', { units: formatNumber(units) })
+                          : t('dialog.trackingNone')}
+                      </span>
+                    </li>
+                  )}
+                  <li className="flex justify-between gap-2 px-3 py-2">
+                    <span>{t('brands.title')}</span>
+                    <span className="text-muted-foreground">
+                      {t('dialog.brands', { count: brands })}
+                    </span>
+                  </li>
+                  {topUp > 0 && (
+                    <li className="px-3 py-2">{t('dialog.topUp', { multiplier: topUp })}</li>
+                  )}
+                  <li className="flex justify-between gap-2 px-3 py-2">
+                    <span>{t('dialog.newLimits')}</span>
+                    <span className="text-muted-foreground">
+                      {t('summary', {
+                        prompts: formatNumber(preview.limits.prompts),
+                        brands: preview.limits.brands,
+                      })}
+                    </span>
+                  </li>
+                </>
+              )}
             </ul>
             <div className="space-y-1 text-sm">
               <div className="flex justify-between gap-2">

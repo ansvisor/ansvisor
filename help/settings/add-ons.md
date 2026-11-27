@@ -1,31 +1,44 @@
 ---
-title: Add-ons: extra tracking, brands, AI top-ups and packs
+title: Add-ons: tracking slots, brands, AI top-ups and packs
 route: /dashboard/settings/billing
-keywords: [add-ons, extra tracking, extra brands, AI top-up, more prompts, AI credits, buy credits, storage pack, extra storage, AI limit used up, get more, storage full]
-synonyms: [add more prompts, track more prompts, add a brand, more brands, get more AI usage, top up credits, more storage, buy more AI, credit pack]
+keywords: [add-ons, tracking slots, slots, volume discount, extra tracking, extra brands, AI top-up, more prompts, AI credits, buy credits, storage pack, extra storage, AI limit used up, get more, storage full]
+synonyms: [buy slots, track on more platforms, add Claude, add Perplexity, add more prompts, track more prompts, add a brand, more brands, get more AI usage, top up credits, more storage, buy more AI, credit pack]
 plan: starter
-updated: 2026-11-21
-last_checked: 2026-11-21
+updated: 2026-11-27
+last_checked: 2026-11-27
 owner: Cihan
 app_version: 0.3.0
 approved: true
-sources: [web/src/components/settings/plan-add-ons-card.tsx, web/src/lib/actions/plan-add-ons.ts, web/src/components/settings/add-ons-card.tsx, web/src/components/ai-usage/get-more.tsx, web/src/lib/actions/add-ons.ts]
+sources: [web/src/components/settings/plan-add-ons-card.tsx, web/src/components/settings/plan-slots-section.tsx, web/src/lib/billing/slot-discount.ts, web/src/lib/actions/plan-add-ons.ts, web/src/components/settings/add-ons-card.tsx, web/src/components/ai-usage/get-more.tsx, web/src/lib/actions/add-ons.ts]
 ---
-**Settings › Billing** sells more for your plan. On Growth, **Add more to your plan** adds extra tracking, extra brands and AI usage top-ups, picked together and paid once. **Add-ons** shows AI credit you have left and the packs you bought. Everything is paid with Stripe, added only after the payment goes through, and shown on your invoice.
+
+**Settings › Billing** sells more for your plan. On Growth, **Add more to your plan** adds tracking slots, extra brands and AI usage top-ups, picked together and paid once. On Enterprise it adds tracking slots. **Add-ons** shows AI credit you have left and the packs you bought. Everything is paid with Stripe, added only after the payment goes through, and shown on your invoice.
+
+## Tracking slots
+
+A slot tracks one prompt in one location on one platform, every day. Your plan includes slots on its own platforms (Growth: 250 on each standard platform). Under **Tracking slots**, each platform shows how many slots are used, your total and what is included. Click **+** or **−** to add or remove 100 slots on it.
+
+Prices per 100 slots a month: $15 on the standard platforms, $45 on ChatGPT Ads and Meta AI, $60 on Perplexity, Claude, Grok and Microsoft Copilot. On a yearly plan, prices are yearly, with 2 months free. Add-ons follow your plan's billing period.
+
+You can't go below the slots a platform uses: remove it from some prompts first.
+
+## Volume discount
+
+The more slots you add, the less each costs: 5% off the part of your monthly slots price above $500, 10% above $1,000, 15% above $2,000 and 20% above $4,000. The card shows your discount and what to add for the next step. It applies to slots only; a plan discount code stays on your plan.
 
 ## Add more to your plan (Growth)
 
-- **Extra tracking:** more prompt locations, tracked on your plan's engines every day. Pick one tier, or **None** to remove it. The largest tiers say **Contact sales**.
+- **Extra tracking:** no longer sold; tracking slots replace it. A workspace that has a tier keeps it, and can remove it.
 - **Extra brands:** each with its own topics, competitors and white-label reports, at a monthly price per brand.
 - **AI usage top-up:** one payment that adds AI usage, briefs and opportunities until your plan renews. It doesn't renew, and you can buy another any time.
 
-On a yearly plan, tracking and brands show yearly prices, with 2 months free.
+On a yearly plan, slots and brands show yearly prices, with 2 months free.
 
 ## Review and pay
 
-Pick what you want, then click **Review and pay**. The window shows your new limits, what is **Due today** (the rest of this period for tracking and brands, and a top-up in full) and your total from the next renewal. **Pay** charges the card on file once. A lower tier or fewer brands leaves a credit for your next invoices. You can't go below what you use: pause prompts or remove brands first.
+Pick what you want, then click **Review and pay**. The window shows your new slots and limits, the volume discount, what is **Due today** (the rest of this period for slots and brands, and a top-up in full) and your total from the next renewal. **Pay** charges the card on file once. Fewer slots or brands leave a credit for your next invoices. You can't go below what you use: pause prompts or remove brands first.
 
-Only admins of an active Growth plan buy. In a free trial, start your plan first; if your plan is set to end, keep it first.
+Only admins of an active Growth or Enterprise plan buy. In a free trial, start your plan first; if your plan is set to end, keep it first.
 
 ## AI credit packs (no longer sold)
 
