@@ -91,7 +91,7 @@ describe('FanoutEngineStrip', () => {
     const buttons = [...container.querySelectorAll('button')].map((b) => b.textContent);
     expect(buttons).toEqual([
       'All engines706',
-      'Microsoft Copilot21% of answers · 706',
+      'Bing AI Mode21% of answers · 706',
       'Perplexitynone since Sep 29',
       // Sampled: an ordinary engine, neither flagged nor "not shared".
       'ChatGPT0% of answers · 0',

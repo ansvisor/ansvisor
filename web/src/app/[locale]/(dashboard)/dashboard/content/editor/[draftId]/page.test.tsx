@@ -8747,7 +8747,7 @@ describe('the side panel', () => {
         b.textContent?.includes('Fan-out'),
       )!;
       // The Sources tab's details, on hover.
-      expect(chip.title).toBe('pipeline forecasting · Microsoft Copilot · searched 2×');
+      expect(chip.title).toBe('pipeline forecasting · Bing AI Mode · searched 2×');
       // The card says how many of the person's sources it was built from.
       expect(
         container.querySelector('[role="region"][aria-label="Agent suggestions"]')!.textContent,

@@ -18,10 +18,16 @@ export const ENGINE_NAMES: Readonly<Record<string, string>> = {
   'chatgpt-shopping': 'ChatGPT Shopping',
   'google-aio': 'Google AI Overviews',
   'google-aimode': 'Google AI Mode',
-  'copilot-web': 'Microsoft Copilot',
+  'copilot-web': 'Bing AI Mode',
   'grok-web': 'Grok',
   'perplexity-web': 'Perplexity',
   'gemini-web': 'Gemini',
+  'chatgpt-ads': 'ChatGPT with ads',
+  'meta-ai-web': 'Meta AI',
+  'claude-web': 'Claude',
+  'copilot-app': 'Microsoft Copilot',
+  'naver-web': 'Naver',
+  'wenxin-web': 'Wenxin',
 
   // API-model platforms.
   chatgpt: 'ChatGPT API',
