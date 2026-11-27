@@ -277,6 +277,7 @@
       "label": "Markanız henüz takip edilmiyor"
     },
     "actions": {
+      "changePlatforms": "Platformları değiştirmek için bir plan gerekir",
       "addPrompts": "Prompt eklemek bir plan gerektirir",
       "removeLocations": "Konumları kaldırmak bir plan gerektirir",
       "editPrompts": "Prompt'ları düzenlemek bir plan gerektirir",
@@ -4531,6 +4532,10 @@
       "name": "Bu ay kalan Site Denetimi sayısını oku",
       "step": "Site Denetimini Oku"
     },
+    "crawlerAccess": {
+      "name": "AI tarayıcı sorunlarını oku",
+      "step": "Site Denetimi · Tarayıcılar okunuyor"
+    },
     "goToPage": {
       "name": "Bir sayfaya git",
       "step": "Bir sayfa açıldı"
@@ -8036,6 +8041,7 @@
       "traffic": "AI trafiği ve kayıtlar",
       "ai-revenue": "AI kaynaklı müşteriler ve gelir",
       "feed-advisor": "Alışveriş feed boşlukları",
+      "tech-fix": "Tarayıcı ve teknik düzeltmeler",
       "earn-or-pay": "Kazan ya da öde",
       "ad-drafts": "Reklam taslakları",
       "paid-overlap": "Ücretli çakışma",
@@ -15776,6 +15782,31 @@
     }
   },
   "prompts": {
+    "bulkPlatforms": {
+      "bulkButton": "Platformlar",
+      "bulkAdd": "Platform ekle",
+      "bulkRemove": "Platformları kaldır",
+      "modes": "Ekle veya kaldır",
+      "modeAdd": "Ekle",
+      "modeRemove": "Kaldır",
+      "platforms": "Platformlar",
+      "title": "Platform ekle",
+      "lead": "Seçili {count} Prompt'u daha fazla platformda takip edin. Her Prompt konumu, her platformda bir takip slot'u kullanır. Bir Prompt'un beklediği platform yeniden çalışır.",
+      "removeTitle": "Platformları kaldır",
+      "removeLead": "Seçili {count} Prompt'un bazı platformlardaki takibini durdurun. Slot'ları yeniden boşa çıkar.",
+      "none": "Eklenecek platform yok. Daha fazla platformda takip etmek için Ayarlar › Faturalama bölümünden takip slot'u ekleyin.",
+      "removeNone": "Seçili Prompt'lar, kaldırabileceğiniz hiçbir platformda çalışmıyor.",
+      "free": "{count} boş",
+      "previewAdd": "{count, plural, one {# Prompt değişecek} other {# Prompt değişecek}} · {unchanged} zaten sahip",
+      "previewRemove": "{count, plural, one {# Prompt değişecek} other {# Prompt değişecek}} · {unchanged} sahip değil · {blocked} Prompt'ta hiç platform kalmayacak",
+      "short": "{platform} için {needed} slot gerekiyor, {free} slot boş.",
+      "addSlots": "Slot ekle",
+      "save": "{count, plural, one {# Prompt'a} other {# Prompt'a}} ekle",
+      "removeSave": "{count, plural, one {# Prompt'tan} other {# Prompt'tan}} kaldır",
+      "done": "{count, plural, one {# Prompt'a platform eklendi} other {# Prompt'a platform eklendi}}",
+      "removed": "{count, plural, one {# Prompt'tan platform kaldırıldı} other {# Prompt'tan platform kaldırıldı}}",
+      "saveFailed": "Platformlar değiştirilemedi. Lütfen tekrar deneyin."
+    },
     "waiting": {
       "resultTitle": "{added} eklendi, {waiting} sıra bekliyor",
       "savedTitle": "{count, plural, one {Kaydedildi, ancak henüz takip edilmiyor} other {# Prompt kaydedildi, ancak henüz takip edilmiyor}}",
@@ -16159,6 +16190,13 @@
       "bulkTitle": "{count, plural, one {Henüz yanıtı olmayan seçili Prompt'u takip etmeye başlayın} other {Henüz yanıtı olmayan seçili # Prompt'u takip etmeye başlayın}}"
     },
     "usage": {
+      "slots": {
+        "title": "Takip slot'ları",
+        "add": "Slot ekle",
+        "usage": "{used} / {limit}",
+        "unlimited": "{used} · sınırsız",
+        "meter": "{platform} slot kullanımı"
+      },
       "panelLabel": "Prompt kullanımı",
       "planAndUsage": "Plan ve kullanım",
       "hide": "Gizle",
@@ -16241,7 +16279,7 @@
       "enginesLegend": "Renkli: Bu Prompt için bu aralıkta paylaşılan aramalar. Soluk: Takip ediliyor ancak hiçbiri paylaşılmadı.",
       "engineEmptyTitle": "{range} aralığında {engine} araması yok",
       "engineEmptyBody": "{engine} genellikle yanıtlarının arkasındaki aramaları paylaşır. Daha uzun bir tarih aralığı deneyin.",
-      "sourceNote": "Perplexity artık takip edilmiyor ve Microsoft Copilot aramalarını paylaşmıyor; bu nedenle bunlar yalnızca bazı günlerde paylaşım yapan ChatGPT'den geliyor. Eskisine kıyasla daha az sayıdalar.",
+      "sourceNote": "Perplexity artık takip edilmiyor ve Bing AI Mode aramalarını paylaşmıyor; bu yüzden bunlar yalnızca bazı günlerde paylaşan ChatGPT'den gelir. Öncekine göre daha az sayıdalar.",
       "emptyTitle": "Henüz yakalanan fan-out yok",
       "emptyBody": "ChatGPT aramalarından bazı günlerde örneklem alınır ve ChatGPT API arama yaptığında bunları paylaşır. Google AI Overviews, AI Mode ve Gemini bunları paylaşmaz. Bu motorlar Prompt'larınız için çalıştığında aramalar burada görünecektir.",
       "coverageTooltip": "Bu aralıktaki izlenen {total} yanıttan {withFanout} tanesi motorun yaptığı aramalarla birlikte geldi. ChatGPT aramalarından bazı günlerde örneklem alınır ve ChatGPT API arama yaptığında bunları paylaşır."
@@ -18702,7 +18740,38 @@
     },
     "planAddOns": {
       "title": "Planınıza daha fazlasını ekleyin",
-      "description": "Growth planınız için ek takip, ek markalar ve AI kullanım paketleri. Seçtiğiniz her şey, kayıtlı karta bir kez tahsil edilir.",
+      "slots": {
+        "title": "Ek takip kredisi satın alın",
+        "description": "{plan}, her standart platformda {included} slot içerir. Herhangi bir platformda ek slot seçin; bunların her birini 0'a kadar azaltabilirsiniz.",
+        "descriptionNone": "Herhangi bir platformda ek slot seçin; bunların her birini 0'a kadar azaltabilirsiniz.",
+        "discount": {
+          "reached": "Ek takibinizde <b>%{percent} indirim</b>: {list} üzerinden {interval, select, year {yıllık} other {aylık}} {off} indirim.",
+          "list": "Ek takip: {interval, select, year {yıllık} other {aylık}} {list}.",
+          "next": "{from} üzerindeki kısımda <b>%{percent} indirim</b> için {interval, select, year {yıllık} other {aylık}} {more} daha ekleyin.",
+          "top": "En yüksek kademeye ulaştınız.",
+          "drops": "Bu değişiklik indiriminizi %{from} seviyesinden %{to} seviyesine düşürür, bu nedenle 100 slot başına fiyat artar.",
+          "steps": "Hacim indirimi kademeleri",
+          "stepsLead": "Her kademe, oranını kendisinin üzerindeki kısımdan düşer:",
+          "step": "{from}/{interval, select, year {yıl} other {ay}} üzerinde %{percent} indirim",
+          "yours": "· sizin",
+          "nextTag": "· sonraki"
+        },
+        "unit": "<b>1 slot</b> = o platformda 1 konumda her gün takip edilen 1 Prompt.",
+        "columns": {
+          "platform": "Platform",
+          "included": "Planınızda",
+          "extra": "Ekstra slots",
+          "price": "{interval, select, year {Yıllık} other {Aylık}} 100 slot başına fiyat",
+          "cost": "{interval, select, year {Yıllık} other {Aylık}} maliyetiniz"
+        },
+        "unlimited": "Limitsiz",
+        "fewer": "100 daha az {platform} slot",
+        "more": "100 daha fazla {platform} slot",
+        "extraOn": "{platform} üzerinde ekstra slots",
+        "was": "önceki: {slots}",
+        "undo": "Geri al",
+        "footer": "Fiyatlar, her platformun takip maliyetine göre belirlenir: bazı yanıtlar daha fazla iş gerektirir (örneğin Perplexity). Yıllık: 2 ay ücretsiz."
+      },
       "tracking": {
         "title": "Ek takip",
         "description": "Planınızdaki motorlarda her gün takip edilen daha fazla Prompt konumu. Her seferinde bir kademe; istediğiniz zaman değiştirebilir veya kaldırabilirsiniz.",
@@ -18710,8 +18779,7 @@
         "none": "Yok",
         "tier": "+{units} Prompt konumu",
         "price": "{price}/{interval, select, year {yıl} other {ay}}",
-        "contactSales": "Satışla iletişime geçin",
-        "yearly": "Yıllık fiyatlarda 2 ay ücretsiz."
+        "contactSales": "Satışla iletişime geçin"
       },
       "brands": {
         "title": "Ek markalar",
@@ -18719,7 +18787,7 @@
         "count": "{count} ek",
         "fewer": "Bir marka daha az",
         "more": "Bir marka daha fazla",
-        "note": "Mevcut marka sayınızın altına inemezsiniz: önce Markalar bölümünden birini kaldırın."
+        "limit": "Planınız {base} marka içerir. Yeni limit: <b>{limit}</b>."
       },
       "topUp": {
         "title": "AI kullanım paketi",
@@ -18728,10 +18796,12 @@
         "label": "AI kullanım paketleri",
         "none": "Yok",
         "option": "+{multiplier}x",
-        "adds": "Bu ayki AI kullanımının {multiplier}× katı · +{briefs} brief · +{opportunities} fırsat"
+        "usage": "{multiplier}x AI kullanımı",
+        "adds": "Bu ayki AI kullanımının {multiplier}× katı · +{briefs} brief · +{opportunities} fırsat",
+        "alsoAdds": "Ayrıca bu ay için +{briefs} brief ve +{opportunities} fırsat ekler.",
+        "once": "Tek sefer {price}"
       },
       "summary": "{prompts} Prompt konumu · {brands} marka",
-      "nothing": "Yukarıdan değiştirmek istediğinizi seçin.",
       "review": "İncele ve öde",
       "reviewing": "Fiyat kontrol ediliyor…",
       "dialog": {
@@ -18742,20 +18812,25 @@
         "brands": "{count, plural, =0 {Ek marka yok} one {# ek marka} other {# ek marka}}",
         "topUp": "AI kullanım paketi +{multiplier}x, tek ödeme",
         "dueToday": "Bugün ödenecek tutar",
-        "dueTodayNote": "Ek takip ve markalar için bu dönemin kalan kısmı ile bir yüklemenin tamamı.",
+        "dueTodayNote": "Slots, ekstra takip ve markalar için bu dönemin kalanı ile ek paketin tamamı.",
+        "slots": "{platform} slots",
+        "slotsValue": "{slots} (+{extra} eklendi)",
+        "volumeDiscount": "Hacim indirimi (%{percent})",
+        "discountValue": "−{off} / {interval, select, year {yıl} other {ay}}",
         "total": "Bir sonraki yenilemeden itibaren",
         "totalValue": "{interval, select, year {Yıllık {price}} other {Aylık {price}}}",
-        "credit": "Daha düşük bir kademe veya daha az marka, sonraki faturalarınız için kredi bırakır.",
+        "credit": "Daha az slot, daha düşük bir kademe veya daha az marka, sonraki faturalarınız için kredi bırakır.",
         "pay": "{price} öde",
         "confirm": "Onayla",
         "cancel": "İptal",
-        "processing": "İşleniyor…"
+        "processing": "İşleniyor…",
+        "slotsWaiting": "{platform}: en yeni {count} Prompt konumu bir slot bekleyecek. Hiçbir şey silinmez; takip etmek için tekrar slot ekleyin."
       },
       "done": "Eklentileriniz güncellendi. Yükleme, ödeme onaylanır onaylanmaz hesaba katılır.",
       "states": {
         "not_admin": "Eklentileri yalnızca adminler değiştirebilir. Çalışma alanınızın bir adminine danışın.",
         "starter": "Eklentiler Growth planıyla birlikte gelir. Takip, marka ve AI kullanımı eklemek için Growth'a yükseltin.",
-        "enterprise": "Limitlerinizi sözleşmeniz belirler. Daha fazlası için hesap yöneticinizle iletişime geçin.",
+        "enterprise": "Diğer limitlerinizi sözleşmeniz belirler. Daha fazlası için hesap yöneticinizle iletişime geçin.",
         "trial": "Eklentiler, planınız başladıktan sonra satın alınabilir.",
         "no_plan": "Eklentiler, planınız aktifken satın alınabilir.",
         "ending": "Planınızın sona ermesi ayarlandı. Eklentilerini değiştirmek için planınızı sürdürün."
@@ -18773,7 +18848,23 @@
         "payment_failed": "Ödeme gerçekleşmedi.",
         "failed": "Eklentileriniz değiştirilemedi. Tekrar deneyin."
       },
-      "readFailed": "Eklentileriniz okunamadı. Daha sonra tekrar deneyin."
+      "readFailed": "Eklentileriniz okunamadı. Daha sonra tekrar deneyin.",
+      "perInterval": "{price}/{interval, select, year {yıl} other {ay}}",
+      "cart": {
+        "title": "Eklentileriniz",
+        "onePayment": "Tek ödeme",
+        "plan": "{plan} planı",
+        "slots": "{platform} ekstra takip",
+        "slotsCount": "{slots} slots",
+        "remove": "{item} öğesini kaldır",
+        "discount": "Ekstra takipte %{percent} hacim indirimi, yukarıdaki fiyatlara dahildir.",
+        "discountDrops": "Hacim indiriminiz %{from} seviyesinden %{to} seviyesine düşüyor, bu nedenle yukarıdaki fiyatlar artıyor.",
+        "brands": "{count, plural, one {# marka} other {# marka}} · her biri {price}",
+        "topUp": "{multiplier}x AI kullanımı · {date} tarihine kadar",
+        "total": "Bir sonraki yenilemeden itibaren {interval, select, year {yıllık} other {aylık}} toplam: <b>{price}</b>",
+        "undoAll": "Tüm değişiklikleri geri al",
+        "dueToday": "Bugün ödenecek tutar: bu dönemin kalan süresi için eklenen öğeler, Gözden geçir ve öde adımında gösterilir."
+      }
     },
     "cancelsOn": "Abonelik {date} tarihinde sona eriyor",
     "changePlan": "Planı Değiştir",

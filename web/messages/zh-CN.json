@@ -277,6 +277,7 @@
       "label": "您的品牌尚未开始跟踪"
     },
     "actions": {
+      "changePlatforms": "更改平台需要订阅套餐",
       "addPrompts": "添加 Prompt 需要有效方案",
       "removeLocations": "移除地区需要有效方案",
       "editPrompts": "编辑 Prompt 需要有效方案",
@@ -4490,6 +4491,10 @@
       "name": "读取本月剩余网站审核次数",
       "step": "读取网站审核"
     },
+    "crawlerAccess": {
+      "name": "读取 AI 爬虫问题",
+      "step": "读取站点审核 · 爬虫"
+    },
     "goToPage": {
       "name": "前往页面",
       "step": "已打开页面"
@@ -7995,6 +8000,7 @@
       "traffic": "AI 流量与注册量",
       "ai-revenue": "来自 AI 的客户与收入",
       "feed-advisor": "购物 Feed 缺口",
+      "tech-fix": "爬虫与技术修复",
       "earn-or-pay": "赚取或付费",
       "ad-drafts": "广告草稿",
       "paid-overlap": "付费重叠",
@@ -15735,6 +15741,31 @@
     }
   },
   "prompts": {
+    "bulkPlatforms": {
+      "bulkButton": "平台",
+      "bulkAdd": "添加平台",
+      "bulkRemove": "移除平台",
+      "modes": "添加或移除",
+      "modeAdd": "添加",
+      "modeRemove": "移除",
+      "platforms": "平台",
+      "title": "添加平台",
+      "lead": "在更多平台上追踪所选的 {count} 个 Prompts。每个 Prompt 位置在每个平台上占用一个追踪 slot。Prompt 正在等待的平台将重新运行。",
+      "removeTitle": "移除平台",
+      "removeLead": "停止在部分平台上追踪所选的 {count} 个 Prompts。它们占用的 slots 将重新释放。",
+      "none": "没有可添加的平台。请在“设置 › 账单”中添加追踪 slots,以便在更多平台上追踪。",
+      "removeNone": "所选 Prompts 没有可移除的平台。",
+      "free": "{count} 个空闲",
+      "previewAdd": "{count, plural, other {将更改 # 个 Prompt}} · {unchanged} 个已包含这些平台",
+      "previewRemove": "{count, plural, other {将更改 # 个 Prompt}} · {unchanged} 个不包含这些平台 · {blocked} 个将不剩任何平台",
+      "short": "{platform} 需要 {needed} 个 slots,目前有 {free} 个空闲。",
+      "addSlots": "添加 slots",
+      "save": "添加到 {count, plural, other {# 个 Prompt}}",
+      "removeSave": "从 {count, plural, other {# 个 Prompt}} 中移除",
+      "done": "{count, plural, other {已为 # 个 Prompt 添加平台}}",
+      "removed": "{count, plural, other {已从 # 个 Prompt 中移除平台}}",
+      "saveFailed": "无法更改平台。请重试。"
+    },
     "waiting": {
       "resultTitle": "已添加 {added} 个，{waiting} 个正在排队等待名额",
       "savedTitle": "{count, plural, other {已保存，但尚未追踪（共 # 个 Prompt）}}",
@@ -16118,6 +16149,13 @@
       "bulkTitle": "{count, plural, other {开始跟踪 # 个尚无答案的选定 Prompt}}"
     },
     "usage": {
+      "slots": {
+        "title": "追踪 slots",
+        "add": "添加 slots",
+        "usage": "{used} / {limit}",
+        "unlimited": "{used} · 无限制",
+        "meter": "{platform} 已使用的 slots"
+      },
       "panelLabel": "Prompt 用量",
       "planAndUsage": "套餐与用量",
       "hide": "隐藏",
@@ -16200,7 +16238,7 @@
       "enginesLegend": "彩色：在此时间范围中共享了此 Prompt 的搜索。淡色：已追踪，但未共享任何搜索。",
       "engineEmptyTitle": "在{range}内没有 {engine} 搜索",
       "engineEmptyBody": "{engine} 通常会共享其回答背后的搜索。请尝试选择更长的时间范围。",
-      "sourceNote": "Perplexity 已不再被追踪，且 Microsoft Copilot 不共享其搜索，因此这些仅来自 ChatGPT（其在某些日期会共享搜索）。搜索数量比以往更少。",
+      "sourceNote": "Perplexity 已不再追踪,Bing AI Mode 也不公开其搜索,因此这些数据仅来自 ChatGPT,而它只在部分日期提供。数量比以前少。",
       "emptyTitle": "尚未捕获到 fan-out",
       "emptyBody": "ChatGPT 的搜索仅在某些日期进行抽样，而 ChatGPT API 在执行搜索时会共享这些搜索。Google AI Overviews、AI Mode 和 Gemini 不会共享。一旦这些引擎为您的 Prompts 运行，搜索将显示在此处。",
       "coverageTooltip": "在此时间范围内追踪的 {total} 个回答中，有 {withFanout} 个包含引擎运行的搜索。ChatGPT 的搜索仅在某些日期抽样，而 ChatGPT API 在执行搜索时会共享这些搜索。"
@@ -18661,7 +18699,38 @@
     },
     "planAddOns": {
       "title": "为您的套餐添加更多内容",
-      "description": "为您的 Growth 套餐提供额外追踪、额外品牌和 AI 用量加购。您所选的所有项目将一次性从预留的银行卡中扣款。",
+      "slots": {
+        "title": "购买额外追踪额度",
+        "description": "{plan} 在每个标准平台上包含 {included} 个 slots。可在任意平台选择额外 slots,也可以随时下调,最低为 0。",
+        "descriptionNone": "可在任意平台选择额外 slots,也可以随时下调,最低为 0。",
+        "discount": {
+          "reached": "额外追踪享 <b>{percent}% 折扣</b>:每{interval, select, year {年} other {月}}{list}减免 {off}。",
+          "list": "额外追踪:每{interval, select, year {年} other {月}} {list}。",
+          "next": "每{interval, select, year {年} other {月}}再增加 {more},即可对超出 {from} 的部分享 <b>{percent}% 折扣</b>。",
+          "top": "您已达到最高档位。",
+          "drops": "此更改会将您的折扣从 {from}% 降至 {to}%,因此每 100 个 slots 的价格将上涨。",
+          "steps": "批量折扣档位",
+          "stepsLead": "每一档的折扣仅适用于超出上一档的部分:",
+          "step": "超过 {from}/{interval, select, year {年} other {月}} 的部分享 {percent}% 折扣",
+          "yours": "· 当前",
+          "nextTag": "· 下一档"
+        },
+        "unit": "<b>1 个 slot</b> = 在该平台的 1 个地区每天追踪 1 个 Prompt。",
+        "columns": {
+          "platform": "平台",
+          "included": "您的套餐包含",
+          "extra": "额外 slots",
+          "price": "每 100 个 slots 每{interval, select, year {年} other {月}}价格",
+          "cost": "您的{interval, select, year {年度} other {月度}}费用"
+        },
+        "unlimited": "无限制",
+        "fewer": "减少 100 个 {platform} slots",
+        "more": "增加 100 个 {platform} slots",
+        "extraOn": "{platform} 的额外 slots",
+        "was": "原为 {slots}",
+        "undo": "撤销",
+        "footer": "价格取决于各平台的追踪成本:某些回答需要更多处理(例如 Perplexity)。年付:免费赠送 2 个月。"
+      },
       "tracking": {
         "title": "额外追踪",
         "description": "在您套餐的引擎上每天追踪更多 Prompt 地区。一次只能选择一个档位，可随时更改或移除。",
@@ -18669,8 +18738,7 @@
         "none": "无",
         "tier": "+{units} 个 Prompt 地区",
         "price": "{price}/{interval, select, year {年} other {月}}",
-        "contactSales": "联系销售",
-        "yearly": "年付价格：免费赠送 2 个月。"
+        "contactSales": "联系销售"
       },
       "brands": {
         "title": "额外品牌",
@@ -18678,7 +18746,7 @@
         "count": "额外 {count} 个",
         "fewer": "减少一个品牌",
         "more": "增加一个品牌",
-        "note": "品牌数量不能少于您现有的数量：请先在“品牌”中移除一个。"
+        "limit": "您的套餐包含 {base} 个品牌。新上限为 <b>{limit}</b>。"
       },
       "topUp": {
         "title": "AI 用量加购",
@@ -18687,10 +18755,12 @@
         "label": "AI 用量加购",
         "none": "无",
         "option": "+{multiplier}倍",
-        "adds": "本月 AI 用量的 {multiplier}× · +{briefs} 份简报 · +{opportunities} 个机会"
+        "usage": "{multiplier} 倍 AI 用量",
+        "adds": "本月 AI 用量的 {multiplier}× · +{briefs} 份简报 · +{opportunities} 个机会",
+        "alsoAdds": "本月还将额外增加 {briefs} 份简报和 {opportunities} 个机会。",
+        "once": "一次性 {price}"
       },
       "summary": "{prompts} 个 Prompt 地区 · {brands} 个品牌",
-      "nothing": "请在上方选择要更改的内容。",
       "review": "查看并付款",
       "reviewing": "正在核对价格…",
       "dialog": {
@@ -18701,20 +18771,25 @@
         "brands": "{count, plural, =0 {无额外品牌} other {# 个额外品牌}}",
         "topUp": "AI 用量加购 +{multiplier}倍，一次性付款",
         "dueToday": "今日应付",
-        "dueTodayNote": "额外追踪和品牌按本周期剩余时间计费，加购按全额计费。",
+        "dueTodayNote": "slots、额外追踪和品牌按本周期剩余时间计费,充值包按全额计费。",
+        "slots": "{platform} slots",
+        "slotsValue": "{slots}(新增 {extra})",
+        "volumeDiscount": "批量折扣({percent}%)",
+        "discountValue": "每{interval, select, year {年} other {月}}−{off}",
         "total": "自下次续订起",
         "totalValue": "每{interval, select, year {年} other {月}} {price}",
-        "credit": "降低套餐档位或减少品牌后,剩余金额将作为余额抵扣您后续的账单。",
+        "credit": "减少 slots、降低档位或减少品牌后,剩余金额将作为抵扣额用于后续账单。",
         "pay": "支付 {price}",
         "confirm": "确认",
         "cancel": "取消",
-        "processing": "处理中…"
+        "processing": "处理中…",
+        "slotsWaiting": "{platform}:最新的 {count} 个 Prompt 地区将等待 slot。不会删除任何内容;再次添加 slots 即可继续追踪。"
       },
       "done": "您的附加项已更新。充值将在付款确认后立即生效。",
       "states": {
         "not_admin": "只有管理员可以更改附加项。请联系您工作区的管理员。",
         "starter": "附加项包含在 Growth 套餐中。升级到 Growth 即可添加追踪、品牌和 AI 用量。",
-        "enterprise": "您的限额由合同约定。如需更多,请联系您的客户经理。",
+        "enterprise": "您的其他限额由合同约定。如需更多,请联系您的客户经理。",
         "trial": "套餐开始后即可购买附加项。",
         "no_plan": "套餐生效期间可购买附加项。",
         "ending": "您的套餐即将结束。请保留套餐以更改其附加项。"
@@ -18732,7 +18807,23 @@
         "payment_failed": "付款未成功。",
         "failed": "无法更改您的附加项。请重试。"
       },
-      "readFailed": "无法读取您的附加项。请稍后重试。"
+      "readFailed": "无法读取您的附加项。请稍后重试。",
+      "perInterval": "{price}/{interval, select, year {年} other {月}}",
+      "cart": {
+        "title": "您的附加项",
+        "onePayment": "一次性付款",
+        "plan": "{plan} 套餐",
+        "slots": "{platform} 额外追踪",
+        "slotsCount": "{slots} 个 slots",
+        "remove": "移除 {item}",
+        "discount": "额外追踪享 {percent}% 批量折扣,已计入上方价格。",
+        "discountDrops": "您的批量折扣将从 {from}% 降至 {to}%,因此上方价格将上涨。",
+        "brands": "{count, plural, other {# 个品牌}} · 每个 {price}",
+        "topUp": "{multiplier}倍 AI 用量 · 截至 {date}",
+        "total": "{interval, select, year {年度} other {月度}}总计（自下次续订起）<b>{price}</b>",
+        "undoAll": "撤销所有更改",
+        "dueToday": "今日应付：本周期剩余时间内新增项目的费用，详见“核对并支付”。"
+      }
     },
     "cancelsOn": "订阅将于 {date} 结束",
     "changePlan": "更改方案",
