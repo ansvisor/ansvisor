@@ -10679,6 +10679,7 @@
       "sectionLabel": "المقاييس الرئيسية",
       "noData": "لا توجد بيانات",
       "viewBreakdown": "{metric}: عرض التفاصيل",
+      "howCalculated": "{metric}: كيف يُحسب هذا؟",
       "openPrompts": "الـ Prompts التي يتم تتبعها: فتح Prompts",
       "openCitations": "الإشارات المرجعية: فتح الإشارات المرجعية",
       "openMentions": "الإشارات: فتح الإشارات",

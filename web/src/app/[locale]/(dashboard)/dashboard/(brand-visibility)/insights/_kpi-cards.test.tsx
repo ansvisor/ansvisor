@@ -158,6 +158,46 @@ describe('the Mentions and Citations cards', () => {
   });
 });
 
+describe('"How is this calculated?" on the cards', () => {
+  const formulaButton = (label: string) =>
+    container.querySelector<HTMLButtonElement>(`button[aria-label="${label}"]`);
+
+  it('is on every card with a Formulas section, not on Tracked prompts', () => {
+    render(plan(47, 50));
+    const labels = [...container.querySelectorAll('[data-slot="kpi-formula"]')].map((b) =>
+      b.getAttribute('aria-label'),
+    );
+    expect(labels).toEqual([
+      'Visibility: how is this calculated?',
+      'Mentions: how is this calculated?',
+      'Citations: how is this calculated?',
+      'Net sentiment: how is this calculated?',
+      'Coverage: how is this calculated?',
+      'Share of voice: how is this calculated?',
+      'Avg. position: how is this calculated?',
+      'Citation rate: how is this calculated?',
+    ]);
+  });
+
+  it("opens Formulas on the card's section with its sample, not the card's page", () => {
+    render(plan(47, 50));
+    act(() => formulaButton('Visibility: how is this calculated?')!.click());
+    expect(onBreakdown).not.toHaveBeenCalled();
+    const active = document.querySelector('[role="dialog"] [data-active]');
+    expect(active?.getAttribute('data-formula-section')).toBe('visibility');
+    expect(active?.textContent).toContain('Based on 120 answers in this period.');
+  });
+
+  it('opens the Mentions section without leaving the page', () => {
+    render(plan(47, 50));
+    act(() => formulaButton('Mentions: how is this calculated?')!.click());
+    expect(onNavigate).not.toHaveBeenCalled();
+    expect(
+      document.querySelector('[role="dialog"] [data-active]')?.getAttribute('data-formula-section'),
+    ).toBe('mentions');
+  });
+});
+
 describe('InfoTip', () => {
   /** Hovers an icon whose box starts at `left`, and returns where the tooltip is centred. */
   function tooltipCentreFor(left: number) {

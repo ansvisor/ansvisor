@@ -10694,6 +10694,7 @@
       "sectionLabel": "Belangrijkste statistieken",
       "noData": "Geen gegevens",
       "viewBreakdown": "{metric}: uitsplitsing bekijken",
+      "howCalculated": "{metric}: hoe wordt dit berekend?",
       "openPrompts": "Gevolgde prompts: Prompts openen",
       "openCitations": "Citaties: Citaties openen",
       "openMentions": "Vermeldingen: Vermeldingen openen",

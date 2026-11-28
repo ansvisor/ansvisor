@@ -14,6 +14,7 @@ import {
   MessageCircle,
   PieChart,
   Quote,
+  Sigma,
   Smile,
   Target,
   type LucideIcon,
@@ -42,6 +43,7 @@ import {
   rateSamples,
   type RateSample,
 } from './kpi-format';
+import { FormulaDialog, type FormulaSection } from './_formula-dialog';
 
 // ─── Info tooltip ─────────────────────────────────────────────────────────────
 
@@ -181,6 +183,9 @@ interface MetricCardProps {
   footer?: React.ReactNode;
   onClick?: () => void;
   clickLabel?: string;
+  /** Opens Formulas on this card's section; the button's accessible name. */
+  onFormula?: () => void;
+  formulaLabel?: string;
 }
 
 /** One KPI card, as in the v2 mockup: label, value with its change, a line of context, a sparkline. */
@@ -197,6 +202,8 @@ export function MetricCard({
   footer,
   onClick,
   clickLabel,
+  onFormula,
+  formulaLabel,
 }: MetricCardProps) {
   const clickable = typeof onClick === 'function';
   return (
@@ -227,6 +234,23 @@ export function MetricCard({
           {label}
         </span>
         <InfoTip content={tooltip} />
+        {onFormula && (
+          <button
+            type="button"
+            aria-label={formulaLabel}
+            title={formulaLabel}
+            data-slot="kpi-formula"
+            // Inside a clickable card: open Formulas, not the card's own page.
+            onClick={(e) => {
+              e.stopPropagation();
+              onFormula();
+            }}
+            onKeyDown={(e) => e.stopPropagation()}
+            className="inline-flex items-center rounded-sm text-muted-foreground/60 transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <Sigma className="h-3 w-3" aria-hidden />
+          </button>
+        )}
         <span className="flex-1" />
         <span className="relative flex h-4 w-4 items-center justify-center">
           <Icon
@@ -327,6 +351,21 @@ export function KpiRows({
     hasValue && low(s) ? t('lowSample', { count: s.count }) : sub;
   const rateDelta = (s: RateSample, delta: Change | null) => (low(s) ? null : delta);
 
+  // "How is this calculated?" on each card with a Formulas section: the
+  // dialog opens on that section, with the card's sample size when it has one.
+  const [formula, setFormula] = useState<FormulaSection | null>(null);
+  const formulaFor = (section: FormulaSection, metric: string) => ({
+    onFormula: () => setFormula(section),
+    formulaLabel: t('howCalculated', { metric }),
+  });
+  const formulaSamples: Partial<Record<FormulaSection, RateSample>> = {
+    visibility: samples.visibility,
+    sentiment: samples.netSentiment,
+    position: samples.avgPosition,
+    citationRate: samples.citationRate,
+    shareOfVoice: samples.shareOfVoice,
+  };
+
   const own = competitors?.brands.findIndex((b) => b.isOwnBrand) ?? -1;
   const visibilitySub =
     competitors && own >= 0
@@ -387,6 +426,7 @@ export function KpiRows({
           }
           spark={trend ? trend.points.map((p) => p.values.you ?? null) : null}
           onClick={() => onBreakdown('visibility')}
+          {...formulaFor('visibility', t('visibility'))}
           clickLabel={t('viewBreakdown', { metric: t('visibility') })}
         />
         <MetricCard
@@ -431,6 +471,7 @@ export function KpiRows({
           spark={daily('mentions')}
           onClick={() => onNavigate(mentionsHref)}
           clickLabel={t('openMentions')}
+          {...formulaFor('mentions', t('mentions'))}
         />
         <MetricCard
           label={t('citations')}
@@ -443,6 +484,7 @@ export function KpiRows({
           // The card counts the brand's own citations: Citations on Brand.
           onClick={() => onNavigate('/dashboard/citations?scope=own')}
           clickLabel={t('openCitations')}
+          {...formulaFor('citations', t('citations'))}
         />
         <MetricCard
           label={t('netSentiment')}
@@ -463,6 +505,7 @@ export function KpiRows({
           spark={daily('netSentiment')}
           onClick={() => onNavigate(mentionsHref)}
           clickLabel={t('openSentiment')}
+          {...formulaFor('sentiment', t('netSentiment'))}
         />
       </div>
 
@@ -483,6 +526,7 @@ export function KpiRows({
               : null
           }
           spark={daily('coverage')}
+          {...formulaFor('coverage', t('coverage'))}
         />
         <MetricCard
           label={t('shareOfVoice')}
@@ -495,6 +539,7 @@ export function KpiRows({
           )}
           sub={rateSub(samples.shareOfVoice, t('shareOfVoiceSub'), !!sov)}
           spark={daily('shareOfVoice')}
+          {...formulaFor('shareOfVoice', t('shareOfVoice'))}
         />
         <MetricCard
           label={t('avgPosition')}
@@ -504,6 +549,7 @@ export function KpiRows({
           delta={rateDelta(samples.avgPosition, lowerIsGood(summary.avgPositionChange, locale))}
           sub={rateSub(samples.avgPosition, t('avgPositionSub'), summary.avgPosition !== null)}
           spark={daily('avgPosition')}
+          {...formulaFor('position', t('avgPosition'))}
         />
         <MetricCard
           label={t('citationRate')}
@@ -513,8 +559,18 @@ export function KpiRows({
           delta={rateDelta(samples.citationRate, upIsGood(summary.citationRateChange, { locale }))}
           sub={rateSub(samples.citationRate, t('citationRateSub'), summary.citationRate !== null)}
           spark={daily('citationRate')}
+          {...formulaFor('citationRate', t('citationRate'))}
         />
       </div>
+
+      <FormulaDialog
+        open={formula !== null}
+        onOpenChange={(next) => {
+          if (!next) setFormula(null);
+        }}
+        section={formula}
+        samples={formulaSamples}
+      />
     </section>
   );
 }

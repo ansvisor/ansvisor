@@ -10698,6 +10698,7 @@
       "sectionLabel": "Wichtigste Kennzahlen",
       "noData": "Keine Daten",
       "viewBreakdown": "{metric}: Aufschlüsselung anzeigen",
+      "howCalculated": "{metric}: Wie wird das berechnet?",
       "openPrompts": "Getrackte Prompts: Prompts öffnen",
       "openCitations": "Zitierungen: Zitierungen öffnen",
       "openMentions": "Erwähnungen: Erwähnungen öffnen",

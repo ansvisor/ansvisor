@@ -10329,6 +10329,7 @@
       "sectionLabel": "Key metrics",
       "noData": "No data",
       "viewBreakdown": "{metric}: view breakdown",
+      "howCalculated": "{metric}: how is this calculated?",
       "openPrompts": "Tracked prompts: open Prompts",
       "openCitations": "Citations: open Citations",
       "openMentions": "Mentions: open Mentions",

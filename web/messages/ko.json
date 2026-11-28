@@ -10669,6 +10669,7 @@
       "sectionLabel": "핵심 지표",
       "noData": "데이터 없음",
       "viewBreakdown": "{metric}: 세부정보 보기",
+      "howCalculated": "{metric}: 어떻게 계산되나요?",
       "openPrompts": "추적 중인 프롬프트: Prompts 열기",
       "openCitations": "인용: Citations 열기",
       "openMentions": "멘션: Mentions 열기",

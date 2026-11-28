@@ -1,11 +1,13 @@
 'use client';
 
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { Sigma } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { cn } from '@/lib/utils';
 import { POSITION_SUPPORT_ANSWERS, VISIBILITY_SCORE_WEIGHTS } from '@/lib/visibility-score';
+import type { RateSample } from './kpi-format';
 
 const PCT = {
   mention: Math.round(VISIBILITY_SCORE_WEIGHTS.mention * 100),
@@ -13,11 +15,60 @@ const PCT = {
   position: Math.round(VISIBILITY_SCORE_WEIGHTS.position * 100),
 };
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+/** The dialog's sections, in order; a KPI card opens the dialog on its own. */
+export type FormulaSection =
+  | 'visibility'
+  | 'trend'
+  | 'mentions'
+  | 'citations'
+  | 'sentiment'
+  | 'position'
+  | 'citationRate'
+  | 'shareOfVoice'
+  | 'coverage'
+  | 'changes';
+
+function Section({
+  id,
+  title,
+  active,
+  sample,
+  children,
+}: {
+  id: FormulaSection;
+  title: string;
+  /** Opened from this section's card: scrolled to and marked. */
+  active: boolean;
+  /** How many answers the card's number is based on, when the card knows. */
+  sample?: RateSample;
+  children: React.ReactNode;
+}) {
+  const tKpi = useTranslations('insights.kpi');
+  // A callback ref: the dialog's content mounts a render after it opens.
+  const scrollTo = useCallback(
+    (el: HTMLElement | null) => {
+      if (active) el?.scrollIntoView?.({ block: 'start' });
+    },
+    [active],
+  );
   return (
-    <section className="space-y-1.5">
+    <section
+      ref={scrollTo}
+      data-formula-section={id}
+      data-active={active || undefined}
+      aria-current={active ? 'true' : undefined}
+      className={cn(
+        'space-y-1.5 scroll-mt-2',
+        active && '-mx-3 rounded-lg border bg-accent/40 px-3 py-2.5',
+      )}
+    >
       <h3 className="text-sm font-semibold">{title}</h3>
       <div className="text-sm text-muted-foreground space-y-1.5">{children}</div>
+      {sample && (
+        <p data-slot="formula-sample" className="text-xs font-medium text-foreground">
+          {tKpi(`sampleTip.${sample.of}`, { count: sample.count })}
+        </p>
+      )}
     </section>
   );
 }
@@ -30,24 +81,53 @@ function Formula({ children }: { children: React.ReactNode }) {
   );
 }
 
+interface FormulaDialogProps {
+  /** Controlled: opened from a KPI card. Without it the header button opens the dialog. */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  /** The section to scroll to and mark, for the card that opened the dialog. */
+  section?: FormulaSection | null;
+  /** Each section's sample size, from the cards that know it. */
+  samples?: Partial<Record<FormulaSection, RateSample>>;
+}
+
 /**
  * "Formulas" header button + dialog explaining how every metric on the
  * Insights page is computed. The Visibility weights are read from the
  * shared score module so this stays correct if the blend is ever tuned.
+ * Controlled (`open`), it has no button: a KPI card opens it on its section.
  */
-export function FormulaDialog() {
-  const [open, setOpen] = useState(false);
+export function FormulaDialog({
+  open: openProp,
+  onOpenChange,
+  section = null,
+  samples,
+}: FormulaDialogProps = {}) {
+  const [ownOpen, setOwnOpen] = useState(false);
+  const controlled = openProp !== undefined;
+  const open = controlled ? openProp : ownOpen;
+  const setOpen = (next: boolean) => {
+    if (!controlled) setOwnOpen(next);
+    onOpenChange?.(next);
+  };
   const t = useTranslations('insights.formulas');
   const b = (chunks: React.ReactNode) => (
     <span className="font-medium text-foreground">{chunks}</span>
   );
+  const at = (id: FormulaSection) => ({
+    id,
+    active: section === id,
+    sample: samples?.[id],
+  });
 
   return (
     <>
-      <Button variant="outline" className="gap-2" onClick={() => setOpen(true)}>
-        <Sigma className="h-4 w-4" />
-        {t('button')}
-      </Button>
+      {!controlled && (
+        <Button variant="outline" className="gap-2" onClick={() => setOpen(true)}>
+          <Sigma className="h-4 w-4" />
+          {t('button')}
+        </Button>
+      )}
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="sm:max-w-2xl max-h-[85vh] overflow-y-auto">
@@ -56,7 +136,7 @@ export function FormulaDialog() {
           </DialogHeader>
 
           <div className="space-y-5">
-            <Section title={t('visibility.title')}>
+            <Section {...at('visibility')} title={t('visibility.title')}>
               <p>{t('visibility.body')}</p>
               <Formula>
                 {t('visibility.formula', {
@@ -75,44 +155,44 @@ export function FormulaDialog() {
               <p>{t('visibility.competitors')}</p>
             </Section>
 
-            <Section title={t('trend.title')}>
+            <Section {...at('trend')} title={t('trend.title')}>
               <p>{t('trend.body')}</p>
             </Section>
 
-            <Section title={t('mentions.title')}>
+            <Section {...at('mentions')} title={t('mentions.title')}>
               <p>{t('mentions.body')}</p>
             </Section>
 
-            <Section title={t('citations.title')}>
+            <Section {...at('citations')} title={t('citations.title')}>
               <p>{t('citations.body')}</p>
             </Section>
 
-            <Section title={t('sentiment.title')}>
+            <Section {...at('sentiment')} title={t('sentiment.title')}>
               <p>{t('sentiment.body')}</p>
               <Formula>{t('sentiment.formula')}</Formula>
             </Section>
 
-            <Section title={t('position.title')}>
+            <Section {...at('position')} title={t('position.title')}>
               <p>{t('position.body')}</p>
               <Formula>{t('position.formula')}</Formula>
             </Section>
 
-            <Section title={t('citationRate.title')}>
+            <Section {...at('citationRate')} title={t('citationRate.title')}>
               <p>{t('citationRate.body')}</p>
               <Formula>{t('citationRate.formula')}</Formula>
             </Section>
 
-            <Section title={t('shareOfVoice.title')}>
+            <Section {...at('shareOfVoice')} title={t('shareOfVoice.title')}>
               <p>{t('shareOfVoice.body')}</p>
               <Formula>{t('shareOfVoice.formula')}</Formula>
             </Section>
 
-            <Section title={t('coverage.title')}>
+            <Section {...at('coverage')} title={t('coverage.title')}>
               <p>{t('coverage.body')}</p>
               <Formula>{t('coverage.formula')}</Formula>
             </Section>
 
-            <Section title={t('changes.title')}>
+            <Section {...at('changes')} title={t('changes.title')}>
               <p>{t('changes.body')}</p>
             </Section>
           </div>
