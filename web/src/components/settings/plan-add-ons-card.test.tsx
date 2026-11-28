@@ -155,7 +155,9 @@ describe('the add-ons card', () => {
     });
     expect(api.preview).toHaveBeenCalledWith({ trackingUnits: 0, extraBrands: 1, topUp: 0 });
     expect(byText('Review and pay')?.textContent).toBe('Review and pay $46.88');
-    expect(container.textContent).toContain('Due today: $46.88 for the added items');
+    expect(container.textContent).toContain(
+      'Due today: $46.88, only for the days left until Nov 29, 2026. From Nov 29, 2026, you pay the monthly total above.',
+    );
   });
 
   it('reviews the whole cart with Stripe’s figures, then pays it once', async () => {

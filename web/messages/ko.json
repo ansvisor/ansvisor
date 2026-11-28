@@ -18860,7 +18860,8 @@
         "total": "다음 갱신부터 {interval, select, year {연간} other {월간}} 합계 <b>{price}</b>",
         "undoAll": "모든 변경 사항 취소",
         "dueToday": "오늘 결제 금액: 이번 기간의 남은 기간 동안 추가된 항목의 요금이며, 검토 및 결제 화면에 표시됩니다.",
-        "dueTodayAmount": "오늘 결제: 추가 항목의 이번 기간 남은 기간분 <b>{price}</b>."
+        "dueTodayAmount": "오늘 결제: 추가 항목의 이번 기간 남은 기간분 <b>{price}</b>.",
+        "dueTodayUntil": "오늘 결제: <b>{price}</b>, {date}까지 남은 일수분만 결제됩니다. {date}부터는 위의 {interval, select, year {연간} other {월간}} 합계를 결제합니다."
       }
     },
     "cancelsOn": "구독이 {date}에 종료됩니다",

@@ -18887,7 +18887,8 @@
         "total": "Total {interval, select, year {anual} other {mensal}} a partir da próxima renovação <b>{price}</b>",
         "undoAll": "Desfazer todas as alterações",
         "dueToday": "A pagar hoje: os itens adicionados pelo restante deste período, exibidos em Revisar e pagar.",
-        "dueTodayAmount": "A pagar hoje: <b>{price}</b> pelos itens adicionados, pelo restante deste período."
+        "dueTodayAmount": "A pagar hoje: <b>{price}</b> pelos itens adicionados, pelo restante deste período.",
+        "dueTodayUntil": "A pagar hoje: <b>{price}</b>, só pelos dias que faltam até {date}. A partir de {date}, você paga o total {interval, select, year {anual} other {mensal}} acima."
       }
     },
     "cancelsOn": "A assinatura termina em {date}",

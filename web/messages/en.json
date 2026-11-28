@@ -18490,7 +18490,8 @@
         "total": "{interval, select, year {Yearly} other {Monthly}} total from the next renewal <b>{price}</b>",
         "undoAll": "Undo all changes",
         "dueToday": "Due today: the added items for the rest of this period, shown on Review and pay.",
-        "dueTodayAmount": "Due today: <b>{price}</b> for the added items, for the rest of this period."
+        "dueTodayAmount": "Due today: <b>{price}</b> for the added items, for the rest of this period.",
+        "dueTodayUntil": "Due today: <b>{price}</b>, only for the days left until {date}. From {date}, you pay the {interval, select, year {yearly} other {monthly}} total above."
       }
     },
     "cancelsOn": "Subscription ends on {date}",

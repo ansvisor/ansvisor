@@ -18889,7 +18889,8 @@
         "total": "Total {interval, select, year {annuel} other {mensuel}} à partir du prochain renouvellement : <b>{price}</b>",
         "undoAll": "Annuler toutes les modifications",
         "dueToday": "À payer aujourd'hui : les éléments ajoutés pour le reste de cette période, affichés dans Vérifier et payer.",
-        "dueTodayAmount": "À payer aujourd'hui : <b>{price}</b> pour les ajouts, pour le reste de cette période."
+        "dueTodayAmount": "À payer aujourd'hui : <b>{price}</b> pour les ajouts, pour le reste de cette période.",
+        "dueTodayUntil": "À payer aujourd'hui : <b>{price}</b>, uniquement pour les jours restants jusqu'au {date}. À partir du {date}, vous payez le total {interval, select, year {annuel} other {mensuel}} ci-dessus."
       }
     },
     "cancelsOn": "L'abonnement prend fin le {date}",

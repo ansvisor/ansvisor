@@ -18885,7 +18885,8 @@
         "total": "{interval, select, year {Jaarlijks} other {Maandelijks}} totaal vanaf de volgende verlenging <b>{price}</b>",
         "undoAll": "Alle wijzigingen ongedaan maken",
         "dueToday": "Vandaag verschuldigd: de toegevoegde items voor de rest van deze periode, weergegeven bij Controleren en betalen.",
-        "dueTodayAmount": "Vandaag te betalen: <b>{price}</b> voor de toevoegingen, voor de rest van deze periode."
+        "dueTodayAmount": "Vandaag te betalen: <b>{price}</b> voor de toevoegingen, voor de rest van deze periode.",
+        "dueTodayUntil": "Vandaag te betalen: <b>{price}</b>, alleen voor de dagen tot {date}. Vanaf {date} betaal je het {interval, select, year {jaarlijkse} other {maandelijkse}} totaal hierboven."
       }
     },
     "cancelsOn": "Abonnement eindigt op {date}",

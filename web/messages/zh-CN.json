@@ -18836,7 +18836,8 @@
         "total": "{interval, select, year {年度} other {月度}}总计（自下次续订起）<b>{price}</b>",
         "undoAll": "撤销所有更改",
         "dueToday": "今日应付：本周期剩余时间内新增项目的费用，详见“核对并支付”。",
-        "dueTodayAmount": "今日应付：新增项目本周期剩余部分 <b>{price}</b>。"
+        "dueTodayAmount": "今日应付：新增项目本周期剩余部分 <b>{price}</b>。",
+        "dueTodayUntil": "今日应付：<b>{price}</b>，仅为到 {date} 为止的剩余天数。从 {date} 起，您按上方的{interval, select, year {年度} other {月度}}合计付款。"
       }
     },
     "cancelsOn": "订阅将于 {date} 结束",

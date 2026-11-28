@@ -18889,7 +18889,8 @@
         "total": "{interval, select, year {Jährliche} other {Monatliche}} Summe ab der nächsten Verlängerung: <b>{price}</b>",
         "undoAll": "Alle Änderungen rückgängig machen",
         "dueToday": "Heute fällig: die hinzugefügten Positionen für den Rest dieses Zeitraums, angezeigt unter „Prüfen und bezahlen“.",
-        "dueTodayAmount": "Heute fällig: <b>{price}</b> für die hinzugefügten Posten, für den Rest dieses Zeitraums."
+        "dueTodayAmount": "Heute fällig: <b>{price}</b> für die hinzugefügten Posten, für den Rest dieses Zeitraums.",
+        "dueTodayUntil": "Heute fällig: <b>{price}</b>, nur für die Tage bis zum {date}. Ab dem {date} zahlen Sie die {interval, select, year {jährliche} other {monatliche}} Summe oben."
       }
     },
     "cancelsOn": "Abonnement endet am {date}",
