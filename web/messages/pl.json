@@ -18816,6 +18816,7 @@
       },
       "summary": "{prompts} lokalizacji Promptów · {brands} marek",
       "review": "Sprawdź i zapłać",
+      "reviewPrice": "Sprawdź i zapłać {price}",
       "reviewing": "Sprawdzanie ceny…",
       "dialog": {
         "title": "Sprawdź swoje dodatki",
@@ -18867,6 +18868,7 @@
         "title": "Twoje dodatki",
         "onePayment": "Jedna płatność",
         "plan": "Plan {plan}",
+        "planSub": "Już w Twojej subskrypcji · bez zmian",
         "slots": "Dodatkowe śledzenie {platform}",
         "slotsCount": "{slots} slots",
         "remove": "Usuń: {item}",
@@ -18876,7 +18878,8 @@
         "topUp": "{multiplier}x użycia AI · do {date}",
         "total": "{interval, select, year {Suma roczna} other {Suma miesięczna}} od następnego odnowienia: <b>{price}</b>",
         "undoAll": "Cofnij wszystkie zmiany",
-        "dueToday": "Do zapłaty dziś: dodane pozycje za pozostałą część bieżącego okresu, widoczne w kroku Przejrzyj i zapłać."
+        "dueToday": "Do zapłaty dziś: dodane pozycje za pozostałą część bieżącego okresu, widoczne w kroku Przejrzyj i zapłać.",
+        "dueTodayAmount": "Do zapłaty dziś: <b>{price}</b> za dodane pozycje, do końca tego okresu."
       }
     },
     "cancelsOn": "Subskrypcja kończy się {date}",

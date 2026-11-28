@@ -18427,6 +18427,7 @@
       },
       "summary": "{prompts} prompt locations · {brands} brands",
       "review": "Review and pay",
+      "reviewPrice": "Review and pay {price}",
       "reviewing": "Checking the price…",
       "dialog": {
         "title": "Review your add-ons",
@@ -18478,6 +18479,7 @@
         "title": "Your add-ons",
         "onePayment": "One payment",
         "plan": "{plan} plan",
+        "planSub": "Already in your subscription · no change",
         "slots": "{platform} extra tracking",
         "slotsCount": "{slots} slots",
         "remove": "Remove {item}",
@@ -18487,7 +18489,8 @@
         "topUp": "{multiplier}x AI usage · until {date}",
         "total": "{interval, select, year {Yearly} other {Monthly}} total from the next renewal <b>{price}</b>",
         "undoAll": "Undo all changes",
-        "dueToday": "Due today: the added items for the rest of this period, shown on Review and pay."
+        "dueToday": "Due today: the added items for the rest of this period, shown on Review and pay.",
+        "dueTodayAmount": "Due today: <b>{price}</b> for the added items, for the rest of this period."
       }
     },
     "cancelsOn": "Subscription ends on {date}",

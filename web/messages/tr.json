@@ -18814,6 +18814,7 @@
       },
       "summary": "{prompts} Prompt konumu · {brands} marka",
       "review": "İncele ve öde",
+      "reviewPrice": "İncele ve öde {price}",
       "reviewing": "Fiyat kontrol ediliyor…",
       "dialog": {
         "title": "Eklentilerinizi inceleyin",
@@ -18865,6 +18866,7 @@
         "title": "Eklentileriniz",
         "onePayment": "Tek ödeme",
         "plan": "{plan} planı",
+        "planSub": "Aboneliğinizde zaten var · değişmiyor",
         "slots": "{platform} ekstra takip",
         "slotsCount": "{slots} slots",
         "remove": "{item} öğesini kaldır",
@@ -18874,7 +18876,8 @@
         "topUp": "{multiplier}x AI kullanımı · {date} tarihine kadar",
         "total": "Bir sonraki yenilemeden itibaren {interval, select, year {yıllık} other {aylık}} toplam: <b>{price}</b>",
         "undoAll": "Tüm değişiklikleri geri al",
-        "dueToday": "Bugün ödenecek tutar: bu dönemin kalan süresi için eklenen öğeler, Gözden geçir ve öde adımında gösterilir."
+        "dueToday": "Bugün ödenecek tutar: bu dönemin kalan süresi için eklenen öğeler, Gözden geçir ve öde adımında gösterilir.",
+        "dueTodayAmount": "Bugün ödenecek: eklenenler için, bu dönemin kalanı için <b>{price}</b>."
       }
     },
     "cancelsOn": "Abonelik {date} tarihinde sona eriyor",

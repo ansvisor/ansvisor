@@ -18824,6 +18824,7 @@
       },
       "summary": "{prompts} localizações de Prompts · {brands} marcas",
       "review": "Revisar e pagar",
+      "reviewPrice": "Revisar e pagar {price}",
       "reviewing": "Verificando o preço…",
       "dialog": {
         "title": "Revise seus adicionais",
@@ -18875,6 +18876,7 @@
         "title": "Seus complementos",
         "onePayment": "Pagamento único",
         "plan": "Plano {plan}",
+        "planSub": "Já incluído na sua assinatura · sem alteração",
         "slots": "Monitoramento extra de {platform}",
         "slotsCount": "{slots} slots",
         "remove": "Remover {item}",
@@ -18884,7 +18886,8 @@
         "topUp": "{multiplier}x de uso de IA · até {date}",
         "total": "Total {interval, select, year {anual} other {mensal}} a partir da próxima renovação <b>{price}</b>",
         "undoAll": "Desfazer todas as alterações",
-        "dueToday": "A pagar hoje: os itens adicionados pelo restante deste período, exibidos em Revisar e pagar."
+        "dueToday": "A pagar hoje: os itens adicionados pelo restante deste período, exibidos em Revisar e pagar.",
+        "dueTodayAmount": "A pagar hoje: <b>{price}</b> pelos itens adicionados, pelo restante deste período."
       }
     },
     "cancelsOn": "A assinatura termina em {date}",

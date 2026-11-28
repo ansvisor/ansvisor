@@ -18773,6 +18773,7 @@
       },
       "summary": "{prompts} 个 Prompt 地区 · {brands} 个品牌",
       "review": "查看并付款",
+      "reviewPrice": "查看并支付 {price}",
       "reviewing": "正在核对价格…",
       "dialog": {
         "title": "查看您的加购项",
@@ -18824,6 +18825,7 @@
         "title": "您的附加项",
         "onePayment": "一次性付款",
         "plan": "{plan} 套餐",
+        "planSub": "已包含在您的订阅中 · 无变化",
         "slots": "{platform} 额外追踪",
         "slotsCount": "{slots} 个 slots",
         "remove": "移除 {item}",
@@ -18833,7 +18835,8 @@
         "topUp": "{multiplier}倍 AI 用量 · 截至 {date}",
         "total": "{interval, select, year {年度} other {月度}}总计（自下次续订起）<b>{price}</b>",
         "undoAll": "撤销所有更改",
-        "dueToday": "今日应付：本周期剩余时间内新增项目的费用，详见“核对并支付”。"
+        "dueToday": "今日应付：本周期剩余时间内新增项目的费用，详见“核对并支付”。",
+        "dueTodayAmount": "今日应付：新增项目本周期剩余部分 <b>{price}</b>。"
       }
     },
     "cancelsOn": "订阅将于 {date} 结束",
