@@ -18884,7 +18884,8 @@
         "total": "{interval, select, year {Suma roczna} other {Suma miesięczna}} od następnego odnowienia: <b>{price}</b>",
         "undoAll": "Cofnij wszystkie zmiany",
         "dueToday": "Do zapłaty dziś: dodane pozycje za pozostałą część bieżącego okresu, widoczne w kroku Przejrzyj i zapłać.",
-        "dueTodayAmount": "Do zapłaty dziś: <b>{price}</b> za dodane pozycje, do końca tego okresu."
+        "dueTodayAmount": "Do zapłaty dziś: <b>{price}</b> za dodane pozycje, do końca tego okresu.",
+        "dueTodayUntil": "Do zapłaty dziś: <b>{price}</b>, tylko za dni pozostałe do {date}. Od {date} płacisz {interval, select, year {roczną} other {miesięczną}} sumę powyżej."
       }
     },
     "cancelsOn": "Subskrypcja kończy się {date}",

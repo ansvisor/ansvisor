@@ -18883,7 +18883,8 @@
         "total": "次回更新からの{interval, select, year {年額} other {月額}}合計 <b>{price}</b>",
         "undoAll": "すべての変更を元に戻す",
         "dueToday": "本日のお支払い:今期の残り期間に追加された項目の料金です。「確認してお支払い」に表示されます。",
-        "dueTodayAmount": "本日のお支払い: 追加分の今期残り期間として <b>{price}</b>。"
+        "dueTodayAmount": "本日のお支払い: 追加分の今期残り期間として <b>{price}</b>。",
+        "dueTodayUntil": "本日のお支払い: <b>{price}</b>({date}までの残り日数分のみ)。{date}からは上記の{interval, select, year {年間} other {月額}}合計をお支払いいただきます。"
       }
     },
     "cancelsOn": "サブスクリプションは {date} に終了します",

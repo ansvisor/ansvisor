@@ -567,8 +567,10 @@ function PlanAddOnsBody({ addOns, onChange }: { addOns: PlanAddOnsView; onChange
               )}
               <div className="text-muted-foreground">
                 {dueToday != null
-                  ? t.rich('cart.dueTodayAmount', {
+                  ? t.rich(renews ? 'cart.dueTodayUntil' : 'cart.dueTodayAmount', {
                       price: money(dueToday),
+                      date: renews ?? '',
+                      interval,
                       b: (chunks) => (
                         <strong className="tabular-nums text-foreground">{chunks}</strong>
                       ),

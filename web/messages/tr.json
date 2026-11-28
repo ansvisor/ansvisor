@@ -18882,7 +18882,8 @@
         "total": "Bir sonraki yenilemeden itibaren {interval, select, year {yıllık} other {aylık}} toplam: <b>{price}</b>",
         "undoAll": "Tüm değişiklikleri geri al",
         "dueToday": "Bugün ödenecek tutar: bu dönemin kalan süresi için eklenen öğeler, Gözden geçir ve öde adımında gösterilir.",
-        "dueTodayAmount": "Bugün ödenecek: eklenenler için, bu dönemin kalanı için <b>{price}</b>."
+        "dueTodayAmount": "Bugün ödenecek: eklenenler için, bu dönemin kalanı için <b>{price}</b>.",
+        "dueTodayUntil": "Bugün ödenecek: <b>{price}</b>, yalnızca {date} tarihine kadar kalan günler için. {date} tarihinden itibaren yukarıdaki {interval, select, year {yıllık} other {aylık}} toplamı ödersiniz."
       }
     },
     "cancelsOn": "Abonelik {date} tarihinde sona eriyor",
