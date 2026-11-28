@@ -4,8 +4,8 @@ route: /dashboard/insights
 keywords: [brand visibility, overview tab, mentions tab, citations tab, product visibility tab, answer engine insights, visibility score, key metrics, leaderboard, by AI platform, topics vs competitors, opportunities, filters]
 synonyms: [visibility page, AI visibility report, analytics hub, insights page, dashboard overview, visibility dashboard]
 plan: all
-updated: 2026-11-23
-last_checked: 2026-11-23
+updated: 2026-11-28
+last_checked: 2026-11-28
 owner: Cihan
 app_version: 0.3.0
 approved: true
@@ -40,6 +40,10 @@ Nine cards follow. Most show their change **vs previous period** and a small dai
 - **Coverage**, **Share of voice**, **Avg. position** and **Citation rate**.
 
 A rate based on fewer than 20 answers says **Low sample** and shows no change.
+
+## The answers behind a card
+
+Under the **Visibility** card, **Based on N answers · See answers** opens the **Visibility Breakdown** panel on its **Answers** tab: the answers the score is read from, for the same range and filters. Under **Mentions**, **N answers name you · See answers** lists the answers that name your brand. Open any of them in full from there.
 
 ## Visibility trend
 

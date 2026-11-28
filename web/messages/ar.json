@@ -10722,7 +10722,11 @@
       "avgPositionSub": "عند الذكر",
       "citationRate": "معدل الإشارة بالمصدر",
       "citationRateTip": "نسبة الإجابات التي تشير إلى نطاقك كمصدر.",
-      "citationRateSub": "من الإجابات تشير إليك كمصدر"
+      "citationRateSub": "من الإجابات تشير إليك كمصدر",
+      "basedOnAnswers": "{count, plural, one {استنادًا إلى إجابة واحدة} other {استنادًا إلى # إجابة}}",
+      "answersNameYou": "{count, plural, one {إجابة واحدة تذكرك} other {# إجابة تذكرك}}",
+      "seeAnswers": "عرض الإجابات",
+      "seeAnswersLabel": "{metric}: عرض الإجابات وراء هذا الرقم"
     },
     "summary": {
       "label": "الملخص",
@@ -11080,7 +11084,27 @@
       "tabs": {
         "prompts": "Prompts",
         "platforms": "المنصات",
-        "topics": "المواضيع"
+        "topics": "المواضيع",
+        "answers": "الإجابات"
+      },
+      "answers": {
+        "hint": "{metric, select, mentions {الإجابات التي تذكرك} other {كل الإجابات}} وراء الرقم، لهذه الفترة وهذه الفلاتر، الأحدث أولًا.",
+        "loadFailed": "تعذّر تحميل الإجابات. حاول مرة أخرى.",
+        "empty": "لا توجد إجابات بعد في هذه الفترة مع هذه الفلاتر.",
+        "mentioned": "مذكور",
+        "mentionedAt": "مذكور · #{position}",
+        "notMentioned": "غير مذكور",
+        "noAnswer": "لا يوجد نص للإجابة",
+        "noAnswerNote": "لم يحفظ هذا التشغيل نص الإجابة، لذا لا يقول شيئًا عن علامتك التجارية.",
+        "sources": "{count, plural, =0 {لا مصادر} one {مصدر واحد} other {# مصدر}}",
+        "ownSources": "{count, plural, other {# منها لك}}",
+        "open": "فتح الإجابة كاملة",
+        "range": "{from}–{to} من {total}",
+        "previous": "السابق",
+        "next": "التالي",
+        "detailTitle": "الإجابة كاملة",
+        "detailLoadFailed": "تعذّر تحميل هذه الإجابة. حاول مرة أخرى.",
+        "detailMissing": "هذه الإجابة لم تعد متاحة."
       },
       "biggest": "{direction, select, down {أكبر انخفاض} other {أكبر ارتفاع}}:",
       "topPlatform": "{direction, select, down {أكبر انخفاض} other {أكبر ارتفاع}} للمنصات: {platform}",

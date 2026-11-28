@@ -10741,7 +10741,11 @@
       "avgPositionSub": "wenn erwähnt",
       "citationRate": "Zitierungsrate",
       "citationRateTip": "Anteil der Antworten, die Ihre Domain zitieren.",
-      "citationRateSub": "der Antworten zitieren Sie"
+      "citationRateSub": "der Antworten zitieren Sie",
+      "basedOnAnswers": "{count, plural, one {Basierend auf # Antwort} other {Basierend auf # Antworten}}",
+      "answersNameYou": "{count, plural, one {# Antwort nennt Sie} other {# Antworten nennen Sie}}",
+      "seeAnswers": "Antworten ansehen",
+      "seeAnswersLabel": "{metric}: die Antworten dahinter ansehen"
     },
     "summary": {
       "label": "Zusammenfassung",
@@ -11099,7 +11103,27 @@
       "tabs": {
         "prompts": "Prompts",
         "platforms": "Plattformen",
-        "topics": "Themen"
+        "topics": "Themen",
+        "answers": "Antworten"
+      },
+      "answers": {
+        "hint": "{metric, select, mentions {Die Antworten, die Sie nennen} other {Alle Antworten}} hinter der Zahl, für diesen Zeitraum und diese Filter, neueste zuerst.",
+        "loadFailed": "Die Antworten konnten nicht geladen werden. Versuchen Sie es erneut.",
+        "empty": "Noch keine Antworten in diesem Zeitraum mit diesen Filtern.",
+        "mentioned": "Genannt",
+        "mentionedAt": "Genannt · #{position}",
+        "notMentioned": "Nicht genannt",
+        "noAnswer": "Kein Antworttext",
+        "noAnswerNote": "Dieser Lauf hat keinen Antworttext gespeichert und sagt daher nichts über Ihre Marke aus.",
+        "sources": "{count, plural, =0 {Keine Quellen} one {# Quelle} other {# Quellen}}",
+        "ownSources": "{count, plural, other {# davon Ihre}}",
+        "open": "Ganze Antwort öffnen",
+        "range": "{from}–{to} von {total}",
+        "previous": "Zurück",
+        "next": "Weiter",
+        "detailTitle": "Ganze Antwort",
+        "detailLoadFailed": "Diese Antwort konnte nicht geladen werden. Versuchen Sie es erneut.",
+        "detailMissing": "Diese Antwort ist nicht mehr verfügbar."
       },
       "biggest": "{direction, select, down {Größter Rückgang} other {Größter Zuwachs}}:",
       "topPlatform": "{direction, select, down {Größter Plattform-Rückgang} other {Größter Plattform-Zuwachs}}: {platform}",

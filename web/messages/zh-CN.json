@@ -10688,7 +10688,11 @@
       "avgPositionSub": "被提及时",
       "citationRate": "引用率",
       "citationRateTip": "引用您域名的回答占比。",
-      "citationRateSub": "的回答引用了您"
+      "citationRateSub": "的回答引用了您",
+      "basedOnAnswers": "{count, plural, other {基于 # 条回答}}",
+      "answersNameYou": "{count, plural, other {# 条回答提到了您}}",
+      "seeAnswers": "查看回答",
+      "seeAnswersLabel": "{metric}：查看背后的回答"
     },
     "summary": {
       "label": "摘要",
@@ -11046,7 +11050,27 @@
       "tabs": {
         "prompts": "Prompts",
         "platforms": "平台",
-        "topics": "主题"
+        "topics": "主题",
+        "answers": "回答"
+      },
+      "answers": {
+        "hint": "此时间段和筛选条件下，构成该数字的{metric, select, mentions {提到您的回答} other {所有回答}}，按时间从新到旧排列。",
+        "loadFailed": "无法加载回答，请重试。",
+        "empty": "此时间段和筛选条件下暂无回答。",
+        "mentioned": "已提及",
+        "mentionedAt": "已提及 · #{position}",
+        "notMentioned": "未提及",
+        "noAnswer": "无回答文本",
+        "noAnswerNote": "本次运行未保存回答文本，因此无法反映您的品牌情况。",
+        "sources": "{count, plural, =0 {无来源} other {# 个来源}}",
+        "ownSources": "{count, plural, other {其中 # 个是您的}}",
+        "open": "打开完整回答",
+        "range": "{from}–{to}，共 {total}",
+        "previous": "上一页",
+        "next": "下一页",
+        "detailTitle": "完整回答",
+        "detailLoadFailed": "无法加载此回答，请重试。",
+        "detailMissing": "此回答已不可用。"
       },
       "biggest": "{direction, select, down {降幅最大} other {增幅最大}}：",
       "topPlatform": "{direction, select, down {降幅最大的平台} other {增幅最大的平台}}：{platform}",

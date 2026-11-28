@@ -10729,7 +10729,11 @@
       "avgPositionSub": "bahsedildiğinde",
       "citationRate": "Atıf oranı",
       "citationRateTip": "Alan adınıza atıfta bulunan yanıtların oranı.",
-      "citationRateSub": "yanıt size atıfta bulundu"
+      "citationRateSub": "yanıt size atıfta bulundu",
+      "basedOnAnswers": "{count, plural, one {# yanıta dayalı} other {# yanıta dayalı}}",
+      "answersNameYou": "{count, plural, one {# yanıt adınızı geçiriyor} other {# yanıt adınızı geçiriyor}}",
+      "seeAnswers": "Yanıtları gör",
+      "seeAnswersLabel": "{metric}: arkasındaki yanıtları gör"
     },
     "summary": {
       "label": "Özet",
@@ -11087,7 +11091,27 @@
       "tabs": {
         "prompts": "Prompts",
         "platforms": "Platformlar",
-        "topics": "Konular"
+        "topics": "Konular",
+        "answers": "Yanıtlar"
+      },
+      "answers": {
+        "hint": "Bu dönem ve bu filtreler için sayının arkasındaki {metric, select, mentions {adınızı geçiren yanıtlar} other {tüm yanıtlar}}, en yeniden eskiye.",
+        "loadFailed": "Yanıtlar yüklenemedi. Tekrar deneyin.",
+        "empty": "Bu dönemde ve bu filtrelerle henüz yanıt yok.",
+        "mentioned": "Bahsedildi",
+        "mentionedAt": "Bahsedildi · #{position}",
+        "notMentioned": "Bahsedilmedi",
+        "noAnswer": "Yanıt metni yok",
+        "noAnswerNote": "Bu çalıştırmada yanıt metni kaydedilmedi, bu yüzden markanız hakkında bir şey göstermiyor.",
+        "sources": "{count, plural, =0 {Kaynak yok} one {# kaynak} other {# kaynak}}",
+        "ownSources": "{count, plural, other {# tanesi sizin}}",
+        "open": "Yanıtın tamamını aç",
+        "range": "{from}–{to} / {total}",
+        "previous": "Önceki",
+        "next": "Sonraki",
+        "detailTitle": "Yanıtın tamamı",
+        "detailLoadFailed": "Bu yanıt yüklenemedi. Tekrar deneyin.",
+        "detailMissing": "Bu yanıt artık mevcut değil."
       },
       "biggest": "{direction, select, down {En büyük düşüş} other {En büyük artış}}:",
       "topPlatform": "En çok {direction, select, down {düşen} other {artan}} platform: {platform}",

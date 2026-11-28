@@ -10741,7 +10741,11 @@
       "avgPositionSub": "lorsque vous êtes mentionné",
       "citationRate": "Taux de citation",
       "citationRateTip": "Part des réponses qui citent votre domaine.",
-      "citationRateSub": "des réponses vous citent"
+      "citationRateSub": "des réponses vous citent",
+      "basedOnAnswers": "{count, plural, one {Basé sur # réponse} other {Basé sur # réponses}}",
+      "answersNameYou": "{count, plural, one {# réponse vous mentionne} other {# réponses vous mentionnent}}",
+      "seeAnswers": "Voir les réponses",
+      "seeAnswersLabel": "{metric} : voir les réponses derrière ce chiffre"
     },
     "summary": {
       "label": "Résumé",
@@ -11099,7 +11103,27 @@
       "tabs": {
         "prompts": "Prompts",
         "platforms": "Plateformes",
-        "topics": "Sujets"
+        "topics": "Sujets",
+        "answers": "Réponses"
+      },
+      "answers": {
+        "hint": "{metric, select, mentions {Les réponses qui vous mentionnent} other {Toutes les réponses}} derrière ce chiffre, pour cette période et ces filtres, des plus récentes aux plus anciennes.",
+        "loadFailed": "Impossible de charger les réponses. Réessayez.",
+        "empty": "Aucune réponse pour cette période et ces filtres pour l'instant.",
+        "mentioned": "Mentionné",
+        "mentionedAt": "Mentionné · #{position}",
+        "notMentioned": "Non mentionné",
+        "noAnswer": "Aucun texte de réponse",
+        "noAnswerNote": "Cette exécution n'a enregistré aucun texte de réponse : elle ne dit donc rien de votre marque.",
+        "sources": "{count, plural, =0 {Aucune source} one {# source} other {# sources}}",
+        "ownSources": "{count, plural, one {# à vous} other {# à vous}}",
+        "open": "Ouvrir la réponse complète",
+        "range": "{from}–{to} sur {total}",
+        "previous": "Précédent",
+        "next": "Suivant",
+        "detailTitle": "Réponse complète",
+        "detailLoadFailed": "Impossible de charger cette réponse. Réessayez.",
+        "detailMissing": "Cette réponse n'est plus disponible."
       },
       "biggest": "{direction, select, down {Plus forte baisse} other {Plus forte hausse}} :",
       "topPlatform": "{direction, select, down {Plus forte baisse} other {Plus forte hausse}} par plateforme : {platform}",

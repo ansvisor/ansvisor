@@ -186,6 +186,8 @@ interface MetricCardProps {
   /** Opens Formulas on this card's section; the button's accessible name. */
   onFormula?: () => void;
   formulaLabel?: string;
+  /** "Based on N answers · See answers": the answers behind the number. */
+  answers?: { text: string; action: string; label: string; onSee: () => void } | null;
 }
 
 /** One KPI card, as in the v2 mockup: label, value with its change, a line of context, a sparkline. */
@@ -204,6 +206,7 @@ export function MetricCard({
   clickLabel,
   onFormula,
   formulaLabel,
+  answers,
 }: MetricCardProps) {
   const clickable = typeof onClick === 'function';
   return (
@@ -291,6 +294,26 @@ export function MetricCard({
       ) : (
         <Sparkline values={spark ?? []} bad={delta?.tone === 'bad'} />
       )}
+      {answers && (
+        <div className="-mt-0.5 flex min-w-0 items-center gap-1 text-[11px] text-muted-foreground">
+          <span className="truncate">{answers.text}</span>
+          <span aria-hidden>·</span>
+          <button
+            type="button"
+            aria-label={answers.label}
+            data-slot="kpi-see-answers"
+            // Inside a clickable card: open the answers, not the card's own action.
+            onClick={(e) => {
+              e.stopPropagation();
+              answers.onSee();
+            }}
+            onKeyDown={(e) => e.stopPropagation()}
+            className="shrink-0 rounded-sm font-medium text-foreground underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            {answers.action}
+          </button>
+        </div>
+      )}
     </Card>
   );
 }
@@ -308,8 +331,11 @@ interface KpiRowsProps {
   competitors: CompetitorComparisonData | null;
   comparison: PromptComparison | null;
   series: KpiSeriesDay[] | null;
-  /** Visibility's breakdown; Mentions opens its own page. */
-  onBreakdown: (metric: 'visibility') => void;
+  /**
+   * Visibility's breakdown (Mentions opens its own page), or on its Answers
+   * tab the answers behind Visibility or Mentions.
+   */
+  onBreakdown: (metric: 'visibility' | 'mentions', tab?: 'answers') => void;
   onNavigate: (path: string) => void;
   /** The Mentions page on the same range and filters, for the Mentions and Net sentiment cards. */
   mentionsHref?: string;
@@ -358,6 +384,17 @@ export function KpiRows({
     onFormula: () => setFormula(section),
     formulaLabel: t('howCalculated', { metric }),
   });
+  // "Based on N answers · See answers": the panel's Answers tab, for the
+  // answers each card counts. Nothing to list without any.
+  const seeAnswers = (metric: 'visibility' | 'mentions', count: number, text: string) =>
+    count > 0
+      ? {
+          text,
+          action: t('seeAnswers'),
+          label: t('seeAnswersLabel', { metric: t(metric) }),
+          onSee: () => onBreakdown(metric, 'answers'),
+        }
+      : null;
   const formulaSamples: Partial<Record<FormulaSection, RateSample>> = {
     visibility: samples.visibility,
     sentiment: samples.netSentiment,
@@ -427,6 +464,11 @@ export function KpiRows({
           spark={trend ? trend.points.map((p) => p.values.you ?? null) : null}
           onClick={() => onBreakdown('visibility')}
           {...formulaFor('visibility', t('visibility'))}
+          answers={seeAnswers(
+            'visibility',
+            summary.totalResults,
+            t('basedOnAnswers', { count: summary.totalResults }),
+          )}
           clickLabel={t('viewBreakdown', { metric: t('visibility') })}
         />
         <MetricCard
@@ -472,6 +514,11 @@ export function KpiRows({
           onClick={() => onNavigate(mentionsHref)}
           clickLabel={t('openMentions')}
           {...formulaFor('mentions', t('mentions'))}
+          answers={seeAnswers(
+            'mentions',
+            summary.mentioningResults,
+            t('answersNameYou', { count: summary.mentioningResults }),
+          )}
         />
         <MetricCard
           label={t('citations')}

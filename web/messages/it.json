@@ -10737,7 +10737,11 @@
       "avgPositionSub": "quando menzionato",
       "citationRate": "Tasso di citazione",
       "citationRateTip": "Quota di risposte che citano il tuo dominio.",
-      "citationRateSub": "delle risposte ti citano"
+      "citationRateSub": "delle risposte ti citano",
+      "basedOnAnswers": "{count, plural, one {Basato su # risposta} other {Basato su # risposte}}",
+      "answersNameYou": "{count, plural, one {# risposta ti nomina} other {# risposte ti nominano}}",
+      "seeAnswers": "Vedi le risposte",
+      "seeAnswersLabel": "{metric}: vedi le risposte dietro il numero"
     },
     "summary": {
       "label": "Riepilogo",
@@ -11095,7 +11099,27 @@
       "tabs": {
         "prompts": "Prompts",
         "platforms": "Piattaforme",
-        "topics": "Argomenti"
+        "topics": "Argomenti",
+        "answers": "Risposte"
+      },
+      "answers": {
+        "hint": "{metric, select, mentions {Le risposte che ti nominano} other {Tutte le risposte}} dietro il numero, per questo periodo e questi filtri, dalla più recente.",
+        "loadFailed": "Impossibile caricare le risposte. Riprova.",
+        "empty": "Ancora nessuna risposta in questo periodo con questi filtri.",
+        "mentioned": "Menzionato",
+        "mentionedAt": "Menzionato · #{position}",
+        "notMentioned": "Non menzionato",
+        "noAnswer": "Nessun testo di risposta",
+        "noAnswerNote": "Questa esecuzione non ha salvato il testo della risposta, quindi non dice nulla sul tuo brand.",
+        "sources": "{count, plural, =0 {Nessuna fonte} one {# fonte} other {# fonti}}",
+        "ownSources": "{count, plural, one {# tua} other {# tue}}",
+        "open": "Apri la risposta completa",
+        "range": "{from}–{to} di {total}",
+        "previous": "Precedente",
+        "next": "Successiva",
+        "detailTitle": "Risposta completa",
+        "detailLoadFailed": "Impossibile caricare questa risposta. Riprova.",
+        "detailMissing": "Questa risposta non è più disponibile."
       },
       "biggest": "{direction, select, down {Calo maggiore} other {Crescita maggiore}}:",
       "topPlatform": "{direction, select, down {Calo} other {Crescita}} principale della piattaforma: {platform}",

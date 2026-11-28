@@ -10731,7 +10731,11 @@
       "avgPositionSub": "gdy wymieniono",
       "citationRate": "Wskaźnik cytowań",
       "citationRateTip": "Odsetek odpowiedzi, które cytują Twoją domenę.",
-      "citationRateSub": "odpowiedzi cytuje Ciebie"
+      "citationRateSub": "odpowiedzi cytuje Ciebie",
+      "basedOnAnswers": "{count, plural, one {Na podstawie # odpowiedzi} few {Na podstawie # odpowiedzi} many {Na podstawie # odpowiedzi} other {Na podstawie # odpowiedzi}}",
+      "answersNameYou": "{count, plural, one {# odpowiedź wymienia Cię} few {# odpowiedzi wymieniają Cię} many {# odpowiedzi wymienia Cię} other {# odpowiedzi wymienia Cię}}",
+      "seeAnswers": "Zobacz odpowiedzi",
+      "seeAnswersLabel": "{metric}: zobacz odpowiedzi stojące za liczbą"
     },
     "summary": {
       "label": "Podsumowanie",
@@ -11089,7 +11093,27 @@
       "tabs": {
         "prompts": "Prompty",
         "platforms": "Platformy",
-        "topics": "Tematy"
+        "topics": "Tematy",
+        "answers": "Odpowiedzi"
+      },
+      "answers": {
+        "hint": "{metric, select, mentions {Odpowiedzi, które Cię wymieniają} other {Wszystkie odpowiedzi}} stojące za liczbą, dla tego okresu i tych filtrów, od najnowszych.",
+        "loadFailed": "Nie udało się wczytać odpowiedzi. Spróbuj ponownie.",
+        "empty": "Brak jeszcze odpowiedzi w tym okresie dla tych filtrów.",
+        "mentioned": "Wymieniono",
+        "mentionedAt": "Wymieniono · #{position}",
+        "notMentioned": "Nie wymieniono",
+        "noAnswer": "Brak tekstu odpowiedzi",
+        "noAnswerNote": "To uruchomienie nie zapisało tekstu odpowiedzi, więc nie mówi nic o Twojej marce.",
+        "sources": "{count, plural, =0 {Brak źródeł} one {# źródło} few {# źródła} many {# źródeł} other {# źródła}}",
+        "ownSources": "{count, plural, other {# Twoich}}",
+        "open": "Otwórz całą odpowiedź",
+        "range": "{from}–{to} z {total}",
+        "previous": "Poprzednia",
+        "next": "Następna",
+        "detailTitle": "Cała odpowiedź",
+        "detailLoadFailed": "Nie udało się wczytać tej odpowiedzi. Spróbuj ponownie.",
+        "detailMissing": "Ta odpowiedź nie jest już dostępna."
       },
       "biggest": "{direction, select, down {Największy spadek} other {Największy wzrost}}:",
       "topPlatform": "{direction, select, down {Największy spadek} other {Największy wzrost}} wśród platform: {platform}",

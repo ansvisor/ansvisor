@@ -10712,7 +10712,11 @@
       "avgPositionSub": "언급 시",
       "citationRate": "인용률",
       "citationRateTip": "귀하의 도메인을 인용한 답변의 비율입니다.",
-      "citationRateSub": "답변에서 귀하를 인용함"
+      "citationRateSub": "답변에서 귀하를 인용함",
+      "basedOnAnswers": "{count, plural, other {답변 #개 기준}}",
+      "answersNameYou": "{count, plural, other {답변 #개가 귀사를 언급}}",
+      "seeAnswers": "답변 보기",
+      "seeAnswersLabel": "{metric}: 이 숫자의 근거가 된 답변 보기"
     },
     "summary": {
       "label": "요약",
@@ -11070,7 +11074,27 @@
       "tabs": {
         "prompts": "Prompts",
         "platforms": "플랫폼",
-        "topics": "주제"
+        "topics": "주제",
+        "answers": "답변"
+      },
+      "answers": {
+        "hint": "이 기간과 필터에서 숫자의 근거가 된 {metric, select, mentions {귀사를 언급한 답변} other {모든 답변}}을 최신순으로 보여줍니다.",
+        "loadFailed": "답변을 불러오지 못했습니다. 다시 시도하세요.",
+        "empty": "이 기간과 필터에는 아직 답변이 없습니다.",
+        "mentioned": "언급됨",
+        "mentionedAt": "언급됨 · #{position}",
+        "notMentioned": "언급 안 됨",
+        "noAnswer": "답변 텍스트 없음",
+        "noAnswerNote": "이 실행에서는 답변 텍스트가 저장되지 않아 브랜드에 대해 알 수 있는 내용이 없습니다.",
+        "sources": "{count, plural, =0 {출처 없음} other {출처 #개}}",
+        "ownSources": "{count, plural, other {그중 #개는 자사}}",
+        "open": "전체 답변 열기",
+        "range": "{total}개 중 {from}–{to}",
+        "previous": "이전",
+        "next": "다음",
+        "detailTitle": "전체 답변",
+        "detailLoadFailed": "이 답변을 불러오지 못했습니다. 다시 시도하세요.",
+        "detailMissing": "이 답변은 더 이상 볼 수 없습니다."
       },
       "biggest": "{direction, select, down {최대 하락} other {최대 상승}}:",
       "topPlatform": "플랫폼 {direction, select, down {최대 하락} other {최대 상승}}: {platform}",
