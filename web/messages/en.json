@@ -10372,7 +10372,11 @@
       "avgPositionSub": "when mentioned",
       "citationRate": "Citation rate",
       "citationRateTip": "Share of answers that cite your domain.",
-      "citationRateSub": "of answers cite you"
+      "citationRateSub": "of answers cite you",
+      "basedOnAnswers": "{count, plural, one {Based on # answer} other {Based on # answers}}",
+      "answersNameYou": "{count, plural, one {# answer names you} other {# answers name you}}",
+      "seeAnswers": "See answers",
+      "seeAnswersLabel": "{metric}: see the answers behind it"
     },
     "summary": {
       "label": "Summary",
@@ -10730,7 +10734,27 @@
       "tabs": {
         "prompts": "Prompts",
         "platforms": "Platforms",
-        "topics": "Topics"
+        "topics": "Topics",
+        "answers": "Answers"
+      },
+      "answers": {
+        "hint": "{metric, select, mentions {The answers that name you} other {Every answer}} behind the number, for this period and these filters, newest first.",
+        "loadFailed": "Couldn't load the answers. Try again.",
+        "empty": "No answers in this period and these filters yet.",
+        "mentioned": "Mentioned",
+        "mentionedAt": "Mentioned · #{position}",
+        "notMentioned": "Not mentioned",
+        "noAnswer": "No answer text",
+        "noAnswerNote": "This run saved no answer text, so it shows nothing about your brand.",
+        "sources": "{count, plural, =0 {No sources} one {# source} other {# sources}}",
+        "ownSources": "{count, plural, other {# yours}}",
+        "open": "Open full answer",
+        "range": "{from}–{to} of {total}",
+        "previous": "Previous",
+        "next": "Next",
+        "detailTitle": "Full answer",
+        "detailLoadFailed": "Couldn't load this answer. Try again.",
+        "detailMissing": "This answer is no longer available."
       },
       "biggest": "{direction, select, down {Biggest drop} other {Biggest gain}}:",
       "topPlatform": "Top platform {direction, select, down {drop} other {gain}}: {platform}",

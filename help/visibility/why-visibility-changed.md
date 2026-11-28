@@ -1,11 +1,11 @@
 ---
 title: Find out why your visibility changed
 route: /dashboard/insights
-keywords: [why it changed, visibility breakdown, full breakdown, gains, drops, visibility drop, root cause]
+keywords: [why it changed, visibility breakdown, see answers, answers tab, full breakdown, gains, drops, visibility drop, root cause]
 synonyms: [why did my score drop, why did visibility go up, what moved my score, investigate a drop, score change explained]
 plan: all
-updated: 2026-11-06
-last_checked: 2026-11-06
+updated: 2026-11-28
+last_checked: 2026-11-28
 owner: Cihan
 app_version: 0.3.0
 approved: true
@@ -30,6 +30,10 @@ A note counts the prompts added during the period: they aren't counted in the ch
 The **Visibility** card, a row of **Why it changed** and **Full breakdown** all open the **Visibility Breakdown** panel. It compares the selected range with the period of the same length just before it, and names the prompt and platform behind the biggest gain or drop.
 
 It lists every slice under three tabs: **Prompts**, **Platforms** and **Topics**. Click a prompt to open its page, where **Platform Results** shows each AI answer and the sources it cited.
+
+## The Answers tab
+
+A fourth tab, **Answers**, lists the answers behind the number, for the same range and filters, newest first, 25 a page. Each shows its prompt, platform, location and date, whether it names you (and in which place), a short excerpt and how many sources it cited, yours among them. **Open full answer** shows the whole answer. A run that saved no answer text says **No answer text**, never **Not mentioned**. **See answers** under the **Visibility** and **Mentions** cards opens this tab; for Mentions it lists the answers that name you.
 
 ## Investigate a sharp drop
 

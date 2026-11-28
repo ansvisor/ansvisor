@@ -198,6 +198,29 @@ describe('"How is this calculated?" on the cards', () => {
   });
 });
 
+describe('"See answers" on Visibility and Mentions', () => {
+  const see = (label: string) =>
+    container.querySelector<HTMLButtonElement>(`button[aria-label="${label}"]`);
+
+  it('says how many answers each counts and opens them, not the card', () => {
+    render(plan(47, 50));
+    const lines = [...container.querySelectorAll('[data-slot="kpi-see-answers"]')].map(
+      (b) => b.parentElement!.textContent,
+    );
+    expect(lines).toEqual(['Based on 120 answers·See answers', '80 answers name you·See answers']);
+    act(() => see('Visibility: see the answers behind it')!.click());
+    expect(onBreakdown).toHaveBeenLastCalledWith('visibility', 'answers');
+    act(() => see('Mentions: see the answers behind it')!.click());
+    expect(onBreakdown).toHaveBeenLastCalledWith('mentions', 'answers');
+    expect(onNavigate).not.toHaveBeenCalled();
+  });
+
+  it('is left out with no answers to list', () => {
+    render(plan(47, 50), { totalResults: 0, mentioningResults: 0 });
+    expect(container.querySelector('[data-slot="kpi-see-answers"]')).toBeNull();
+  });
+});
+
 describe('InfoTip', () => {
   /** Hovers an icon whose box starts at `left`, and returns where the tooltip is centred. */
   function tooltipCentreFor(left: number) {

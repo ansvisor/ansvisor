@@ -27,9 +27,10 @@ import {
   type InsightsBreakdown,
 } from '@/lib/insights-breakdown';
 import { sortBreakdownRowsForDisplay } from './breakdown-display';
+import { AnswersTab } from './_answers-tab';
 
-/** The panel's tabs: each kind of slice it lists. */
-export type BreakdownTab = 'prompts' | 'platforms' | 'topics';
+/** The panel's tabs: each kind of slice it lists, and the answers behind the number. */
+export type BreakdownTab = 'prompts' | 'platforms' | 'topics' | 'answers';
 
 type SheetT = ReturnType<typeof useTranslations<'insights.breakdownSheet'>>;
 
@@ -122,7 +123,13 @@ export function MetricBreakdownSheet({
           )}
 
           {!loading && !error && data && metric && (
-            <BreakdownBody data={data} metric={metric} initialTab={initialTab} />
+            <BreakdownBody
+              data={data}
+              metric={metric}
+              initialTab={initialTab}
+              brandId={brandId!}
+              filters={filters}
+            />
           )}
         </div>
       </SheetContent>
@@ -147,10 +154,14 @@ function BreakdownBody({
   data,
   metric,
   initialTab,
+  brandId,
+  filters,
 }: {
   data: InsightsBreakdown;
   metric: BreakdownMetric;
   initialTab?: BreakdownTab;
+  brandId: string;
+  filters?: BreakdownFilters;
 }) {
   const [tab, setTab] = useState<BreakdownTab>(initialTab ?? 'prompts');
   const t = useTranslations('insights.breakdownSheet');
@@ -160,6 +171,7 @@ function BreakdownBody({
 
   const pickRows = () =>
     tab === 'prompts' ? data.byPrompt : tab === 'platforms' ? data.byPlatform : data.byTopic;
+  const sliceKind = tab === 'answers' ? 'prompts' : tab;
 
   return (
     <div className="space-y-4">
@@ -238,15 +250,20 @@ function BreakdownBody({
               {data.byTopic.length}
             </Badge>
           </TabsTrigger>
+          <TabsTrigger value="answers">{t('tabs.answers')}</TabsTrigger>
         </TabsList>
 
         <TabsContent value={tab} className="mt-3">
-          <BreakdownTable
-            rows={pickRows()}
-            metric={metric}
-            kind={tab}
-            comparable={data.windowDays !== null}
-          />
+          {tab === 'answers' ? (
+            <AnswersTab brandId={brandId} metric={metric} filters={filters} />
+          ) : (
+            <BreakdownTable
+              rows={pickRows()}
+              metric={metric}
+              kind={sliceKind}
+              comparable={data.windowDays !== null}
+            />
+          )}
         </TabsContent>
       </Tabs>
     </div>

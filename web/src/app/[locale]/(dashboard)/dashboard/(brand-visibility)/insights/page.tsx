@@ -985,8 +985,8 @@ export default function InsightsPage() {
                   competitors={competitorData}
                   comparison={comparison}
                   series={kpiSeries}
-                  onBreakdown={(metric) => {
-                    setBreakdownTab(undefined);
+                  onBreakdown={(metric, tab) => {
+                    setBreakdownTab(tab);
                     setBreakdownMetric(metric);
                   }}
                   onNavigate={(path) => router.push(path)}

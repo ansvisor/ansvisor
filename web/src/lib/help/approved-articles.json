@@ -6746,7 +6746,7 @@
         "visibility dashboard"
       ],
       "plan": "all",
-      "updated": "2026-11-23",
+      "updated": "2026-11-28",
       "sections": [
         {
           "heading": null,
@@ -6767,6 +6767,10 @@
         {
           "heading": "The key metric cards",
           "text": "Nine cards follow. Most show their change **vs previous period** and a small daily line:\n\n- **Visibility**: your score from 0 to 100, and your rank among the tracked brands, or, before you track competitors, how many prompts you appeared in. Click it to open the **Visibility Breakdown** panel.\n- **Tracked prompts**: the prompts answered in the period. On plans with a limit, a bar shows how many prompt locations your workspace uses. Click it to open Prompts.\n- **Mentions** and **Citations**: how often answers named your brand and cited your pages. They open the **Mentions** and **Citations** tabs.\n- **Net sentiment**: the positive minus the negative share of the answers that name you. It opens the **Mentions** tab.\n- **Coverage**, **Share of voice**, **Avg. position** and **Citation rate**.\n\nA rate based on fewer than 20 answers says **Low sample** and shows no change."
+        },
+        {
+          "heading": "The answers behind a card",
+          "text": "Under the **Visibility** card, **Based on N answers · See answers** opens the **Visibility Breakdown** panel on its **Answers** tab: the answers the score is read from, for the same range and filters. Under **Mentions**, **N answers name you · See answers** lists the answers that name your brand. Open any of them in full from there."
         },
         {
           "heading": "Visibility trend",
@@ -6979,6 +6983,8 @@
       "keywords": [
         "why it changed",
         "visibility breakdown",
+        "see answers",
+        "answers tab",
         "full breakdown",
         "gains",
         "drops",
@@ -6993,7 +6999,7 @@
         "score change explained"
       ],
       "plan": "all",
-      "updated": "2026-11-06",
+      "updated": "2026-11-28",
       "sections": [
         {
           "heading": null,
@@ -7010,6 +7016,10 @@
         {
           "heading": "The Visibility Breakdown panel",
           "text": "The **Visibility** card, a row of **Why it changed** and **Full breakdown** all open the **Visibility Breakdown** panel. It compares the selected range with the period of the same length just before it, and names the prompt and platform behind the biggest gain or drop.\n\nIt lists every slice under three tabs: **Prompts**, **Platforms** and **Topics**. Click a prompt to open its page, where **Platform Results** shows each AI answer and the sources it cited."
+        },
+        {
+          "heading": "The Answers tab",
+          "text": "A fourth tab, **Answers**, lists the answers behind the number, for the same range and filters, newest first, 25 a page. Each shows its prompt, platform, location and date, whether it names you (and in which place), a short excerpt and how many sources it cited, yours among them. **Open full answer** shows the whole answer. A run that saved no answer text says **No answer text**, never **Not mentioned**. **See answers** under the **Visibility** and **Mentions** cards opens this tab; for Mentions it lists the answers that name you."
         },
         {
           "heading": "Investigate a sharp drop",
