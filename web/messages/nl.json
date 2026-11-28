@@ -10737,7 +10737,11 @@
       "avgPositionSub": "indien vermeld",
       "citationRate": "Citeerpercentage",
       "citationRateTip": "Aandeel van antwoorden die uw domein citeren.",
-      "citationRateSub": "van de antwoorden citeert u"
+      "citationRateSub": "van de antwoorden citeert u",
+      "basedOnAnswers": "{count, plural, one {Gebaseerd op # antwoord} other {Gebaseerd op # antwoorden}}",
+      "answersNameYou": "{count, plural, one {# antwoord noemt je} other {# antwoorden noemen je}}",
+      "seeAnswers": "Antwoorden bekijken",
+      "seeAnswersLabel": "{metric}: de antwoorden erachter bekijken"
     },
     "summary": {
       "label": "Overzicht",
@@ -11095,7 +11099,27 @@
       "tabs": {
         "prompts": "Prompts",
         "platforms": "Platforms",
-        "topics": "Onderwerpen"
+        "topics": "Onderwerpen",
+        "answers": "Antwoorden"
+      },
+      "answers": {
+        "hint": "{metric, select, mentions {De antwoorden die je noemen} other {Alle antwoorden}} achter het getal, voor deze periode en deze filters, nieuwste eerst.",
+        "loadFailed": "De antwoorden konden niet worden geladen. Probeer het opnieuw.",
+        "empty": "Nog geen antwoorden in deze periode met deze filters.",
+        "mentioned": "Genoemd",
+        "mentionedAt": "Genoemd · #{position}",
+        "notMentioned": "Niet genoemd",
+        "noAnswer": "Geen antwoordtekst",
+        "noAnswerNote": "Deze run heeft geen antwoordtekst opgeslagen, dus zegt niets over je merk.",
+        "sources": "{count, plural, =0 {Geen bronnen} one {# bron} other {# bronnen}}",
+        "ownSources": "{count, plural, other {# van jou}}",
+        "open": "Volledig antwoord openen",
+        "range": "{from}–{to} van {total}",
+        "previous": "Vorige",
+        "next": "Volgende",
+        "detailTitle": "Volledig antwoord",
+        "detailLoadFailed": "Dit antwoord kon niet worden geladen. Probeer het opnieuw.",
+        "detailMissing": "Dit antwoord is niet meer beschikbaar."
       },
       "biggest": "{direction, select, down {Grootste daling} other {Grootste stijging}}:",
       "topPlatform": "Platform met {direction, select, down {grootste daling} other {grootste stijging}}: {platform}",

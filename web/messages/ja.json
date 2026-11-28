@@ -10730,7 +10730,11 @@
       "avgPositionSub": "言及時",
       "citationRate": "引用率",
       "citationRateTip": "あなたのドメインを引用している回答の割合。",
-      "citationRateSub": "の回答で引用"
+      "citationRateSub": "の回答で引用",
+      "basedOnAnswers": "{count, plural, other {#件の回答に基づく}}",
+      "answersNameYou": "{count, plural, other {#件の回答があなたに言及}}",
+      "seeAnswers": "回答を見る",
+      "seeAnswersLabel": "{metric}: この数値の元になった回答を見る"
     },
     "summary": {
       "label": "概要",
@@ -11088,7 +11092,27 @@
       "tabs": {
         "prompts": "Prompts",
         "platforms": "プラットフォーム",
-        "topics": "トピック"
+        "topics": "トピック",
+        "answers": "回答"
+      },
+      "answers": {
+        "hint": "この期間とフィルターで、数値の元になった{metric, select, mentions {あなたに言及した回答} other {すべての回答}}を新しい順に表示します。",
+        "loadFailed": "回答を読み込めませんでした。もう一度お試しください。",
+        "empty": "この期間とフィルターでの回答はまだありません。",
+        "mentioned": "言及あり",
+        "mentionedAt": "言及あり · #{position}",
+        "notMentioned": "言及なし",
+        "noAnswer": "回答テキストなし",
+        "noAnswerNote": "この実行では回答テキストが保存されなかったため、ブランドについては何もわかりません。",
+        "sources": "{count, plural, =0 {ソースなし} other {#件のソース}}",
+        "ownSources": "{count, plural, other {うち#件が自社}}",
+        "open": "回答全文を開く",
+        "range": "{total}件中 {from}–{to}",
+        "previous": "前へ",
+        "next": "次へ",
+        "detailTitle": "回答全文",
+        "detailLoadFailed": "この回答を読み込めませんでした。もう一度お試しください。",
+        "detailMissing": "この回答はもう利用できません。"
       },
       "biggest": "{direction, select, down {最大の減少} other {最大の増加}}:",
       "topPlatform": "プラットフォーム別{direction, select, down {減少} other {増加}}トップ: {platform}",
