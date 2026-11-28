@@ -98,7 +98,8 @@ function PlanAddOnsBody({ addOns, onChange }: { addOns: PlanAddOnsView; onChange
   const slotsView = addOns.slots;
   const slotsOpen = slotsView?.state === 'open';
   // Enterprise buys only slots; its other limits are its contract's.
-  const slotsOnly = addOns.state === 'enterprise' && !!slotsView;
+  const enterprise = addOns.state === 'enterprise';
+  const slotsOnly = enterprise && !!slotsView;
   const money = (cents: number) => formatPackPrice(cents, addOns.currency);
   const interval = addOns.interval;
   const per = (cents: number) => t('perInterval', { price: money(cents), interval });
@@ -190,6 +191,9 @@ function PlanAddOnsBody({ addOns, onChange }: { addOns: PlanAddOnsView; onChange
     router.refresh();
     onChange();
   }
+
+  // Enterprise with no slots on sale: nothing here it can buy, so nothing shows.
+  if (enterprise && !slotsView) return null;
 
   const renews = addOns.renewsOn ? formatDate(addOns.renewsOn) : null;
   const shownState = slotsOnly ? slotsView.state : addOns.state;

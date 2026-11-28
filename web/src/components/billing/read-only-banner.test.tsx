@@ -217,7 +217,7 @@ describe('ReadOnlyBanner', () => {
     );
     await render({ status: null, neverSubscribed: true });
     expect(container.textContent).toContain(
-      "Your brand isn't tracked yet. Start a 14-day free trial, or get 50% off your first month.",
+      "Your brand isn't tracked yet. Start a 7-day free trial, or get 50% off your first month.",
     );
     const start = seePlans()!;
     expect(seeTheDemo()).toBeDefined();
@@ -230,7 +230,7 @@ describe('ReadOnlyBanner', () => {
     vi.stubEnv('NEXT_PUBLIC_FIRST_MONTH_OFFER', 'off');
     await render({ status: null, neverSubscribed: true });
     expect(container.textContent).toContain(
-      "Your brand isn't tracked yet. Start a 14-day free trial.",
+      "Your brand isn't tracked yet. Start a 7-day free trial.",
     );
     expect(container.textContent).not.toContain('50%');
   });

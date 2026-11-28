@@ -4,7 +4,7 @@ import type { StartChoice } from '@/lib/billing/plan-purchase';
 /**
  * Onboarding's new order on the cloud, "card first" (PR 2 of 3; the owner's
  * decision of 2026-11-16): a new admin starts on the choice, the plan step's
- * cards moved to the front. The 14-day free trial (or a plan bought) takes
+ * cards moved to the front. The 7-day free trial (or a plan bought) takes
  * the card first, in Stripe Checkout; then setup after purchase
  * (setup-after-purchase.ts) sets up the brand and starts its first run. The
  * sample brand opens the demo at once, with no setup; buying from it leads

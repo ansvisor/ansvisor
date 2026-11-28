@@ -17,43 +17,62 @@ const accessFor = (plan: Plan) =>
   Object.fromEntries(POSITION_PLATFORMS.map((p) => [p.id, platformAccess(plan, p.id)]));
 
 describe('POSITION_PLATFORMS', () => {
-  it('lists Starter’s engines first, and no longer Copilot or Perplexity', () => {
+  it('lists Starter’s engines first, then Growth’s standard five, then the slot platforms', () => {
     expect(POSITION_PLATFORMS.map((p) => p.label)).toEqual([
       'ChatGPT',
       'Gemini',
       'Google AI Overviews',
       'Google AI Mode',
+      'Bing AI Mode',
+      'Perplexity',
+      'Claude',
       'Grok',
+      'Microsoft Copilot',
+      'ChatGPT with ads',
+      'Meta AI',
+      'Naver',
+      'Wenxin',
       'Claude API',
     ]);
   });
 });
 
 describe('platformAccess', () => {
-  it('locks Starter to ChatGPT and Gemini, with Grok and Claude behind sales', () => {
+  it('locks Starter to ChatGPT and Gemini: the rest come with Growth, Claude API with sales', () => {
     const access = accessFor(PLANS.starter);
     expect(access['chatgpt-web']).toEqual({ state: 'included' });
     expect(access['gemini-web']).toEqual({ state: 'included' });
-    for (const id of ['google-aio', 'google-aimode']) {
+    for (const id of ['google-aio', 'google-aimode', 'copilot-web', 'grok-web', 'claude-web']) {
       expect(access[id]).toEqual({ state: 'locked', requiredPlan: 'growth' });
     }
-    expect(access['grok-web']).toEqual({ state: 'locked', requiredPlan: 'enterprise' });
     expect(access.claude).toEqual({ state: 'locked', requiredPlan: 'enterprise' });
   });
 
-  it('includes the other scrapers on Growth and leaves Grok and Claude to sales', () => {
-    const access = accessFor(PLANS.growth);
-    for (const p of POSITION_PLATFORMS.filter((p) => p.id !== 'claude' && p.id !== 'grok-web')) {
-      expect(access[p.id]).toEqual({ state: 'included' });
+  it('offers slots, never sales, for a platform with none on a plan that sells them (00564)', () => {
+    const growth: Plan = {
+      ...PLANS.growth,
+      slots: {
+        'chatgpt-web': 250,
+        'gemini-web': 250,
+        'google-aio': 250,
+        'google-aimode': 250,
+        'copilot-web': 250,
+        'claude-web': 300,
+      },
+    };
+    const access = accessFor(growth);
+    for (const id of ['chatgpt-web', 'gemini-web', 'google-aio', 'google-aimode', 'copilot-web']) {
+      expect(access[id]).toEqual({ state: 'included' });
     }
-    expect(access['grok-web']).toEqual({ state: 'locked', requiredPlan: 'enterprise' });
-    expect(access.claude).toEqual({ state: 'locked', requiredPlan: 'enterprise' });
-  });
-
-  it('leaves Grok to sales on Enterprise too', () => {
-    expect(platformAccess(PLANS.enterprise, 'grok-web')).toEqual({
+    expect(access['claude-web']).toEqual({ state: 'included' });
+    for (const id of ['grok-web', 'perplexity-web', 'copilot-app', 'meta-ai-web']) {
+      expect(access[id]).toEqual({ state: 'locked', requiredPlan: 'growth', addSlots: true });
+    }
+    const enterprise: Plan = { ...PLANS.enterprise, slots: { 'chatgpt-web': 3000 } };
+    expect(platformAccess(enterprise, 'grok-web')).toEqual({
       state: 'locked',
       requiredPlan: 'enterprise',
+      addSlots: true,
     });
   });
 

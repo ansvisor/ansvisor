@@ -15900,6 +15900,10 @@
     "loadError": "Promptlar yüklenemedi.",
     "visibilityDegraded": "Görünürlük verileri geçici olarak kullanılamıyor; Promptlar bunlar olmadan gösteriliyor.",
     "positions": {
+      "slots": {
+        "note": "Henüz planınızda yok · {platform} sonuçlarını ve konumlarını takip etmek için takip slot'ları ekleyin.",
+        "add": "Slot ekle"
+      },
       "answers": "{count, plural, one {# yanıt} other {# yanıt}}",
       "answersInPeriod": "Bu dönemde {count, plural, one {# yanıt} other {# yanıt}}",
       "mentionedIn": "{answers, plural, one {# yanıtın} other {# yanıtın}} {mentioned} tanesinde · {mentions, plural, one {# bahsedilme} other {# bahsedilme}}",

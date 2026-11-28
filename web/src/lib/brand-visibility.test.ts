@@ -108,8 +108,9 @@ describe('the filters the tabs share', () => {
   it('names an engine as Mentions does: one of its platforms', () => {
     expect(mentionsPlatformOf('chatgpt-web,gpt-5-chat-latest')).toBe('chatgpt-web');
     expect(mentionsPlatformOf('gemini-web')).toBe('gemini-web');
-    // An engine no longer tracked (#2181) isn't one of its platforms: no filter.
-    expect(mentionsPlatformOf('perplexity-web')).toBe('');
+    // Perplexity is sold as tracking slots again (00564): one of its platforms.
+    expect(mentionsPlatformOf('perplexity-web')).toBe('perplexity-web');
+    expect(mentionsPlatformOf('claude-web')).toBe('claude-web');
     // Claude's API models answer under the "claude" platform there.
     expect(mentionsPlatformOf('claude-sonnet-5')).toBe('claude');
     expect(mentionsPlatformOf('')).toBe('');

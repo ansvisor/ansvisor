@@ -15901,6 +15901,10 @@
     "loadError": "Prompt を読み込めませんでした。",
     "visibilityDegraded": "視認性データは一時的に利用できません — 視認性データなしで Prompt を表示しています。",
     "positions": {
+      "slots": {
+        "note": "現在のプランには含まれていません · {platform}の結果と順位をトラッキングするには、トラッキング用のslotsを追加してください。",
+        "add": "slotsを追加"
+      },
       "answers": "{count, plural, other {# 件の回答}}",
       "answersInPeriod": "この期間で {count, plural, other {# 件の回答}}",
       "mentionedIn": "{answers, plural, other {# 件の回答}}中 {mentioned} 件で言及 · {mentions, plural, other {# 件の言及}}",
