@@ -967,6 +967,7 @@
         "impact": "Impacto {level}",
         "effort": "cerca de {effort}",
         "steps": "{done} de {total} etapas concluídas",
+        "past": "Antes: {improved} de {results} ações parecidas melhoraram os resultados",
         "firstStep": "Primeira etapa: {step}",
         "start": "Iniciar",
         "continue": "Continuar",
@@ -2176,6 +2177,7 @@
         },
         "notScored": "Ainda não pontuado",
         "why": "Por que esta prioridade?",
+        "pastTag": "{improved} de {results} funcionaram",
         "lowConfidence": {
           "tip": "Baseado em {why}. Google Analytics, Search Console ou uma auditoria do site podem adicionar um segundo tipo de evidência. Isso é só uma parte da pontuação; impacto e demanda também contam.",
           "sentTip": "Avaliado pelo que foi enviado junto, não por descobertas detectadas."

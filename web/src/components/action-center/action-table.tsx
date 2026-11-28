@@ -28,6 +28,7 @@ import {
 } from 'lucide-react';
 import { RemovedNote } from '@/components/action-center/removed-note';
 import { LowConfidenceTag } from '@/components/action-center/low-confidence-tag';
+import { PastResultTag } from '@/components/action-center/past-result-tag';
 import { RunAgentButton } from '@/components/action-center/run-agent-button';
 import { useDotViewer } from '@/components/layout/menu-dot';
 import { PageDot } from '@/components/layout/page-dot';
@@ -579,6 +580,7 @@ export function ActionTable({
                   <div className="flex flex-wrap items-center gap-1.5">
                     <PriorityBadge score={action.priorityScore} level={action.priorityLevel} />
                     <LowConfidenceTag confidence={action.priorityReason?.confidence} />
+                    <PastResultTag reason={action.priorityReason} />
                   </div>
                 </TableCell>
                 <TableCell>

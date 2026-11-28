@@ -7,6 +7,7 @@ import { Link } from '@/i18n/navigation';
 import { track } from '@/lib/analytics';
 import { actionTexts, taskText } from '@/lib/action-center/display';
 import { priorityReasonText } from '@/lib/action-center/priority';
+import { shownPastResult } from '@/components/action-center/past-result-tag';
 import { getTodayFocus, skipTodayFocus, type FocusCard } from '@/lib/actions/today-focus';
 import { useChatAgentic } from '@/components/providers/chat-agentic-provider';
 import { AgentWorkGear } from '@/components/action-center/agent-work-gear';
@@ -164,6 +165,8 @@ function FocusRow({
     ? priorityReasonText(action.priorityReason, tPriority)
     : texts.description;
   const step = card.firstStep ? taskText(card.firstStep, tTasks) : null;
+  // How its kind did here before, once there are two results or more: a track, not a forecast.
+  const past = shownPastResult(action.priorityReason);
   const meta = [
     action.priorityLevel
       ? t('impact', { level: tPriority(`levels.${action.priorityLevel}`) })
@@ -172,6 +175,7 @@ function FocusRow({
     action.taskTotal > 0
       ? t('steps', { done: action.taskCompleted, total: action.taskTotal })
       : null,
+    past ? t('past', { improved: past.improved, results: past.results }) : null,
   ].filter(Boolean);
 
   return (

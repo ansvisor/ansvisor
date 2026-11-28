@@ -967,6 +967,7 @@
         "impact": "影響度: {level}",
         "effort": "所要時間: 約{effort}",
         "steps": "{total}ステップ中{done}ステップ完了",
+        "past": "過去: 類似アクション {results} 件中 {improved} 件で結果が改善",
         "firstStep": "最初のステップ: {step}",
         "start": "開始",
         "continue": "続ける",
@@ -2176,6 +2177,7 @@
         },
         "notScored": "未スコア",
         "why": "この優先度の理由",
+        "pastTag": "{results} 件中 {improved} 件が効果あり",
         "lowConfidence": {
           "tip": "{why}に基づいています。Google Analytics、Search Console、サイト監査で2つ目の種類の根拠を追加できます。これはスコアの一部にすぎず、影響度と需要も順位に反映されます。",
           "sentTip": "検出された結果ではなく、送信時の内容から評価されています。"

@@ -36,6 +36,8 @@ Demand or business value that nothing measures neither raises nor lowers the sco
 
 On top of these, past success nudges the score: how this brand's own earlier actions of the same kind turned out over the last six months, as the History scorecard counts them. A kind that improved results here sits up to 10 points higher, one that rarely did up to 10 lower. A few results barely move it, and a kind with no results yet doesn't move at all. Other brands' results are never used.
 
+With two results or more, the **Actions** list shows the track next to the score, for example **4 of 7 worked**; hover it for the full sentence. Today's focus cards say it too. It's a count of what happened, never a forecast.
+
 ## When the score changes
 
 An action is scored when it is created, and again every night from that night's evidence. When you resolve or dismiss a signal, the actions it supports are scored again right away. An action not scored yet shows a dash and sorts after the scored ones.

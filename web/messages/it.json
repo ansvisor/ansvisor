@@ -967,6 +967,7 @@
         "impact": "Impatto {level}",
         "effort": "circa {effort}",
         "steps": "{done} di {total} passaggi completati",
+        "past": "Prima: {improved} azioni simili su {results} hanno migliorato i risultati",
         "firstStep": "Primo passaggio: {step}",
         "start": "Inizia",
         "continue": "Continua",
@@ -2176,6 +2177,7 @@
         },
         "notScored": "Non ancora valutata",
         "why": "Perché questa priorità?",
+        "pastTag": "{improved} su {results} hanno funzionato",
         "lowConfidence": {
           "tip": "Basato su {why}. Google Analytics, Search Console o un audit del sito possono aggiungere un secondo tipo di prova. È solo una parte del punteggio; impatto e domanda contano comunque.",
           "sentTip": "Valutato in base a ciò con cui è stato inviato, non a risultati rilevati."
