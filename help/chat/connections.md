@@ -1,17 +1,17 @@
 ---
 title: See and manage connections in Chat
 route: /dashboard/chat/connections
-keywords: [connections, integrations, connect, disconnect, search console, google analytics, cms, webflow, wordpress, merchant center, product feed, connected tools]
+keywords: [connections, integrations, connect, disconnect, search console, google analytics, cms, webflow, wordpress, merchant center, product feed, connected tools, slack, hubspot]
 synonyms: [connected apps, linked tools, data sources, plug in a tool, hook up]
 plan: all
-updated: 2026-11-02
-last_checked: 2026-11-02
+updated: 2026-11-29
+last_checked: 2026-11-29
 owner: Cihan
 app_version: 0.3.0
 approved: true
-sources: [web/messages/en.json, docs/guides/send-to-cms.mdx]
+sources: [web/messages/en.json, web/src/lib/chat/connections.ts, docs/guides/send-to-cms.mdx]
 ---
-**Connections** shows what the brand open now has connected, and what it could connect: Search Console, Analytics, your CMS, your product catalog and more. Connections are per brand. Chat, its skills and your agents all read the same list, so a tool connected in Settings shows as connected here too.
+**Connections** shows what the brand open now has connected, and what it could connect: Search Console, Analytics, your CMS, your product catalog, Slack and more. Connections are per brand. Chat, its skills and your agents all read the same list, so a tool connected in Settings shows as connected here too.
 
 ## In the chat menu
 
@@ -33,4 +33,6 @@ If you're not an Admin, click **Ask your Admin to connect** to send them a reque
 
 ## Tools coming soon
 
-Cards marked **Soon**, such as HubSpot or Slack, can't be connected yet. To ask for a tool that isn't listed, click **Request a connection**.
+Cards marked **Soon**, such as Shopify or Zapier, can't be connected yet. To ask for a tool that isn't listed, click **Request a connection**.
+
+Slack can be connected: it receives the brand's Pulse and alerts. HubSpot is connected in **Settings › Integrations** on Growth and above (see **Connect HubSpot**), although its card here still says **Soon**.
