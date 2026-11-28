@@ -368,7 +368,7 @@ export function priorityReasonText(reason: PriorityReason, t: Translator): strin
   return t('reason.sentence.end', { text });
 }
 
-/** "Low confidence — one kind of finding from one source." */
+/** "Single source — one kind of finding from one source." */
 export function priorityConfidenceText(confidence: PriorityConfidence, t: Translator): string {
   return t('reason.confidence.line', {
     level: t(`reason.confidence.${confidence.level}`),

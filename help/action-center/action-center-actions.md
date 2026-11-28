@@ -107,7 +107,7 @@ Click a row to open the action. Its top line shows the priority and the action's
 
 An open action's tabs:
 
-- **Overview**: **Why this priority?**, with how sure the score is (low, medium or high confidence, and why, such as one kind of finding from one source), **Why this action?** with the signals behind it, the **Goal**, with **Done when** (what done looks like, with a date) and the linked **KPIs**.
+- **Overview**: **Why this priority?**, with how many kinds of evidence agree (Single source, Confirmed or Well confirmed, and why, such as one kind of finding from one source), **Why this action?** with the signals behind it, the **Goal**, with **Done when** (what done looks like, with a date) and the linked **KPIs**.
 - **Affected**: the prompts, pages, topics, competitors or platforms it is about, with each prompt's demand.
 - **Tasks**: the work, step by step, with how many are done, such as **Tasks 2/5**.
 - **Signals**: the evidence. Click one to open it on the Signals tab.

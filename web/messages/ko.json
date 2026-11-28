@@ -2158,8 +2158,8 @@
         "notScored": "아직 채점되지 않음",
         "why": "이 우선순위인 이유는?",
         "lowConfidence": {
-          "tip": "{why}을(를) 기준으로 합니다. 신뢰도는 점수의 일부일 뿐이라 영향도와 수요에 따라 높게 평가될 수 있습니다. 실행 전에 확인하세요.",
-          "sentTip": "감지된 결과가 아니라 전송 시 함께 제공된 정보를 기준으로 평가되었습니다. 실행 전에 확인하세요."
+          "tip": "{why}에 근거합니다. Google Analytics, Search Console 또는 사이트 감사를 통해 두 번째 근거를 추가할 수 있습니다. 이는 점수의 일부일 뿐이며, 영향과 수요도 순위에 반영됩니다.",
+          "sentTip": "감지된 결과가 아니라 함께 보낸 내용을 기준으로 평가되었습니다."
         },
         "reason": {
           "change": {
@@ -2215,9 +2215,9 @@
           "sources": "{count}개 소스에서 확인됨",
           "confidence": {
             "line": "{level} — {why}.",
-            "low": "낮은 신뢰도",
-            "medium": "보통 신뢰도",
-            "high": "높은 신뢰도",
+            "low": "단일 출처",
+            "medium": "확인됨",
+            "high": "충분히 확인됨",
             "found": "{sources, plural, =0 {{kinds, plural, other {#가지 발견 유형}}} other {{sources, plural, other {#개 출처}}의 {kinds, plural, other {#가지 발견 유형}}}}",
             "sent": "감지된 발견 사항이 아닌 함께 전송된 항목을 바탕으로 평가됨"
           },

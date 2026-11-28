@@ -108,7 +108,7 @@
         },
         {
           "heading": "Inside an action",
-          "text": "An open action's tabs:\n\n- **Overview**: **Why this priority?**, with how sure the score is (low, medium or high confidence, and why, such as one kind of finding from one source), **Why this action?** with the signals behind it, the **Goal**, with **Done when** (what done looks like, with a date) and the linked **KPIs**.\n- **Affected**: the prompts, pages, topics, competitors or platforms it is about, with each prompt's demand.\n- **Tasks**: the work, step by step, with how many are done, such as **Tasks 2/5**.\n- **Signals**: the evidence. Click one to open it on the Signals tab.\n- **History**: every change, from status and assignee changes to tasks updated or sent.\n\nThe title's count, **Why this action?**, the **Goal**'s \"5 of 7 prompts\" and the AI searches a month all count the same prompts as the **Affected** tab, so the monthly searches are the sum of its rows."
+          "text": "An open action's tabs:\n\n- **Overview**: **Why this priority?**, with how many kinds of evidence agree (Single source, Confirmed or Well confirmed, and why, such as one kind of finding from one source), **Why this action?** with the signals behind it, the **Goal**, with **Done when** (what done looks like, with a date) and the linked **KPIs**.\n- **Affected**: the prompts, pages, topics, competitors or platforms it is about, with each prompt's demand.\n- **Tasks**: the work, step by step, with how many are done, such as **Tasks 2/5**.\n- **Signals**: the evidence. Click one to open it on the Signals tab.\n- **History**: every change, from status and assignee changes to tasks updated or sent.\n\nThe title's count, **Why this action?**, the **Goal**'s \"5 of 7 prompts\" and the AI searches a month all count the same prompts as the **Affected** tab, so the monthly searches are the sum of its rows."
         },
         {
           "heading": "A goal date that has passed",
@@ -338,7 +338,9 @@
         "critical",
         "why this priority",
         "action ranking",
-        "low confidence"
+        "low confidence",
+        "single source",
+        "confirmed"
       ],
       "synonyms": [
         "action priority",
@@ -374,8 +376,8 @@
           "text": "The action's **Overview** tab starts with **Why this priority?**: one sentence written from the facts the score rests on. It says what changed, on what, how recently, and what makes it matter. When past success moves the score by a point or more, it says so too."
         },
         {
-          "heading": "Low confidence",
-          "text": "When an action's score rests on little evidence, such as one kind of finding from one source, a **Low confidence** tag sits next to its score in the **Actions** list and next to **Why this priority?** in the open action. Hover or focus the tag to see why.\n\nThe score itself doesn't change. Confidence is only one part of it, so an action with strong impact and demand can still rank high. Check what it found before you act on it."
+          "heading": "Single source",
+          "text": "Confidence says how many kinds of evidence agree, not whether a finding is right. Most actions come from your tracked AI answers alone: one kind of finding from one source. They show a **Single source** tag next to the score in the **Actions** list and next to **Why this priority?** in the open action. Hover or focus it to see why.\n\nA second kind of evidence, such as Google Analytics, Search Console or a site audit, makes it **Confirmed** or **Well confirmed**. Confidence is only one part of the score, so impact and demand still rank the action."
         },
         {
           "heading": "Not the Content Plan's score",

@@ -2158,8 +2158,8 @@
         "notScored": "Pas encore évalué",
         "why": "Pourquoi cette priorité ?",
         "lowConfidence": {
-          "tip": "Basé sur {why}. La confiance n'est qu'une partie du score : l'impact et la demande peuvent donc le classer haut. Vérifiez avant d'agir.",
-          "sentTip": "Évalué d'après ce avec quoi il a été envoyé, et non d'après des constats détectés. Vérifiez avant d'agir."
+          "tip": "Basé sur {why}. Google Analytics, Search Console ou un audit du site peuvent ajouter un second type de preuve. Ce n'est qu'une partie du score ; l'impact et la demande comptent aussi.",
+          "sentTip": "Évalué d'après ce qui a été envoyé, pas d'après des constats détectés."
         },
         "reason": {
           "change": {
@@ -2215,9 +2215,9 @@
           "sources": "confirmé par {count} sources",
           "confidence": {
             "line": "{level} — {why}.",
-            "low": "Confiance faible",
-            "medium": "Confiance moyenne",
-            "high": "Confiance élevée",
+            "low": "Source unique",
+            "medium": "Confirmé",
+            "high": "Bien confirmé",
             "found": "{kinds, plural, one {un type de résultat} other {# types de résultats}}{sources, plural, =0 {} one { provenant d'une source} other { provenant de # sources}}",
             "sent": "évalué d'après les éléments envoyés avec, et non à partir des résultats détectés"
           },
