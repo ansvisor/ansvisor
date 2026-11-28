@@ -967,6 +967,7 @@
         "impact": "{level} 영향도",
         "effort": "약 {effort}",
         "steps": "{total}단계 중 {done}단계 완료",
+        "past": "이전: 유사한 작업 {results}개 중 {improved}개가 결과를 개선",
         "firstStep": "첫 번째 단계: {step}",
         "start": "시작",
         "continue": "계속",
@@ -2176,6 +2177,7 @@
         },
         "notScored": "아직 채점되지 않음",
         "why": "이 우선순위인 이유는?",
+        "pastTag": "{results}개 중 {improved}개 효과",
         "lowConfidence": {
           "tip": "{why}에 근거합니다. Google Analytics, Search Console 또는 사이트 감사를 통해 두 번째 근거를 추가할 수 있습니다. 이는 점수의 일부일 뿐이며, 영향과 수요도 순위에 반영됩니다.",
           "sentTip": "감지된 결과가 아니라 함께 보낸 내용을 기준으로 평가되었습니다."

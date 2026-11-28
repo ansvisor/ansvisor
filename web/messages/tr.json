@@ -967,6 +967,7 @@
         "impact": "{level} etki",
         "effort": "yaklaşık {effort}",
         "steps": "{total} adımdan {done} tanesi tamamlandı",
+        "past": "Önceki: benzer {results} aksiyonun {improved} tanesi sonuçları iyileştirdi",
         "firstStep": "İlk adım: {step}",
         "start": "Başlat",
         "continue": "Devam et",
@@ -2176,6 +2177,7 @@
         },
         "notScored": "Henüz puanlanmadı",
         "why": "Neden bu öncelik?",
+        "pastTag": "{results} aksiyonun {improved} tanesi işe yaradı",
         "lowConfidence": {
           "tip": "{why} temel alınmıştır. Google Analytics, Search Console veya bir site denetimi ikinci bir kanıt türü ekleyebilir. Bu, puanın yalnızca bir parçasıdır; sıralamayı etki ve talep de belirler.",
           "sentTip": "Tespit edilen bulgulara göre değil, birlikte gönderildiği içeriğe göre derecelendirildi."

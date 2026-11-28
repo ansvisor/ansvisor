@@ -967,6 +967,7 @@
         "impact": "{level} impact",
         "effort": "about {effort}",
         "steps": "{done} of {total} steps done",
+        "past": "Before: {improved} of {results} similar actions improved results",
         "firstStep": "First step: {step}",
         "start": "Start",
         "continue": "Continue",
@@ -2176,6 +2177,7 @@
         },
         "notScored": "Not scored yet",
         "why": "Why this priority?",
+        "pastTag": "{improved} of {results} worked",
         "lowConfidence": {
           "tip": "Based on {why}. Google Analytics, Search Console or a site audit can add a second kind of evidence. This is one part of the score; impact and demand still rank it.",
           "sentTip": "Rated from what it was sent with, not from detected findings."

@@ -967,6 +967,7 @@
         "impact": "{level} impact",
         "effort": "ongeveer {effort}",
         "steps": "{done} van {total} stappen voltooid",
+        "past": "Eerder: {improved} van {results} vergelijkbare acties verbeterden de resultaten",
         "firstStep": "Eerste stap: {step}",
         "start": "Starten",
         "continue": "Doorgaan",
@@ -2176,6 +2177,7 @@
         },
         "notScored": "Nog niet beoordeeld",
         "why": "Waarom deze prioriteit?",
+        "pastTag": "{improved} van {results} werkten",
         "lowConfidence": {
           "tip": "Gebaseerd op {why}. Google Analytics, Search Console of een site-audit kan een tweede soort bewijs toevoegen. Dit is maar één deel van de score; impact en vraag tellen ook mee.",
           "sentTip": "Beoordeeld op wat ermee werd meegestuurd, niet op gevonden bevindingen."

@@ -967,6 +967,7 @@
         "impact": "{level} 影响",
         "effort": "约需 {effort}",
         "steps": "已完成 {done}/{total} 个步骤",
+        "past": "此前：{results} 个类似操作中有 {improved} 个改善了结果",
         "firstStep": "第一步：{step}",
         "start": "开始",
         "continue": "继续",
@@ -2176,6 +2177,7 @@
         },
         "notScored": "尚未评分",
         "why": "为什么是此优先级？",
+        "pastTag": "{results} 个中 {improved} 个有效",
         "lowConfidence": {
           "tip": "基于{why}。Google Analytics、Search Console 或网站审计可以增加第二类证据。这只是评分的一部分，影响和需求同样决定排序。",
           "sentTip": "根据发送时附带的内容评估，而非检测到的发现。"

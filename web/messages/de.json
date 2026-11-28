@@ -967,6 +967,7 @@
         "impact": "{level} Auswirkung",
         "effort": "ca. {effort}",
         "steps": "{done} von {total} Schritten erledigt",
+        "past": "Bisher: {improved} von {results} ähnlichen Aktionen verbesserten die Ergebnisse",
         "firstStep": "Erster Schritt: {step}",
         "start": "Starten",
         "continue": "Fortsetzen",
@@ -2176,6 +2177,7 @@
         },
         "notScored": "Noch nicht bewertet",
         "why": "Warum diese Priorität?",
+        "pastTag": "{improved} von {results} wirkten",
         "lowConfidence": {
           "tip": "Basierend auf {why}. Google Analytics, Search Console oder ein Site-Audit können eine zweite Art von Beleg hinzufügen. Das ist nur ein Teil der Bewertung; Wirkung und Nachfrage bestimmen die Reihenfolge mit.",
           "sentTip": "Bewertet anhand dessen, womit sie gesendet wurde, nicht anhand erkannter Befunde."
