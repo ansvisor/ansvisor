@@ -16598,6 +16598,155 @@
       "noRoomToResume": "Spazio insufficiente per riprendere",
       "bulkFailed": "{action, select, resume {Impossibile riprendere i Prompt.} other {Impossibile mettere in pausa i Prompt.}}",
       "bulkPartial": "{action, select, resume {{failed} su {total} non è stato possibile riprenderli.} other {{failed} su {total} non è stato possibile metterli in pausa.}}"
+    },
+    "positionsSheet": {
+      "tracked": "Prompt monitorato",
+      "paused": "In pausa",
+      "improvingTitle": "Apri l'azione e il relativo Outcome",
+      "improving": "In miglioramento · {code}",
+      "window": "{preset, select, custom {Intervallo personalizzato} other {Ultimi {preset}}}",
+      "lastRun": "Ultima esecuzione: {at}",
+      "runs": "{count, plural, one {# esecuzione} other {# esecuzioni}}",
+      "period": "Periodo",
+      "discardNote": "Cambiando il periodo, le modifiche di Migliora non inviate andranno perse.",
+      "keepEditing": "Continua a modificare",
+      "discard": "Scarta e cambia",
+      "aiAnswers": "Risposte IA",
+      "back": "Torna ai Prompt",
+      "loading": "Caricamento delle posizioni",
+      "loadError": "Impossibile caricare le posizioni: {message}",
+      "retry": "Riprova",
+      "noLongerAvailable": "Questo Prompt non è più disponibile.",
+      "loadFailed": "Caricamento delle posizioni non riuscito.",
+      "sentimentUnavailable": "Sentiment non disponibile",
+      "sentiment": {
+        "positive": "positivo",
+        "neutral": "neutro",
+        "negative": "negativo"
+      },
+      "notMentioned": "Non menzionato",
+      "mentioned": "Menzionato",
+      "positionUnavailable": "Posizione non disponibile",
+      "notCited": "Non citato",
+      "cited": "Citato",
+      "locked": {
+        "growth": "Disponibile nel piano Growth",
+        "notEnabled": "Non abilitato per questo workspace",
+        "enterprise": "Disponibile nel piano Enterprise",
+        "line": "{note} · {growth, select, yes {Passa a un piano superiore} other {Contattaci}} per monitorare risultati e posizioni su {platform}."
+      },
+      "upgrade": "Passa a un piano superiore",
+      "contactUs": "Contattaci",
+      "improve": "Migliora",
+      "stat": {
+        "platformsAnswered": "Piattaforme che hanno risposto",
+        "inLatestRun": "nell'ultima esecuzione",
+        "mentionedOn": "Menzionato su",
+        "citedOn": "Citato su",
+        "platforms": "piattaforme",
+        "avgPosition": "Posizione media",
+        "whenMentioned": "quando menzionato",
+        "whenMentionedSources": "quando menzionato · {avg} nelle fonti",
+        "runs": "Esecuzioni",
+        "trackedOf": "{tracked} su {count, plural, one {# giorno} other {# giorni}} monitorati",
+        "mentioned": "Menzionato",
+        "cited": "Citato",
+        "ofDays": "{n} / {count, plural, one {# giorno} other {# giorni}}",
+        "notMentionedCount": "{count} non menzionato",
+        "notCitedCount": "{count} non citato"
+      },
+      "tabs": {
+        "platforms": "Risultati per piattaforma",
+        "history": "Cronologia giornaliera ({count})"
+      },
+      "runAt": "Esecuzione alle {at}",
+      "noRuns": "Nessuna esecuzione di monitoraggio completata in questo periodo",
+      "noRunsDot": "Nessuna esecuzione di monitoraggio completata in questo periodo.",
+      "mention": "Menzione",
+      "citation": "Citazione",
+      "detectedEarlier": "Rilevato in precedenza in questo periodo",
+      "untracked": "{count, plural, one {# giorno} other {# giorni}} senza un'esecuzione completata. I giorni non monitorati non vengono conteggiati come non menzionato o non citato.",
+      "blocksNote": "Ogni blocco rappresenta un giorno dell'intervallo selezionato, nel tuo fuso orario. Passa il mouse su un blocco per vedere le posizioni di quel giorno; apri una piattaforma per vedere tutte le esecuzioni.",
+      "legend": {
+        "Early": "Menzionato all'inizio",
+        "Mid": "Centrale",
+        "Late": "Tardivo",
+        "cited": "Solo citato",
+        "none": "Nessun risultato",
+        "untracked": "Non monitorato"
+      },
+      "tone": {
+        "Early": "Iniziale",
+        "Mid": "Centrale",
+        "Late": "Tardiva"
+      },
+      "tip": {
+        "share": " in {n} di {runs} esecuzioni",
+        "rankOf": "#{rank} di {total}"
+      },
+      "heatmapLabel": "{platform}: menzionato in {mentioned} e citato in {cited} su {count, plural, one {# giorno monitorato} other {# giorni monitorati}}",
+      "trio": {
+        "best": "Migliore",
+        "worst": "Peggiore",
+        "avg": "Media",
+        "none": "Nessuna posizione di menzione",
+        "title": "Posizione quando menzionato"
+      },
+      "runsNote": "{runs} esecuzioni · menzionato in {mentioned} · citato in {cited}",
+      "noData": "Nessun dato di monitoraggio per questo periodo",
+      "toggle": "{open, select, yes {Nascondi} other {Mostra}} i risultati giornalieri di {platform}",
+      "runsOnDays": "{runs, plural, one {# esecuzione} other {# esecuzioni}} in {days, plural, one {# giorno} other {# giorni}}",
+      "sentimentLine": " · sentiment nelle risposte che citano il brand: {positive} positivo, {neutral} neutro, {negative} negativo",
+      "sentimentUnavailableTail": ", {count} non disponibili",
+      "moreDays": "Mostra altri {count} giorni",
+      "platformsAnswered": "{count, plural, one {# piattaforma ha risposto} other {# piattaforme hanno risposto}}"
+    },
+    "bulkImport": {
+      "intro": "Inserisci i tuoi Prompt in <b>una sola colonna</b>, un Prompt per riga, andando verso il basso. Una prima riga intitolata <b>Prompt</b> viene letta come intestazione (facoltativa). I Prompt importati usano le piattaforme selezionate in Singolo e la località del brand; imposta argomento e località di ciascuno in seguito con Modifica in Tutti i Prompt.",
+      "drop": "Trascina qui un file .xlsx o .csv, oppure fai clic per sfogliare",
+      "perRow": "Un Prompt per riga · fino a {max} righe",
+      "template": "Scarica il modello",
+      "chooseFile": "Scegli un file .xlsx o .csv.",
+      "unreadable": "Impossibile leggere questo file. Verifica che sia un file .xlsx o .csv valido.",
+      "counts": "<b>{valid} validi</b> · {duplicates, plural, one {# duplicato} other {# duplicati}} · {errors, plural, one {# errore} other {# errori}}",
+      "inUse": "· {used} / {max} località dei Prompt in uso",
+      "truncated": "Sono state lette solo le prime {max} righe; altre {more} sono state escluse. Dividi i file più grandi.",
+      "extraColumns": "Viene letta solo la colonna dei Prompt; le altre colonne del file sono state ignorate.",
+      "noneImportable": "Nessun Prompt può essere importato. Il tuo piano {plan} monitora fino a {max} località dei Prompt e {used} sono già in uso.",
+      "someImportable": "Verranno importati solo {valid} Prompt su {total}. Il tuo piano {plan} monitora fino a {max} località dei Prompt e {used} sono già in uso. {count, plural, one {Il Prompt rimanente (dalla riga {row}) non verrà importato} other {I # Prompt rimanenti (dalla riga {row}) non verranno importati}}.",
+      "toAddMore": "Per aggiungere altri Prompt, {starter, select, yes {passa a un piano superiore} other {contattaci}}.",
+      "head": {
+        "row": "Riga",
+        "prompt": "Prompt",
+        "status": "Stato"
+      },
+      "status": {
+        "valid": "Valido",
+        "duplicate": "Duplicato",
+        "error": "Errore",
+        "over_limit": "Oltre il limite del piano"
+      },
+      "reason": {
+        "empty": "Prompt vuoto",
+        "tooLong": "Più lungo di {max} caratteri",
+        "duplicate": "Già monitorato o ripetuto nel file"
+      },
+      "downloadNotImported": "Scarica i Prompt non importati (.csv)",
+      "downloadErrors": "Scarica gli errori (.csv)",
+      "importButton": "Importa {count, plural, one {# Prompt} other {# Prompt}}",
+      "importedSome": "{imported} importati · {notImported} non importati a causa del limite del piano",
+      "importedAll": "{count, plural, one {# Prompt importato} other {# Prompt importati}}",
+      "analyzing": "Analisi in corso. Imposta argomenti e località con Modifica in Tutti i Prompt.",
+      "nextRun": "Verranno acquisiti dalla prossima esecuzione di monitoraggio.",
+      "failed": "Importazione non riuscita. Riprova."
+    },
+    "workStatus": {
+      "todo": "Da fare",
+      "in_progress": "In corso",
+      "done": "Completato",
+      "set": "Imposta stato",
+      "setLabel": "Imposta stato di lavorazione",
+      "none": "Nessuno stato"
     }
   },
   "volumeEstimate": {

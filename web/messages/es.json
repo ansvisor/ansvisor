@@ -16596,6 +16596,155 @@
       "noRoomToResume": "No hay espacio suficiente para reanudar",
       "bulkFailed": "{action, select, resume {No se pudieron reanudar los Prompts.} other {No se pudieron pausar los Prompts.}}",
       "bulkPartial": "{action, select, resume {No se pudieron reanudar {failed} de {total}.} other {No se pudieron pausar {failed} de {total}.}}"
+    },
+    "positionsSheet": {
+      "tracked": "Prompt monitorizado",
+      "paused": "En pausa",
+      "improvingTitle": "Abrir la acción y su resultado",
+      "improving": "En mejora · {code}",
+      "window": "{preset, select, custom {Rango personalizado} other {Últimos {preset}}}",
+      "lastRun": "Última ejecución: {at}",
+      "runs": "{count, plural, one {# ejecución} other {# ejecuciones}}",
+      "period": "Periodo",
+      "discardNote": "Cambiar el periodo descartará las ediciones de Mejorar que no haya enviado.",
+      "keepEditing": "Seguir editando",
+      "discard": "Descartar y cambiar",
+      "aiAnswers": "Respuestas de IA",
+      "back": "Volver a Prompts",
+      "loading": "Cargando posiciones",
+      "loadError": "No se pudieron cargar las posiciones: {message}",
+      "retry": "Reintentar",
+      "noLongerAvailable": "Este Prompt ya no está disponible.",
+      "loadFailed": "Error al cargar las posiciones.",
+      "sentimentUnavailable": "Sentimiento no disponible",
+      "sentiment": {
+        "positive": "positivo",
+        "neutral": "neutral",
+        "negative": "negativo"
+      },
+      "notMentioned": "No mencionado",
+      "mentioned": "Mencionado",
+      "positionUnavailable": "Posición no disponible",
+      "notCited": "No citado",
+      "cited": "Citado",
+      "locked": {
+        "growth": "Disponible en Growth",
+        "notEnabled": "No habilitado para este espacio de trabajo",
+        "enterprise": "Disponible en Enterprise",
+        "line": "{note} · {growth, select, yes {Actualice el plan} other {Contáctenos}} para monitorizar los resultados y posiciones de {platform}."
+      },
+      "upgrade": "Mejorar plan",
+      "contactUs": "Contáctenos",
+      "improve": "Mejorar",
+      "stat": {
+        "platformsAnswered": "Plataformas que respondieron",
+        "inLatestRun": "en su última ejecución",
+        "mentionedOn": "Mencionado en",
+        "citedOn": "Citado en",
+        "platforms": "plataformas",
+        "avgPosition": "Posición media",
+        "whenMentioned": "cuando se menciona",
+        "whenMentionedSources": "cuando se menciona · {avg} en fuentes",
+        "runs": "Ejecuciones",
+        "trackedOf": "{tracked} de {count, plural, one {# día} other {# días}} con seguimiento",
+        "mentioned": "Mencionado",
+        "cited": "Citado",
+        "ofDays": "{n} / {count, plural, one {# día} other {# días}}",
+        "notMentionedCount": "{count} sin mención",
+        "notCitedCount": "{count} sin cita"
+      },
+      "tabs": {
+        "platforms": "Resultados por plataforma",
+        "history": "Historial diario ({count})"
+      },
+      "runAt": "Ejecutado el {at}",
+      "noRuns": "No hay ejecuciones de seguimiento completadas en este período",
+      "noRunsDot": "No hay ejecuciones de seguimiento completadas en este período.",
+      "mention": "Mención",
+      "citation": "Cita",
+      "detectedEarlier": "Detectado antes en este período",
+      "untracked": "{count, plural, one {# día} other {# días}} sin una ejecución completada. Los días sin seguimiento no cuentan como sin mención ni sin cita.",
+      "blocksNote": "Cada bloque es un día del rango seleccionado, en su zona horaria. Pase el cursor sobre un bloque para ver las posiciones de ese día; abra una plataforma para ver todas las ejecuciones.",
+      "legend": {
+        "Early": "Mencionado al principio",
+        "Mid": "Medio",
+        "Late": "Final",
+        "cited": "Solo citado",
+        "none": "Sin resultado",
+        "untracked": "Sin seguimiento"
+      },
+      "tone": {
+        "Early": "Al principio",
+        "Mid": "Medio",
+        "Late": "Al final"
+      },
+      "tip": {
+        "share": " en {n} de {runs} ejecuciones",
+        "rankOf": "#{rank} de {total}"
+      },
+      "heatmapLabel": "{platform}: mencionado en {mentioned} y citado en {cited} de {count, plural, one {# día con seguimiento} other {# días con seguimiento}}",
+      "trio": {
+        "best": "Mejor",
+        "worst": "Peor",
+        "avg": "Prom.",
+        "none": "Sin posición de mención",
+        "title": "Posición cuando se menciona"
+      },
+      "runsNote": "{runs} ejecuciones · mencionado en {mentioned} · citado en {cited}",
+      "noData": "No hay datos de seguimiento para este período",
+      "toggle": "{open, select, yes {Ocultar} other {Mostrar}} resultados diarios de {platform}",
+      "runsOnDays": "{runs, plural, one {# ejecución} other {# ejecuciones}} en {days, plural, one {# día} other {# días}}",
+      "sentimentLine": " · sentimiento en las respuestas que mencionan: {positive} positivas, {neutral} neutras, {negative} negativas",
+      "sentimentUnavailableTail": ", {count} no disponibles",
+      "moreDays": "Mostrar {count} días más",
+      "platformsAnswered": "{count, plural, one {# plataforma respondió} other {# plataformas respondieron}}"
+    },
+    "bulkImport": {
+      "intro": "Coloque sus Prompts en <b>una sola columna</b>, un Prompt por fila, hacia abajo. Una primera fila titulada <b>Prompt</b> se lee como encabezado (opcional). Los Prompts importados usan las plataformas seleccionadas en Individual y la ubicación de la marca; defina después el tema y la ubicación de cada uno con Editar en Todos los Prompts.",
+      "drop": "Suelte un archivo .xlsx o .csv, o haga clic para explorar",
+      "perRow": "Un Prompt por fila · hasta {max} filas",
+      "template": "Descargar plantilla",
+      "chooseFile": "Elija un archivo .xlsx o .csv.",
+      "unreadable": "No se pudo leer este archivo. Compruebe que sea un archivo .xlsx o .csv válido.",
+      "counts": "<b>{valid} válidos</b> · {duplicates, plural, one {# duplicado} other {# duplicados}} · {errors, plural, one {# error} other {# errores}}",
+      "inUse": "· {used} / {max} ubicaciones de Prompts en uso",
+      "truncated": "Solo se leyeron las primeras {max} filas; se omitieron {more} más. Divida los archivos más grandes.",
+      "extraColumns": "Solo se lee la columna de Prompts; se ignoraron las demás columnas del archivo.",
+      "noneImportable": "No se puede importar ningún Prompt. Su plan {plan} permite hasta {max} ubicaciones de Prompts y ya hay {used} en uso.",
+      "someImportable": "Solo se importarán {valid} de {total} Prompts. Su plan {plan} permite hasta {max} ubicaciones de Prompts y ya hay {used} en uso. {count, plural, one {El # Prompt restante} other {Los # Prompts restantes}} (desde la fila {row}) no se importarán.",
+      "toAddMore": "Para añadir más Prompts, {starter, select, yes {mejore su plan} other {contáctenos}}.",
+      "head": {
+        "row": "Fila",
+        "prompt": "Prompt",
+        "status": "Estado"
+      },
+      "status": {
+        "valid": "Válido",
+        "duplicate": "Duplicado",
+        "error": "Error",
+        "over_limit": "Supera el límite del plan"
+      },
+      "reason": {
+        "empty": "Prompt vacío",
+        "tooLong": "Más largo de {max} caracteres",
+        "duplicate": "Ya se rastrea o está repetido en el archivo"
+      },
+      "downloadNotImported": "Descargar Prompts no importados (.csv)",
+      "downloadErrors": "Descargar errores (.csv)",
+      "importButton": "Importar {count, plural, one {# Prompt} other {# Prompts}}",
+      "importedSome": "{imported} importados · {notImported} no importados por el límite del plan",
+      "importedAll": "{count, plural, one {# Prompt importado} other {# Prompts importados}}",
+      "analyzing": "Analizándolos ahora. Defina temas y ubicaciones con Editar en Todos los Prompts.",
+      "nextRun": "Se recogerán en la próxima ejecución de seguimiento.",
+      "failed": "La importación falló. Inténtelo de nuevo."
+    },
+    "workStatus": {
+      "todo": "Por hacer",
+      "in_progress": "En curso",
+      "done": "Hecho",
+      "set": "Definir estado",
+      "setLabel": "Definir estado de trabajo",
+      "none": "Sin estado"
     }
   },
   "volumeEstimate": {

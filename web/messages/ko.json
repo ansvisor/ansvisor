@@ -16573,6 +16573,155 @@
       "noRoomToResume": "재개할 여유 공간이 부족합니다",
       "bulkFailed": "{action, select, resume {Prompts를 재개하지 못했습니다.} other {Prompts를 일시중지하지 못했습니다.}}",
       "bulkPartial": "{action, select, resume {{total}개 중 {failed}개를 재개할 수 없습니다.} other {{total}개 중 {failed}개를 일시중지할 수 없습니다.}}"
+    },
+    "positionsSheet": {
+      "tracked": "추적 중인 Prompt",
+      "paused": "일시중지됨",
+      "improvingTitle": "액션과 결과 열기",
+      "improving": "개선 중 · {code}",
+      "window": "{preset, select, custom {사용자 지정 기간} other {최근 {preset}}}",
+      "lastRun": "마지막 실행: {at}",
+      "runs": "{count, plural, other {#회 실행}}",
+      "period": "기간",
+      "discardNote": "기간을 변경하면 전송하지 않은 개선 편집 내용이 삭제됩니다.",
+      "keepEditing": "계속 편집",
+      "discard": "삭제하고 변경",
+      "aiAnswers": "AI 답변",
+      "back": "Prompts로 돌아가기",
+      "loading": "순위를 불러오는 중",
+      "loadError": "순위를 불러오지 못했습니다: {message}",
+      "retry": "다시 시도",
+      "noLongerAvailable": "이 Prompt는 더 이상 사용할 수 없습니다.",
+      "loadFailed": "순위를 불러오지 못했습니다.",
+      "sentimentUnavailable": "감성 정보를 사용할 수 없음",
+      "sentiment": {
+        "positive": "긍정",
+        "neutral": "중립",
+        "negative": "부정"
+      },
+      "notMentioned": "언급되지 않음",
+      "mentioned": "언급됨",
+      "positionUnavailable": "순위를 사용할 수 없음",
+      "notCited": "인용되지 않음",
+      "cited": "인용됨",
+      "locked": {
+        "growth": "Growth 요금제에서 사용 가능",
+        "notEnabled": "이 워크스페이스에서는 사용할 수 없음",
+        "enterprise": "Enterprise 요금제에서 사용 가능",
+        "line": "{note} · {platform} 결과와 순위를 추적하려면 {growth, select, yes {업그레이드하세요} other {문의해 주세요}}."
+      },
+      "upgrade": "업그레이드",
+      "contactUs": "문의하기",
+      "improve": "개선",
+      "stat": {
+        "platformsAnswered": "응답한 플랫폼",
+        "inLatestRun": "최근 실행 기준",
+        "mentionedOn": "언급된 플랫폼",
+        "citedOn": "인용된 플랫폼",
+        "platforms": "개 플랫폼",
+        "avgPosition": "평균 순위",
+        "whenMentioned": "언급 시",
+        "whenMentionedSources": "언급 시 · 출처에서 {avg}",
+        "runs": "실행",
+        "trackedOf": "{count, plural, other {#일}} 중 {tracked}일 추적됨",
+        "mentioned": "언급됨",
+        "cited": "인용됨",
+        "ofDays": "{n} / {count, plural, other {#일}}",
+        "notMentionedCount": "{count}회 언급되지 않음",
+        "notCitedCount": "{count}회 인용되지 않음"
+      },
+      "tabs": {
+        "platforms": "플랫폼별 결과",
+        "history": "일별 기록 ({count})"
+      },
+      "runAt": "실행 시각 {at}",
+      "noRuns": "이 기간에 완료된 추적 실행이 없습니다",
+      "noRunsDot": "이 기간에 완료된 추적 실행이 없습니다.",
+      "mention": "언급",
+      "citation": "인용",
+      "detectedEarlier": "이 기간 중 먼저 감지됨",
+      "untracked": "{count, plural, other {#일}} 동안 완료된 실행이 없습니다. 추적되지 않은 날은 언급되지 않음 또는 인용되지 않음으로 집계되지 않습니다.",
+      "blocksNote": "각 블록은 선택한 기간의 하루이며 사용자의 시간대를 기준으로 합니다. 블록에 마우스를 올리면 해당 날짜의 순위를, 플랫폼을 열면 모든 실행을 볼 수 있습니다.",
+      "legend": {
+        "Early": "초반 언급",
+        "Mid": "중반",
+        "Late": "후반",
+        "cited": "인용만",
+        "none": "결과 없음",
+        "untracked": "추적 안 됨"
+      },
+      "tone": {
+        "Early": "초반",
+        "Mid": "중반",
+        "Late": "후반"
+      },
+      "tip": {
+        "share": " {runs}회 실행 중 {n}회",
+        "rankOf": "{total}개 중 {rank}위"
+      },
+      "heatmapLabel": "{platform}: 추적된 {count, plural, other {#일}} 중 {mentioned}일 언급, {cited}일 인용",
+      "trio": {
+        "best": "최고",
+        "worst": "최저",
+        "avg": "평균",
+        "none": "언급 순위 없음",
+        "title": "언급 시 순위"
+      },
+      "runsNote": "{runs}회 실행 · {mentioned}회 언급 · {cited}회 인용",
+      "noData": "이 기간의 추적 데이터가 없습니다",
+      "toggle": "{platform} 일별 결과 {open, select, yes {숨기기} other {표시}}",
+      "runsOnDays": "{days, plural, other {#일}} 동안 {runs, plural, other {#회}} 실행",
+      "sentimentLine": " · 언급된 답변의 감성: 긍정 {positive}건, 중립 {neutral}건, 부정 {negative}건",
+      "sentimentUnavailableTail": ", {count}건 확인 불가",
+      "moreDays": "{count}일 더 보기",
+      "platformsAnswered": "{count, plural, other {#개 플랫폼}}이 답변함"
+    },
+    "bulkImport": {
+      "intro": "Prompt를 <b>한 열</b>에 한 행당 하나씩 아래로 입력하세요. 첫 행의 제목이 <b>Prompt</b>이면 헤더로 인식됩니다(선택 사항). 가져온 Prompts는 단일에서 선택한 플랫폼과 브랜드의 위치를 사용하며, 각 Prompt의 주제와 위치는 나중에 모든 Prompts의 편집에서 설정할 수 있습니다.",
+      "drop": ".xlsx 또는 .csv 파일을 끌어다 놓거나 클릭하여 찾아보세요",
+      "perRow": "행당 Prompt 하나 · 최대 {max}행",
+      "template": "템플릿 다운로드",
+      "chooseFile": ".xlsx 또는 .csv 파일을 선택하세요.",
+      "unreadable": "파일을 읽을 수 없습니다. 올바른 .xlsx 또는 .csv 파일인지 확인하세요.",
+      "counts": "<b>유효 {valid}건</b> · 중복 {duplicates, plural, other {#건}} · 오류 {errors, plural, other {#건}}",
+      "inUse": "· Prompt 위치 {used} / {max} 사용 중",
+      "truncated": "처음 {max}행만 읽었으며 {more}행은 제외되었습니다. 파일을 나누어 주세요.",
+      "extraColumns": "Prompt 열만 읽으며 파일의 다른 열은 무시되었습니다.",
+      "noneImportable": "가져올 수 있는 Prompts가 없습니다. {plan} 플랜은 최대 {max}개의 Prompt 위치를 추적하며 {used}개가 이미 사용 중입니다.",
+      "someImportable": "{total}개 중 {valid}개의 Prompts만 가져옵니다. {plan} 플랜은 최대 {max}개의 Prompt 위치를 추적하며 {used}개가 이미 사용 중입니다. 나머지 {count, plural, other {#개 Prompt}}({row}행부터)는 가져오지 않습니다.",
+      "toAddMore": "Prompts를 더 추가하려면 {starter, select, yes {플랜을 업그레이드하세요} other {문의해 주세요}}.",
+      "head": {
+        "row": "행",
+        "prompt": "Prompt",
+        "status": "상태"
+      },
+      "status": {
+        "valid": "유효",
+        "duplicate": "중복",
+        "error": "오류",
+        "over_limit": "플랜 한도 초과"
+      },
+      "reason": {
+        "empty": "빈 Prompt",
+        "tooLong": "{max}자 초과",
+        "duplicate": "이미 추적 중이거나 파일 내 중복"
+      },
+      "downloadNotImported": "가져오지 않은 Prompts 다운로드 (.csv)",
+      "downloadErrors": "오류 다운로드 (.csv)",
+      "importButton": "{count, plural, other {Prompt #개}} 가져오기",
+      "importedSome": "{imported}개 가져옴 · 플랜 한도로 {notImported}개 가져오지 않음",
+      "importedAll": "{count, plural, other {Prompt #개를 가져왔습니다}}",
+      "analyzing": "지금 분석하고 있습니다. 주제와 위치는 모든 Prompts의 편집에서 설정하세요.",
+      "nextRun": "다음 추적 실행 때 반영됩니다.",
+      "failed": "가져오기에 실패했습니다. 다시 시도해 주세요."
+    },
+    "workStatus": {
+      "todo": "할 일",
+      "in_progress": "진행 중",
+      "done": "완료",
+      "set": "상태 설정",
+      "setLabel": "작업 상태 설정",
+      "none": "상태 없음"
     }
   },
   "volumeEstimate": {

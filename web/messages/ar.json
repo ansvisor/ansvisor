@@ -16583,6 +16583,155 @@
       "noRoomToResume": "لا توجد مساحة كافية للاستئناف",
       "bulkFailed": "{action, select, resume {فشل استئناف الـPrompts.} other {فشل إيقاف الـPrompts مؤقتًا.}}",
       "bulkPartial": "{action, select, resume {تعذّر استئناف {failed} من {total}.} other {تعذّر إيقاف {failed} من {total} مؤقتًا.}}"
+    },
+    "positionsSheet": {
+      "tracked": "Prompt متتبَّع",
+      "paused": "متوقف مؤقتًا",
+      "improvingTitle": "افتح الإجراء ونتيجته",
+      "improving": "قيد التحسين · {code}",
+      "window": "{preset, select, custom {نطاق مخصص} other {آخر {preset}}}",
+      "lastRun": "آخر تشغيل: {at}",
+      "runs": "{count, plural, zero {# عمليات تشغيل} one {تشغيل واحد} two {تشغيلان} few {# عمليات تشغيل} many {# تشغيلًا} other {# تشغيل}}",
+      "period": "الفترة",
+      "discardNote": "سيؤدي تغيير الفترة إلى تجاهل تعديلات التحسين غير المرسلة.",
+      "keepEditing": "متابعة التعديل",
+      "discard": "تجاهل وتغيير",
+      "aiAnswers": "إجابات الذكاء الاصطناعي",
+      "back": "العودة إلى Prompts",
+      "loading": "جارٍ تحميل المواضع",
+      "loadError": "تعذّر تحميل المواضع: {message}",
+      "retry": "إعادة المحاولة",
+      "noLongerAvailable": "هذا الـ Prompt لم يعد متاحًا.",
+      "loadFailed": "فشل تحميل المواضع.",
+      "sentimentUnavailable": "المشاعر غير متاحة",
+      "sentiment": {
+        "positive": "إيجابية",
+        "neutral": "محايدة",
+        "negative": "سلبية"
+      },
+      "notMentioned": "غير مذكور",
+      "mentioned": "مذكور",
+      "positionUnavailable": "الموضع غير متاح",
+      "notCited": "غير مستشهد به",
+      "cited": "مستشهد به",
+      "locked": {
+        "growth": "متاح في خطة Growth",
+        "notEnabled": "غير مفعّل لمساحة العمل هذه",
+        "enterprise": "متاح في خطة Enterprise",
+        "line": "{note} · {growth, select, yes {قم بالترقية} other {تواصل معنا}} لتتبع نتائج {platform} ومواضعها."
+      },
+      "upgrade": "ترقية",
+      "contactUs": "تواصل معنا",
+      "improve": "تحسين",
+      "stat": {
+        "platformsAnswered": "المنصات التي أجابت",
+        "inLatestRun": "في آخر تشغيل لها",
+        "mentionedOn": "مذكور في",
+        "citedOn": "مستشهد به في",
+        "platforms": "منصات",
+        "avgPosition": "متوسط الموضع",
+        "whenMentioned": "عند الذكر",
+        "whenMentionedSources": "عند الذكر · {avg} في المصادر",
+        "runs": "مرات التشغيل",
+        "trackedOf": "{tracked} من {count, plural, zero {# يوم} one {يوم واحد} two {يومين} few {# أيام} many {# يومًا} other {# يوم}} تمت متابعتها",
+        "mentioned": "تم الذكر",
+        "cited": "تم الاستشهاد",
+        "ofDays": "{n} / {count, plural, zero {# يوم} one {يوم واحد} two {يومين} few {# أيام} many {# يومًا} other {# يوم}}",
+        "notMentionedCount": "{count} بدون ذكر",
+        "notCitedCount": "{count} بدون استشهاد"
+      },
+      "tabs": {
+        "platforms": "نتائج المنصات",
+        "history": "السجل اليومي ({count})"
+      },
+      "runAt": "وقت التشغيل: {at}",
+      "noRuns": "لا توجد عمليات تتبع مكتملة في هذه الفترة",
+      "noRunsDot": "لا توجد عمليات تتبع مكتملة في هذه الفترة.",
+      "mention": "ذكر",
+      "citation": "استشهاد",
+      "detectedEarlier": "تم اكتشافه سابقًا في هذه الفترة",
+      "untracked": "{count, plural, zero {# يوم} one {يوم واحد} two {يومان} few {# أيام} many {# يومًا} other {# يوم}} بدون تشغيل مكتمل. لا تُحتسب الأيام غير المتتبعة كأيام بدون ذكر أو بدون استشهاد.",
+      "blocksNote": "تمثل كل كتلة يومًا واحدًا في النطاق المحدد، بحسب منطقتك الزمنية. مرّر المؤشر فوق كتلة لعرض مواضع ذلك اليوم، وافتح منصة لعرض كل عمليات التشغيل.",
+      "legend": {
+        "Early": "ذكر مبكر",
+        "Mid": "متوسط",
+        "Late": "متأخر",
+        "cited": "استشهاد فقط",
+        "none": "لا توجد نتيجة",
+        "untracked": "غير متتبع"
+      },
+      "tone": {
+        "Early": "مبكر",
+        "Mid": "متوسط",
+        "Late": "متأخر"
+      },
+      "tip": {
+        "share": " في {n} من {runs} عملية تشغيل",
+        "rankOf": "#{rank} من {total}"
+      },
+      "heatmapLabel": "{platform}: تم الذكر في {mentioned} والاستشهاد في {cited} من أصل {count, plural, zero {# يوم متتبع} one {يوم متتبع واحد} two {يومين متتبعين} few {# أيام متتبعة} many {# يومًا متتبعًا} other {# يوم متتبع}}",
+      "trio": {
+        "best": "الأفضل",
+        "worst": "الأسوأ",
+        "avg": "المتوسط",
+        "none": "لا يوجد موضع ذكر",
+        "title": "الموضع عند الذكر"
+      },
+      "runsNote": "{runs} عملية تشغيل · تم الذكر في {mentioned} · تم الاستشهاد في {cited}",
+      "noData": "لا توجد بيانات تتبع لهذه الفترة",
+      "toggle": "{open, select, yes {إخفاء} other {عرض}} نتائج {platform} اليومية",
+      "runsOnDays": "{runs, plural, zero {# عملية تشغيل} one {عملية تشغيل واحدة} two {عمليتا تشغيل} few {# عمليات تشغيل} many {# عملية تشغيل} other {# عملية تشغيل}} في {days, plural, zero {# يوم} one {يوم واحد} two {يومين} few {# أيام} many {# يومًا} other {# يوم}}",
+      "sentimentLine": " · المشاعر في الإجابات التي تذكر العلامة: {positive} إيجابية، {neutral} محايدة، {negative} سلبية",
+      "sentimentUnavailableTail": "، {count} غير متاحة",
+      "moreDays": "عرض {count} أيام إضافية",
+      "platformsAnswered": "{count, plural, zero {لم تُجب أي منصة} one {أجابت منصة واحدة} two {أجابت منصتان} few {أجابت # منصات} many {أجابت # منصة} other {أجابت # منصة}}"
+    },
+    "bulkImport": {
+      "intro": "ضع الـ Prompts في <b>عمود واحد</b>، بحيث يكون في كل صف Prompt واحد، من الأعلى إلى الأسفل. يُقرأ الصف الأول المعنون <b>Prompt</b> على أنه صف العناوين (اختياري). تستخدم الـ Prompts المستوردة المنصات المحددة ضمن «فردي» وموقع العلامة التجارية؛ حدّد موضوع كل منها وموقعه لاحقًا عبر «تعديل» في «كل الـ Prompts».",
+      "drop": "أفلت ملف .xlsx أو .csv، أو انقر للاستعراض",
+      "perRow": "Prompt واحد في كل صف · حتى {max} صف",
+      "template": "تنزيل القالب",
+      "chooseFile": "اختر ملف .xlsx أو .csv.",
+      "unreadable": "تعذرت قراءة هذا الملف. تأكد من أنه ملف .xlsx أو .csv صالح.",
+      "counts": "<b>{valid} صالح</b> · {duplicates, plural, zero {# مكرر} one {# مكرر} two {# مكرران} few {# مكررة} many {# مكررًا} other {# مكرر}} · {errors, plural, zero {# أخطاء} one {# خطأ} two {# خطآن} few {# أخطاء} many {# خطأً} other {# خطأ}}",
+      "inUse": "· {used} / {max} من مواقع الـ Prompts قيد الاستخدام",
+      "truncated": "تمت قراءة أول {max} صف فقط؛ وتم استبعاد {more} صف إضافي. يرجى تقسيم الملفات الأكبر.",
+      "extraColumns": "تتم قراءة عمود الـ Prompt فقط؛ وتم تجاهل بقية أعمدة الملف.",
+      "noneImportable": "لا يمكن استيراد أي Prompts. تتيح باقتك {plan} تتبع ما يصل إلى {max} من مواقع الـ Prompts، و{used} منها قيد الاستخدام بالفعل.",
+      "someImportable": "سيتم استيراد {valid} فقط من أصل {total} من Prompts. تتيح باقتك {plan} تتبّع ما يصل إلى {max} من مواقع Prompts، وقد تم استخدام {used} منها بالفعل. لن يتم استيراد {count, plural, zero {# من Prompts} one {Prompt واحد} two {Promptين} few {# Prompts} many {# Prompt} other {# Prompts}} المتبقية (بدءًا من الصف {row}).",
+      "toAddMore": "لإضافة المزيد من الـ Prompts، {starter, select, yes {قم بترقية باقتك} other {تواصل معنا}}.",
+      "head": {
+        "row": "الصف",
+        "prompt": "Prompt",
+        "status": "الحالة"
+      },
+      "status": {
+        "valid": "صالح",
+        "duplicate": "مكرر",
+        "error": "خطأ",
+        "over_limit": "تجاوز حد الباقة"
+      },
+      "reason": {
+        "empty": "Prompt فارغ",
+        "tooLong": "أطول من {max} حرف",
+        "duplicate": "متتبَّع بالفعل أو مكرر في الملف"
+      },
+      "downloadNotImported": "تنزيل الـ Prompts غير المستوردة (.csv)",
+      "downloadErrors": "تنزيل الأخطاء (.csv)",
+      "importButton": "استيراد {count, plural, zero {# Prompt} one {Prompt واحد} two {Promptين} few {# Prompts} many {# Prompt} other {# Prompt}}",
+      "importedSome": "تم استيراد {imported} · لم يتم استيراد {notImported} بسبب حد الباقة",
+      "importedAll": "{count, plural, zero {لم يتم استيراد أي Prompt} one {تم استيراد Prompt واحد} two {تم استيراد Promptين} few {تم استيراد # Prompts} many {تم استيراد # Prompt} other {تم استيراد # Prompt}}",
+      "analyzing": "جارٍ تحليلها الآن. حدّد المواضيع والمواقع عبر «تعديل» في «كل الـ Prompts».",
+      "nextRun": "سيتم التقاطها في دورة التتبع التالية.",
+      "failed": "فشل الاستيراد. يرجى المحاولة مرة أخرى."
+    },
+    "workStatus": {
+      "todo": "للتنفيذ",
+      "in_progress": "قيد التنفيذ",
+      "done": "مكتمل",
+      "set": "تعيين الحالة",
+      "setLabel": "تعيين حالة العمل",
+      "none": "بدون حالة"
     }
   },
   "volumeEstimate": {
