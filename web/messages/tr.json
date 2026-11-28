@@ -16586,7 +16586,7 @@
     },
     "positionsSheet": {
       "tracked": "Takip edilen Prompt",
-      "paused": "x",
+      "paused": "Duraklatıldı",
       "improvingTitle": "Aksiyonu ve Sonucunu aç",
       "improving": "İyileşiyor · {code}",
       "window": "{preset, select, custom {Özel aralık} other {Son {preset}}}",
