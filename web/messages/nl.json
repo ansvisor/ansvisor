@@ -18776,6 +18776,7 @@
           "nextTag": "· volgende"
         },
         "unit": "<b>1 slot</b> = 1 Prompt die dagelijks wordt gevolgd in 1 locatie op dat platform.",
+        "unitInfo": "Wat is een slot?",
         "columns": {
           "platform": "Platform",
           "included": "In uw abonnement",

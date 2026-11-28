@@ -18768,6 +18768,7 @@
           "nextTag": "· sonraki"
         },
         "unit": "<b>1 slot</b> = o platformda 1 konumda her gün takip edilen 1 Prompt.",
+        "unitInfo": "Slot nedir?",
         "columns": {
           "platform": "Platform",
           "included": "Planınızda",

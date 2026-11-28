@@ -224,6 +224,8 @@ describe('the add-ons card', () => {
     expect(text()).toContain('Buy extra tracking credits');
     expect(text()).toContain('Growth includes 250 slots on each standard platform.');
     expect(text()).toContain('In your plan');
+    // The Extra slots header explains a slot on hover, from an (i) button.
+    expect(document.querySelector('th button[aria-label="What is a slot?"]')).not.toBeNull();
     expect(text()).toContain('Extra tracking: $0 a month. Add $500 more a month for 5% off');
 
     const more = document.querySelector<HTMLElement>('[aria-label="100 more Claude slots"]')!;

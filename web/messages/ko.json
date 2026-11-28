@@ -18751,6 +18751,7 @@
           "nextTag": "· 다음 단계"
         },
         "unit": "<b>1 slot</b> = 해당 플랫폼의 1개 위치에서 매일 추적되는 Prompt 1개입니다.",
+        "unitInfo": "slot이란?",
         "columns": {
           "platform": "플랫폼",
           "included": "요금제 포함",

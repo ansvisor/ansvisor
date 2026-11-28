@@ -18780,6 +18780,7 @@
           "nextTag": "· suivant"
         },
         "unit": "<b>1 slot</b> = 1 Prompt suivi dans 1 localisation sur cette plateforme, chaque jour.",
+        "unitInfo": "Qu'est-ce qu'un slot ?",
         "columns": {
           "platform": "Plateforme",
           "included": "Dans votre offre",

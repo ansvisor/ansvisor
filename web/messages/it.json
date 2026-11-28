@@ -18776,6 +18776,7 @@
           "nextTag": "· successivo"
         },
         "unit": "<b>1 slot</b> = 1 Prompt monitorato in 1 località su quella piattaforma, ogni giorno.",
+        "unitInfo": "Cos'è uno slot?",
         "columns": {
           "platform": "Piattaforma",
           "included": "Nel tuo piano",

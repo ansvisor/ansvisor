@@ -18381,6 +18381,7 @@
           "nextTag": "· next"
         },
         "unit": "<b>1 slot</b> = 1 prompt tracked in 1 location on that platform, every day.",
+        "unitInfo": "What is a slot?",
         "columns": {
           "platform": "Platform",
           "included": "In your plan",

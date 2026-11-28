@@ -18727,6 +18727,7 @@
           "nextTag": "· 下一档"
         },
         "unit": "<b>1 个 slot</b> = 在该平台的 1 个地区每天追踪 1 个 Prompt。",
+        "unitInfo": "什么是 slot?",
         "columns": {
           "platform": "平台",
           "included": "您的套餐包含",
