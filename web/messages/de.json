@@ -10773,6 +10773,30 @@
       "noRuns": "Keine Durchläufe in diesem Zeitraum",
       "biggestDrop": "stärkster Rückgang"
     },
+    "dataHealth": {
+      "title": "Datenqualität",
+      "summary": "{range} · {percent} der erwarteten Antworten erhalten",
+      "loading": "Datenqualität wird geladen",
+      "tableLabel": "Erhaltene Antworten nach KI-Plattform",
+      "platform": "Plattform",
+      "expected": "Erwartet",
+      "received": "Erhalten",
+      "missing": "Fehlend",
+      "lastAnswer": "Letzte Antwort",
+      "none": "Noch keine",
+      "empty": "In diesem Zeitraum werden noch keine Prompts auf einer KI-Plattform verfolgt.",
+      "loadFailed": "Datenqualität konnte nicht geladen werden",
+      "footnote": "Erwartet = heute verfolgte Prompts × Standorte × Tage seit dem Hinzufügen des jeweiligen Prompts. Ein Tag ohne Antwort zählt als nicht verfolgt, nie als nicht erwähnt.",
+      "pausedNote": "Ein Prompt, der eine Zeit lang pausiert war, kann an diesen Tagen als fehlend erscheinen. Die heutigen Antworten zählen, sobald sie eintreffen, nie als fehlend.",
+      "range": {
+        "24h": "Letzte 24 Stunden",
+        "7d": "Letzte 7 Tage",
+        "30d": "Letzte 30 Tage",
+        "90d": "Letzte 90 Tage",
+        "all": "Gesamter Zeitraum",
+        "custom": "{from} – {to}"
+      }
+    },
     "leaderboard": {
       "title": "Rangliste",
       "headToHead": "Direkter Vergleich",

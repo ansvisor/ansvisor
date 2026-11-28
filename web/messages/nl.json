@@ -10769,6 +10769,30 @@
       "noRuns": "Geen runs in deze periode",
       "biggestDrop": "grootste daling"
     },
+    "dataHealth": {
+      "title": "Gegevensgezondheid",
+      "summary": "{range} · {percent} van de verwachte antwoorden ontvangen",
+      "loading": "Gegevensgezondheid laden",
+      "tableLabel": "Ontvangen antwoorden per AI-platform",
+      "platform": "Platform",
+      "expected": "Verwacht",
+      "received": "Ontvangen",
+      "missing": "Ontbrekend",
+      "lastAnswer": "Laatste antwoord",
+      "none": "Nog geen",
+      "empty": "Nog geen gevolgde Prompts op een AI-platform in deze periode.",
+      "loadFailed": "Gegevensgezondheid kon niet worden geladen",
+      "footnote": "Verwacht = vandaag gevolgde Prompts × locaties × dagen sinds elke Prompt is toegevoegd. Een dag zonder antwoord telt als niet gevolgd, nooit als niet genoemd.",
+      "pausedNote": "Een Prompt die een tijd gepauzeerd was, kan op die dagen als ontbrekend verschijnen. De antwoorden van vandaag tellen zodra ze binnenkomen, nooit als ontbrekend.",
+      "range": {
+        "24h": "Laatste 24 uur",
+        "7d": "Laatste 7 dagen",
+        "30d": "Laatste 30 dagen",
+        "90d": "Laatste 90 dagen",
+        "all": "Altijd",
+        "custom": "{from} – {to}"
+      }
+    },
     "leaderboard": {
       "title": "Leaderboard",
       "headToHead": "Head-to-head",

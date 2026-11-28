@@ -38,6 +38,7 @@ vi.mock('@/lib/actions/citations', () => ({
 }));
 vi.mock('@/lib/actions/topic', () => ({ getTopics: reads.getTopics }));
 vi.mock('@/lib/actions/competitor', () => ({ getCompetitors: vi.fn() }));
+vi.mock('@/lib/actions/data-health', () => ({ getDataHealth: vi.fn() }));
 const shopping = vi.hoisted(() => ({
   getCompetitorProducts: vi.fn(),
   getCompetitorSummary: vi.fn(),

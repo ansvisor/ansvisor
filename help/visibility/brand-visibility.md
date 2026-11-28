@@ -1,11 +1,11 @@
 ---
 title: Visibility and its Overview tab
 route: /dashboard/insights
-keywords: [brand visibility, overview tab, mentions tab, citations tab, product visibility tab, answer engine insights, visibility score, key metrics, leaderboard, by AI platform, topics vs competitors, opportunities, filters]
+keywords: [brand visibility, overview tab, mentions tab, citations tab, product visibility tab, answer engine insights, visibility score, key metrics, leaderboard, by AI platform, data health, missing answers, topics vs competitors, opportunities, filters]
 synonyms: [visibility page, AI visibility report, analytics hub, insights page, dashboard overview, visibility dashboard]
 plan: all
-updated: 2026-11-23
-last_checked: 2026-11-23
+updated: 2026-11-28
+last_checked: 2026-11-28
 owner: Cihan
 app_version: 0.3.0
 approved: true
@@ -61,6 +61,14 @@ A platform with too few answers shows **Low sample** or **No runs this period** 
 
 Each platform has one name everywhere in Ansvisor, in reports and e-mails too: Google's Gemini app is **Gemini**. Answers from an AI model asked directly, not through its app, have **API** after the name: **ChatGPT API**, **Gemini API** and **Claude API**.
 
+## Data health
+
+Under **By AI platform**, **Data health** shows that your data is complete. For each platform it lists the **Expected** answers, the answers **Received**, how many are **Missing** and when the **Last answer** came in. Its header sums it up, for example "Last 7 days · 98% of expected answers received".
+
+Expected is today's tracked prompts × their locations × the days since each prompt was added. A day with no answer counts as not tracked, never as not mentioned. A prompt you paused for a while can show as missing on those days, and today's answers count as they arrive, never as missing.
+
+Data health follows the date range, region and topic you pick.
+
 ## Why it changed
 
 **Why it changed** lists the platforms, topics and prompts that moved your Visibility most, under **Gains** and **Drops**. Each row shows its own score before and after, and its effect on your overall score. A note counts the prompts added during the period, which aren't counted in the change.
@@ -93,7 +101,7 @@ Under the tabs:
 - **Region**: one region your prompts run in.
 - **AI Model**: one AI platform; versions of the same engine count as one.
 
-The filters apply to everything on the tab except **Opportunities**, which lists your stored suggestions. They're kept in the page's address, so a link you share opens with the same filters, and the date range, AI model, region and topic carry over to the other tabs.
+The filters apply to everything on the tab except **Opportunities**, which lists your stored suggestions, and **Data health**, which leaves out the AI model. They're kept in the page's address, so a link you share opens with the same filters, and the date range, AI model, region and topic carry over to the other tabs.
 
 ## A weekly review
 

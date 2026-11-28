@@ -10761,6 +10761,30 @@
       "noRuns": "Bu dönemde çalıştırma yok",
       "biggestDrop": "en büyük düşüş"
     },
+    "dataHealth": {
+      "title": "Veri sağlığı",
+      "summary": "{range} · beklenen yanıtların {percent} kadarı alındı",
+      "loading": "Veri sağlığı yükleniyor",
+      "tableLabel": "AI platformuna göre alınan yanıtlar",
+      "platform": "Platform",
+      "expected": "Beklenen",
+      "received": "Alınan",
+      "missing": "Eksik",
+      "lastAnswer": "Son yanıt",
+      "none": "Henüz yok",
+      "empty": "Bu aralıkta hiçbir AI platformunda takip edilen Prompt yok.",
+      "loadFailed": "Veri sağlığı yüklenemedi",
+      "footnote": "Beklenen = bugün takip edilen Prompt'lar × konumlar × her Prompt eklendiğinden beri geçen günler. Yanıt gelmeyen bir gün \"takip edilmedi\" sayılır, asla \"bahsedilmedi\" sayılmaz.",
+      "pausedNote": "Bir süre duraklatılan bir Prompt o günlerde eksik görünebilir. Bugünün yanıtları geldikçe sayılır, asla eksik sayılmaz.",
+      "range": {
+        "24h": "Son 24 saat",
+        "7d": "Son 7 gün",
+        "30d": "Son 30 gün",
+        "90d": "Son 90 gün",
+        "all": "Tüm zamanlar",
+        "custom": "{from} – {to}"
+      }
+    },
     "leaderboard": {
       "title": "Liderlik Tablosu",
       "headToHead": "Bire Bir",

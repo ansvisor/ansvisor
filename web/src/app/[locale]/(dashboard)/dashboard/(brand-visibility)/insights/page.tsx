@@ -83,6 +83,7 @@ import { formatWindowBound } from './kpi-format';
 import { KpiRows } from './_kpi-cards';
 import { SummaryLine } from './_summary-line';
 import { PlatformTable } from './_platform-table';
+import { DataHealthCard } from './_data-health';
 import { Leaderboard } from './_leaderboard';
 import { TrendCard } from './_trend-card';
 import { trendLines, type TrendMarkerData } from '@/lib/insights-trend';
@@ -1079,6 +1080,10 @@ export default function InsightsPage() {
               ) : (
                 <BusinessHubCard key={brand.id} brandId={brand.id} />
               )}
+
+              {/* Data health, under By AI platform: expected vs received answers per platform,
+                  over the page's window, region and topic. Its own read. */}
+              <DataHealthCard key={brand.id} brandId={brand.id} filters={filters} />
 
               {/* Topics vs competitors (VIS-010): the trend's brands, topic by topic. */}
               {/* Its columns are the trend's lines, so it needs the trend's points. */}
