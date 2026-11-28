@@ -277,6 +277,7 @@
       "label": "لا يتم تتبع علامتك التجارية بعد"
     },
     "actions": {
+      "changePlatforms": "تغيير المنصات يتطلب خطة",
       "addPrompts": "تتطلب إضافة Prompts وجود خطة",
       "removeLocations": "تتطلب إزالة المواقع وجود خطة",
       "editPrompts": "يتطلب تعديل Prompts وجود خطة",
@@ -4524,6 +4525,10 @@
       "name": "قراءة عمليات تدقيق الموقع المتبقية هذا الشهر",
       "step": "قراءة تدقيق الموقع"
     },
+    "crawlerAccess": {
+      "name": "قراءة مشكلات زواحف الذكاء الاصطناعي",
+      "step": "قراءة Site Audit · الزواحف"
+    },
     "goToPage": {
       "name": "الانتقال إلى صفحة",
       "step": "تم فتح صفحة"
@@ -8029,6 +8034,7 @@
       "traffic": "حركة الزيارات والتسجيلات من الذكاء الاصطناعي",
       "ai-revenue": "العملاء والإيرادات من الذكاء الاصطناعي",
       "feed-advisor": "فجوات خلاصة التسوق",
+      "tech-fix": "إصلاحات الزواحف والإصلاحات التقنية",
       "earn-or-pay": "اكسب أو ادفع",
       "ad-drafts": "مسودات الإعلانات",
       "paid-overlap": "التداخل المدفوع",
@@ -15769,154 +15775,30 @@
     }
   },
   "prompts": {
-    "positionsSheet": {
-      "tracked": "Prompt متتبَّع",
-      "paused": "متوقف مؤقتًا",
-      "improvingTitle": "افتح الإجراء ونتيجته",
-      "improving": "قيد التحسين · {code}",
-      "window": "{preset, select, custom {نطاق مخصص} other {آخر {preset}}}",
-      "lastRun": "آخر تشغيل: {at}",
-      "runs": "{count, plural, zero {# عمليات تشغيل} one {تشغيل واحد} two {تشغيلان} few {# عمليات تشغيل} many {# تشغيلًا} other {# تشغيل}}",
-      "period": "الفترة",
-      "discardNote": "سيؤدي تغيير الفترة إلى تجاهل تعديلات التحسين غير المرسلة.",
-      "keepEditing": "متابعة التعديل",
-      "discard": "تجاهل وتغيير",
-      "aiAnswers": "إجابات الذكاء الاصطناعي",
-      "back": "العودة إلى Prompts",
-      "loading": "جارٍ تحميل المواضع",
-      "loadError": "تعذّر تحميل المواضع: {message}",
-      "retry": "إعادة المحاولة",
-      "noLongerAvailable": "هذا الـ Prompt لم يعد متاحًا.",
-      "loadFailed": "فشل تحميل المواضع.",
-      "sentimentUnavailable": "المشاعر غير متاحة",
-      "sentiment": {
-        "positive": "إيجابية",
-        "neutral": "محايدة",
-        "negative": "سلبية"
-      },
-      "notMentioned": "غير مذكور",
-      "mentioned": "مذكور",
-      "positionUnavailable": "الموضع غير متاح",
-      "notCited": "غير مستشهد به",
-      "cited": "مستشهد به",
-      "locked": {
-        "growth": "متاح في خطة Growth",
-        "notEnabled": "غير مفعّل لمساحة العمل هذه",
-        "enterprise": "متاح في خطة Enterprise",
-        "line": "{note} · {growth, select, yes {قم بالترقية} other {تواصل معنا}} لتتبع نتائج {platform} ومواضعها."
-      },
-      "upgrade": "ترقية",
-      "contactUs": "تواصل معنا",
-      "improve": "تحسين",
-      "stat": {
-        "platformsAnswered": "المنصات التي أجابت",
-        "inLatestRun": "في آخر تشغيل لها",
-        "mentionedOn": "مذكور في",
-        "citedOn": "مستشهد به في",
-        "platforms": "منصات",
-        "avgPosition": "متوسط الموضع",
-        "whenMentioned": "عند الذكر",
-        "whenMentionedSources": "عند الذكر · {avg} في المصادر",
-        "runs": "مرات التشغيل",
-        "trackedOf": "{tracked} من {count, plural, zero {# يوم} one {يوم واحد} two {يومين} few {# أيام} many {# يومًا} other {# يوم}} تمت متابعتها",
-        "mentioned": "تم الذكر",
-        "cited": "تم الاستشهاد",
-        "ofDays": "{n} / {count, plural, zero {# يوم} one {يوم واحد} two {يومين} few {# أيام} many {# يومًا} other {# يوم}}",
-        "notMentionedCount": "{count} بدون ذكر",
-        "notCitedCount": "{count} بدون استشهاد"
-      },
-      "tabs": {
-        "platforms": "نتائج المنصات",
-        "history": "السجل اليومي ({count})"
-      },
-      "runAt": "وقت التشغيل: {at}",
-      "noRuns": "لا توجد عمليات تتبع مكتملة في هذه الفترة",
-      "noRunsDot": "لا توجد عمليات تتبع مكتملة في هذه الفترة.",
-      "mention": "ذكر",
-      "citation": "استشهاد",
-      "detectedEarlier": "تم اكتشافه سابقًا في هذه الفترة",
-      "untracked": "{count, plural, zero {# يوم} one {يوم واحد} two {يومان} few {# أيام} many {# يومًا} other {# يوم}} بدون تشغيل مكتمل. لا تُحتسب الأيام غير المتتبعة كأيام بدون ذكر أو بدون استشهاد.",
-      "blocksNote": "تمثل كل كتلة يومًا واحدًا في النطاق المحدد، بحسب منطقتك الزمنية. مرّر المؤشر فوق كتلة لعرض مواضع ذلك اليوم، وافتح منصة لعرض كل عمليات التشغيل.",
-      "legend": {
-        "Early": "ذكر مبكر",
-        "Mid": "متوسط",
-        "Late": "متأخر",
-        "cited": "استشهاد فقط",
-        "none": "لا توجد نتيجة",
-        "untracked": "غير متتبع"
-      },
-      "tone": {
-        "Early": "مبكر",
-        "Mid": "متوسط",
-        "Late": "متأخر"
-      },
-      "tip": {
-        "share": " في {n} من {runs} عملية تشغيل",
-        "rankOf": "#{rank} من {total}"
-      },
-      "heatmapLabel": "{platform}: تم الذكر في {mentioned} والاستشهاد في {cited} من أصل {count, plural, zero {# يوم متتبع} one {يوم متتبع واحد} two {يومين متتبعين} few {# أيام متتبعة} many {# يومًا متتبعًا} other {# يوم متتبع}}",
-      "trio": {
-        "best": "الأفضل",
-        "worst": "الأسوأ",
-        "avg": "المتوسط",
-        "none": "لا يوجد موضع ذكر",
-        "title": "الموضع عند الذكر"
-      },
-      "runsNote": "{runs} عملية تشغيل · تم الذكر في {mentioned} · تم الاستشهاد في {cited}",
-      "noData": "لا توجد بيانات تتبع لهذه الفترة",
-      "toggle": "{open, select, yes {إخفاء} other {عرض}} نتائج {platform} اليومية",
-      "runsOnDays": "{runs, plural, zero {# عملية تشغيل} one {عملية تشغيل واحدة} two {عمليتا تشغيل} few {# عمليات تشغيل} many {# عملية تشغيل} other {# عملية تشغيل}} في {days, plural, zero {# يوم} one {يوم واحد} two {يومين} few {# أيام} many {# يومًا} other {# يوم}}",
-      "sentimentLine": " · المشاعر في الإجابات التي تذكر العلامة: {positive} إيجابية، {neutral} محايدة، {negative} سلبية",
-      "sentimentUnavailableTail": "، {count} غير متاحة",
-      "moreDays": "عرض {count} أيام إضافية",
-      "platformsAnswered": "{count, plural, zero {لم تُجب أي منصة} one {أجابت منصة واحدة} two {أجابت منصتان} few {أجابت # منصات} many {أجابت # منصة} other {أجابت # منصة}}"
-    },
-    "bulkImport": {
-      "intro": "ضع الـ Prompts في <b>عمود واحد</b>، بحيث يكون في كل صف Prompt واحد، من الأعلى إلى الأسفل. يُقرأ الصف الأول المعنون <b>Prompt</b> على أنه صف العناوين (اختياري). تستخدم الـ Prompts المستوردة المنصات المحددة ضمن «فردي» وموقع العلامة التجارية؛ حدّد موضوع كل منها وموقعه لاحقًا عبر «تعديل» في «كل الـ Prompts».",
-      "drop": "أفلت ملف .xlsx أو .csv، أو انقر للاستعراض",
-      "perRow": "Prompt واحد في كل صف · حتى {max} صف",
-      "template": "تنزيل القالب",
-      "chooseFile": "اختر ملف .xlsx أو .csv.",
-      "unreadable": "تعذرت قراءة هذا الملف. تأكد من أنه ملف .xlsx أو .csv صالح.",
-      "counts": "<b>{valid} صالح</b> · {duplicates, plural, zero {# مكرر} one {# مكرر} two {# مكرران} few {# مكررة} many {# مكررًا} other {# مكرر}} · {errors, plural, zero {# أخطاء} one {# خطأ} two {# خطآن} few {# أخطاء} many {# خطأً} other {# خطأ}}",
-      "inUse": "· {used} / {max} من مواقع الـ Prompts قيد الاستخدام",
-      "truncated": "تمت قراءة أول {max} صف فقط؛ وتم استبعاد {more} صف إضافي. يرجى تقسيم الملفات الأكبر.",
-      "extraColumns": "تتم قراءة عمود الـ Prompt فقط؛ وتم تجاهل بقية أعمدة الملف.",
-      "noneImportable": "لا يمكن استيراد أي Prompts. تتيح باقتك {plan} تتبع ما يصل إلى {max} من مواقع الـ Prompts، و{used} منها قيد الاستخدام بالفعل.",
-      "someImportable": "سيتم استيراد {valid} فقط من أصل {total} من Prompts. تتيح باقتك {plan} تتبّع ما يصل إلى {max} من مواقع Prompts، وقد تم استخدام {used} منها بالفعل. لن يتم استيراد {count, plural, zero {# من Prompts} one {Prompt واحد} two {Promptين} few {# Prompts} many {# Prompt} other {# Prompts}} المتبقية (بدءًا من الصف {row}).",
-      "toAddMore": "لإضافة المزيد من الـ Prompts، {starter, select, yes {قم بترقية باقتك} other {تواصل معنا}}.",
-      "head": {
-        "row": "الصف",
-        "prompt": "Prompt",
-        "status": "الحالة"
-      },
-      "status": {
-        "valid": "صالح",
-        "duplicate": "مكرر",
-        "error": "خطأ",
-        "over_limit": "تجاوز حد الباقة"
-      },
-      "reason": {
-        "empty": "Prompt فارغ",
-        "tooLong": "أطول من {max} حرف",
-        "duplicate": "متتبَّع بالفعل أو مكرر في الملف"
-      },
-      "downloadNotImported": "تنزيل الـ Prompts غير المستوردة (.csv)",
-      "downloadErrors": "تنزيل الأخطاء (.csv)",
-      "importButton": "استيراد {count, plural, zero {# Prompt} one {Prompt واحد} two {Promptين} few {# Prompts} many {# Prompt} other {# Prompt}}",
-      "importedSome": "تم استيراد {imported} · لم يتم استيراد {notImported} بسبب حد الباقة",
-      "importedAll": "{count, plural, zero {لم يتم استيراد أي Prompt} one {تم استيراد Prompt واحد} two {تم استيراد Promptين} few {تم استيراد # Prompts} many {تم استيراد # Prompt} other {تم استيراد # Prompt}}",
-      "analyzing": "جارٍ تحليلها الآن. حدّد المواضيع والمواقع عبر «تعديل» في «كل الـ Prompts».",
-      "nextRun": "سيتم التقاطها في دورة التتبع التالية.",
-      "failed": "فشل الاستيراد. يرجى المحاولة مرة أخرى."
-    },
-    "workStatus": {
-      "todo": "للتنفيذ",
-      "in_progress": "قيد التنفيذ",
-      "done": "مكتمل",
-      "set": "تعيين الحالة",
-      "setLabel": "تعيين حالة العمل",
-      "none": "بدون حالة"
+    "bulkPlatforms": {
+      "bulkButton": "المنصات",
+      "bulkAdd": "إضافة منصات",
+      "bulkRemove": "إزالة منصات",
+      "modes": "إضافة أو إزالة",
+      "modeAdd": "إضافة",
+      "modeRemove": "إزالة",
+      "platforms": "المنصات",
+      "title": "إضافة منصات",
+      "lead": "تتبَّع الـ Prompts المحددة وعددها {count} على المزيد من المنصات. يستخدم كل موقع Prompt واحد slot تتبع على كل منصة. وسيُعاد تشغيل أي منصة ينتظرها الـ Prompt.",
+      "removeTitle": "إزالة منصات",
+      "removeLead": "أوقف تتبع الـ Prompts المحددة وعددها {count} على بعض المنصات. ستصبح الـ slots الخاصة بها متاحة مرة أخرى.",
+      "none": "لا توجد منصة لإضافتها. أضف slots تتبع من الإعدادات › الفوترة لتتبع المزيد من المنصات.",
+      "removeNone": "لا تعمل الـ Prompts المحددة على أي منصة يمكنك إزالتها.",
+      "free": "{count} متاح",
+      "previewAdd": "{count, plural, zero {لن يتغير أي Prompt} one {سيتغير Prompt واحد} two {سيتغير Prompt واحدان} few {ستتغير # Prompts} many {سيتغير # Prompt} other {سيتغير # Prompt}} · {unchanged} لديها هذه المنصات بالفعل",
+      "previewRemove": "{count, plural, zero {لن يتغير أي Prompt} one {سيتغير Prompt واحد} two {سيتغير Prompt واحدان} few {ستتغير # Prompts} many {سيتغير # Prompt} other {سيتغير # Prompt}} · {unchanged} ليست لديها هذه المنصات · {blocked} لن تبقى لها أي منصة",
+      "short": "تحتاج {platform} إلى {needed} من الـ slots ولديها {free} متاحة.",
+      "addSlots": "إضافة slots",
+      "save": "إضافة إلى {count, plural, zero {# Prompt} one {Prompt واحد} two {Promptين} few {# Prompts} many {# Prompt} other {# Prompt}}",
+      "removeSave": "إزالة من {count, plural, zero {# Prompt} one {Prompt واحد} two {Promptين} few {# Prompts} many {# Prompt} other {# Prompt}}",
+      "done": "{count, plural, zero {لم تُضف منصات} one {تمت إضافة المنصات إلى Prompt واحد} two {تمت إضافة المنصات إلى Promptين} few {تمت إضافة المنصات إلى # Prompts} many {تمت إضافة المنصات إلى # Prompt} other {تمت إضافة المنصات إلى # Prompt}}",
+      "removed": "{count, plural, zero {لم تُزل منصات} one {تمت إزالة المنصات من Prompt واحد} two {تمت إزالة المنصات من Promptين} few {تمت إزالة المنصات من # Prompts} many {تمت إزالة المنصات من # Prompt} other {تمت إزالة المنصات من # Prompt}}",
+      "saveFailed": "تعذر تغيير المنصات. حاول مرة أخرى."
     },
     "waiting": {
       "resultTitle": "تمت إضافة {added}، و{waiting} في انتظار توفر مكان",
@@ -16011,6 +15893,10 @@
     "loadError": "تعذر تحميل الـ Prompts الخاصة بك.",
     "visibilityDegraded": "أرقام الظهور غير متاحة مؤقتًا — يتم عرض الـ Prompts بدونها.",
     "positions": {
+      "slots": {
+        "note": "غير متوفر في خطتك حاليًا · أضف slots للتتبع لتتبع نتائج {platform} ومراكزها.",
+        "add": "إضافة slots"
+      },
       "answers": "{count, plural, zero {لا توجد إجابات} one {إجابة واحدة} two {إجابتان} few {# إجابات} many {# إجابة} other {# إجابة}}",
       "answersInPeriod": "{count, plural, zero {لا توجد إجابات} one {إجابة واحدة} two {إجابتان} few {# إجابات} many {# إجابة} other {# إجابة}} في هذه الفترة",
       "mentionedIn": "في {mentioned} من {answers, plural, zero {لا توجد إجابات} one {إجابة واحدة} two {إجابتين} few {# إجابات} many {# إجابة} other {# إجابة}} · {mentions, plural, zero {لا توجد إشارات} one {إشارة واحدة} two {إشارتان} few {# إشارات} many {# إشارة} other {# إشارة}}",
@@ -16301,6 +16187,13 @@
       "bulkTitle": "{count, plural, zero {بدء تتبع Prompts المحددة التي لا تحتوي على إجابات بعد} one {بدء تتبع Prompt المحدد الذي لا يحتوي على إجابات بعد} two {بدء تتبع الـ Promptين المحددين اللذين لا يحتويان على إجابات بعد} few {بدء تتبع الـ # Prompts المحددة التي لا تحتوي على إجابات بعد} many {بدء تتبع الـ # Prompt المحددة التي لا تحتوي على إجابات بعد} other {بدء تتبع الـ # Prompt المحددة التي لا تحتوي على إجابات بعد}}"
     },
     "usage": {
+      "slots": {
+        "title": "slots التتبع",
+        "add": "إضافة slots",
+        "usage": "{used} / {limit}",
+        "unlimited": "{used} · بلا حد",
+        "meter": "slots {platform} المستخدمة"
+      },
       "panelLabel": "استخدام Prompt",
       "planAndUsage": "الخطة والاستخدام",
       "hide": "إخفاء",
@@ -16383,7 +16276,7 @@
       "enginesLegend": "ملوّن: عمليات بحث تمت مشاركتها لهذا الـ Prompt خلال الفترة. باهت: متبع، ولكنه لم يشارك أياً منها.",
       "engineEmptyTitle": "لا توجد عمليات بحث من {engine} في {range}",
       "engineEmptyBody": "عادةً ما يشارك {engine} عمليات البحث التي تستند إليها إجاباته. جرب تحديد نطاق زمني أطول.",
-      "sourceNote": "لم يعد Perplexity متبعاً ولا يشارك Microsoft Copilot عمليات البحث الخاصة به، لذا تأتي هذه من ChatGPT فقط، والذي يشاركها في بعض الأيام. أصبح عددها أقل من ذي قبل.",
+      "sourceNote": "لم يعد Perplexity قيد التتبع ولا يشارك Bing AI Mode عمليات البحث الخاصة به، لذا تأتي هذه من ChatGPT فقط، الذي يشاركها في بعض الأيام. وعددها أقل من السابق.",
       "emptyTitle": "لم يتم تسجيل أي fan-out بعد",
       "emptyBody": "تؤخذ عينات من عمليات بحث ChatGPT في بعض الأيام، وتشاركها ChatGPT API عندما تُجري بحثاً. بينما لا تشاركها Google AI Overviews وAI Mode وGemini. بمجرد تشغيل تلك المحركات للـ Prompts الخاصة بك، ستظهر عمليات البحث هنا.",
       "coverageTooltip": "من أصل {total} من الإجابات المتبعة في هذه الفترة، جاءت {withFanout} مصحوبة بعمليات البحث التي أجراها المحرك. تؤخذ عينات من عمليات بحث ChatGPT في بعض الأيام، وتشاركها ChatGPT API عندما تُجري بحثاً."
@@ -16683,6 +16576,155 @@
       "noRoomToResume": "لا توجد مساحة كافية للاستئناف",
       "bulkFailed": "{action, select, resume {فشل استئناف الـPrompts.} other {فشل إيقاف الـPrompts مؤقتًا.}}",
       "bulkPartial": "{action, select, resume {تعذّر استئناف {failed} من {total}.} other {تعذّر إيقاف {failed} من {total} مؤقتًا.}}"
+    },
+    "positionsSheet": {
+      "tracked": "Prompt متتبَّع",
+      "paused": "متوقف مؤقتًا",
+      "improvingTitle": "افتح الإجراء ونتيجته",
+      "improving": "قيد التحسين · {code}",
+      "window": "{preset, select, custom {نطاق مخصص} other {آخر {preset}}}",
+      "lastRun": "آخر تشغيل: {at}",
+      "runs": "{count, plural, zero {# عمليات تشغيل} one {تشغيل واحد} two {تشغيلان} few {# عمليات تشغيل} many {# تشغيلًا} other {# تشغيل}}",
+      "period": "الفترة",
+      "discardNote": "سيؤدي تغيير الفترة إلى تجاهل تعديلات التحسين غير المرسلة.",
+      "keepEditing": "متابعة التعديل",
+      "discard": "تجاهل وتغيير",
+      "aiAnswers": "إجابات الذكاء الاصطناعي",
+      "back": "العودة إلى Prompts",
+      "loading": "جارٍ تحميل المواضع",
+      "loadError": "تعذّر تحميل المواضع: {message}",
+      "retry": "إعادة المحاولة",
+      "noLongerAvailable": "هذا الـ Prompt لم يعد متاحًا.",
+      "loadFailed": "فشل تحميل المواضع.",
+      "sentimentUnavailable": "المشاعر غير متاحة",
+      "sentiment": {
+        "positive": "إيجابية",
+        "neutral": "محايدة",
+        "negative": "سلبية"
+      },
+      "notMentioned": "غير مذكور",
+      "mentioned": "مذكور",
+      "positionUnavailable": "الموضع غير متاح",
+      "notCited": "غير مستشهد به",
+      "cited": "مستشهد به",
+      "locked": {
+        "growth": "متاح في خطة Growth",
+        "notEnabled": "غير مفعّل لمساحة العمل هذه",
+        "enterprise": "متاح في خطة Enterprise",
+        "line": "{note} · {growth, select, yes {قم بالترقية} other {تواصل معنا}} لتتبع نتائج {platform} ومواضعها."
+      },
+      "upgrade": "ترقية",
+      "contactUs": "تواصل معنا",
+      "improve": "تحسين",
+      "stat": {
+        "platformsAnswered": "المنصات التي أجابت",
+        "inLatestRun": "في آخر تشغيل لها",
+        "mentionedOn": "مذكور في",
+        "citedOn": "مستشهد به في",
+        "platforms": "منصات",
+        "avgPosition": "متوسط الموضع",
+        "whenMentioned": "عند الذكر",
+        "whenMentionedSources": "عند الذكر · {avg} في المصادر",
+        "runs": "مرات التشغيل",
+        "trackedOf": "{tracked} من {count, plural, zero {# يوم} one {يوم واحد} two {يومين} few {# أيام} many {# يومًا} other {# يوم}} تمت متابعتها",
+        "mentioned": "تم الذكر",
+        "cited": "تم الاستشهاد",
+        "ofDays": "{n} / {count, plural, zero {# يوم} one {يوم واحد} two {يومين} few {# أيام} many {# يومًا} other {# يوم}}",
+        "notMentionedCount": "{count} بدون ذكر",
+        "notCitedCount": "{count} بدون استشهاد"
+      },
+      "tabs": {
+        "platforms": "نتائج المنصات",
+        "history": "السجل اليومي ({count})"
+      },
+      "runAt": "وقت التشغيل: {at}",
+      "noRuns": "لا توجد عمليات تتبع مكتملة في هذه الفترة",
+      "noRunsDot": "لا توجد عمليات تتبع مكتملة في هذه الفترة.",
+      "mention": "ذكر",
+      "citation": "استشهاد",
+      "detectedEarlier": "تم اكتشافه سابقًا في هذه الفترة",
+      "untracked": "{count, plural, zero {# يوم} one {يوم واحد} two {يومان} few {# أيام} many {# يومًا} other {# يوم}} بدون تشغيل مكتمل. لا تُحتسب الأيام غير المتتبعة كأيام بدون ذكر أو بدون استشهاد.",
+      "blocksNote": "تمثل كل كتلة يومًا واحدًا في النطاق المحدد، بحسب منطقتك الزمنية. مرّر المؤشر فوق كتلة لعرض مواضع ذلك اليوم، وافتح منصة لعرض كل عمليات التشغيل.",
+      "legend": {
+        "Early": "ذكر مبكر",
+        "Mid": "متوسط",
+        "Late": "متأخر",
+        "cited": "استشهاد فقط",
+        "none": "لا توجد نتيجة",
+        "untracked": "غير متتبع"
+      },
+      "tone": {
+        "Early": "مبكر",
+        "Mid": "متوسط",
+        "Late": "متأخر"
+      },
+      "tip": {
+        "share": " في {n} من {runs} عملية تشغيل",
+        "rankOf": "#{rank} من {total}"
+      },
+      "heatmapLabel": "{platform}: تم الذكر في {mentioned} والاستشهاد في {cited} من أصل {count, plural, zero {# يوم متتبع} one {يوم متتبع واحد} two {يومين متتبعين} few {# أيام متتبعة} many {# يومًا متتبعًا} other {# يوم متتبع}}",
+      "trio": {
+        "best": "الأفضل",
+        "worst": "الأسوأ",
+        "avg": "المتوسط",
+        "none": "لا يوجد موضع ذكر",
+        "title": "الموضع عند الذكر"
+      },
+      "runsNote": "{runs} عملية تشغيل · تم الذكر في {mentioned} · تم الاستشهاد في {cited}",
+      "noData": "لا توجد بيانات تتبع لهذه الفترة",
+      "toggle": "{open, select, yes {إخفاء} other {عرض}} نتائج {platform} اليومية",
+      "runsOnDays": "{runs, plural, zero {# عملية تشغيل} one {عملية تشغيل واحدة} two {عمليتا تشغيل} few {# عمليات تشغيل} many {# عملية تشغيل} other {# عملية تشغيل}} في {days, plural, zero {# يوم} one {يوم واحد} two {يومين} few {# أيام} many {# يومًا} other {# يوم}}",
+      "sentimentLine": " · المشاعر في الإجابات التي تذكر العلامة: {positive} إيجابية، {neutral} محايدة، {negative} سلبية",
+      "sentimentUnavailableTail": "، {count} غير متاحة",
+      "moreDays": "عرض {count} أيام إضافية",
+      "platformsAnswered": "{count, plural, zero {لم تُجب أي منصة} one {أجابت منصة واحدة} two {أجابت منصتان} few {أجابت # منصات} many {أجابت # منصة} other {أجابت # منصة}}"
+    },
+    "bulkImport": {
+      "intro": "ضع الـ Prompts في <b>عمود واحد</b>، بحيث يكون في كل صف Prompt واحد، من الأعلى إلى الأسفل. يُقرأ الصف الأول المعنون <b>Prompt</b> على أنه صف العناوين (اختياري). تستخدم الـ Prompts المستوردة المنصات المحددة ضمن «فردي» وموقع العلامة التجارية؛ حدّد موضوع كل منها وموقعه لاحقًا عبر «تعديل» في «كل الـ Prompts».",
+      "drop": "أفلت ملف .xlsx أو .csv، أو انقر للاستعراض",
+      "perRow": "Prompt واحد في كل صف · حتى {max} صف",
+      "template": "تنزيل القالب",
+      "chooseFile": "اختر ملف .xlsx أو .csv.",
+      "unreadable": "تعذرت قراءة هذا الملف. تأكد من أنه ملف .xlsx أو .csv صالح.",
+      "counts": "<b>{valid} صالح</b> · {duplicates, plural, zero {# مكرر} one {# مكرر} two {# مكرران} few {# مكررة} many {# مكررًا} other {# مكرر}} · {errors, plural, zero {# أخطاء} one {# خطأ} two {# خطآن} few {# أخطاء} many {# خطأً} other {# خطأ}}",
+      "inUse": "· {used} / {max} من مواقع الـ Prompts قيد الاستخدام",
+      "truncated": "تمت قراءة أول {max} صف فقط؛ وتم استبعاد {more} صف إضافي. يرجى تقسيم الملفات الأكبر.",
+      "extraColumns": "تتم قراءة عمود الـ Prompt فقط؛ وتم تجاهل بقية أعمدة الملف.",
+      "noneImportable": "لا يمكن استيراد أي Prompts. تتيح باقتك {plan} تتبع ما يصل إلى {max} من مواقع الـ Prompts، و{used} منها قيد الاستخدام بالفعل.",
+      "someImportable": "سيتم استيراد {valid} فقط من أصل {total} من Prompts. تتيح باقتك {plan} تتبّع ما يصل إلى {max} من مواقع Prompts، وقد تم استخدام {used} منها بالفعل. لن يتم استيراد {count, plural, zero {# من Prompts} one {Prompt واحد} two {Promptين} few {# Prompts} many {# Prompt} other {# Prompts}} المتبقية (بدءًا من الصف {row}).",
+      "toAddMore": "لإضافة المزيد من الـ Prompts، {starter, select, yes {قم بترقية باقتك} other {تواصل معنا}}.",
+      "head": {
+        "row": "الصف",
+        "prompt": "Prompt",
+        "status": "الحالة"
+      },
+      "status": {
+        "valid": "صالح",
+        "duplicate": "مكرر",
+        "error": "خطأ",
+        "over_limit": "تجاوز حد الباقة"
+      },
+      "reason": {
+        "empty": "Prompt فارغ",
+        "tooLong": "أطول من {max} حرف",
+        "duplicate": "متتبَّع بالفعل أو مكرر في الملف"
+      },
+      "downloadNotImported": "تنزيل الـ Prompts غير المستوردة (.csv)",
+      "downloadErrors": "تنزيل الأخطاء (.csv)",
+      "importButton": "استيراد {count, plural, zero {# Prompt} one {Prompt واحد} two {Promptين} few {# Prompts} many {# Prompt} other {# Prompt}}",
+      "importedSome": "تم استيراد {imported} · لم يتم استيراد {notImported} بسبب حد الباقة",
+      "importedAll": "{count, plural, zero {لم يتم استيراد أي Prompt} one {تم استيراد Prompt واحد} two {تم استيراد Promptين} few {تم استيراد # Prompts} many {تم استيراد # Prompt} other {تم استيراد # Prompt}}",
+      "analyzing": "جارٍ تحليلها الآن. حدّد المواضيع والمواقع عبر «تعديل» في «كل الـ Prompts».",
+      "nextRun": "سيتم التقاطها في دورة التتبع التالية.",
+      "failed": "فشل الاستيراد. يرجى المحاولة مرة أخرى."
+    },
+    "workStatus": {
+      "todo": "للتنفيذ",
+      "in_progress": "قيد التنفيذ",
+      "done": "مكتمل",
+      "set": "تعيين الحالة",
+      "setLabel": "تعيين حالة العمل",
+      "none": "بدون حالة"
     }
   },
   "volumeEstimate": {
@@ -18844,7 +18886,38 @@
     },
     "planAddOns": {
       "title": "أضف المزيد إلى خطتك",
-      "description": "تتبّع إضافي وعلامات تجارية إضافية وشحنات إضافية لاستخدام الذكاء الاصطناعي لخطة Growth الخاصة بك. يتم تحصيل رسوم كل ما تختاره مرة واحدة من البطاقة المحفوظة.",
+      "slots": {
+        "title": "شراء أرصدة تتبع إضافية",
+        "description": "تتضمن {plan} عدد {included} من الـ slots على كل منصة قياسية. اختر slots إضافية على أي منصة، ويمكنك خفضها جميعًا حتى 0.",
+        "descriptionNone": "اختر slots إضافية على أي منصة، ويمكنك خفضها جميعًا حتى 0.",
+        "discount": {
+          "reached": "<b>خصم {percent}%</b> على التتبع الإضافي: خصم {off} على {list} في {interval, select, year {السنة} other {الشهر}}.",
+          "list": "التتبع الإضافي: {list} في {interval, select, year {السنة} other {الشهر}}.",
+          "next": "أضف {more} إضافية في {interval, select, year {السنة} other {الشهر}} للحصول على <b>خصم {percent}%</b> على الجزء الذي يتجاوز {from}.",
+          "top": "لقد وصلت إلى أعلى مستوى.",
+          "drops": "هذا التغيير يخفض خصمك من {from}% إلى {to}%، لذلك يرتفع السعر لكل 100 slot.",
+          "steps": "شرائح خصم الكمية",
+          "stepsLead": "تطبق كل شريحة نسبتها على الجزء الذي يتجاوز الشريحة السابقة:",
+          "step": "خصم {percent}% فوق {from}/{interval, select, year {سنة} other {شهر}}",
+          "yours": "· شريحتك",
+          "nextTag": "· التالية"
+        },
+        "unit": "<b>1 slot</b> = 1 Prompt يتم تتبعه في موقع واحد على تلك المنصة، كل يوم.",
+        "columns": {
+          "platform": "المنصة",
+          "included": "في خطتك",
+          "extra": "slots إضافية",
+          "price": "السعر لكل 100 slot في {interval, select, year {السنة} other {الشهر}}",
+          "cost": "تكلفتك {interval, select, year {السنوية} other {الشهرية}}"
+        },
+        "unlimited": "بلا حد",
+        "fewer": "100 slot أقل على {platform}",
+        "more": "100 slot أكثر على {platform}",
+        "extraOn": "slots إضافية على {platform}",
+        "was": "كان {slots}",
+        "undo": "تراجع",
+        "footer": "تتبع الأسعار تكلفة تتبع كل منصة: بعض الإجابات تتطلب جهدًا أكبر (مثل Perplexity). الدفع السنوي: شهران مجانًا."
+      },
       "tracking": {
         "title": "تتبّع إضافي",
         "description": "مزيد من مواقع Prompts، يتم تتبعها يوميًا على محركات خطتك. شريحة واحدة في كل مرة، ويمكنك تغييرها أو إزالتها في أي وقت.",
@@ -18852,8 +18925,7 @@
         "none": "بدون",
         "tier": "+{units} من مواقع Prompts",
         "price": "{price}/{interval, select, year {سنة} other {شهر}}",
-        "contactSales": "تواصل مع المبيعات",
-        "yearly": "الأسعار السنوية: شهران مجانًا."
+        "contactSales": "تواصل مع المبيعات"
       },
       "brands": {
         "title": "علامات تجارية إضافية",
@@ -18861,7 +18933,7 @@
         "count": "{count} إضافية",
         "fewer": "علامة تجارية أقل بواحدة",
         "more": "علامة تجارية أكثر بواحدة",
-        "note": "لا يمكنك النزول عن عدد العلامات التجارية الحالية: احذف واحدة من «العلامات التجارية» أولاً."
+        "limit": "تشمل خطتك {base} علامة تجارية. الحد الجديد <b>{limit}</b>."
       },
       "topUp": {
         "title": "شحن رصيد استخدام الذكاء الاصطناعي",
@@ -18870,10 +18942,12 @@
         "label": "شحنات استخدام الذكاء الاصطناعي",
         "none": "بدون",
         "option": "+{multiplier}x",
-        "adds": "{multiplier}× استخدام الذكاء الاصطناعي لهذا الشهر · +{briefs} ملخصات · +{opportunities} فرص"
+        "usage": "استخدام AI بمقدار {multiplier}x",
+        "adds": "{multiplier}× استخدام الذكاء الاصطناعي لهذا الشهر · +{briefs} ملخصات · +{opportunities} فرص",
+        "alsoAdds": "يضيف أيضًا +{briefs} ملخصات و+{opportunities} فرص هذا الشهر.",
+        "once": "{price} مرة واحدة"
       },
       "summary": "{prompts} مواقع Prompts · {brands} علامات تجارية",
-      "nothing": "اختر ما تريد تغييره أعلاه.",
       "review": "مراجعة والدفع",
       "reviewing": "جارٍ التحقق من السعر…",
       "dialog": {
@@ -18884,20 +18958,25 @@
         "brands": "{count, plural, =0 {لا توجد علامات تجارية إضافية} one {علامة تجارية إضافية واحدة} two {علامتان تجاريتان إضافيتان} few {# علامات تجارية إضافية} many {# علامة تجارية إضافية} other {# علامة تجارية إضافية}}",
         "topUp": "زيادة استخدام الذكاء الاصطناعي +{multiplier}x، بدفعة واحدة",
         "dueToday": "المبلغ المستحق اليوم",
-        "dueTodayNote": "باقي هذه الفترة للتتبع الإضافي والعلامات التجارية الإضافية، مع شحن الرصيد بالكامل.",
+        "dueTodayNote": "باقي هذه الفترة للـ slots والتتبع الإضافي والعلامات التجارية، مع رصيد الشحن كاملًا.",
+        "slots": "slots على {platform}",
+        "slotsValue": "{slots} (+{extra} مضافة)",
+        "volumeDiscount": "خصم الكمية ({percent}%)",
+        "discountValue": "−{off} في {interval, select, year {السنة} other {الشهر}}",
         "total": "من التجديد القادم",
         "totalValue": "{price} {interval, select, year {سنويًا} other {شهريًا}}",
-        "credit": "عند اختيار مستوى أدنى أو عدد أقل من العلامات التجارية، يُضاف رصيد إلى فواتيرك القادمة.",
+        "credit": "تقليل slots أو الانتقال إلى مستوى أقل أو تقليل العلامات التجارية يترك رصيدًا لفواتيرك القادمة.",
         "pay": "ادفع {price}",
         "confirm": "تأكيد",
         "cancel": "إلغاء",
-        "processing": "جارٍ المعالجة…"
+        "processing": "جارٍ المعالجة…",
+        "slotsWaiting": "{platform}: أحدث {count} من مواقع Prompts ستنتظر slot. لن يتم حذف أي شيء؛ أضف slots مجددًا لتتبعها."
       },
       "done": "تم تحديث الإضافات الخاصة بك. يُحتسب شحن الرصيد فور تأكيد الدفع.",
       "states": {
         "not_admin": "يمكن للمسؤولين فقط تغيير الإضافات. اطلب ذلك من أحد مسؤولي مساحة العمل.",
         "starter": "الإضافات متاحة مع خطة Growth. قم بالترقية إلى Growth لإضافة التتبع والعلامات التجارية واستخدام الذكاء الاصطناعي.",
-        "enterprise": "يحدد عقدك حدودك. تواصل مع مدير حسابك للحصول على المزيد.",
+        "enterprise": "يحدد عقدك حدودك الأخرى. تواصل مع مدير حسابك للمزيد.",
         "trial": "يمكن شراء الإضافات بعد بدء خطتك.",
         "no_plan": "يمكن شراء الإضافات أثناء سريان خطتك.",
         "ending": "خطتك مضبوطة على الانتهاء. أبقِ على خطتك لتغيير إضافاتها."
@@ -18915,7 +18994,23 @@
         "payment_failed": "لم تتم عملية الدفع.",
         "failed": "تعذر تغيير الإضافات. حاول مرة أخرى."
       },
-      "readFailed": "تعذرت قراءة الإضافات. حاول مرة أخرى لاحقًا."
+      "readFailed": "تعذرت قراءة الإضافات. حاول مرة أخرى لاحقًا.",
+      "perInterval": "{price}/{interval, select, year {سنة} other {شهر}}",
+      "cart": {
+        "title": "إضافاتك",
+        "onePayment": "دفعة واحدة",
+        "plan": "خطة {plan}",
+        "slots": "تتبع إضافي لـ {platform}",
+        "slotsCount": "{slots} slots",
+        "remove": "إزالة {item}",
+        "discount": "خصم الكمية {percent}% على التتبع الإضافي، مشمول في الأسعار أعلاه.",
+        "discountDrops": "ينخفض خصم الكمية من {from}% إلى {to}%، لذلك ترتفع الأسعار أعلاه.",
+        "brands": "{count, plural, zero {# علامة تجارية} one {علامة تجارية واحدة} two {علامتان تجاريتان} few {# علامات تجارية} many {# علامة تجارية} other {# علامة تجارية}} · {price} لكل واحدة",
+        "topUp": "استخدام AI بمقدار {multiplier}x · حتى {date}",
+        "total": "الإجمالي {interval, select, year {السنوي} other {الشهري}} اعتبارًا من التجديد التالي <b>{price}</b>",
+        "undoAll": "التراجع عن جميع التغييرات",
+        "dueToday": "المستحق اليوم: العناصر المضافة لبقية هذه الفترة، ويظهر في صفحة المراجعة والدفع."
+      }
     },
     "cancelsOn": "ينتهي الاشتراك في {date}",
     "changePlan": "تغيير الخطة",

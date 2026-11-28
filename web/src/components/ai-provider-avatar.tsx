@@ -51,9 +51,11 @@ export function resolveAIProvider(model: string, platform?: string): AIProviderK
   }
   if (
     key === 'Microsoft Copilot' ||
+    key === 'Bing AI Mode' ||
     key === 'Copilot' ||
     key === 'copilot' ||
-    key === 'copilot-web'
+    key === 'copilot-web' ||
+    key === 'copilot-app'
   ) {
     return 'copilot';
   }
@@ -85,7 +87,7 @@ export function resolveAIProvider(model: string, platform?: string): AIProviderK
   ) {
     return 'google';
   }
-  if (key === 'Meta AI' || key === 'meta-ai' || key.startsWith('llama-')) {
+  if (key === 'Meta AI' || key === 'meta-ai' || key === 'meta-ai-web' || key.startsWith('llama-')) {
     return 'meta';
   }
 

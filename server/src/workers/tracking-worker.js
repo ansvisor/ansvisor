@@ -30,6 +30,7 @@ import {
   isFirstRun,
   progressiveRollups,
 } from '../lib/first-run-rollups.js';
+import { slottedPlatforms } from '../config/tracking-slots.js';
 import logger from '../lib/logger.js';
 
 function resolveModelPlatform(model) {
@@ -46,13 +47,37 @@ function resolveModelPlatform(model) {
  * and a platform may be down. Both are filtered here rather than at the picker,
  * because every id that survives becomes a paid submission to the answer
  * provider.
+ *
+ * `slotted` (the cloud) is the set of platforms the workspace's plan and
+ * bought tracking slots cover (slottedPlatforms): a platform outside it is
+ * never run, whatever the prompt says. ChatGPT Shopping runs beside ChatGPT
+ * and has no slots of its own. Null or absent: nothing is limited (self-host).
  */
-export function runnablePlatforms(platforms, { shoppingEnabled } = {}) {
+export function runnablePlatforms(platforms, { shoppingEnabled, slotted } = {}) {
   return (platforms ?? []).filter(
     (platform) =>
       !unavailablePlatforms().includes(platform) &&
-      (shoppingEnabled || platform !== 'chatgpt-shopping'),
+      (shoppingEnabled || platform !== 'chatgpt-shopping') &&
+      (!slotted || platform === 'chatgpt-shopping' || slotted.has(platform)),
   );
+}
+
+/**
+ * The organization row the worker plans a run with: its plan, overrides and
+ * bought tracking slots. Before 00564 is applied add_on_slots doesn't exist;
+ * the row is read again without it, so a deploy that runs ahead of the
+ * migration keeps tracking (with only the plan's own platforms).
+ */
+export async function loadOrgPlanRow(orgId) {
+  const read = (columns) =>
+    supabaseAdmin.from('organizations').select(columns).eq('id', orgId).single();
+  const { data, error } = await read('plan, plan_overrides, add_on_slots');
+  if (!error) return data;
+  if (/add_on_slots/.test(error.message ?? '')) {
+    const again = await read('plan, plan_overrides');
+    return again.data ? { ...again.data, add_on_slots: {} } : null;
+  }
+  return null;
 }
 
 /**
@@ -339,17 +364,18 @@ export async function processTrackingJob({ brandId, promptId, promptIds, source,
   // every model is allowed (self-host, or a plan without the restriction).
   let allowedModels = null;
   let plan = null;
+  // Cloud: the platforms the plan and the workspace's tracking slots cover
+  // (00564). A prompt can still list one it has no slots for (a plan change,
+  // an older save), so it's filtered here: every platform run is paid.
+  let slotted = null;
   if (isCloud()) {
-    const { data: org } = await supabaseAdmin
-      .from('organizations')
-      .select('plan, plan_overrides')
-      .eq('id', brand.organization_id)
-      .single();
+    const org = await loadOrgPlanRow(brand.organization_id);
     plan = applyPlanOverrides(getPlan(org?.plan), org);
     allowedModels = plan.limits.allowedModels ?? null;
     if (allowedModels) {
       logger.info({ brandId, allowedModels }, 'api-model tracking plan-gated for this org');
     }
+    slotted = slottedPlatforms(plan, org?.add_on_slots);
   }
   // ChatGPT Shopping, like the models, only where the plan shows its results.
   const shoppingEnabled = shoppingTracked(brand, plan);
@@ -361,7 +387,8 @@ export async function processTrackingJob({ brandId, promptId, promptIds, source,
     return allowedModels ? models.filter((m) => allowedModels.includes(m)) : models;
   };
 
-  const allowedPlatformsFor = (prompt) => runnablePlatforms(prompt.platforms, { shoppingEnabled });
+  const allowedPlatformsFor = (prompt) =>
+    runnablePlatforms(prompt.platforms, { shoppingEnabled, slotted });
 
   // A prompt's tracked locations (#691): country codes, US state codes
   // (`US-CA`) and city codes (`TR~ISTANBUL`, PROMPT-015d) alike. No locations

@@ -277,6 +277,7 @@
       "label": "ブランドはまだ追跡されていません"
     },
     "actions": {
+      "changePlatforms": "プラットフォームを変更するにはプランが必要です",
       "addPrompts": "Promptの追加にはプランが必要です",
       "removeLocations": "ロケーションの削除にはプランが必要です",
       "editPrompts": "Promptの編集にはプランが必要です",
@@ -4532,6 +4533,10 @@
       "name": "今月のサイト監査の残り回数を読み取る",
       "step": "サイト監査を読み取り"
     },
+    "crawlerAccess": {
+      "name": "AIクローラーの問題を読み取る",
+      "step": "サイト監査・クローラーを読み取り中"
+    },
     "goToPage": {
       "name": "ページに移動",
       "step": "ページを開きました"
@@ -8037,6 +8042,7 @@
       "traffic": "AIトラフィックと登録数",
       "ai-revenue": "AI経由の顧客と収益",
       "feed-advisor": "ショッピングフィードのギャップ",
+      "tech-fix": "クローラーと技術面の修正",
       "earn-or-pay": "獲得または支払い",
       "ad-drafts": "広告の下書き",
       "paid-overlap": "有料広告の重複",
@@ -15777,154 +15783,30 @@
     }
   },
   "prompts": {
-    "positionsSheet": {
-      "tracked": "トラッキング中のPrompt",
-      "paused": "一時停止中",
-      "improvingTitle": "アクションとその成果を開く",
-      "improving": "改善中 · {code}",
-      "window": "{preset, select, custom {カスタム期間} other {過去{preset}}}",
-      "lastRun": "最終実行: {at}",
-      "runs": "{count, plural, other {#回の実行}}",
-      "period": "期間",
-      "discardNote": "期間を変更すると、未送信の改善の編集内容は破棄されます。",
-      "keepEditing": "編集を続ける",
-      "discard": "破棄して変更",
-      "aiAnswers": "AIの回答",
-      "back": "Promptに戻る",
-      "loading": "順位を読み込み中",
-      "loadError": "順位を読み込めませんでした: {message}",
-      "retry": "再試行",
-      "noLongerAvailable": "このPromptは利用できなくなりました。",
-      "loadFailed": "順位の読み込みに失敗しました。",
-      "sentimentUnavailable": "センチメントを取得できません",
-      "sentiment": {
-        "positive": "ポジティブ",
-        "neutral": "中立",
-        "negative": "ネガティブ"
-      },
-      "notMentioned": "言及なし",
-      "mentioned": "言及あり",
-      "positionUnavailable": "順位を取得できません",
-      "notCited": "引用なし",
-      "cited": "引用あり",
-      "locked": {
-        "growth": "Growthプランで利用できます",
-        "notEnabled": "このワークスペースでは有効になっていません",
-        "enterprise": "Enterpriseプランで利用できます",
-        "line": "{note} · {platform}の結果と順位をトラッキングするには、{growth, select, yes {アップグレードしてください} other {お問い合わせください}}。"
-      },
-      "upgrade": "アップグレード",
-      "contactUs": "お問い合わせ",
-      "improve": "改善する",
-      "stat": {
-        "platformsAnswered": "回答したプラットフォーム",
-        "inLatestRun": "最新の実行時",
-        "mentionedOn": "言及されたプラットフォーム",
-        "citedOn": "引用されたプラットフォーム",
-        "platforms": "プラットフォーム",
-        "avgPosition": "平均順位",
-        "whenMentioned": "言及された場合",
-        "whenMentionedSources": "言及された場合 · ソース内 {avg}",
-        "runs": "実行回数",
-        "trackedOf": "{count, plural, other {#日}}中{tracked}日を追跡",
-        "mentioned": "言及",
-        "cited": "引用",
-        "ofDays": "{n} / {count, plural, other {#日}}",
-        "notMentionedCount": "言及なし {count}件",
-        "notCitedCount": "引用なし {count}件"
-      },
-      "tabs": {
-        "platforms": "プラットフォーム別結果",
-        "history": "日次履歴（{count}）"
-      },
-      "runAt": "実行日時 {at}",
-      "noRuns": "この期間に完了した追跡実行はありません",
-      "noRunsDot": "この期間に完了した追跡実行はありません。",
-      "mention": "言及",
-      "citation": "引用",
-      "detectedEarlier": "この期間の早い時点で検出されました",
-      "untracked": "{count, plural, other {#日}}は実行が完了していません。未追跡の日は「言及なし」「引用なし」には含まれません。",
-      "blocksNote": "各ブロックは選択した期間の1日を表し、お使いのタイムゾーンで表示されます。ブロックにカーソルを合わせるとその日の順位を確認でき、プラットフォームを開くとすべての実行を確認できます。",
-      "legend": {
-        "Early": "早い順位で言及",
-        "Mid": "中間",
-        "Late": "遅い",
-        "cited": "引用のみ",
-        "none": "結果なし",
-        "untracked": "未追跡"
-      },
-      "tone": {
-        "Early": "早い",
-        "Mid": "中間",
-        "Late": "遅い"
-      },
-      "tip": {
-        "share": "（{runs}回中{n}回）",
-        "rankOf": "{total}件中{rank}位"
-      },
-      "heatmapLabel": "{platform}：追跡した{count, plural, other {#日}}のうち、言及{mentioned}日、引用{cited}日",
-      "trio": {
-        "best": "最高",
-        "worst": "最低",
-        "avg": "平均",
-        "none": "言及順位なし",
-        "title": "言及された場合の順位"
-      },
-      "runsNote": "{runs}回実行 · 言及{mentioned}回 · 引用{cited}回",
-      "noData": "この期間の追跡データはありません",
-      "toggle": "{platform}の日次結果を{open, select, yes {非表示} other {表示}}",
-      "runsOnDays": "{days, plural, other {#日}}で{runs, plural, other {#回}}実行",
-      "sentimentLine": " · 言及した回答のセンチメント:ポジティブ {positive}、ニュートラル {neutral}、ネガティブ {negative}",
-      "sentimentUnavailableTail": "、取得不可 {count}",
-      "moreDays": "さらに{count}日分を表示",
-      "platformsAnswered": "{count, plural, other {#個のプラットフォーム}}が回答しました"
-    },
-    "bulkImport": {
-      "intro": "Prompt を<b>1列</b>に、1行につき1つ、上から下へ入力してください。1行目が<b>Prompt</b>というタイトルの場合はヘッダーとして読み込まれます(省略可)。インポートされた Prompt には、単一で選択したプラットフォームとブランドの地域が適用されます。トピックと地域は、あとから「すべての Prompts」の編集で設定してください。",
-      "drop": ".xlsx または .csv ファイルをドロップするか、クリックして選択してください",
-      "perRow": "1行に1つの Prompt · 最大{max}行",
-      "template": "テンプレートをダウンロード",
-      "chooseFile": ".xlsx または .csv ファイルを選択してください。",
-      "unreadable": "このファイルを読み込めませんでした。有効な .xlsx または .csv ファイルか確認してください。",
-      "counts": "<b>{valid}件が有効</b> · {duplicates, plural, other {重複 #件}} · {errors, plural, other {エラー #件}}",
-      "inUse": "· Prompt の地域枠 {used} / {max} 使用中",
-      "truncated": "最初の{max}行のみ読み込まれ、残りの{more}行は除外されました。大きなファイルは分割してください。",
-      "extraColumns": "Prompt の列のみ読み込まれます。ファイルのその他の列は無視されました。",
-      "noneImportable": "Prompt をインポートできません。{plan}プランでは最大{max}件の Prompt の地域を追跡でき、すでに{used}件が使用中です。",
-      "someImportable": "{total}件中{valid}件のPromptのみインポートされます。ご利用の{plan}プランでは最大{max}件のPromptロケーションを追跡でき、すでに{used}件が使用されています。残りの{count, plural, other {#件のPrompt}}（{row}行目以降）はインポートされません。",
-      "toAddMore": "Prompt を追加するには、{starter, select, yes {プランをアップグレードしてください} other {お問い合わせください}}。",
-      "head": {
-        "row": "行",
-        "prompt": "Prompt",
-        "status": "ステータス"
-      },
-      "status": {
-        "valid": "有効",
-        "duplicate": "重複",
-        "error": "エラー",
-        "over_limit": "プラン上限超過"
-      },
-      "reason": {
-        "empty": "Prompt が空です",
-        "tooLong": "{max}文字を超えています",
-        "duplicate": "すでに追跡中、またはファイル内で重複しています"
-      },
-      "downloadNotImported": "インポートされなかった Prompt をダウンロード(.csv)",
-      "downloadErrors": "エラーをダウンロード(.csv)",
-      "importButton": "{count, plural, other {#件のPrompt}}をインポート",
-      "importedSome": "{imported}件インポート · {notImported}件はプラン上限のためインポートされませんでした",
-      "importedAll": "{count, plural, other {#件のPromptをインポートしました}}",
-      "analyzing": "現在分析中です。トピックと地域は「すべての Prompts」の編集で設定してください。",
-      "nextRun": "次回のトラッキング実行時に処理されます。",
-      "failed": "インポートに失敗しました。もう一度お試しください。"
-    },
-    "workStatus": {
-      "todo": "未着手",
-      "in_progress": "進行中",
-      "done": "完了",
-      "set": "ステータスを設定",
-      "setLabel": "作業ステータスを設定",
-      "none": "ステータスなし"
+    "bulkPlatforms": {
+      "bulkButton": "プラットフォーム",
+      "bulkAdd": "プラットフォームを追加",
+      "bulkRemove": "プラットフォームを削除",
+      "modes": "追加または削除",
+      "modeAdd": "追加",
+      "modeRemove": "削除",
+      "platforms": "プラットフォーム",
+      "title": "プラットフォームを追加",
+      "lead": "選択した{count}件のPromptをさらに多くのプラットフォームで追跡します。各Promptの地域ごとに、プラットフォームごとにtracking slotを1つ使用します。Promptが待機中のプラットフォームは再実行されます。",
+      "removeTitle": "プラットフォームを削除",
+      "removeLead": "選択した{count}件のPromptを一部のプラットフォームで追跡しないようにします。そのslotは再び空きになります。",
+      "none": "追加できるプラットフォームがありません。さらに多くのプラットフォームで追跡するには、設定 › 請求でtracking slotを追加してください。",
+      "removeNone": "選択したPromptは、削除できるプラットフォームでは実行されていません。",
+      "free": "空き{count}",
+      "previewAdd": "{count, plural, other {#件のPromptが変更されます}} · {unchanged}件は設定済みです",
+      "previewRemove": "{count, plural, other {#件のPromptが変更されます}} · {unchanged}件は未設定です · {blocked}件はプラットフォームが残らなくなります",
+      "short": "{platform}には{needed}個のslotが必要ですが、空きは{free}個です。",
+      "addSlots": "slotを追加",
+      "save": "{count, plural, other {#件のPromptに追加}}",
+      "removeSave": "{count, plural, other {#件のPromptから削除}}",
+      "done": "{count, plural, other {#件のPromptにプラットフォームを追加しました}}",
+      "removed": "{count, plural, other {#件のPromptからプラットフォームを削除しました}}",
+      "saveFailed": "プラットフォームを変更できませんでした。もう一度お試しください。"
     },
     "waiting": {
       "resultTitle": "{added}件を追加、{waiting}件が空き枠待ちです",
@@ -16019,6 +15901,10 @@
     "loadError": "Prompt を読み込めませんでした。",
     "visibilityDegraded": "視認性データは一時的に利用できません — 視認性データなしで Prompt を表示しています。",
     "positions": {
+      "slots": {
+        "note": "現在のプランには含まれていません · {platform}の結果と順位をトラッキングするには、トラッキング用のslotsを追加してください。",
+        "add": "slotsを追加"
+      },
       "answers": "{count, plural, other {# 件の回答}}",
       "answersInPeriod": "この期間で {count, plural, other {# 件の回答}}",
       "mentionedIn": "{answers, plural, other {# 件の回答}}中 {mentioned} 件で言及 · {mentions, plural, other {# 件の言及}}",
@@ -16309,6 +16195,13 @@
       "bulkTitle": "{count, plural, other {まだ回答のない選択した#件のPromptの追跡を開始}}"
     },
     "usage": {
+      "slots": {
+        "title": "Tracking slots",
+        "add": "slotを追加",
+        "usage": "{used} / {limit}",
+        "unlimited": "{used}・上限なし",
+        "meter": "{platform}のslot使用量"
+      },
       "panelLabel": "Prompt使用状況",
       "planAndUsage": "プランと使用状況",
       "hide": "非表示",
@@ -16391,7 +16284,7 @@
       "enginesLegend": "カラー表示: 期間内にこのPromptの検索が共有されたエンジン。薄い表示: 追跡中ですが共有されなかったエンジン。",
       "engineEmptyTitle": "{range}内に{engine}の検索はありません",
       "engineEmptyBody": "{engine}は通常、回答の背景にある検索を共有します。より長い期間を指定してお試しください。",
-      "sourceNote": "Perplexityは追跡されなくなり、Copilotは検索を共有しないため、これらは一部の日程で共有されるChatGPTのみからのものです。以前よりも少なくなっています。",
+      "sourceNote": "Perplexityは追跡対象外となり、Bing AI Modeは検索内容を共有しないため、これらはChatGPTのみから取得されます。ChatGPTが共有するのも一部の日のみです。以前より件数は少なくなっています。",
       "emptyTitle": "キャプチャされたfan-outはまだありません",
       "emptyBody": "ChatGPTの検索は一部の日程でサンプリングされ、ChatGPT APIは検索実行時に共有します。Google AI Overviews、AI Mode、Geminiは検索を共有しません。対象のエンジンがお客様のPromptで実行されると、検索がここに表示されます。",
       "coverageTooltip": "この期間内に追跡された{total}件の回答のうち、{withFanout}件でエンジンが実行した検索が含まれていました。ChatGPTの検索は一部の日程でサンプリングされ、ChatGPT APIは検索実行時に共有します。"
@@ -16691,6 +16584,155 @@
       "noRoomToResume": "再開するための空きが足りません",
       "bulkFailed": "{action, select, resume {Promptを再開できませんでした。} other {Promptを一時停止できませんでした。}}",
       "bulkPartial": "{action, select, resume {{total} 件中 {failed} 件を再開できませんでした。} other {{total} 件中 {failed} 件を一時停止できませんでした。}}"
+    },
+    "positionsSheet": {
+      "tracked": "トラッキング中のPrompt",
+      "paused": "一時停止中",
+      "improvingTitle": "アクションとその成果を開く",
+      "improving": "改善中 · {code}",
+      "window": "{preset, select, custom {カスタム期間} other {過去{preset}}}",
+      "lastRun": "最終実行: {at}",
+      "runs": "{count, plural, other {#回の実行}}",
+      "period": "期間",
+      "discardNote": "期間を変更すると、未送信の改善の編集内容は破棄されます。",
+      "keepEditing": "編集を続ける",
+      "discard": "破棄して変更",
+      "aiAnswers": "AIの回答",
+      "back": "Promptに戻る",
+      "loading": "順位を読み込み中",
+      "loadError": "順位を読み込めませんでした: {message}",
+      "retry": "再試行",
+      "noLongerAvailable": "このPromptは利用できなくなりました。",
+      "loadFailed": "順位の読み込みに失敗しました。",
+      "sentimentUnavailable": "センチメントを取得できません",
+      "sentiment": {
+        "positive": "ポジティブ",
+        "neutral": "中立",
+        "negative": "ネガティブ"
+      },
+      "notMentioned": "言及なし",
+      "mentioned": "言及あり",
+      "positionUnavailable": "順位を取得できません",
+      "notCited": "引用なし",
+      "cited": "引用あり",
+      "locked": {
+        "growth": "Growthプランで利用できます",
+        "notEnabled": "このワークスペースでは有効になっていません",
+        "enterprise": "Enterpriseプランで利用できます",
+        "line": "{note} · {platform}の結果と順位をトラッキングするには、{growth, select, yes {アップグレードしてください} other {お問い合わせください}}。"
+      },
+      "upgrade": "アップグレード",
+      "contactUs": "お問い合わせ",
+      "improve": "改善する",
+      "stat": {
+        "platformsAnswered": "回答したプラットフォーム",
+        "inLatestRun": "最新の実行時",
+        "mentionedOn": "言及されたプラットフォーム",
+        "citedOn": "引用されたプラットフォーム",
+        "platforms": "プラットフォーム",
+        "avgPosition": "平均順位",
+        "whenMentioned": "言及された場合",
+        "whenMentionedSources": "言及された場合 · ソース内 {avg}",
+        "runs": "実行回数",
+        "trackedOf": "{count, plural, other {#日}}中{tracked}日を追跡",
+        "mentioned": "言及",
+        "cited": "引用",
+        "ofDays": "{n} / {count, plural, other {#日}}",
+        "notMentionedCount": "言及なし {count}件",
+        "notCitedCount": "引用なし {count}件"
+      },
+      "tabs": {
+        "platforms": "プラットフォーム別結果",
+        "history": "日次履歴（{count}）"
+      },
+      "runAt": "実行日時 {at}",
+      "noRuns": "この期間に完了した追跡実行はありません",
+      "noRunsDot": "この期間に完了した追跡実行はありません。",
+      "mention": "言及",
+      "citation": "引用",
+      "detectedEarlier": "この期間の早い時点で検出されました",
+      "untracked": "{count, plural, other {#日}}は実行が完了していません。未追跡の日は「言及なし」「引用なし」には含まれません。",
+      "blocksNote": "各ブロックは選択した期間の1日を表し、お使いのタイムゾーンで表示されます。ブロックにカーソルを合わせるとその日の順位を確認でき、プラットフォームを開くとすべての実行を確認できます。",
+      "legend": {
+        "Early": "早い順位で言及",
+        "Mid": "中間",
+        "Late": "遅い",
+        "cited": "引用のみ",
+        "none": "結果なし",
+        "untracked": "未追跡"
+      },
+      "tone": {
+        "Early": "早い",
+        "Mid": "中間",
+        "Late": "遅い"
+      },
+      "tip": {
+        "share": "（{runs}回中{n}回）",
+        "rankOf": "{total}件中{rank}位"
+      },
+      "heatmapLabel": "{platform}：追跡した{count, plural, other {#日}}のうち、言及{mentioned}日、引用{cited}日",
+      "trio": {
+        "best": "最高",
+        "worst": "最低",
+        "avg": "平均",
+        "none": "言及順位なし",
+        "title": "言及された場合の順位"
+      },
+      "runsNote": "{runs}回実行 · 言及{mentioned}回 · 引用{cited}回",
+      "noData": "この期間の追跡データはありません",
+      "toggle": "{platform}の日次結果を{open, select, yes {非表示} other {表示}}",
+      "runsOnDays": "{days, plural, other {#日}}で{runs, plural, other {#回}}実行",
+      "sentimentLine": " · 言及した回答のセンチメント:ポジティブ {positive}、ニュートラル {neutral}、ネガティブ {negative}",
+      "sentimentUnavailableTail": "、取得不可 {count}",
+      "moreDays": "さらに{count}日分を表示",
+      "platformsAnswered": "{count, plural, other {#個のプラットフォーム}}が回答しました"
+    },
+    "bulkImport": {
+      "intro": "Prompt を<b>1列</b>に、1行につき1つ、上から下へ入力してください。1行目が<b>Prompt</b>というタイトルの場合はヘッダーとして読み込まれます(省略可)。インポートされた Prompt には、単一で選択したプラットフォームとブランドの地域が適用されます。トピックと地域は、あとから「すべての Prompts」の編集で設定してください。",
+      "drop": ".xlsx または .csv ファイルをドロップするか、クリックして選択してください",
+      "perRow": "1行に1つの Prompt · 最大{max}行",
+      "template": "テンプレートをダウンロード",
+      "chooseFile": ".xlsx または .csv ファイルを選択してください。",
+      "unreadable": "このファイルを読み込めませんでした。有効な .xlsx または .csv ファイルか確認してください。",
+      "counts": "<b>{valid}件が有効</b> · {duplicates, plural, other {重複 #件}} · {errors, plural, other {エラー #件}}",
+      "inUse": "· Prompt の地域枠 {used} / {max} 使用中",
+      "truncated": "最初の{max}行のみ読み込まれ、残りの{more}行は除外されました。大きなファイルは分割してください。",
+      "extraColumns": "Prompt の列のみ読み込まれます。ファイルのその他の列は無視されました。",
+      "noneImportable": "Prompt をインポートできません。{plan}プランでは最大{max}件の Prompt の地域を追跡でき、すでに{used}件が使用中です。",
+      "someImportable": "{total}件中{valid}件のPromptのみインポートされます。ご利用の{plan}プランでは最大{max}件のPromptロケーションを追跡でき、すでに{used}件が使用されています。残りの{count, plural, other {#件のPrompt}}（{row}行目以降）はインポートされません。",
+      "toAddMore": "Prompt を追加するには、{starter, select, yes {プランをアップグレードしてください} other {お問い合わせください}}。",
+      "head": {
+        "row": "行",
+        "prompt": "Prompt",
+        "status": "ステータス"
+      },
+      "status": {
+        "valid": "有効",
+        "duplicate": "重複",
+        "error": "エラー",
+        "over_limit": "プラン上限超過"
+      },
+      "reason": {
+        "empty": "Prompt が空です",
+        "tooLong": "{max}文字を超えています",
+        "duplicate": "すでに追跡中、またはファイル内で重複しています"
+      },
+      "downloadNotImported": "インポートされなかった Prompt をダウンロード(.csv)",
+      "downloadErrors": "エラーをダウンロード(.csv)",
+      "importButton": "{count, plural, other {#件のPrompt}}をインポート",
+      "importedSome": "{imported}件インポート · {notImported}件はプラン上限のためインポートされませんでした",
+      "importedAll": "{count, plural, other {#件のPromptをインポートしました}}",
+      "analyzing": "現在分析中です。トピックと地域は「すべての Prompts」の編集で設定してください。",
+      "nextRun": "次回のトラッキング実行時に処理されます。",
+      "failed": "インポートに失敗しました。もう一度お試しください。"
+    },
+    "workStatus": {
+      "todo": "未着手",
+      "in_progress": "進行中",
+      "done": "完了",
+      "set": "ステータスを設定",
+      "setLabel": "作業ステータスを設定",
+      "none": "ステータスなし"
     }
   },
   "volumeEstimate": {
@@ -18852,7 +18894,38 @@
     },
     "planAddOns": {
       "title": "プランにオプションを追加",
-      "description": "Growthプラント向けの追加トラッキング、追加ブランド、AI使用量のチャージです。選択した内容は、登録済みのカードに一度だけ請求されます。",
+      "slots": {
+        "title": "追加のトラッキングクレジットを購入",
+        "description": "{plan}には、各標準プラットフォームに{included}個のslotが含まれます。任意のプラットフォームで追加slotを選択できます。0まで減らすことも可能です。",
+        "descriptionNone": "任意のプラットフォームで追加slotを選択できます。0まで減らすことも可能です。",
+        "discount": {
+          "reached": "追加トラッキングが<b>{percent}%割引</b>：{list}が{interval, select, year {年} other {月}}あたり{off}割引。",
+          "list": "追加トラッキング：{interval, select, year {年} other {月}}あたり{list}。",
+          "next": "{interval, select, year {年} other {月}}あたりさらに{more}追加すると、{from}を超える分が<b>{percent}%割引</b>になります。",
+          "top": "最上位のステップに到達しました。",
+          "drops": "この変更により割引率が{from}%から{to}%に下がるため、100 slotsあたりの価格が上がります。",
+          "steps": "ボリューム割引の段階",
+          "stepsLead": "各段階の割引率は、その段階を超える部分に適用されます。",
+          "step": "{from}/{interval, select, year {年} other {月}}超で{percent}%オフ",
+          "yours": "· 現在",
+          "nextTag": "· 次"
+        },
+        "unit": "<b>1 slot</b> = そのプラットフォームの1つのロケーションで、1つのPromptを毎日追跡できる単位です。",
+        "columns": {
+          "platform": "プラットフォーム",
+          "included": "プランに含まれる数",
+          "extra": "追加slots",
+          "price": "100 slotsあたりの{interval, select, year {年額} other {月額}}料金",
+          "cost": "{interval, select, year {年額} other {月額}}費用"
+        },
+        "unlimited": "無制限",
+        "fewer": "{platform}のslotsを100減らす",
+        "more": "{platform}のslotsを100増やす",
+        "extraOn": "{platform}の追加slots",
+        "was": "変更前: {slots}",
+        "undo": "元に戻す",
+        "footer": "料金は各プラットフォームの追跡にかかるコストに基づいています。回答の取得に手間がかかるもの(例: Perplexity)は高くなります。年払いなら2か月分無料です。"
+      },
       "tracking": {
         "title": "追加トラッキング",
         "description": "プランのエンジンで毎日トラッキングされる Prompt ロケーションを増やせます。一度に選べるのは1つのティアで、いつでも変更や削除ができます。",
@@ -18860,8 +18933,7 @@
         "none": "なし",
         "tier": "+{units} Prompt ロケーション",
         "price": "{price}/{interval, select, year {年} other {月}}",
-        "contactSales": "営業に問い合わせる",
-        "yearly": "年額プランは2か月分無料です。"
+        "contactSales": "営業に問い合わせる"
       },
       "brands": {
         "title": "追加ブランド",
@@ -18869,7 +18941,7 @@
         "count": "{count}件追加",
         "fewer": "ブランドを1つ減らす",
         "more": "ブランドを1つ増やす",
-        "note": "現在のブランド数より少なくはできません。先にブランドで1つ削除してください。"
+        "limit": "ご利用のプランには{base}件のブランドが含まれています。新しい上限は<b>{limit}</b>件です。"
       },
       "topUp": {
         "title": "AI使用量のチャージ",
@@ -18878,10 +18950,12 @@
         "label": "AI使用量のチャージ",
         "none": "なし",
         "option": "+{multiplier}倍",
-        "adds": "今月のAI使用量の{multiplier}倍 ・ ブリーフ+{briefs}件 ・ 機会+{opportunities}件"
+        "usage": "AI使用量{multiplier}倍",
+        "adds": "今月のAI使用量の{multiplier}倍 ・ ブリーフ+{briefs}件 ・ 機会+{opportunities}件",
+        "alsoAdds": "今月分として、ブリーフ+{briefs}件と機会+{opportunities}件も追加されます。",
+        "once": "{price}(1回払い)"
       },
       "summary": "{prompts} Prompt ロケーション・{brands}ブランド",
-      "nothing": "上で変更する内容を選択してください。",
       "review": "確認して支払う",
       "reviewing": "料金を確認中…",
       "dialog": {
@@ -18892,20 +18966,25 @@
         "brands": "{count, plural, =0 {追加ブランドなし} other {追加ブランド#件}}",
         "topUp": "AI使用量のチャージ +{multiplier}倍(1回払い)",
         "dueToday": "本日のお支払い",
-        "dueTodayNote": "追加トラッキングとブランドの今期の残り期間分と、チャージの全額です。",
+        "dueTodayNote": "slots、追加トラッキング、ブランドは今期の残り期間分、トップアップは全額が対象です。",
+        "slots": "{platform}のslots",
+        "slotsValue": "{slots}(+{extra}追加)",
+        "volumeDiscount": "ボリューム割引({percent}%)",
+        "discountValue": "−{off}/{interval, select, year {年} other {月}}",
         "total": "次回の更新から",
         "totalValue": "{interval, select, year {年額} other {月額}} {price}",
-        "credit": "下位のティアへの変更やブランド数の削減を行うと、差額は次回以降の請求書にクレジットとして反映されます。",
+        "credit": "slots、ティア、ブランドを減らすと、差額が次回以降の請求にクレジットとして適用されます。",
         "pay": "{price}を支払う",
         "confirm": "確認",
         "cancel": "キャンセル",
-        "processing": "処理中…"
+        "processing": "処理中…",
+        "slotsWaiting": "{platform}: 新しい順に{count}件のPromptロケーションはslotの空きを待機します。削除されることはありません。追跡するにはslotsを再度追加してください。"
       },
       "done": "アドオンを更新しました。追加購入分は、支払いが確認され次第すぐに反映されます。",
       "states": {
         "not_admin": "アドオンを変更できるのは管理者のみです。ワークスペースの管理者にご依頼ください。",
         "starter": "アドオンはGrowthプランでご利用いただけます。Growthにアップグレードすると、トラッキング、ブランド、AI使用量を追加できます。",
-        "enterprise": "上限は契約内容によって定められています。追加をご希望の場合は、担当のアカウントマネージャーにお問い合わせください。",
+        "enterprise": "その他の上限は契約により設定されています。増やす場合は担当のアカウントマネージャーにご連絡ください。",
         "trial": "アドオンはプランの開始後に購入できます。",
         "no_plan": "アドオンはプランが有効な間に購入できます。",
         "ending": "プランは終了する予定です。アドオンを変更するには、プランを継続してください。"
@@ -18923,7 +19002,23 @@
         "payment_failed": "お支払いを完了できませんでした。",
         "failed": "アドオンを変更できませんでした。もう一度お試しください。"
       },
-      "readFailed": "アドオンを読み取れませんでした。しばらくしてからもう一度お試しください。"
+      "readFailed": "アドオンを読み取れませんでした。しばらくしてからもう一度お試しください。",
+      "perInterval": "{price}/{interval, select, year {年} other {月}}",
+      "cart": {
+        "title": "アドオン",
+        "onePayment": "1回払い",
+        "plan": "{plan}プラン",
+        "slots": "{platform}の追加トラッキング",
+        "slotsCount": "{slots} slots",
+        "remove": "{item}を削除",
+        "discount": "追加トラッキングにボリューム割引{percent}%が上記の価格に適用されています。",
+        "discountDrops": "ボリューム割引が{from}%から{to}%に下がるため、上記の価格が上がります。",
+        "brands": "{count, plural, other {#ブランド}} · 各{price}",
+        "topUp": "AI使用量{multiplier}倍 · {date}まで",
+        "total": "次回更新からの{interval, select, year {年額} other {月額}}合計 <b>{price}</b>",
+        "undoAll": "すべての変更を元に戻す",
+        "dueToday": "本日のお支払い:今期の残り期間に追加された項目の料金です。「確認してお支払い」に表示されます。"
+      }
     },
     "cancelsOn": "サブスクリプションは {date} に終了します",
     "changePlan": "プランを変更",

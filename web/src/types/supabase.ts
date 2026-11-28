@@ -356,12 +356,14 @@ export type Database = {
           grant_bytes: number | null
           grant_opportunities: number | null
           grant_prompts: number | null
+          grant_slots: number | null
           highlight: boolean
           id: string
           kind: string
           multiplier: number | null
           name: string
           plans: string[] | null
+          platform: string | null
           price_cents: number
           sale: string
           sort: number
@@ -381,12 +383,14 @@ export type Database = {
           grant_bytes?: number | null
           grant_opportunities?: number | null
           grant_prompts?: number | null
+          grant_slots?: number | null
           highlight?: boolean
           id: string
           kind: string
           multiplier?: number | null
           name: string
           plans?: string[] | null
+          platform?: string | null
           price_cents: number
           sale?: string
           sort?: number
@@ -406,12 +410,14 @@ export type Database = {
           grant_bytes?: number | null
           grant_opportunities?: number | null
           grant_prompts?: number | null
+          grant_slots?: number | null
           highlight?: boolean
           id?: string
           kind?: string
           multiplier?: number | null
           name?: string
           plans?: string[] | null
+          platform?: string | null
           price_cents?: number
           sale?: string
           sort?: number
@@ -6999,6 +7005,7 @@ export type Database = {
         Row: {
           add_on_brands: number
           add_on_prompts: number
+          add_on_slots: Json
           anthropic_api_key_encrypted: string | null
           anthropic_api_key_last4: string | null
           anthropic_api_key_set_at: string | null
@@ -7021,6 +7028,7 @@ export type Database = {
         Insert: {
           add_on_brands?: number
           add_on_prompts?: number
+          add_on_slots?: Json
           anthropic_api_key_encrypted?: string | null
           anthropic_api_key_last4?: string | null
           anthropic_api_key_set_at?: string | null
@@ -7043,6 +7051,7 @@ export type Database = {
         Update: {
           add_on_brands?: number
           add_on_prompts?: number
+          add_on_slots?: Json
           anthropic_api_key_encrypted?: string | null
           anthropic_api_key_last4?: string | null
           anthropic_api_key_set_at?: string | null
@@ -7782,6 +7791,7 @@ export type Database = {
           text: string
           tags: string[]
           topic_id: string | null
+          waiting_platforms: string[]
           waiting_since: string | null
           work_status: string | null
         }
@@ -7798,6 +7808,7 @@ export type Database = {
           text: string
           tags?: string[]
           topic_id?: string | null
+          waiting_platforms?: string[]
           waiting_since?: string | null
           work_status?: string | null
         }
@@ -7814,6 +7825,7 @@ export type Database = {
           text?: string
           tags?: string[]
           topic_id?: string | null
+          waiting_platforms?: string[]
           waiting_since?: string | null
           work_status?: string | null
         }
@@ -9924,6 +9936,13 @@ export type Database = {
         }[]
       }
       org_brand_count: { Args: { p_organization_id: string }; Returns: number }
+      org_platform_slot_usage: {
+        Args: { p_organization_id: string }
+        Returns: {
+          platform: string
+          slots: number
+        }[]
+      }
       org_prompt_location_usage: {
         Args: { p_organization_id: string }
         Returns: {

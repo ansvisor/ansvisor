@@ -277,6 +277,7 @@
       "label": "您的品牌尚未开始跟踪"
     },
     "actions": {
+      "changePlatforms": "更改平台需要订阅套餐",
       "addPrompts": "添加 Prompt 需要有效方案",
       "removeLocations": "移除地区需要有效方案",
       "editPrompts": "编辑 Prompt 需要有效方案",
@@ -4490,6 +4491,10 @@
       "name": "读取本月剩余网站审核次数",
       "step": "读取网站审核"
     },
+    "crawlerAccess": {
+      "name": "读取 AI 爬虫问题",
+      "step": "读取站点审核 · 爬虫"
+    },
     "goToPage": {
       "name": "前往页面",
       "step": "已打开页面"
@@ -7995,6 +8000,7 @@
       "traffic": "AI 流量与注册量",
       "ai-revenue": "来自 AI 的客户与收入",
       "feed-advisor": "购物 Feed 缺口",
+      "tech-fix": "爬虫与技术修复",
       "earn-or-pay": "赚取或付费",
       "ad-drafts": "广告草稿",
       "paid-overlap": "付费重叠",
@@ -15735,154 +15741,30 @@
     }
   },
   "prompts": {
-    "positionsSheet": {
-      "tracked": "已跟踪的 Prompt",
-      "paused": "已暂停",
-      "improvingTitle": "打开操作及其成果",
-      "improving": "改进中 · {code}",
-      "window": "{preset, select, custom {自定义范围} other {最近 {preset}}}",
-      "lastRun": "上次运行:{at}",
-      "runs": "{count, plural, other {# 次运行}}",
-      "period": "时间段",
-      "discardNote": "更改时间段将丢弃您尚未提交的改进编辑内容。",
-      "keepEditing": "继续编辑",
-      "discard": "丢弃并更改",
-      "aiAnswers": "AI 回答",
-      "back": "返回 Prompts",
-      "loading": "正在加载排名",
-      "loadError": "无法加载排名:{message}",
-      "retry": "重试",
-      "noLongerAvailable": "此 Prompt 已不可用。",
-      "loadFailed": "加载排名失败。",
-      "sentimentUnavailable": "情感倾向不可用",
-      "sentiment": {
-        "positive": "正面",
-        "neutral": "中性",
-        "negative": "负面"
-      },
-      "notMentioned": "未被提及",
-      "mentioned": "已被提及",
-      "positionUnavailable": "排名不可用",
-      "notCited": "未被引用",
-      "cited": "已被引用",
-      "locked": {
-        "growth": "Growth 套餐可用",
-        "notEnabled": "此工作区未启用",
-        "enterprise": "Enterprise 套餐可用",
-        "line": "{note} · {growth, select, yes {升级} other {联系我们}}以跟踪 {platform} 的结果和排名。"
-      },
-      "upgrade": "升级",
-      "contactUs": "联系我们",
-      "improve": "改进",
-      "stat": {
-        "platformsAnswered": "已回答的平台",
-        "inLatestRun": "在其最近一次运行中",
-        "mentionedOn": "被提及的平台",
-        "citedOn": "被引用的平台",
-        "platforms": "个平台",
-        "avgPosition": "平均排名",
-        "whenMentioned": "被提及时",
-        "whenMentionedSources": "被提及时 · 来源中为 {avg}",
-        "runs": "运行次数",
-        "trackedOf": "共 {count, plural, other {# 天}}，已追踪 {tracked} 天",
-        "mentioned": "已提及",
-        "cited": "已引用",
-        "ofDays": "{n} / {count, plural, other {# 天}}",
-        "notMentionedCount": "{count} 次未提及",
-        "notCitedCount": "{count} 次未引用"
-      },
-      "tabs": {
-        "platforms": "平台结果",
-        "history": "每日历史（{count}）"
-      },
-      "runAt": "运行时间：{at}",
-      "noRuns": "此期间没有已完成的追踪运行",
-      "noRunsDot": "此期间没有已完成的追踪运行。",
-      "mention": "提及",
-      "citation": "引用",
-      "detectedEarlier": "在此期间早些时候已检测到",
-      "untracked": "{count, plural, other {# 天}}没有已完成的运行。未追踪的日期不会计为未提及或未引用。",
-      "blocksNote": "每个方块代表所选范围内按您所在时区计算的一天。将鼠标悬停在方块上可查看当天的排名位置；打开平台可查看每次运行。",
-      "legend": {
-        "Early": "较早提及",
-        "Mid": "中间",
-        "Late": "较晚",
-        "cited": "仅被引用",
-        "none": "无结果",
-        "untracked": "未追踪"
-      },
-      "tone": {
-        "Early": "较早",
-        "Mid": "中间",
-        "Late": "较晚"
-      },
-      "tip": {
-        "share": "，{runs} 次运行中有 {n} 次",
-        "rankOf": "第 {rank} 位，共 {total} 位"
-      },
-      "heatmapLabel": "{platform}：在 {count, plural, other {# 个已追踪日}}中，{mentioned} 天被提及，{cited} 天被引用",
-      "trio": {
-        "best": "最佳",
-        "worst": "最差",
-        "avg": "平均",
-        "none": "无提及位置",
-        "title": "被提及时的位置"
-      },
-      "runsNote": "{runs} 次运行 · {mentioned} 次提及 · {cited} 次引用",
-      "noData": "此期间没有追踪数据",
-      "toggle": "{open, select, yes {隐藏} other {显示}}每日 {platform} 结果",
-      "runsOnDays": "{days, plural, other {# 天}}共 {runs, plural, other {# 次运行}}",
-      "sentimentLine": " · 提及品牌的回答情感倾向:{positive} 条正面,{neutral} 条中性,{negative} 条负面",
-      "sentimentUnavailableTail": ",{count} 条不可用",
-      "moreDays": "再显示 {count} 天",
-      "platformsAnswered": "{count, plural, other {# 个平台}}已回答"
-    },
-    "bulkImport": {
-      "intro": "请将您的 Prompt 放在<b>同一列</b>中,每行一个 Prompt,自上而下排列。若第一行标题为 <b>Prompt</b>,将被视为表头(可选)。导入的 Prompt 将使用“单个添加”中所选的平台以及品牌所在地区;之后可在“全部 Prompts”中通过“编辑”设置每个 Prompt 的主题和地区。",
-      "drop": "拖放 .xlsx 或 .csv 文件,或点击浏览",
-      "perRow": "每行一个 Prompt · 最多 {max} 行",
-      "template": "下载模板",
-      "chooseFile": "请选择 .xlsx 或 .csv 文件。",
-      "unreadable": "无法读取此文件。请确认其为有效的 .xlsx 或 .csv 文件。",
-      "counts": "<b>{valid} 条有效</b> · {duplicates, plural, other {# 条重复}} · {errors, plural, other {# 条错误}}",
-      "inUse": "· 已使用 {used} / {max} 个 Prompt 地区位置",
-      "truncated": "仅读取了前 {max} 行,另有 {more} 行未读取。请拆分较大的文件。",
-      "extraColumns": "仅读取 Prompt 列,文件中的其他列已被忽略。",
-      "noneImportable": "无法导入任何 Prompt。您的 {plan} 套餐最多可追踪 {max} 个 Prompt 地区位置,已使用 {used} 个。",
-      "someImportable": "在 {total} 个 Prompt 中,仅会导入 {valid} 个。您的 {plan} 套餐最多可追踪 {max} 个 Prompt 地区位置,已使用 {used} 个。其余 {count, plural, other {# 个 Prompt}}(从第 {row} 行起)将不会被导入。",
-      "toAddMore": "如需添加更多 Prompt,请{starter, select, yes {升级您的套餐} other {联系我们}}。",
-      "head": {
-        "row": "行",
-        "prompt": "Prompt",
-        "status": "状态"
-      },
-      "status": {
-        "valid": "有效",
-        "duplicate": "重复",
-        "error": "错误",
-        "over_limit": "超出套餐限额"
-      },
-      "reason": {
-        "empty": "Prompt 为空",
-        "tooLong": "超过 {max} 个字符",
-        "duplicate": "已在追踪或在文件中重复"
-      },
-      "downloadNotImported": "下载未导入的 Prompt(.csv)",
-      "downloadErrors": "下载错误(.csv)",
-      "importButton": "导入 {count, plural, other {# 个 Prompt}}",
-      "importedSome": "已导入 {imported} 个 · 因套餐限额有 {notImported} 个未导入",
-      "importedAll": "已导入 {count, plural, other {# 个 Prompt}}",
-      "analyzing": "正在分析。可在“全部 Prompts”中通过“编辑”设置主题和地区。",
-      "nextRun": "它们将在下一次追踪运行时被处理。",
-      "failed": "导入失败,请重试。"
-    },
-    "workStatus": {
-      "todo": "待办",
-      "in_progress": "进行中",
-      "done": "已完成",
-      "set": "设置状态",
-      "setLabel": "设置工作状态",
-      "none": "无状态"
+    "bulkPlatforms": {
+      "bulkButton": "平台",
+      "bulkAdd": "添加平台",
+      "bulkRemove": "移除平台",
+      "modes": "添加或移除",
+      "modeAdd": "添加",
+      "modeRemove": "移除",
+      "platforms": "平台",
+      "title": "添加平台",
+      "lead": "在更多平台上追踪所选的 {count} 个 Prompts。每个 Prompt 位置在每个平台上占用一个追踪 slot。Prompt 正在等待的平台将重新运行。",
+      "removeTitle": "移除平台",
+      "removeLead": "停止在部分平台上追踪所选的 {count} 个 Prompts。它们占用的 slots 将重新释放。",
+      "none": "没有可添加的平台。请在“设置 › 账单”中添加追踪 slots,以便在更多平台上追踪。",
+      "removeNone": "所选 Prompts 没有可移除的平台。",
+      "free": "{count} 个空闲",
+      "previewAdd": "{count, plural, other {将更改 # 个 Prompt}} · {unchanged} 个已包含这些平台",
+      "previewRemove": "{count, plural, other {将更改 # 个 Prompt}} · {unchanged} 个不包含这些平台 · {blocked} 个将不剩任何平台",
+      "short": "{platform} 需要 {needed} 个 slots,目前有 {free} 个空闲。",
+      "addSlots": "添加 slots",
+      "save": "添加到 {count, plural, other {# 个 Prompt}}",
+      "removeSave": "从 {count, plural, other {# 个 Prompt}} 中移除",
+      "done": "{count, plural, other {已为 # 个 Prompt 添加平台}}",
+      "removed": "{count, plural, other {已从 # 个 Prompt 中移除平台}}",
+      "saveFailed": "无法更改平台。请重试。"
     },
     "waiting": {
       "resultTitle": "已添加 {added} 个，{waiting} 个正在排队等待名额",
@@ -15977,6 +15859,10 @@
     "loadError": "无法加载您的 Prompt。",
     "visibilityDegraded": "可见度数据暂时不可用 — 正在显示未包含这些数据的 Prompt。",
     "positions": {
+      "slots": {
+        "note": "您的套餐尚未包含 · 添加跟踪 slots 以跟踪 {platform} 的结果和排名。",
+        "add": "添加 slots"
+      },
       "answers": "{count, plural, other {# 个回答}}",
       "answersInPeriod": "在此期间共有 {count, plural, other {# 个回答}}",
       "mentionedIn": "在 {answers, plural, other {# 个回答}}中的 {mentioned} 个被提及 · {mentions, plural, other {# 次提及}}",
@@ -16267,6 +16153,13 @@
       "bulkTitle": "{count, plural, other {开始跟踪 # 个尚无答案的选定 Prompt}}"
     },
     "usage": {
+      "slots": {
+        "title": "追踪 slots",
+        "add": "添加 slots",
+        "usage": "{used} / {limit}",
+        "unlimited": "{used} · 无限制",
+        "meter": "{platform} 已使用的 slots"
+      },
       "panelLabel": "Prompt 用量",
       "planAndUsage": "套餐与用量",
       "hide": "隐藏",
@@ -16349,7 +16242,7 @@
       "enginesLegend": "彩色：在此时间范围中共享了此 Prompt 的搜索。淡色：已追踪，但未共享任何搜索。",
       "engineEmptyTitle": "在{range}内没有 {engine} 搜索",
       "engineEmptyBody": "{engine} 通常会共享其回答背后的搜索。请尝试选择更长的时间范围。",
-      "sourceNote": "Perplexity 已不再被追踪，且 Microsoft Copilot 不共享其搜索，因此这些仅来自 ChatGPT（其在某些日期会共享搜索）。搜索数量比以往更少。",
+      "sourceNote": "Perplexity 已不再追踪,Bing AI Mode 也不公开其搜索,因此这些数据仅来自 ChatGPT,而它只在部分日期提供。数量比以前少。",
       "emptyTitle": "尚未捕获到 fan-out",
       "emptyBody": "ChatGPT 的搜索仅在某些日期进行抽样，而 ChatGPT API 在执行搜索时会共享这些搜索。Google AI Overviews、AI Mode 和 Gemini 不会共享。一旦这些引擎为您的 Prompts 运行，搜索将显示在此处。",
       "coverageTooltip": "在此时间范围内追踪的 {total} 个回答中，有 {withFanout} 个包含引擎运行的搜索。ChatGPT 的搜索仅在某些日期抽样，而 ChatGPT API 在执行搜索时会共享这些搜索。"
@@ -16649,6 +16542,155 @@
       "noRoomToResume": "空间不足，无法恢复",
       "bulkFailed": "{action, select, resume {恢复 Prompts 失败。} other {暂停 Prompts 失败。}}",
       "bulkPartial": "{action, select, resume {{total} 个中有 {failed} 个无法恢复。} other {{total} 个中有 {failed} 个无法暂停。}}"
+    },
+    "positionsSheet": {
+      "tracked": "已跟踪的 Prompt",
+      "paused": "已暂停",
+      "improvingTitle": "打开操作及其成果",
+      "improving": "改进中 · {code}",
+      "window": "{preset, select, custom {自定义范围} other {最近 {preset}}}",
+      "lastRun": "上次运行:{at}",
+      "runs": "{count, plural, other {# 次运行}}",
+      "period": "时间段",
+      "discardNote": "更改时间段将丢弃您尚未提交的改进编辑内容。",
+      "keepEditing": "继续编辑",
+      "discard": "丢弃并更改",
+      "aiAnswers": "AI 回答",
+      "back": "返回 Prompts",
+      "loading": "正在加载排名",
+      "loadError": "无法加载排名:{message}",
+      "retry": "重试",
+      "noLongerAvailable": "此 Prompt 已不可用。",
+      "loadFailed": "加载排名失败。",
+      "sentimentUnavailable": "情感倾向不可用",
+      "sentiment": {
+        "positive": "正面",
+        "neutral": "中性",
+        "negative": "负面"
+      },
+      "notMentioned": "未被提及",
+      "mentioned": "已被提及",
+      "positionUnavailable": "排名不可用",
+      "notCited": "未被引用",
+      "cited": "已被引用",
+      "locked": {
+        "growth": "Growth 套餐可用",
+        "notEnabled": "此工作区未启用",
+        "enterprise": "Enterprise 套餐可用",
+        "line": "{note} · {growth, select, yes {升级} other {联系我们}}以跟踪 {platform} 的结果和排名。"
+      },
+      "upgrade": "升级",
+      "contactUs": "联系我们",
+      "improve": "改进",
+      "stat": {
+        "platformsAnswered": "已回答的平台",
+        "inLatestRun": "在其最近一次运行中",
+        "mentionedOn": "被提及的平台",
+        "citedOn": "被引用的平台",
+        "platforms": "个平台",
+        "avgPosition": "平均排名",
+        "whenMentioned": "被提及时",
+        "whenMentionedSources": "被提及时 · 来源中为 {avg}",
+        "runs": "运行次数",
+        "trackedOf": "共 {count, plural, other {# 天}}，已追踪 {tracked} 天",
+        "mentioned": "已提及",
+        "cited": "已引用",
+        "ofDays": "{n} / {count, plural, other {# 天}}",
+        "notMentionedCount": "{count} 次未提及",
+        "notCitedCount": "{count} 次未引用"
+      },
+      "tabs": {
+        "platforms": "平台结果",
+        "history": "每日历史（{count}）"
+      },
+      "runAt": "运行时间：{at}",
+      "noRuns": "此期间没有已完成的追踪运行",
+      "noRunsDot": "此期间没有已完成的追踪运行。",
+      "mention": "提及",
+      "citation": "引用",
+      "detectedEarlier": "在此期间早些时候已检测到",
+      "untracked": "{count, plural, other {# 天}}没有已完成的运行。未追踪的日期不会计为未提及或未引用。",
+      "blocksNote": "每个方块代表所选范围内按您所在时区计算的一天。将鼠标悬停在方块上可查看当天的排名位置；打开平台可查看每次运行。",
+      "legend": {
+        "Early": "较早提及",
+        "Mid": "中间",
+        "Late": "较晚",
+        "cited": "仅被引用",
+        "none": "无结果",
+        "untracked": "未追踪"
+      },
+      "tone": {
+        "Early": "较早",
+        "Mid": "中间",
+        "Late": "较晚"
+      },
+      "tip": {
+        "share": "，{runs} 次运行中有 {n} 次",
+        "rankOf": "第 {rank} 位，共 {total} 位"
+      },
+      "heatmapLabel": "{platform}：在 {count, plural, other {# 个已追踪日}}中，{mentioned} 天被提及，{cited} 天被引用",
+      "trio": {
+        "best": "最佳",
+        "worst": "最差",
+        "avg": "平均",
+        "none": "无提及位置",
+        "title": "被提及时的位置"
+      },
+      "runsNote": "{runs} 次运行 · {mentioned} 次提及 · {cited} 次引用",
+      "noData": "此期间没有追踪数据",
+      "toggle": "{open, select, yes {隐藏} other {显示}}每日 {platform} 结果",
+      "runsOnDays": "{days, plural, other {# 天}}共 {runs, plural, other {# 次运行}}",
+      "sentimentLine": " · 提及品牌的回答情感倾向:{positive} 条正面,{neutral} 条中性,{negative} 条负面",
+      "sentimentUnavailableTail": ",{count} 条不可用",
+      "moreDays": "再显示 {count} 天",
+      "platformsAnswered": "{count, plural, other {# 个平台}}已回答"
+    },
+    "bulkImport": {
+      "intro": "请将您的 Prompt 放在<b>同一列</b>中,每行一个 Prompt,自上而下排列。若第一行标题为 <b>Prompt</b>,将被视为表头(可选)。导入的 Prompt 将使用“单个添加”中所选的平台以及品牌所在地区;之后可在“全部 Prompts”中通过“编辑”设置每个 Prompt 的主题和地区。",
+      "drop": "拖放 .xlsx 或 .csv 文件,或点击浏览",
+      "perRow": "每行一个 Prompt · 最多 {max} 行",
+      "template": "下载模板",
+      "chooseFile": "请选择 .xlsx 或 .csv 文件。",
+      "unreadable": "无法读取此文件。请确认其为有效的 .xlsx 或 .csv 文件。",
+      "counts": "<b>{valid} 条有效</b> · {duplicates, plural, other {# 条重复}} · {errors, plural, other {# 条错误}}",
+      "inUse": "· 已使用 {used} / {max} 个 Prompt 地区位置",
+      "truncated": "仅读取了前 {max} 行,另有 {more} 行未读取。请拆分较大的文件。",
+      "extraColumns": "仅读取 Prompt 列,文件中的其他列已被忽略。",
+      "noneImportable": "无法导入任何 Prompt。您的 {plan} 套餐最多可追踪 {max} 个 Prompt 地区位置,已使用 {used} 个。",
+      "someImportable": "在 {total} 个 Prompt 中,仅会导入 {valid} 个。您的 {plan} 套餐最多可追踪 {max} 个 Prompt 地区位置,已使用 {used} 个。其余 {count, plural, other {# 个 Prompt}}(从第 {row} 行起)将不会被导入。",
+      "toAddMore": "如需添加更多 Prompt,请{starter, select, yes {升级您的套餐} other {联系我们}}。",
+      "head": {
+        "row": "行",
+        "prompt": "Prompt",
+        "status": "状态"
+      },
+      "status": {
+        "valid": "有效",
+        "duplicate": "重复",
+        "error": "错误",
+        "over_limit": "超出套餐限额"
+      },
+      "reason": {
+        "empty": "Prompt 为空",
+        "tooLong": "超过 {max} 个字符",
+        "duplicate": "已在追踪或在文件中重复"
+      },
+      "downloadNotImported": "下载未导入的 Prompt(.csv)",
+      "downloadErrors": "下载错误(.csv)",
+      "importButton": "导入 {count, plural, other {# 个 Prompt}}",
+      "importedSome": "已导入 {imported} 个 · 因套餐限额有 {notImported} 个未导入",
+      "importedAll": "已导入 {count, plural, other {# 个 Prompt}}",
+      "analyzing": "正在分析。可在“全部 Prompts”中通过“编辑”设置主题和地区。",
+      "nextRun": "它们将在下一次追踪运行时被处理。",
+      "failed": "导入失败,请重试。"
+    },
+    "workStatus": {
+      "todo": "待办",
+      "in_progress": "进行中",
+      "done": "已完成",
+      "set": "设置状态",
+      "setLabel": "设置工作状态",
+      "none": "无状态"
     }
   },
   "volumeEstimate": {
@@ -18810,7 +18852,38 @@
     },
     "planAddOns": {
       "title": "为您的套餐添加更多内容",
-      "description": "为您的 Growth 套餐提供额外追踪、额外品牌和 AI 用量加购。您所选的所有项目将一次性从预留的银行卡中扣款。",
+      "slots": {
+        "title": "购买额外追踪额度",
+        "description": "{plan} 在每个标准平台上包含 {included} 个 slots。可在任意平台选择额外 slots,也可以随时下调,最低为 0。",
+        "descriptionNone": "可在任意平台选择额外 slots,也可以随时下调,最低为 0。",
+        "discount": {
+          "reached": "额外追踪享 <b>{percent}% 折扣</b>:每{interval, select, year {年} other {月}}{list}减免 {off}。",
+          "list": "额外追踪:每{interval, select, year {年} other {月}} {list}。",
+          "next": "每{interval, select, year {年} other {月}}再增加 {more},即可对超出 {from} 的部分享 <b>{percent}% 折扣</b>。",
+          "top": "您已达到最高档位。",
+          "drops": "此更改会将您的折扣从 {from}% 降至 {to}%,因此每 100 个 slots 的价格将上涨。",
+          "steps": "批量折扣档位",
+          "stepsLead": "每一档的折扣仅适用于超出上一档的部分:",
+          "step": "超过 {from}/{interval, select, year {年} other {月}} 的部分享 {percent}% 折扣",
+          "yours": "· 当前",
+          "nextTag": "· 下一档"
+        },
+        "unit": "<b>1 个 slot</b> = 在该平台的 1 个地区每天追踪 1 个 Prompt。",
+        "columns": {
+          "platform": "平台",
+          "included": "您的套餐包含",
+          "extra": "额外 slots",
+          "price": "每 100 个 slots 每{interval, select, year {年} other {月}}价格",
+          "cost": "您的{interval, select, year {年度} other {月度}}费用"
+        },
+        "unlimited": "无限制",
+        "fewer": "减少 100 个 {platform} slots",
+        "more": "增加 100 个 {platform} slots",
+        "extraOn": "{platform} 的额外 slots",
+        "was": "原为 {slots}",
+        "undo": "撤销",
+        "footer": "价格取决于各平台的追踪成本:某些回答需要更多处理(例如 Perplexity)。年付:免费赠送 2 个月。"
+      },
       "tracking": {
         "title": "额外追踪",
         "description": "在您套餐的引擎上每天追踪更多 Prompt 地区。一次只能选择一个档位，可随时更改或移除。",
@@ -18818,8 +18891,7 @@
         "none": "无",
         "tier": "+{units} 个 Prompt 地区",
         "price": "{price}/{interval, select, year {年} other {月}}",
-        "contactSales": "联系销售",
-        "yearly": "年付价格：免费赠送 2 个月。"
+        "contactSales": "联系销售"
       },
       "brands": {
         "title": "额外品牌",
@@ -18827,7 +18899,7 @@
         "count": "额外 {count} 个",
         "fewer": "减少一个品牌",
         "more": "增加一个品牌",
-        "note": "品牌数量不能少于您现有的数量：请先在“品牌”中移除一个。"
+        "limit": "您的套餐包含 {base} 个品牌。新上限为 <b>{limit}</b>。"
       },
       "topUp": {
         "title": "AI 用量加购",
@@ -18836,10 +18908,12 @@
         "label": "AI 用量加购",
         "none": "无",
         "option": "+{multiplier}倍",
-        "adds": "本月 AI 用量的 {multiplier}× · +{briefs} 份简报 · +{opportunities} 个机会"
+        "usage": "{multiplier} 倍 AI 用量",
+        "adds": "本月 AI 用量的 {multiplier}× · +{briefs} 份简报 · +{opportunities} 个机会",
+        "alsoAdds": "本月还将额外增加 {briefs} 份简报和 {opportunities} 个机会。",
+        "once": "一次性 {price}"
       },
       "summary": "{prompts} 个 Prompt 地区 · {brands} 个品牌",
-      "nothing": "请在上方选择要更改的内容。",
       "review": "查看并付款",
       "reviewing": "正在核对价格…",
       "dialog": {
@@ -18850,20 +18924,25 @@
         "brands": "{count, plural, =0 {无额外品牌} other {# 个额外品牌}}",
         "topUp": "AI 用量加购 +{multiplier}倍，一次性付款",
         "dueToday": "今日应付",
-        "dueTodayNote": "额外追踪和品牌按本周期剩余时间计费，加购按全额计费。",
+        "dueTodayNote": "slots、额外追踪和品牌按本周期剩余时间计费,充值包按全额计费。",
+        "slots": "{platform} slots",
+        "slotsValue": "{slots}(新增 {extra})",
+        "volumeDiscount": "批量折扣({percent}%)",
+        "discountValue": "每{interval, select, year {年} other {月}}−{off}",
         "total": "自下次续订起",
         "totalValue": "每{interval, select, year {年} other {月}} {price}",
-        "credit": "降低套餐档位或减少品牌后,剩余金额将作为余额抵扣您后续的账单。",
+        "credit": "减少 slots、降低档位或减少品牌后,剩余金额将作为抵扣额用于后续账单。",
         "pay": "支付 {price}",
         "confirm": "确认",
         "cancel": "取消",
-        "processing": "处理中…"
+        "processing": "处理中…",
+        "slotsWaiting": "{platform}:最新的 {count} 个 Prompt 地区将等待 slot。不会删除任何内容;再次添加 slots 即可继续追踪。"
       },
       "done": "您的附加项已更新。充值将在付款确认后立即生效。",
       "states": {
         "not_admin": "只有管理员可以更改附加项。请联系您工作区的管理员。",
         "starter": "附加项包含在 Growth 套餐中。升级到 Growth 即可添加追踪、品牌和 AI 用量。",
-        "enterprise": "您的限额由合同约定。如需更多,请联系您的客户经理。",
+        "enterprise": "您的其他限额由合同约定。如需更多,请联系您的客户经理。",
         "trial": "套餐开始后即可购买附加项。",
         "no_plan": "套餐生效期间可购买附加项。",
         "ending": "您的套餐即将结束。请保留套餐以更改其附加项。"
@@ -18881,7 +18960,23 @@
         "payment_failed": "付款未成功。",
         "failed": "无法更改您的附加项。请重试。"
       },
-      "readFailed": "无法读取您的附加项。请稍后重试。"
+      "readFailed": "无法读取您的附加项。请稍后重试。",
+      "perInterval": "{price}/{interval, select, year {年} other {月}}",
+      "cart": {
+        "title": "您的附加项",
+        "onePayment": "一次性付款",
+        "plan": "{plan} 套餐",
+        "slots": "{platform} 额外追踪",
+        "slotsCount": "{slots} 个 slots",
+        "remove": "移除 {item}",
+        "discount": "额外追踪享 {percent}% 批量折扣,已计入上方价格。",
+        "discountDrops": "您的批量折扣将从 {from}% 降至 {to}%,因此上方价格将上涨。",
+        "brands": "{count, plural, other {# 个品牌}} · 每个 {price}",
+        "topUp": "{multiplier}倍 AI 用量 · 截至 {date}",
+        "total": "{interval, select, year {年度} other {月度}}总计（自下次续订起）<b>{price}</b>",
+        "undoAll": "撤销所有更改",
+        "dueToday": "今日应付：本周期剩余时间内新增项目的费用，详见“核对并支付”。"
+      }
     },
     "cancelsOn": "订阅将于 {date} 结束",
     "changePlan": "更改方案",

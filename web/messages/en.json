@@ -277,6 +277,7 @@
       "label": "Your brand isn't tracked yet"
     },
     "actions": {
+      "changePlatforms": "Changing platforms needs a plan",
       "addPrompts": "Adding prompts needs a plan",
       "removeLocations": "Removing locations needs a plan",
       "editPrompts": "Editing prompts needs a plan",
@@ -4395,6 +4396,7 @@
     "contentImpact": { "name": "Read a live page's impact", "step": "Read Live page" },
     "contentSources": { "name": "Read a draft's sources", "step": "Read Sources" },
     "siteAuditQuota": { "name": "Read Site Audits left this month", "step": "Read Site Audit" },
+    "crawlerAccess": { "name": "Read AI crawler issues", "step": "Read Site Audit · Crawlers" },
     "goToPage": { "name": "Go to a page", "step": "Opened a page" },
     "fanouts": { "name": "Read query fan-outs", "step": "Read Query Fan-outs" },
     "fanoutGaps": { "name": "Read fan-out gaps", "step": "Read fan-out gaps" },
@@ -7686,6 +7688,7 @@
       "traffic": "AI traffic and sign-ups",
       "ai-revenue": "Customers and revenue from AI",
       "feed-advisor": "Shopping feed gaps",
+      "tech-fix": "Crawler and technical fixes",
       "earn-or-pay": "Earn or pay",
       "ad-drafts": "Ad drafts",
       "paid-overlap": "Paid overlap",
@@ -8278,7 +8281,7 @@
       },
       "technical-fixer": {
         "name": "Crawler & Technical Fixer",
-        "description": "Fixes what keeps AI crawlers out and sends the fix to your site’s code as a pull request."
+        "description": "Finds what keeps AI crawlers out of your site and writes the fixes for your developer."
       },
       "third-party-sources": {
         "name": "Third-party Sources",
@@ -15392,154 +15395,30 @@
     }
   },
   "prompts": {
-    "positionsSheet": {
-      "tracked": "Tracked prompt",
-      "paused": "Paused",
-      "improvingTitle": "Open the action and its Outcome",
-      "improving": "Improving · {code}",
-      "window": "{preset, select, custom {Custom range} other {Last {preset}}}",
-      "lastRun": "Last run: {at}",
-      "runs": "{count, plural, one {# run} other {# runs}}",
-      "period": "Period",
-      "discardNote": "Changing the period discards your unsent Improve edits.",
-      "keepEditing": "Keep editing",
-      "discard": "Discard & change",
-      "aiAnswers": "AI answers",
-      "back": "Back to prompts",
-      "loading": "Loading positions",
-      "loadError": "Couldn't load positions: {message}",
-      "retry": "Retry",
-      "noLongerAvailable": "This prompt is no longer available.",
-      "loadFailed": "Failed to load positions.",
-      "sentimentUnavailable": "Sentiment unavailable",
-      "sentiment": {
-        "positive": "positive",
-        "neutral": "neutral",
-        "negative": "negative"
-      },
-      "notMentioned": "Not mentioned",
-      "mentioned": "Mentioned",
-      "positionUnavailable": "Position unavailable",
-      "notCited": "Not cited",
-      "cited": "Cited",
-      "locked": {
-        "growth": "Available on Growth",
-        "notEnabled": "Not enabled for this workspace",
-        "enterprise": "Available on Enterprise",
-        "line": "{note} · {growth, select, yes {Upgrade} other {Contact us}} to track {platform} results and positions."
-      },
-      "upgrade": "Upgrade",
-      "contactUs": "Contact us",
-      "improve": "Improve",
-      "stat": {
-        "platformsAnswered": "Platforms answered",
-        "inLatestRun": "in their latest run",
-        "mentionedOn": "Mentioned on",
-        "citedOn": "Cited on",
-        "platforms": "platforms",
-        "avgPosition": "Avg. position",
-        "whenMentioned": "when mentioned",
-        "whenMentionedSources": "when mentioned · {avg} in sources",
-        "runs": "Runs",
-        "trackedOf": "{tracked} of {count, plural, one {# day} other {# days}} tracked",
-        "mentioned": "Mentioned",
-        "cited": "Cited",
-        "ofDays": "{n} / {count, plural, one {# day} other {# days}}",
-        "notMentionedCount": "{count} not mentioned",
-        "notCitedCount": "{count} not cited"
-      },
-      "tabs": {
-        "platforms": "Platform results",
-        "history": "Daily history ({count})"
-      },
-      "runAt": "Run at {at}",
-      "noRuns": "No completed tracking runs in this period",
-      "noRunsDot": "No completed tracking runs in this period.",
-      "mention": "Mention",
-      "citation": "Citation",
-      "detectedEarlier": "Detected earlier in this period",
-      "untracked": "{count, plural, one {# day} other {# days}} without a completed run. Untracked days don't count as not mentioned or not cited.",
-      "blocksNote": "Each block is one day in the selected range, in your time zone. Hover a block for that day's positions; open a platform for every run.",
-      "legend": {
-        "Early": "Mentioned early",
-        "Mid": "Mid",
-        "Late": "Late",
-        "cited": "Cited only",
-        "none": "No result",
-        "untracked": "Not tracked"
-      },
-      "tone": {
-        "Early": "Early",
-        "Mid": "Mid",
-        "Late": "Late"
-      },
-      "tip": {
-        "share": " in {n} of {runs} runs",
-        "rankOf": "#{rank} of {total}"
-      },
-      "heatmapLabel": "{platform}: mentioned on {mentioned} and cited on {cited} of {count, plural, one {# tracked day} other {# tracked days}}",
-      "trio": {
-        "best": "Best",
-        "worst": "Worst",
-        "avg": "Avg.",
-        "none": "No mention position",
-        "title": "Position when mentioned"
-      },
-      "runsNote": "{runs} runs · mentioned in {mentioned} · cited in {cited}",
-      "noData": "No tracking data for this period",
-      "toggle": "{open, select, yes {Hide} other {Show}} daily {platform} results",
-      "runsOnDays": "{runs, plural, one {# run} other {# runs}} on {days, plural, one {# day} other {# days}}",
-      "sentimentLine": " · sentiment in mentioning answers: {positive} positive, {neutral} neutral, {negative} negative",
-      "sentimentUnavailableTail": ", {count} unavailable",
-      "moreDays": "Show {count} more days",
-      "platformsAnswered": "{count, plural, one {# platform} other {# platforms}} answered"
-    },
-    "bulkImport": {
-      "intro": "Put your prompts in <b>one column</b>, one prompt per row, going down. A first row titled <b>Prompt</b> is read as the header (optional). Imported prompts use the platforms selected under Single and the brand's location; set each one's topic and location afterwards with Edit in All Prompts.",
-      "drop": "Drop an .xlsx or .csv file, or click to browse",
-      "perRow": "One prompt per row · up to {max} rows",
-      "template": "Download template",
-      "chooseFile": "Choose an .xlsx or .csv file.",
-      "unreadable": "This file could not be read. Check that it is a valid .xlsx or .csv file.",
-      "counts": "<b>{valid} valid</b> · {duplicates, plural, one {# duplicate} other {# duplicates}} · {errors, plural, one {# error} other {# errors}}",
-      "inUse": "· {used} / {max} prompt locations in use",
-      "truncated": "Only the first {max} rows were read; {more} more were left out. Split larger files.",
-      "extraColumns": "Only the prompt column is read; the file's other columns were ignored.",
-      "noneImportable": "No prompts can be imported. Your {plan} plan tracks up to {max} prompt locations and {used} are already in use.",
-      "someImportable": "Only {valid} of {total} prompts will be imported. Your {plan} plan tracks up to {max} prompt locations and {used} are already in use. The remaining {count, plural, one {# prompt} other {# prompts}} (from row {row}) won't be imported.",
-      "toAddMore": "To add more prompts, {starter, select, yes {upgrade your plan} other {contact us}}.",
-      "head": {
-        "row": "Row",
-        "prompt": "Prompt",
-        "status": "Status"
-      },
-      "status": {
-        "valid": "Valid",
-        "duplicate": "Duplicate",
-        "error": "Error",
-        "over_limit": "Over plan limit"
-      },
-      "reason": {
-        "empty": "Empty prompt",
-        "tooLong": "Longer than {max} characters",
-        "duplicate": "Already tracked or repeated in the file"
-      },
-      "downloadNotImported": "Download not-imported prompts (.csv)",
-      "downloadErrors": "Download errors (.csv)",
-      "importButton": "Import {count, plural, one {# prompt} other {# prompts}}",
-      "importedSome": "{imported} imported · {notImported} not imported due to plan limit",
-      "importedAll": "{count, plural, one {# prompt imported} other {# prompts imported}}",
-      "analyzing": "Analyzing them now. Set topics and locations with Edit in All Prompts.",
-      "nextRun": "They will be picked up by the next tracking run.",
-      "failed": "Import failed. Please try again."
-    },
-    "workStatus": {
-      "todo": "To do",
-      "in_progress": "In progress",
-      "done": "Done",
-      "set": "Set status",
-      "setLabel": "Set work status",
-      "none": "No status"
+    "bulkPlatforms": {
+      "bulkButton": "Platforms",
+      "bulkAdd": "Add platforms",
+      "bulkRemove": "Remove platforms",
+      "modes": "Add or remove",
+      "modeAdd": "Add",
+      "modeRemove": "Remove",
+      "platforms": "Platforms",
+      "title": "Add platforms",
+      "lead": "Track the {count} selected prompts on more platforms. Each prompt location uses one tracking slot on each platform. A platform a prompt waits on runs again.",
+      "removeTitle": "Remove platforms",
+      "removeLead": "Stop tracking the {count} selected prompts on some platforms. Their slots are free again.",
+      "none": "No platform to add. Add tracking slots in Settings › Billing to track on more platforms.",
+      "removeNone": "The selected prompts run on no platform you can remove.",
+      "free": "{count} free",
+      "previewAdd": "{count, plural, one {# prompt will change} other {# prompts will change}} · {unchanged} already have them",
+      "previewRemove": "{count, plural, one {# prompt will change} other {# prompts will change}} · {unchanged} don't have them · {blocked} would have no platform left",
+      "short": "{platform} needs {needed} slots and has {free} free.",
+      "addSlots": "Add slots",
+      "save": "Add to {count, plural, one {# prompt} other {# prompts}}",
+      "removeSave": "Remove from {count, plural, one {# prompt} other {# prompts}}",
+      "done": "{count, plural, one {Platforms added to # prompt} other {Platforms added to # prompts}}",
+      "removed": "{count, plural, one {Platforms removed from # prompt} other {Platforms removed from # prompts}}",
+      "saveFailed": "Couldn't change the platforms. Try again."
     },
     "waiting": {
       "resultTitle": "{added} added, {waiting} waiting for a spot",
@@ -15634,6 +15513,10 @@
     "loadError": "Couldn't load your prompts.",
     "visibilityDegraded": "Visibility figures are temporarily unavailable — showing prompts without them.",
     "positions": {
+      "slots": {
+        "note": "Not in your plan yet · Add tracking slots to track {platform} results and positions.",
+        "add": "Add slots"
+      },
       "answers": "{count, plural, one {# answer} other {# answers}}",
       "answersInPeriod": "{count, plural, one {# answer} other {# answers}} in this period",
       "mentionedIn": "In {mentioned} of {answers, plural, one {# answer} other {# answers}} · {mentions, plural, one {# mention} other {# mentions}}",
@@ -15924,6 +15807,13 @@
       "bulkTitle": "{count, plural, one {Start tracking the selected prompt with no answers yet} other {Start tracking the # selected prompts with no answers yet}}"
     },
     "usage": {
+      "slots": {
+        "title": "Tracking slots",
+        "add": "Add slots",
+        "usage": "{used} / {limit}",
+        "unlimited": "{used} · no limit",
+        "meter": "{platform} slots used"
+      },
       "panelLabel": "Prompt usage",
       "planAndUsage": "Plan & usage",
       "hide": "Hide",
@@ -16006,7 +15896,7 @@
       "enginesLegend": "Coloured: shared searches for this prompt in the window. Faded: tracked, but shared none.",
       "engineEmptyTitle": "No {engine} searches in the {range}",
       "engineEmptyBody": "{engine} usually shares the searches behind its answers. Try a longer date range.",
-      "sourceNote": "Perplexity is no longer tracked and Microsoft Copilot doesn't share its searches, so these come from ChatGPT only, which shares them on some days. There are fewer of them than before.",
+      "sourceNote": "Perplexity is no longer tracked and Bing AI Mode doesn't share its searches, so these come from ChatGPT only, which shares them on some days. There are fewer of them than before.",
       "emptyTitle": "No fan-out captured yet",
       "emptyBody": "ChatGPT's searches are sampled on some days, and the ChatGPT API shares them when it searches. Google AI Overviews, AI Mode and Gemini don't share them. Once those engines run for your prompts, the searches will appear here.",
       "coverageTooltip": "Of {total} tracked answers in this window, {withFanout} came with the searches the engine ran. ChatGPT's are sampled on some days, and the ChatGPT API shares them when it searches."
@@ -16306,6 +16196,155 @@
       "noRoomToResume": "Not enough room to resume",
       "bulkFailed": "{action, select, resume {Failed to resume the prompts.} other {Failed to pause the prompts.}}",
       "bulkPartial": "{action, select, resume {{failed} of {total} couldn't be resumed.} other {{failed} of {total} couldn't be paused.}}"
+    },
+    "positionsSheet": {
+      "tracked": "Tracked prompt",
+      "paused": "Paused",
+      "improvingTitle": "Open the action and its Outcome",
+      "improving": "Improving · {code}",
+      "window": "{preset, select, custom {Custom range} other {Last {preset}}}",
+      "lastRun": "Last run: {at}",
+      "runs": "{count, plural, one {# run} other {# runs}}",
+      "period": "Period",
+      "discardNote": "Changing the period discards your unsent Improve edits.",
+      "keepEditing": "Keep editing",
+      "discard": "Discard & change",
+      "aiAnswers": "AI answers",
+      "back": "Back to prompts",
+      "loading": "Loading positions",
+      "loadError": "Couldn't load positions: {message}",
+      "retry": "Retry",
+      "noLongerAvailable": "This prompt is no longer available.",
+      "loadFailed": "Failed to load positions.",
+      "sentimentUnavailable": "Sentiment unavailable",
+      "sentiment": {
+        "positive": "positive",
+        "neutral": "neutral",
+        "negative": "negative"
+      },
+      "notMentioned": "Not mentioned",
+      "mentioned": "Mentioned",
+      "positionUnavailable": "Position unavailable",
+      "notCited": "Not cited",
+      "cited": "Cited",
+      "locked": {
+        "growth": "Available on Growth",
+        "notEnabled": "Not enabled for this workspace",
+        "enterprise": "Available on Enterprise",
+        "line": "{note} · {growth, select, yes {Upgrade} other {Contact us}} to track {platform} results and positions."
+      },
+      "upgrade": "Upgrade",
+      "contactUs": "Contact us",
+      "improve": "Improve",
+      "stat": {
+        "platformsAnswered": "Platforms answered",
+        "inLatestRun": "in their latest run",
+        "mentionedOn": "Mentioned on",
+        "citedOn": "Cited on",
+        "platforms": "platforms",
+        "avgPosition": "Avg. position",
+        "whenMentioned": "when mentioned",
+        "whenMentionedSources": "when mentioned · {avg} in sources",
+        "runs": "Runs",
+        "trackedOf": "{tracked} of {count, plural, one {# day} other {# days}} tracked",
+        "mentioned": "Mentioned",
+        "cited": "Cited",
+        "ofDays": "{n} / {count, plural, one {# day} other {# days}}",
+        "notMentionedCount": "{count} not mentioned",
+        "notCitedCount": "{count} not cited"
+      },
+      "tabs": {
+        "platforms": "Platform results",
+        "history": "Daily history ({count})"
+      },
+      "runAt": "Run at {at}",
+      "noRuns": "No completed tracking runs in this period",
+      "noRunsDot": "No completed tracking runs in this period.",
+      "mention": "Mention",
+      "citation": "Citation",
+      "detectedEarlier": "Detected earlier in this period",
+      "untracked": "{count, plural, one {# day} other {# days}} without a completed run. Untracked days don't count as not mentioned or not cited.",
+      "blocksNote": "Each block is one day in the selected range, in your time zone. Hover a block for that day's positions; open a platform for every run.",
+      "legend": {
+        "Early": "Mentioned early",
+        "Mid": "Mid",
+        "Late": "Late",
+        "cited": "Cited only",
+        "none": "No result",
+        "untracked": "Not tracked"
+      },
+      "tone": {
+        "Early": "Early",
+        "Mid": "Mid",
+        "Late": "Late"
+      },
+      "tip": {
+        "share": " in {n} of {runs} runs",
+        "rankOf": "#{rank} of {total}"
+      },
+      "heatmapLabel": "{platform}: mentioned on {mentioned} and cited on {cited} of {count, plural, one {# tracked day} other {# tracked days}}",
+      "trio": {
+        "best": "Best",
+        "worst": "Worst",
+        "avg": "Avg.",
+        "none": "No mention position",
+        "title": "Position when mentioned"
+      },
+      "runsNote": "{runs} runs · mentioned in {mentioned} · cited in {cited}",
+      "noData": "No tracking data for this period",
+      "toggle": "{open, select, yes {Hide} other {Show}} daily {platform} results",
+      "runsOnDays": "{runs, plural, one {# run} other {# runs}} on {days, plural, one {# day} other {# days}}",
+      "sentimentLine": " · sentiment in mentioning answers: {positive} positive, {neutral} neutral, {negative} negative",
+      "sentimentUnavailableTail": ", {count} unavailable",
+      "moreDays": "Show {count} more days",
+      "platformsAnswered": "{count, plural, one {# platform} other {# platforms}} answered"
+    },
+    "bulkImport": {
+      "intro": "Put your prompts in <b>one column</b>, one prompt per row, going down. A first row titled <b>Prompt</b> is read as the header (optional). Imported prompts use the platforms selected under Single and the brand's location; set each one's topic and location afterwards with Edit in All Prompts.",
+      "drop": "Drop an .xlsx or .csv file, or click to browse",
+      "perRow": "One prompt per row · up to {max} rows",
+      "template": "Download template",
+      "chooseFile": "Choose an .xlsx or .csv file.",
+      "unreadable": "This file could not be read. Check that it is a valid .xlsx or .csv file.",
+      "counts": "<b>{valid} valid</b> · {duplicates, plural, one {# duplicate} other {# duplicates}} · {errors, plural, one {# error} other {# errors}}",
+      "inUse": "· {used} / {max} prompt locations in use",
+      "truncated": "Only the first {max} rows were read; {more} more were left out. Split larger files.",
+      "extraColumns": "Only the prompt column is read; the file's other columns were ignored.",
+      "noneImportable": "No prompts can be imported. Your {plan} plan tracks up to {max} prompt locations and {used} are already in use.",
+      "someImportable": "Only {valid} of {total} prompts will be imported. Your {plan} plan tracks up to {max} prompt locations and {used} are already in use. The remaining {count, plural, one {# prompt} other {# prompts}} (from row {row}) won't be imported.",
+      "toAddMore": "To add more prompts, {starter, select, yes {upgrade your plan} other {contact us}}.",
+      "head": {
+        "row": "Row",
+        "prompt": "Prompt",
+        "status": "Status"
+      },
+      "status": {
+        "valid": "Valid",
+        "duplicate": "Duplicate",
+        "error": "Error",
+        "over_limit": "Over plan limit"
+      },
+      "reason": {
+        "empty": "Empty prompt",
+        "tooLong": "Longer than {max} characters",
+        "duplicate": "Already tracked or repeated in the file"
+      },
+      "downloadNotImported": "Download not-imported prompts (.csv)",
+      "downloadErrors": "Download errors (.csv)",
+      "importButton": "Import {count, plural, one {# prompt} other {# prompts}}",
+      "importedSome": "{imported} imported · {notImported} not imported due to plan limit",
+      "importedAll": "{count, plural, one {# prompt imported} other {# prompts imported}}",
+      "analyzing": "Analyzing them now. Set topics and locations with Edit in All Prompts.",
+      "nextRun": "They will be picked up by the next tracking run.",
+      "failed": "Import failed. Please try again."
+    },
+    "workStatus": {
+      "todo": "To do",
+      "in_progress": "In progress",
+      "done": "Done",
+      "set": "Set status",
+      "setLabel": "Set work status",
+      "none": "No status"
     }
   },
   "volumeEstimate": {
@@ -18467,7 +18506,38 @@
     },
     "planAddOns": {
       "title": "Add more to your plan",
-      "description": "Extra tracking, extra brands and AI usage top-ups for your Growth plan. Everything you pick is charged once, to the card on file.",
+      "slots": {
+        "title": "Buy extra tracking credits",
+        "description": "{plan} includes {included} slots on each standard platform. Choose extra slots on any platform; you can lower any of them, down to 0.",
+        "descriptionNone": "Choose extra slots on any platform; you can lower any of them, down to 0.",
+        "discount": {
+          "reached": "<b>{percent}% off</b> your extra tracking: {off} off {list} a {interval, select, year {year} other {month}}.",
+          "list": "Extra tracking: {list} a {interval, select, year {year} other {month}}.",
+          "next": "Add {more} more a {interval, select, year {year} other {month}} for <b>{percent}% off</b> the part above {from}.",
+          "top": "You reach the highest step.",
+          "drops": "This change lowers your discount from {from}% to {to}%, so the price per 100 slots goes up.",
+          "steps": "Volume discount steps",
+          "stepsLead": "Each step takes its rate off the part above it:",
+          "step": "{percent}% off above {from}/{interval, select, year {yr} other {mo}}",
+          "yours": "· yours",
+          "nextTag": "· next"
+        },
+        "unit": "<b>1 slot</b> = 1 prompt tracked in 1 location on that platform, every day.",
+        "columns": {
+          "platform": "Platform",
+          "included": "In your plan",
+          "extra": "Extra slots",
+          "price": "Price per 100 slots a {interval, select, year {year} other {month}}",
+          "cost": "Your {interval, select, year {yearly} other {monthly}} cost"
+        },
+        "unlimited": "No limit",
+        "fewer": "100 fewer {platform} slots",
+        "more": "100 more {platform} slots",
+        "extraOn": "Extra slots on {platform}",
+        "was": "was {slots}",
+        "undo": "Undo",
+        "footer": "Prices follow what each platform costs to track: some answers take more work (for example Perplexity). Yearly: 2 months free."
+      },
       "tracking": {
         "title": "Extra tracking",
         "description": "More prompt locations, tracked on your plan's engines every day. One tier at a time; change or remove it any time.",
@@ -18475,8 +18545,7 @@
         "none": "None",
         "tier": "+{units} prompt locations",
         "price": "{price}/{interval, select, year {yr} other {mo}}",
-        "contactSales": "Contact sales",
-        "yearly": "Yearly prices: 2 months free."
+        "contactSales": "Contact sales"
       },
       "brands": {
         "title": "Extra brands",
@@ -18484,7 +18553,7 @@
         "count": "{count} extra",
         "fewer": "One brand fewer",
         "more": "One brand more",
-        "note": "You can't go below the brands you have: remove one in Brands first."
+        "limit": "Your plan includes {base} brands. New limit <b>{limit}</b>."
       },
       "topUp": {
         "title": "AI usage top-up",
@@ -18493,10 +18562,12 @@
         "label": "AI usage top-ups",
         "none": "None",
         "option": "+{multiplier}x",
-        "adds": "{multiplier}× this month’s AI usage · +{briefs} briefs · +{opportunities} opportunities"
+        "usage": "{multiplier}x AI usage",
+        "adds": "{multiplier}× this month’s AI usage · +{briefs} briefs · +{opportunities} opportunities",
+        "alsoAdds": "Also adds +{briefs} briefs and +{opportunities} opportunities this month.",
+        "once": "{price} once"
       },
       "summary": "{prompts} prompt locations · {brands} brands",
-      "nothing": "Pick what to change above.",
       "review": "Review and pay",
       "reviewing": "Checking the price…",
       "dialog": {
@@ -18507,20 +18578,25 @@
         "brands": "{count, plural, =0 {No extra brands} one {# extra brand} other {# extra brands}}",
         "topUp": "AI usage top-up +{multiplier}x, one payment",
         "dueToday": "Due today",
-        "dueTodayNote": "The rest of this period for extra tracking and brands, and a top-up in full.",
+        "dueTodayNote": "The rest of this period for slots, extra tracking and brands, and a top-up in full.",
+        "slots": "{platform} slots",
+        "slotsValue": "{slots} (+{extra} added)",
+        "volumeDiscount": "Volume discount ({percent}%)",
+        "discountValue": "−{off} a {interval, select, year {year} other {month}}",
         "total": "From the next renewal",
         "totalValue": "{price} a {interval, select, year {year} other {month}}",
-        "credit": "A lower tier or fewer brands leaves a credit for your next invoices.",
+        "credit": "Fewer slots, a lower tier or fewer brands leave a credit for your next invoices.",
         "pay": "Pay {price}",
         "confirm": "Confirm",
         "cancel": "Cancel",
-        "processing": "Processing…"
+        "processing": "Processing…",
+        "slotsWaiting": "{platform}: the newest {count} prompt locations will wait for a slot. Nothing is deleted; add slots again to track them."
       },
       "done": "Your add-ons are updated. A top-up counts as soon as the payment is confirmed.",
       "states": {
         "not_admin": "Only admins change add-ons. Ask an admin of your workspace.",
         "starter": "Add-ons come with the Growth plan. Upgrade to Growth to add tracking, brands and AI usage.",
-        "enterprise": "Your contract sets your limits. Contact your account manager for more.",
+        "enterprise": "Your contract sets your other limits. Contact your account manager for more.",
         "trial": "Add-ons can be bought once your plan has started.",
         "no_plan": "Add-ons can be bought while your plan is active.",
         "ending": "Your plan is set to end. Keep your plan to change its add-ons."
@@ -18538,7 +18614,23 @@
         "payment_failed": "The payment didn't go through.",
         "failed": "Couldn't change your add-ons. Try again."
       },
-      "readFailed": "Couldn't read your add-ons. Try again later."
+      "readFailed": "Couldn't read your add-ons. Try again later.",
+      "perInterval": "{price}/{interval, select, year {yr} other {mo}}",
+      "cart": {
+        "title": "Your add-ons",
+        "onePayment": "One payment",
+        "plan": "{plan} plan",
+        "slots": "{platform} extra tracking",
+        "slotsCount": "{slots} slots",
+        "remove": "Remove {item}",
+        "discount": "Volume discount {percent}% on extra tracking, in the prices above.",
+        "discountDrops": "Your volume discount drops from {from}% to {to}%, so the prices above go up.",
+        "brands": "{count, plural, one {# brand} other {# brands}} · {price} each",
+        "topUp": "{multiplier}x AI usage · until {date}",
+        "total": "{interval, select, year {Yearly} other {Monthly}} total from the next renewal <b>{price}</b>",
+        "undoAll": "Undo all changes",
+        "dueToday": "Due today: the added items for the rest of this period, shown on Review and pay."
+      }
     },
     "cancelsOn": "Subscription ends on {date}",
     "changePlan": "Change Plan",

@@ -1,6 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
 import { PLANS, type Plan } from '@/config/plans';
-import { fetchPromptUsageRow, toPromptUsageSummary, usagePlan } from './prompt-usage-summary';
+import {
+  fetchPromptUsageRow,
+  slotMeters,
+  toPromptUsageSummary,
+  usagePlan,
+} from './prompt-usage-summary';
 
 const withLimit = (plan: Plan, maxPrompts: number): Plan => ({
   ...plan,
@@ -92,5 +97,30 @@ describe('fetchPromptUsageRow', () => {
   it('throws when the RPC fails', async () => {
     const rpc = vi.fn(async () => ({ data: null, error: { message: 'boom' } }));
     await expect(fetchPromptUsageRow({ rpc } as never, 'b1')).rejects.toThrow('boom');
+  });
+});
+
+describe('slotMeters', () => {
+  it('lists each platform with slots or in use, in the config’s order', () => {
+    expect(
+      slotMeters(
+        { 'claude-web': 300, 'chatgpt-web': 250, 'gemini-web': 250, 'grok-web': 0 },
+        new Map([
+          ['chatgpt-web', 212],
+          ['perplexity-web', 4],
+        ]),
+      ),
+    ).toEqual([
+      { platform: 'chatgpt-web', used: 212, limit: 250 },
+      { platform: 'gemini-web', used: 0, limit: 250 },
+      { platform: 'perplexity-web', used: 4, limit: 0 },
+      { platform: 'claude-web', used: 0, limit: 300 },
+    ]);
+  });
+
+  it('reads no limit as null', () => {
+    expect(slotMeters({ 'chatgpt-web': -1 }, new Map())).toEqual([
+      { platform: 'chatgpt-web', used: 0, limit: null },
+    ]);
   });
 });

@@ -25,6 +25,12 @@ interface PlanContextValue {
    */
   allowedModelIds: string[] | null;
   /**
+   * The engines a prompt may be set to where the plan has tracking slots
+   * (00564): the platforms with slots, and ChatGPT Shopping. Null where the
+   * plan's own list (or every engine) applies.
+   */
+  promptPlatformIds: string[] | null;
+  /**
    * Whether the org's plan is active (or trialing). When it isn't, the
    * dashboard is read-only: every page opens, and an action opens the
    * upgrade dialog instead of running (useUpgradeGate). Always true
@@ -49,6 +55,7 @@ const PlanContext = createContext<PlanContextValue>({
   ownPlanId: 'self_hosted',
   isCloud: false,
   allowedModelIds: null,
+  promptPlatformIds: null,
   subscriptionActive: true,
   subscriptionStatus: null,
   planEndsAt: null,
@@ -59,6 +66,7 @@ const PlanContext = createContext<PlanContextValue>({
 export function PlanProvider({
   planId,
   allowedModelIds = null,
+  promptPlatformIds = null,
   subscriptionActive = true,
   subscriptionStatus = null,
   planEndsAt = null,
@@ -68,6 +76,7 @@ export function PlanProvider({
 }: {
   planId: PlanId;
   allowedModelIds?: string[] | null;
+  promptPlatformIds?: string[] | null;
   subscriptionActive?: boolean;
   subscriptionStatus?: string | null;
   planEndsAt?: string | null;
@@ -92,6 +101,8 @@ export function PlanProvider({
         ownPlanId: effectivePlan,
         isCloud,
         allowedModelIds: isCloud ? shownModels : null,
+        // The demo brand shows its own plan's engines.
+        promptPlatformIds: isCloud && shownPlan === effectivePlan ? promptPlatformIds : null,
         subscriptionActive: isCloud ? subscriptionActive : true,
         subscriptionStatus: isCloud ? subscriptionStatus : null,
         planEndsAt: isCloud ? planEndsAt : null,

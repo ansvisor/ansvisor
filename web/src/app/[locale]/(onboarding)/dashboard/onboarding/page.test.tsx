@@ -484,7 +484,7 @@ describe('the plan step', () => {
   const promo = { status: 200 };
   const answer = async (url: string) =>
     url === '/api/stripe/trial'
-      ? Response.json({ trialAvailable: trialAvailable.value, trialDays: 14 })
+      ? Response.json({ trialAvailable: trialAvailable.value, trialDays: 7 })
       : url === '/api/stripe/promo-code'
         ? Response.json(
             promo.status === 200
@@ -642,8 +642,8 @@ describe('the plan step', () => {
     const pressed = container.querySelector('[data-choice][aria-pressed="true"]');
     expect(pressed?.getAttribute('data-choice')).toBe('trial');
     expect(modeButtons('trial').map((b) => b.textContent)).toEqual([
-      'Start 14-day free trial',
-      'Start 14-day free trial',
+      'Start 7-day free trial',
+      'Start 7-day free trial',
     ]);
     expect(modeButtons('buy')).toEqual([]);
   });
@@ -652,10 +652,10 @@ describe('the plan step', () => {
     await render();
     await choose('month');
     expect(text()).toContain('Choose how to start');
-    expect(text()).not.toContain('Start Your 14-Day Free Trial');
+    expect(text()).not.toContain('Start Your 7-Day Free Trial');
     expect(text()).not.toContain('No charge today');
     // The first-month offer is on the cards, not by Monthly; the demo comes last.
-    expect(choices()).toEqual(['14-day trial', 'Monthly', 'YearlySave 20%', 'Demo · no card']);
+    expect(choices()).toEqual(['7-day trial', 'Monthly', 'YearlySave 20%', 'Demo · no card']);
     expect(text()).not.toContain('50% off the first month');
     // Monthly, with the first-month offer: its price large on the card.
     expect(modeButtons('buy').map((b) => b.textContent)).toEqual(['Buy now', 'Buy now']);
@@ -708,13 +708,13 @@ describe('the plan step', () => {
     await render();
     await choose('trial');
     expect(modeButtons('trial').map((b) => b.textContent)).toEqual([
-      'Start 14-day free trial',
-      'Start 14-day free trial',
+      'Start 7-day free trial',
+      'Start 7-day free trial',
     ]);
     expect(slots('due-amount')).toEqual(['$0', '$0']);
     expect(slots('start-terms')).toEqual([
-      'Free until Nov 11, then $49/monthLimited AI usage for 14 days',
-      'Free until Nov 11, then $249/monthLimited AI usage for 14 days',
+      'Free until Nov 4, then $49/monthLimited AI usage for 7 days',
+      'Free until Nov 4, then $249/monthLimited AI usage for 7 days',
     ]);
     // No offer with the trial: the plain price.
     expect(text()).not.toContain('Limited offer');
@@ -819,7 +819,7 @@ describe('the plan step', () => {
     vi.stubEnv('NEXT_PUBLIC_FIRST_MONTH_OFFER', 'off');
     await render();
     await choose('month');
-    expect(choices()).toEqual(['14-day trial', 'Monthly', 'YearlySave 20%', 'Demo · no card']);
+    expect(choices()).toEqual(['7-day trial', 'Monthly', 'YearlySave 20%', 'Demo · no card']);
     expect(modeButtons('buy').map((b) => b.textContent)).toEqual([
       'Choose Starter',
       'Choose Growth',
@@ -910,12 +910,12 @@ describe('the plan step', () => {
       expect(text()).toContain('How do you want to start?');
       // A new person may have the free trial: no organization needed to say so.
       expect(container.querySelector('[data-slot="start-intro"]')?.textContent).toBe(
-        'With the 14-day free trial, you add a card and nothing is charged until it ends. Cancel any time. Then set up your brand, and its tracking starts.',
+        'With the 7-day free trial, you add a card and nothing is charged until it ends. Cancel any time. Then set up your brand, and its tracking starts.',
       );
-      expect(choices()).toEqual(['14-day trial', 'Monthly', 'YearlySave 20%', 'Demo · no card']);
+      expect(choices()).toEqual(['7-day trial', 'Monthly', 'YearlySave 20%', 'Demo · no card']);
       expect(modeButtons('trial').map((b) => b.textContent)).toEqual([
-        'Start 14-day free trial',
-        'Start 14-day free trial',
+        'Start 7-day free trial',
+        'Start 7-day free trial',
       ]);
       expect(modeButtons('trial').every((b) => !b.disabled)).toBe(true);
       // Nothing before it, and no brand yet: no Back, no step dots, no brand line.
@@ -1216,7 +1216,7 @@ describe('setup after purchase', () => {
     vi.stubEnv('NEXT_PUBLIC_IS_CLOUD', 'true');
     vi.stubGlobal(
       'fetch',
-      vi.fn(async () => Response.json({ trialAvailable: false, trialDays: 14 })),
+      vi.fn(async () => Response.json({ trialAvailable: false, trialDays: 7 })),
     );
     // A trial started, and no brand of the organization's own yet.
     db.onboarded = true;
@@ -1783,7 +1783,7 @@ describe('setup after purchase', () => {
       db.org = null;
       vi.stubGlobal(
         'fetch',
-        vi.fn(async () => Response.json({ trialAvailable: true, trialDays: 14 })),
+        vi.fn(async () => Response.json({ trialAvailable: true, trialDays: 7 })),
       );
       await render();
       await act(async () => button('Continue with 1 competitor')!.click());

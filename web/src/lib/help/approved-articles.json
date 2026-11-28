@@ -1169,6 +1169,12 @@
         "ai traffic",
         "sign-ups",
         "/traffic",
+        "crawler & technical fixer",
+        "technical fixer",
+        "ai crawlers",
+        "robots.txt",
+        "gptbot",
+        "/tech-fix",
         "shopping feed advisor",
         "feed gaps",
         "product feed",
@@ -1227,6 +1233,9 @@
         "black friday",
         "ai traffic report",
         "ai visitors who sign up",
+        "can chatgpt crawl my site",
+        "ai bots blocked",
+        "firewall blocks ai bots",
         "what is my feed missing",
         "missing gtin",
         "feed fixes"
@@ -1289,6 +1298,10 @@
         {
           "heading": "Shopping Feed Advisor",
           "text": "**Shopping Feed Advisor** runs every Monday at 09:00 on **Auto, ask before changes**. It is made for e-commerce brands and needs a product catalog: connect one in **Settings › Integrations › Catalog**. Each run checks every live product in your catalog for what AI shopping answers need: a GTIN, a photo, a price, stock, a full description that says early on what the product is, a category and a brand. It lists the gaps by impact, the readiness points your catalog loses on each, and gives example products and a fix for each gap. It never changes your store or feed. Sending a fix to the Action Center is a card you approve. In Chat, the same skill is **/feed-advisor**."
+        },
+        {
+          "heading": "Crawler & Technical Fixer",
+          "text": "**Crawler & Technical Fixer** runs when you click **Run now**, on **Ask me first**. It is made for AEO and developer roles. It reads each page's latest **Site Audit** and lists what keeps AI crawlers out: AI bots your robots.txt blocks, bots your CDN or firewall turns away, main text that only appears once JavaScript runs, and missing HTTPS or canonical tags. For each issue it writes the fix ready for your developer, such as the robots.txt lines to add. It never changes your site and doesn't open pull requests. Sending a fix to the Action Center is a card you approve. A page with no audit isn't checked; with no audit at all, it offers to audit your home page, which uses one of the month's audits. In Chat, the same skill is **/tech-fix**."
         },
         {
           "heading": "Agency Client Reporter",
@@ -3188,7 +3201,7 @@
         },
         {
           "heading": "Scores and Platform Breakdown",
-          "text": "At the top of the comparison, **Your Visibility score** and **Their Visibility score** show each side's score out of 100 over the date range, the same numbers as the two cards, and **Difference** shows the gap between them in points.\n\n**Platform Breakdown** shows your score and the competitor's on each AI platform, with the difference. A competitor can lead on one platform and trail on another, so aim your work at the platforms where it's ahead. It lists the platforms your plan tracks, with **No answers in this period** for one without answers yet. Microsoft Copilot is asked through Bing AI Mode. Platforms outside your plan, such as Claude on Growth, aren't shown; a line under the card names them."
+          "text": "At the top of the comparison, **Your Visibility score** and **Their Visibility score** show each side's score out of 100 over the date range, the same numbers as the two cards, and **Difference** shows the gap between them in points.\n\n**Platform Breakdown** shows your score and the competitor's on each AI platform, with the difference. A competitor can lead on one platform and trail on another, so aim your work at the platforms where it's ahead. It lists the platforms your plan tracks, with **No answers in this period** for one without answers yet. Bing AI Mode is listed under its own name. Platforms outside your plan, such as Claude on Growth, aren't shown; a line under the card names them."
         },
         {
           "heading": "Gaps and Strengths",
@@ -4181,7 +4194,7 @@
         },
         {
           "heading": "On the cloud: choose how to start",
-          "text": "The first screen, **How do you want to start?**, opens on the free trial. You can pick **Monthly**, **Yearly** or **Demo** instead.\n\n- **Start 14-day free trial** opens checkout. Nothing is charged until the trial ends, and you can cancel any time. The trial comes with an organization's first subscription only.\n- **Buy now**, or a plan without a trial, starts the plan the same day.\n\nAfter checkout, the five setup steps open; your brand's first run starts when you finish.\n\nNot ready to add a card? Pick **Demo**, then **Explore the sample brand**, or select **Explore a sample brand first** under the plans. It's made up, with sample data: every page opens, but nothing runs or changes. When you pick a plan there, you set up your own brand. If it doesn't open after it's prepared, **Open the demo** loads it again.\n\nA self-hosted install has no such screen."
+          "text": "The first screen, **How do you want to start?**, opens on the free trial. You can pick **Monthly**, **Yearly** or **Demo** instead.\n\n- **Start 7-day free trial** opens checkout. Nothing is charged until the trial ends, and you can cancel any time. The trial comes with an organization's first subscription only.\n- **Buy now**, or a plan without a trial, starts the plan the same day.\n\nAfter checkout, the five setup steps open; your brand's first run starts when you finish.\n\nNot ready to add a card? Pick **Demo**, then **Explore the sample brand**, or select **Explore a sample brand first** under the plans. It's made up, with sample data: every page opens, but nothing runs or changes. When you pick a plan there, you set up your own brand. If it doesn't open after it's prepared, **Open the demo** loads it again.\n\nA self-hosted install has no such screen."
         },
         {
           "heading": "Step 1: Brand basics",
@@ -5021,7 +5034,7 @@
         },
         {
           "heading": "Which engines share their searches",
-          "text": "ChatGPT's searches are sampled on some days, and the ChatGPT API shares them when it searches. Google AI Overviews, AI Mode, Gemini, Microsoft Copilot and the Claude and Gemini API models don't share them: their chips say **not shared**, and a note under the chips names them. Copilot shared them until November 2026; Ansvisor now reads its answers from Bing, which doesn't. Perplexity shared them too, but Ansvisor no longer tracks it. Searches from their past answers still show for the dates you pick.\n\nNew searches now come from ChatGPT only, so the tab lists fewer of them than before. A note at the top of the tab says so."
+          "text": "ChatGPT's searches are sampled on some days, and the ChatGPT API shares them when it searches. Google AI Overviews, AI Mode, Gemini, Bing AI Mode and the Claude and Gemini API models don't share them: their chips say **not shared**, and a note under the chips names them. Microsoft Copilot shared them until November 2026; Ansvisor now tracks Bing AI Mode in its place, which doesn't. Perplexity shared them too, but Ansvisor no longer tracks it. Searches from their past answers still show for the dates you pick.\n\nNew searches now come from ChatGPT only, so the tab lists fewer of them than before. A note at the top of the tab says so."
         },
         {
           "heading": "Engines",
@@ -5137,7 +5150,11 @@
         "location filter",
         "analyze volume",
         "track now",
-        "no answers yet"
+        "no answers yet",
+        "tracking slots",
+        "add a platform",
+        "bulk platforms",
+        "waiting platform"
       ],
       "synonyms": [
         "prompt list",
@@ -5146,7 +5163,7 @@
         "tracked queries"
       ],
       "plan": "all",
-      "updated": "2026-11-20",
+      "updated": "2026-11-27",
       "sections": [
         {
           "heading": null,
@@ -5187,6 +5204,10 @@
         {
           "heading": "Organize with tags",
           "text": "Tags label prompts with your own words, such as a campaign or product line. A prompt carries up to 10 tags, each up to 50 characters. Admins and managers tag one from **Edit** on its **…** menu, under **Tags**: type and press Enter. Tags show beside the prompt's text in the table.\n\nTo tag many at once, tick their rows and open **Tags** in the bar that appears: **Add tags** puts them on every selected prompt, leaving one that would go over 10 alone, and **Remove tags** takes the picked tags off. The dialog says how many prompts will change before you save.\n\nThe **Tags** filter beside the search box narrows the table to one or more tags. With several picked, **Match all** keeps prompts carrying every one; **Match any** keeps those carrying at least one. It combines with search and the other filters."
+        },
+        {
+          "heading": "Tracking slots per platform",
+          "text": "On Growth and Enterprise, **Show usage** also lists **Tracking slots**: each platform's slots in use against the slots you have, amber near full and red when full. A slot is one prompt in one location on one platform. **Add slots** opens **Settings › Billing**.\n\nTo track prompts on another platform, tick their rows and open **Platforms** in the bar: **Add platforms** offers the platforms you have slots on, each with its free slots, and says if one has too few for the selection. **Remove platforms** takes a platform off, freeing its slots; a prompt it would leave with nothing to run is left alone. When a platform runs out of slots, the newest prompts wait on it; adding it again here runs it again."
         },
         {
           "heading": "Open a prompt or act on it",
@@ -5493,10 +5514,13 @@
     },
     {
       "id": "settings/add-ons",
-      "title": "Add-ons: extra tracking, brands, AI top-ups and packs",
+      "title": "Add-ons: tracking slots, brands, AI top-ups and packs",
       "route": "/dashboard/settings/billing",
       "keywords": [
         "add-ons",
+        "tracking slots",
+        "slots",
+        "volume discount",
         "extra tracking",
         "extra brands",
         "AI top-up",
@@ -5510,6 +5534,10 @@
         "storage full"
       ],
       "synonyms": [
+        "buy slots",
+        "track on more platforms",
+        "add Claude",
+        "add Perplexity",
         "add more prompts",
         "track more prompts",
         "add a brand",
@@ -5521,19 +5549,27 @@
         "credit pack"
       ],
       "plan": "starter",
-      "updated": "2026-11-21",
+      "updated": "2026-11-27",
       "sections": [
         {
           "heading": null,
-          "text": "**Settings › Billing** sells more for your plan. On Growth, **Add more to your plan** adds extra tracking, extra brands and AI usage top-ups, picked together and paid once. **Add-ons** shows AI credit you have left and the packs you bought. Everything is paid with Stripe, added only after the payment goes through, and shown on your invoice."
+          "text": "**Settings › Billing** sells more for your plan. On Growth, **Add more to your plan** adds tracking slots, extra brands and AI usage top-ups, picked together and paid once. On Enterprise it adds tracking slots. **Add-ons** shows AI credit you have left and the packs you bought. Everything is paid with Stripe, added only after the payment goes through, and shown on your invoice."
+        },
+        {
+          "heading": "Tracking slots",
+          "text": "A slot tracks one prompt in one location on one platform, every day. Your plan includes slots on its own platforms (Growth: 250 on each standard platform). Under **Tracking slots**, each platform shows how many slots are used, your total and what is included. Click **+** or **−** to add or remove 100 slots on it.\n\nPrices per 100 slots a month: $15 on the standard platforms, $45 on ChatGPT Ads and Meta AI, $60 on Perplexity, Claude, Grok and Microsoft Copilot. On a yearly plan, prices are yearly, with 2 months free. Add-ons follow your plan's billing period.\n\nYou can't go below the slots a platform uses: remove it from some prompts first."
+        },
+        {
+          "heading": "Volume discount",
+          "text": "The more slots you add, the less each costs: 5% off the part of your monthly slots price above $500, 10% above $1,000, 15% above $2,000 and 20% above $4,000. The card shows your discount and what to add for the next step. It applies to slots only; a plan discount code stays on your plan."
         },
         {
           "heading": "Add more to your plan (Growth)",
-          "text": "- **Extra tracking:** more prompt locations, tracked on your plan's engines every day. Pick one tier, or **None** to remove it. The largest tiers say **Contact sales**.\n- **Extra brands:** each with its own topics, competitors and white-label reports, at a monthly price per brand.\n- **AI usage top-up:** one payment that adds AI usage, briefs and opportunities until your plan renews. It doesn't renew, and you can buy another any time.\n\nOn a yearly plan, tracking and brands show yearly prices, with 2 months free."
+          "text": "- **Extra tracking:** no longer sold; tracking slots replace it. A workspace that has a tier keeps it, and can remove it.\n- **Extra brands:** each with its own topics, competitors and white-label reports, at a monthly price per brand.\n- **AI usage top-up:** one payment that adds AI usage, briefs and opportunities until your plan renews. It doesn't renew, and you can buy another any time.\n\nOn a yearly plan, slots and brands show yearly prices, with 2 months free."
         },
         {
           "heading": "Review and pay",
-          "text": "Pick what you want, then click **Review and pay**. The window shows your new limits, what is **Due today** (the rest of this period for tracking and brands, and a top-up in full) and your total from the next renewal. **Pay** charges the card on file once. A lower tier or fewer brands leaves a credit for your next invoices. You can't go below what you use: pause prompts or remove brands first.\n\nOnly admins of an active Growth plan buy. In a free trial, start your plan first; if your plan is set to end, keep it first."
+          "text": "Pick what you want, then click **Review and pay**. The window shows your new slots and limits, the volume discount, what is **Due today** (the rest of this period for slots and brands, and a top-up in full) and your total from the next renewal. **Pay** charges the card on file once. Fewer slots or brands leave a credit for your next invoices. You can't go below what you use: pause prompts or remove brands first.\n\nOnly admins of an active Growth or Enterprise plan buy. In a free trial, start your plan first; if your plan is set to end, keep it first."
         },
         {
           "heading": "AI credit packs (no longer sold)",

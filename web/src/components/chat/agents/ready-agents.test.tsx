@@ -163,8 +163,8 @@ describe('Ready to use', () => {
     expect(shown[8].getAttribute('data-preset')).toBe('fanout-gap-filler');
     expect(shown[9].getAttribute('data-preset')).toBe('prompt-portfolio');
     expect(shown[10].getAttribute('data-preset')).toBe('onboarding-help');
-    expect(shown.slice(8, 28).every((c) => c.getAttribute('data-status') === 'ready')).toBe(true);
-    expect(shown.slice(28).every((c) => c.getAttribute('data-status') === 'soon')).toBe(true);
+    expect(shown.slice(8, 29).every((c) => c.getAttribute('data-status') === 'ready')).toBe(true);
+    expect(shown.slice(29).every((c) => c.getAttribute('data-status') === 'soon')).toBe(true);
     // Not the AEO Operator: the browser reads CHAT_OPERATOR off, and the page hands it in when on.
     expect(shown).toHaveLength(38);
     expect(ids()).not.toContain('aeo-operator');
@@ -240,7 +240,7 @@ describe('Ready to use', () => {
     expect(card('shopping-readiness').querySelector('[data-cell="trigger"]')?.textContent).toBe(
       'TriggerWhen the catalog syncs',
     );
-    expect(action('agents.usePreset')).toHaveLength(28);
+    expect(action('agents.usePreset')).toHaveLength(29);
 
     // Fan-out Gap Filler: its skills on Mondays, in its mode.
     const added = card('fanout-gap-filler');
@@ -293,12 +293,12 @@ describe('Ready to use', () => {
 
   it('says what a Soon card waits for, and opens nothing from it', async () => {
     await render();
-    const fixer = card('technical-fixer');
-    expect(fixer.querySelector('[data-slot="preset-soon"]')?.textContent).toBe(
-      'SoonNeeds fixes sent as pull requests',
+    const soon = card('ticket-loop');
+    expect(soon.querySelector('[data-slot="preset-soon"]')?.textContent).toBe(
+      'SoonNeeds Jira or Linear',
     );
-    expect(fixer.querySelector('a')).toBeNull();
-    expect(fixer.querySelector('button')).toBeNull();
+    expect(soon.querySelector('a')).toBeNull();
+    expect(soon.querySelector('button')).toBeNull();
     // The AEO Operator isn't a Soon card any more: it is ready, and shown only while it is on.
     expect(container.querySelector('[data-preset="aeo-operator"]')).toBeNull();
     expect(container.textContent).not.toContain('Needs sub-agents');

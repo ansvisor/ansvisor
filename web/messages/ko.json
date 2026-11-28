@@ -277,6 +277,7 @@
       "label": "아직 브랜드가 추적되지 않고 있습니다"
     },
     "actions": {
+      "changePlatforms": "플랫폼을 변경하려면 플랜이 필요합니다",
       "addPrompts": "Prompt를 추가하려면 요금제가 필요합니다",
       "removeLocations": "위치를 제거하려면 요금제가 필요합니다",
       "editPrompts": "Prompt를 수정하려면 요금제가 필요합니다",
@@ -4514,6 +4515,10 @@
       "name": "이번 달 남은 사이트 감사 횟수 확인",
       "step": "사이트 감사 확인"
     },
+    "crawlerAccess": {
+      "name": "AI 크롤러 문제 읽기",
+      "step": "사이트 감사 · 크롤러 읽기"
+    },
     "goToPage": {
       "name": "페이지로 이동",
       "step": "페이지를 열었습니다"
@@ -8019,6 +8024,7 @@
       "traffic": "AI 트래픽 및 가입",
       "ai-revenue": "AI 유입 고객 및 수익",
       "feed-advisor": "쇼핑 피드 누락 항목",
+      "tech-fix": "크롤러 및 기술 수정",
       "earn-or-pay": "수익 또는 지출",
       "ad-drafts": "광고 초안",
       "paid-overlap": "유료 중복",
@@ -15759,154 +15765,30 @@
     }
   },
   "prompts": {
-    "positionsSheet": {
-      "tracked": "추적 중인 Prompt",
-      "paused": "일시중지됨",
-      "improvingTitle": "액션과 결과 열기",
-      "improving": "개선 중 · {code}",
-      "window": "{preset, select, custom {사용자 지정 기간} other {최근 {preset}}}",
-      "lastRun": "마지막 실행: {at}",
-      "runs": "{count, plural, other {#회 실행}}",
-      "period": "기간",
-      "discardNote": "기간을 변경하면 전송하지 않은 개선 편집 내용이 삭제됩니다.",
-      "keepEditing": "계속 편집",
-      "discard": "삭제하고 변경",
-      "aiAnswers": "AI 답변",
-      "back": "Prompts로 돌아가기",
-      "loading": "순위를 불러오는 중",
-      "loadError": "순위를 불러오지 못했습니다: {message}",
-      "retry": "다시 시도",
-      "noLongerAvailable": "이 Prompt는 더 이상 사용할 수 없습니다.",
-      "loadFailed": "순위를 불러오지 못했습니다.",
-      "sentimentUnavailable": "감성 정보를 사용할 수 없음",
-      "sentiment": {
-        "positive": "긍정",
-        "neutral": "중립",
-        "negative": "부정"
-      },
-      "notMentioned": "언급되지 않음",
-      "mentioned": "언급됨",
-      "positionUnavailable": "순위를 사용할 수 없음",
-      "notCited": "인용되지 않음",
-      "cited": "인용됨",
-      "locked": {
-        "growth": "Growth 요금제에서 사용 가능",
-        "notEnabled": "이 워크스페이스에서는 사용할 수 없음",
-        "enterprise": "Enterprise 요금제에서 사용 가능",
-        "line": "{note} · {platform} 결과와 순위를 추적하려면 {growth, select, yes {업그레이드하세요} other {문의해 주세요}}."
-      },
-      "upgrade": "업그레이드",
-      "contactUs": "문의하기",
-      "improve": "개선",
-      "stat": {
-        "platformsAnswered": "응답한 플랫폼",
-        "inLatestRun": "최근 실행 기준",
-        "mentionedOn": "언급된 플랫폼",
-        "citedOn": "인용된 플랫폼",
-        "platforms": "개 플랫폼",
-        "avgPosition": "평균 순위",
-        "whenMentioned": "언급 시",
-        "whenMentionedSources": "언급 시 · 출처에서 {avg}",
-        "runs": "실행",
-        "trackedOf": "{count, plural, other {#일}} 중 {tracked}일 추적됨",
-        "mentioned": "언급됨",
-        "cited": "인용됨",
-        "ofDays": "{n} / {count, plural, other {#일}}",
-        "notMentionedCount": "{count}회 언급되지 않음",
-        "notCitedCount": "{count}회 인용되지 않음"
-      },
-      "tabs": {
-        "platforms": "플랫폼별 결과",
-        "history": "일별 기록 ({count})"
-      },
-      "runAt": "실행 시각 {at}",
-      "noRuns": "이 기간에 완료된 추적 실행이 없습니다",
-      "noRunsDot": "이 기간에 완료된 추적 실행이 없습니다.",
-      "mention": "언급",
-      "citation": "인용",
-      "detectedEarlier": "이 기간 중 먼저 감지됨",
-      "untracked": "{count, plural, other {#일}} 동안 완료된 실행이 없습니다. 추적되지 않은 날은 언급되지 않음 또는 인용되지 않음으로 집계되지 않습니다.",
-      "blocksNote": "각 블록은 선택한 기간의 하루이며 사용자의 시간대를 기준으로 합니다. 블록에 마우스를 올리면 해당 날짜의 순위를, 플랫폼을 열면 모든 실행을 볼 수 있습니다.",
-      "legend": {
-        "Early": "초반 언급",
-        "Mid": "중반",
-        "Late": "후반",
-        "cited": "인용만",
-        "none": "결과 없음",
-        "untracked": "추적 안 됨"
-      },
-      "tone": {
-        "Early": "초반",
-        "Mid": "중반",
-        "Late": "후반"
-      },
-      "tip": {
-        "share": " {runs}회 실행 중 {n}회",
-        "rankOf": "{total}개 중 {rank}위"
-      },
-      "heatmapLabel": "{platform}: 추적된 {count, plural, other {#일}} 중 {mentioned}일 언급, {cited}일 인용",
-      "trio": {
-        "best": "최고",
-        "worst": "최저",
-        "avg": "평균",
-        "none": "언급 순위 없음",
-        "title": "언급 시 순위"
-      },
-      "runsNote": "{runs}회 실행 · {mentioned}회 언급 · {cited}회 인용",
-      "noData": "이 기간의 추적 데이터가 없습니다",
-      "toggle": "{platform} 일별 결과 {open, select, yes {숨기기} other {표시}}",
-      "runsOnDays": "{days, plural, other {#일}} 동안 {runs, plural, other {#회}} 실행",
-      "sentimentLine": " · 언급된 답변의 감성: 긍정 {positive}건, 중립 {neutral}건, 부정 {negative}건",
-      "sentimentUnavailableTail": ", {count}건 확인 불가",
-      "moreDays": "{count}일 더 보기",
-      "platformsAnswered": "{count, plural, other {#개 플랫폼}}이 답변함"
-    },
-    "bulkImport": {
-      "intro": "Prompt를 <b>한 열</b>에 한 행당 하나씩 아래로 입력하세요. 첫 행의 제목이 <b>Prompt</b>이면 헤더로 인식됩니다(선택 사항). 가져온 Prompts는 단일에서 선택한 플랫폼과 브랜드의 위치를 사용하며, 각 Prompt의 주제와 위치는 나중에 모든 Prompts의 편집에서 설정할 수 있습니다.",
-      "drop": ".xlsx 또는 .csv 파일을 끌어다 놓거나 클릭하여 찾아보세요",
-      "perRow": "행당 Prompt 하나 · 최대 {max}행",
-      "template": "템플릿 다운로드",
-      "chooseFile": ".xlsx 또는 .csv 파일을 선택하세요.",
-      "unreadable": "파일을 읽을 수 없습니다. 올바른 .xlsx 또는 .csv 파일인지 확인하세요.",
-      "counts": "<b>유효 {valid}건</b> · 중복 {duplicates, plural, other {#건}} · 오류 {errors, plural, other {#건}}",
-      "inUse": "· Prompt 위치 {used} / {max} 사용 중",
-      "truncated": "처음 {max}행만 읽었으며 {more}행은 제외되었습니다. 파일을 나누어 주세요.",
-      "extraColumns": "Prompt 열만 읽으며 파일의 다른 열은 무시되었습니다.",
-      "noneImportable": "가져올 수 있는 Prompts가 없습니다. {plan} 플랜은 최대 {max}개의 Prompt 위치를 추적하며 {used}개가 이미 사용 중입니다.",
-      "someImportable": "{total}개 중 {valid}개의 Prompts만 가져옵니다. {plan} 플랜은 최대 {max}개의 Prompt 위치를 추적하며 {used}개가 이미 사용 중입니다. 나머지 {count, plural, other {#개 Prompt}}({row}행부터)는 가져오지 않습니다.",
-      "toAddMore": "Prompts를 더 추가하려면 {starter, select, yes {플랜을 업그레이드하세요} other {문의해 주세요}}.",
-      "head": {
-        "row": "행",
-        "prompt": "Prompt",
-        "status": "상태"
-      },
-      "status": {
-        "valid": "유효",
-        "duplicate": "중복",
-        "error": "오류",
-        "over_limit": "플랜 한도 초과"
-      },
-      "reason": {
-        "empty": "빈 Prompt",
-        "tooLong": "{max}자 초과",
-        "duplicate": "이미 추적 중이거나 파일 내 중복"
-      },
-      "downloadNotImported": "가져오지 않은 Prompts 다운로드 (.csv)",
-      "downloadErrors": "오류 다운로드 (.csv)",
-      "importButton": "{count, plural, other {Prompt #개}} 가져오기",
-      "importedSome": "{imported}개 가져옴 · 플랜 한도로 {notImported}개 가져오지 않음",
-      "importedAll": "{count, plural, other {Prompt #개를 가져왔습니다}}",
-      "analyzing": "지금 분석하고 있습니다. 주제와 위치는 모든 Prompts의 편집에서 설정하세요.",
-      "nextRun": "다음 추적 실행 때 반영됩니다.",
-      "failed": "가져오기에 실패했습니다. 다시 시도해 주세요."
-    },
-    "workStatus": {
-      "todo": "할 일",
-      "in_progress": "진행 중",
-      "done": "완료",
-      "set": "상태 설정",
-      "setLabel": "작업 상태 설정",
-      "none": "상태 없음"
+    "bulkPlatforms": {
+      "bulkButton": "플랫폼",
+      "bulkAdd": "플랫폼 추가",
+      "bulkRemove": "플랫폼 제거",
+      "modes": "추가 또는 제거",
+      "modeAdd": "추가",
+      "modeRemove": "제거",
+      "platforms": "플랫폼",
+      "title": "플랫폼 추가",
+      "lead": "선택한 Prompt {count}개를 더 많은 플랫폼에서 추적합니다. Prompt 위치마다 각 플랫폼에서 추적 slot을 하나씩 사용합니다. Prompt가 대기 중인 플랫폼은 다시 실행됩니다.",
+      "removeTitle": "플랫폼 제거",
+      "removeLead": "선택한 Prompt {count}개의 일부 플랫폼 추적을 중지합니다. 해당 slot은 다시 사용할 수 있게 됩니다.",
+      "none": "추가할 플랫폼이 없습니다. 더 많은 플랫폼에서 추적하려면 설정 › 결제에서 추적 slot을 추가하세요.",
+      "removeNone": "선택한 Prompt가 실행 중인 플랫폼 중 제거할 수 있는 플랫폼이 없습니다.",
+      "free": "{count}개 사용 가능",
+      "previewAdd": "{count, plural, other {Prompt #개가 변경됩니다}} · {unchanged}개는 이미 적용됨",
+      "previewRemove": "{count, plural, other {Prompt #개가 변경됩니다}} · {unchanged}개는 해당 플랫폼이 없음 · {blocked}개는 남는 플랫폼이 없게 됨",
+      "short": "{platform}에 slot {needed}개가 필요하지만 사용 가능한 slot은 {free}개입니다.",
+      "addSlots": "slot 추가",
+      "save": "{count, plural, other {Prompt #개}}에 추가",
+      "removeSave": "{count, plural, other {Prompt #개}}에서 제거",
+      "done": "{count, plural, other {Prompt #개에 플랫폼을 추가했습니다}}",
+      "removed": "{count, plural, other {Prompt #개에서 플랫폼을 제거했습니다}}",
+      "saveFailed": "플랫폼을 변경하지 못했습니다. 다시 시도해 주세요."
     },
     "waiting": {
       "resultTitle": "{added}개 추가됨, {waiting}개 대기 중",
@@ -16001,6 +15883,10 @@
     "loadError": "Prompt를 불러올 수 없습니다.",
     "visibilityDegraded": "가시성 수치를 일시적으로 사용할 수 없어 가시성 수치 없이 Prompt를 표시합니다.",
     "positions": {
+      "slots": {
+        "note": "아직 요금제에 포함되어 있지 않습니다 · {platform} 결과와 순위를 추적하려면 추적 slots를 추가하세요.",
+        "add": "slots 추가"
+      },
       "answers": "답변 {count, plural, other {#개}}",
       "answersInPeriod": "해당 기간 내 답변 {count, plural, other {#개}}",
       "mentionedIn": "답변 {answers, plural, other {#개}} 중 {mentioned}개에 포함 · 언급 {mentions, plural, other {#회}}",
@@ -16291,6 +16177,13 @@
       "bulkTitle": "{count, plural, other {아직 답변이 없는 선택된 Prompt #개 추적 시작}}"
     },
     "usage": {
+      "slots": {
+        "title": "추적 slot",
+        "add": "slot 추가",
+        "usage": "{used} / {limit}",
+        "unlimited": "{used} · 제한 없음",
+        "meter": "{platform} slot 사용량"
+      },
       "panelLabel": "Prompt 사용량",
       "planAndUsage": "요금제 및 사용량",
       "hide": "숨기기",
@@ -16373,7 +16266,7 @@
       "enginesLegend": "색상 표시: 이 기간 동안 해당 Prompt에 대해 검색어를 공유함. 흐리게 표시: 추적되었으나 검색어를 공유하지 않음.",
       "engineEmptyTitle": "{range} 동안 {engine} 검색어 없음",
       "engineEmptyBody": "{engine}은(는) 일반적으로 답변의 기반이 된 검색어를 공유합니다. 더 긴 기간을 선택해 보세요.",
-      "sourceNote": "Perplexity는 더 이상 추적되지 않으며 Copilot은 검색어를 공유하지 않으므로, 이 데이터는 검색어를 간헐적으로 공유하는 ChatGPT에서만 가져옵니다. 이전보다 검색어 수가 적습니다.",
+      "sourceNote": "Perplexity는 더 이상 추적되지 않으며 Bing AI Mode는 검색어를 공유하지 않으므로, 이 검색어는 ChatGPT에서만 가져옵니다. ChatGPT도 일부 날짜에만 공유합니다. 이전보다 수가 적습니다.",
       "emptyTitle": "아직 수집된 fan-out이 없습니다",
       "emptyBody": "ChatGPT의 검색어는 일부 날짜에만 샘플링되며, ChatGPT API는 검색을 수행할 때 이를 공유합니다. Google AI Overviews, AI Mode 및 Gemini는 이를 공유하지 않습니다. 해당 엔진이 내 Prompt에 대해 실행되면 검색어가 여기에 표시됩니다.",
       "coverageTooltip": "이 기간 동안 추적된 {total}개의 답변 중 {withFanout}개에 엔진이 실행한 검색어가 포함되어 있습니다. ChatGPT의 검색어는 일부 날짜에만 샘플링되며, ChatGPT API는 검색을 수행할 때 이를 공유합니다."
@@ -16673,6 +16566,155 @@
       "noRoomToResume": "재개할 여유 공간이 부족합니다",
       "bulkFailed": "{action, select, resume {Prompts를 재개하지 못했습니다.} other {Prompts를 일시중지하지 못했습니다.}}",
       "bulkPartial": "{action, select, resume {{total}개 중 {failed}개를 재개할 수 없습니다.} other {{total}개 중 {failed}개를 일시중지할 수 없습니다.}}"
+    },
+    "positionsSheet": {
+      "tracked": "추적 중인 Prompt",
+      "paused": "일시중지됨",
+      "improvingTitle": "액션과 결과 열기",
+      "improving": "개선 중 · {code}",
+      "window": "{preset, select, custom {사용자 지정 기간} other {최근 {preset}}}",
+      "lastRun": "마지막 실행: {at}",
+      "runs": "{count, plural, other {#회 실행}}",
+      "period": "기간",
+      "discardNote": "기간을 변경하면 전송하지 않은 개선 편집 내용이 삭제됩니다.",
+      "keepEditing": "계속 편집",
+      "discard": "삭제하고 변경",
+      "aiAnswers": "AI 답변",
+      "back": "Prompts로 돌아가기",
+      "loading": "순위를 불러오는 중",
+      "loadError": "순위를 불러오지 못했습니다: {message}",
+      "retry": "다시 시도",
+      "noLongerAvailable": "이 Prompt는 더 이상 사용할 수 없습니다.",
+      "loadFailed": "순위를 불러오지 못했습니다.",
+      "sentimentUnavailable": "감성 정보를 사용할 수 없음",
+      "sentiment": {
+        "positive": "긍정",
+        "neutral": "중립",
+        "negative": "부정"
+      },
+      "notMentioned": "언급되지 않음",
+      "mentioned": "언급됨",
+      "positionUnavailable": "순위를 사용할 수 없음",
+      "notCited": "인용되지 않음",
+      "cited": "인용됨",
+      "locked": {
+        "growth": "Growth 요금제에서 사용 가능",
+        "notEnabled": "이 워크스페이스에서는 사용할 수 없음",
+        "enterprise": "Enterprise 요금제에서 사용 가능",
+        "line": "{note} · {platform} 결과와 순위를 추적하려면 {growth, select, yes {업그레이드하세요} other {문의해 주세요}}."
+      },
+      "upgrade": "업그레이드",
+      "contactUs": "문의하기",
+      "improve": "개선",
+      "stat": {
+        "platformsAnswered": "응답한 플랫폼",
+        "inLatestRun": "최근 실행 기준",
+        "mentionedOn": "언급된 플랫폼",
+        "citedOn": "인용된 플랫폼",
+        "platforms": "개 플랫폼",
+        "avgPosition": "평균 순위",
+        "whenMentioned": "언급 시",
+        "whenMentionedSources": "언급 시 · 출처에서 {avg}",
+        "runs": "실행",
+        "trackedOf": "{count, plural, other {#일}} 중 {tracked}일 추적됨",
+        "mentioned": "언급됨",
+        "cited": "인용됨",
+        "ofDays": "{n} / {count, plural, other {#일}}",
+        "notMentionedCount": "{count}회 언급되지 않음",
+        "notCitedCount": "{count}회 인용되지 않음"
+      },
+      "tabs": {
+        "platforms": "플랫폼별 결과",
+        "history": "일별 기록 ({count})"
+      },
+      "runAt": "실행 시각 {at}",
+      "noRuns": "이 기간에 완료된 추적 실행이 없습니다",
+      "noRunsDot": "이 기간에 완료된 추적 실행이 없습니다.",
+      "mention": "언급",
+      "citation": "인용",
+      "detectedEarlier": "이 기간 중 먼저 감지됨",
+      "untracked": "{count, plural, other {#일}} 동안 완료된 실행이 없습니다. 추적되지 않은 날은 언급되지 않음 또는 인용되지 않음으로 집계되지 않습니다.",
+      "blocksNote": "각 블록은 선택한 기간의 하루이며 사용자의 시간대를 기준으로 합니다. 블록에 마우스를 올리면 해당 날짜의 순위를, 플랫폼을 열면 모든 실행을 볼 수 있습니다.",
+      "legend": {
+        "Early": "초반 언급",
+        "Mid": "중반",
+        "Late": "후반",
+        "cited": "인용만",
+        "none": "결과 없음",
+        "untracked": "추적 안 됨"
+      },
+      "tone": {
+        "Early": "초반",
+        "Mid": "중반",
+        "Late": "후반"
+      },
+      "tip": {
+        "share": " {runs}회 실행 중 {n}회",
+        "rankOf": "{total}개 중 {rank}위"
+      },
+      "heatmapLabel": "{platform}: 추적된 {count, plural, other {#일}} 중 {mentioned}일 언급, {cited}일 인용",
+      "trio": {
+        "best": "최고",
+        "worst": "최저",
+        "avg": "평균",
+        "none": "언급 순위 없음",
+        "title": "언급 시 순위"
+      },
+      "runsNote": "{runs}회 실행 · {mentioned}회 언급 · {cited}회 인용",
+      "noData": "이 기간의 추적 데이터가 없습니다",
+      "toggle": "{platform} 일별 결과 {open, select, yes {숨기기} other {표시}}",
+      "runsOnDays": "{days, plural, other {#일}} 동안 {runs, plural, other {#회}} 실행",
+      "sentimentLine": " · 언급된 답변의 감성: 긍정 {positive}건, 중립 {neutral}건, 부정 {negative}건",
+      "sentimentUnavailableTail": ", {count}건 확인 불가",
+      "moreDays": "{count}일 더 보기",
+      "platformsAnswered": "{count, plural, other {#개 플랫폼}}이 답변함"
+    },
+    "bulkImport": {
+      "intro": "Prompt를 <b>한 열</b>에 한 행당 하나씩 아래로 입력하세요. 첫 행의 제목이 <b>Prompt</b>이면 헤더로 인식됩니다(선택 사항). 가져온 Prompts는 단일에서 선택한 플랫폼과 브랜드의 위치를 사용하며, 각 Prompt의 주제와 위치는 나중에 모든 Prompts의 편집에서 설정할 수 있습니다.",
+      "drop": ".xlsx 또는 .csv 파일을 끌어다 놓거나 클릭하여 찾아보세요",
+      "perRow": "행당 Prompt 하나 · 최대 {max}행",
+      "template": "템플릿 다운로드",
+      "chooseFile": ".xlsx 또는 .csv 파일을 선택하세요.",
+      "unreadable": "파일을 읽을 수 없습니다. 올바른 .xlsx 또는 .csv 파일인지 확인하세요.",
+      "counts": "<b>유효 {valid}건</b> · 중복 {duplicates, plural, other {#건}} · 오류 {errors, plural, other {#건}}",
+      "inUse": "· Prompt 위치 {used} / {max} 사용 중",
+      "truncated": "처음 {max}행만 읽었으며 {more}행은 제외되었습니다. 파일을 나누어 주세요.",
+      "extraColumns": "Prompt 열만 읽으며 파일의 다른 열은 무시되었습니다.",
+      "noneImportable": "가져올 수 있는 Prompts가 없습니다. {plan} 플랜은 최대 {max}개의 Prompt 위치를 추적하며 {used}개가 이미 사용 중입니다.",
+      "someImportable": "{total}개 중 {valid}개의 Prompts만 가져옵니다. {plan} 플랜은 최대 {max}개의 Prompt 위치를 추적하며 {used}개가 이미 사용 중입니다. 나머지 {count, plural, other {#개 Prompt}}({row}행부터)는 가져오지 않습니다.",
+      "toAddMore": "Prompts를 더 추가하려면 {starter, select, yes {플랜을 업그레이드하세요} other {문의해 주세요}}.",
+      "head": {
+        "row": "행",
+        "prompt": "Prompt",
+        "status": "상태"
+      },
+      "status": {
+        "valid": "유효",
+        "duplicate": "중복",
+        "error": "오류",
+        "over_limit": "플랜 한도 초과"
+      },
+      "reason": {
+        "empty": "빈 Prompt",
+        "tooLong": "{max}자 초과",
+        "duplicate": "이미 추적 중이거나 파일 내 중복"
+      },
+      "downloadNotImported": "가져오지 않은 Prompts 다운로드 (.csv)",
+      "downloadErrors": "오류 다운로드 (.csv)",
+      "importButton": "{count, plural, other {Prompt #개}} 가져오기",
+      "importedSome": "{imported}개 가져옴 · 플랜 한도로 {notImported}개 가져오지 않음",
+      "importedAll": "{count, plural, other {Prompt #개를 가져왔습니다}}",
+      "analyzing": "지금 분석하고 있습니다. 주제와 위치는 모든 Prompts의 편집에서 설정하세요.",
+      "nextRun": "다음 추적 실행 때 반영됩니다.",
+      "failed": "가져오기에 실패했습니다. 다시 시도해 주세요."
+    },
+    "workStatus": {
+      "todo": "할 일",
+      "in_progress": "진행 중",
+      "done": "완료",
+      "set": "상태 설정",
+      "setLabel": "작업 상태 설정",
+      "none": "상태 없음"
     }
   },
   "volumeEstimate": {
@@ -18834,7 +18876,38 @@
     },
     "planAddOns": {
       "title": "플랜에 더 추가하기",
-      "description": "Growth 플랜을 위한 추가 트래킹, 추가 브랜드, AI 사용량 충전입니다. 선택한 모든 항목은 등록된 카드로 한 번에 결제됩니다.",
+      "slots": {
+        "title": "추가 추적 크레딧 구매",
+        "description": "{plan} 플랜에는 각 표준 플랫폼당 slot {included}개가 포함되어 있습니다. 원하는 플랫폼에 추가 slot을 선택하세요. 각 항목은 0까지 줄일 수 있습니다.",
+        "descriptionNone": "원하는 플랫폼에 추가 slot을 선택하세요. 각 항목은 0까지 줄일 수 있습니다.",
+        "discount": {
+          "reached": "추가 추적 <b>{percent}% 할인</b>: {interval, select, year {연} other {월}} {list}에서 {off} 할인.",
+          "list": "추가 추적: {interval, select, year {연} other {월}} {list}.",
+          "next": "{interval, select, year {연} other {월}} {more}을(를) 더 추가하면 {from} 초과분에 <b>{percent}% 할인</b>이 적용됩니다.",
+          "top": "최고 단계에 도달했습니다.",
+          "drops": "이 변경으로 할인율이 {from}%에서 {to}%로 낮아져 100 slots당 가격이 올라갑니다.",
+          "steps": "볼륨 할인 단계",
+          "stepsLead": "각 단계의 할인율은 해당 구간을 초과하는 부분에만 적용됩니다:",
+          "step": "{from}/{interval, select, year {년} other {월}} 초과분 {percent}% 할인",
+          "yours": "· 현재 적용",
+          "nextTag": "· 다음 단계"
+        },
+        "unit": "<b>1 slot</b> = 해당 플랫폼의 1개 위치에서 매일 추적되는 Prompt 1개입니다.",
+        "columns": {
+          "platform": "플랫폼",
+          "included": "요금제 포함",
+          "extra": "추가 slots",
+          "price": "{interval, select, year {연간} other {월간}} 100 slots당 가격",
+          "cost": "{interval, select, year {연간} other {월간}} 비용"
+        },
+        "unlimited": "제한 없음",
+        "fewer": "{platform} slots 100개 감소",
+        "more": "{platform} slots 100개 추가",
+        "extraOn": "{platform}의 추가 slots",
+        "was": "이전: {slots}",
+        "undo": "실행 취소",
+        "footer": "가격은 각 플랫폼의 추적 비용에 따라 책정됩니다. 일부 답변(예: Perplexity)은 더 많은 작업이 필요합니다. 연간 결제 시 2개월 무료."
+      },
       "tracking": {
         "title": "추가 트래킹",
         "description": "플랜의 엔진에서 매일 추적되는 Prompt 위치를 더 늘립니다. 한 번에 하나의 단계만 선택할 수 있으며 언제든 변경하거나 제거할 수 있습니다.",
@@ -18842,8 +18915,7 @@
         "none": "없음",
         "tier": "+{units}개 Prompt 위치",
         "price": "{price}/{interval, select, year {년} other {월}}",
-        "contactSales": "영업팀에 문의",
-        "yearly": "연간 요금: 2개월 무료."
+        "contactSales": "영업팀에 문의"
       },
       "brands": {
         "title": "추가 브랜드",
@@ -18851,7 +18923,7 @@
         "count": "{count}개 추가",
         "fewer": "브랜드 1개 줄이기",
         "more": "브랜드 1개 늘리기",
-        "note": "현재 보유한 브랜드 수보다 적게 설정할 수 없습니다. 먼저 브랜드에서 하나를 제거해 주세요."
+        "limit": "요금제에 브랜드 {base}개가 포함되어 있습니다. 새 한도는 <b>{limit}</b>개입니다."
       },
       "topUp": {
         "title": "AI 사용량 충전",
@@ -18860,10 +18932,12 @@
         "label": "AI 사용량 충전 옵션",
         "none": "없음",
         "option": "+{multiplier}배",
-        "adds": "이번 달 AI 사용량의 {multiplier}배 · 브리프 +{briefs}개 · 기회 +{opportunities}개"
+        "usage": "AI 사용량 {multiplier}배",
+        "adds": "이번 달 AI 사용량의 {multiplier}배 · 브리프 +{briefs}개 · 기회 +{opportunities}개",
+        "alsoAdds": "이번 달 브리프 +{briefs}개와 기회 +{opportunities}개도 추가됩니다.",
+        "once": "{price} 1회 결제"
       },
       "summary": "Prompt 위치 {prompts}개 · 브랜드 {brands}개",
-      "nothing": "위에서 변경할 항목을 선택해 주세요.",
       "review": "검토 및 결제",
       "reviewing": "가격 확인 중…",
       "dialog": {
@@ -18874,20 +18948,25 @@
         "brands": "{count, plural, =0 {추가 브랜드 없음} other {추가 브랜드 #개}}",
         "topUp": "AI 사용량 충전 +{multiplier}배, 1회 결제",
         "dueToday": "오늘 결제 금액",
-        "dueTodayNote": "추가 트래킹 및 브랜드의 이번 기간 잔여분과 충전 전액입니다.",
+        "dueTodayNote": "slots, 추가 추적, 브랜드는 이번 결제 기간의 남은 기간分, 충전은 전액이 청구됩니다.",
+        "slots": "{platform} slots",
+        "slotsValue": "{slots} (+{extra} 추가)",
+        "volumeDiscount": "볼륨 할인 ({percent}%)",
+        "discountValue": "−{off}/{interval, select, year {년} other {월}}",
         "total": "다음 갱신부터",
         "totalValue": "{interval, select, year {연} other {월}} {price}",
-        "credit": "더 낮은 등급이나 더 적은 브랜드를 선택하면 다음 청구서에 크레딧이 적용됩니다.",
+        "credit": "slots, 등급 또는 브랜드를 줄이면 차액이 다음 청구서에 크레딧으로 적용됩니다.",
         "pay": "{price} 결제",
         "confirm": "확인",
         "cancel": "취소",
-        "processing": "처리 중…"
+        "processing": "처리 중…",
+        "slotsWaiting": "{platform}: 최신 Prompt 위치 {count}개는 slot이 생길 때까지 대기합니다. 삭제되는 항목은 없으며, slots를 다시 추가하면 추적됩니다."
       },
       "done": "애드온이 업데이트되었습니다. 충전분은 결제가 확인되는 즉시 반영됩니다.",
       "states": {
         "not_admin": "애드온은 관리자만 변경할 수 있습니다. 워크스페이스 관리자에게 문의해 주세요.",
         "starter": "애드온은 Growth 플랜에서 사용할 수 있습니다. Growth로 업그레이드하여 트래킹, 브랜드, AI 사용량을 추가하세요.",
-        "enterprise": "계약에 따라 한도가 정해져 있습니다. 추가가 필요하면 담당 매니저에게 문의해 주세요.",
+        "enterprise": "기타 한도는 계약에 따라 정해집니다. 추가가 필요하면 담당 매니저에게 문의해 주세요.",
         "trial": "애드온은 플랜이 시작된 후에 구매할 수 있습니다.",
         "no_plan": "애드온은 플랜이 활성 상태일 때 구매할 수 있습니다.",
         "ending": "플랜이 종료될 예정입니다. 애드온을 변경하려면 플랜을 유지해 주세요."
@@ -18905,7 +18984,23 @@
         "payment_failed": "결제가 완료되지 않았습니다.",
         "failed": "애드온을 변경하지 못했습니다. 다시 시도해 주세요."
       },
-      "readFailed": "애드온을 불러오지 못했습니다. 나중에 다시 시도해 주세요."
+      "readFailed": "애드온을 불러오지 못했습니다. 나중에 다시 시도해 주세요.",
+      "perInterval": "{price}/{interval, select, year {년} other {월}}",
+      "cart": {
+        "title": "내 추가 항목",
+        "onePayment": "일시불",
+        "plan": "{plan} 요금제",
+        "slots": "{platform} 추가 추적",
+        "slotsCount": "{slots} slots",
+        "remove": "{item} 제거",
+        "discount": "추가 추적에 볼륨 할인 {percent}%가 위 가격에 반영되어 있습니다.",
+        "discountDrops": "볼륨 할인이 {from}%에서 {to}%로 낮아져 위 가격이 올라갑니다.",
+        "brands": "{count, plural, other {브랜드 #개}} · 개당 {price}",
+        "topUp": "AI 사용량 {multiplier}배 · {date}까지",
+        "total": "다음 갱신부터 {interval, select, year {연간} other {월간}} 합계 <b>{price}</b>",
+        "undoAll": "모든 변경 사항 취소",
+        "dueToday": "오늘 결제 금액: 이번 기간의 남은 기간 동안 추가된 항목의 요금이며, 검토 및 결제 화면에 표시됩니다."
+      }
     },
     "cancelsOn": "구독이 {date}에 종료됩니다",
     "changePlan": "플랜 변경",

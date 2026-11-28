@@ -6,6 +6,7 @@ import { SidebarErrorBoundary } from '@/components/layout/sidebar-error-boundary
 import { MobileNav } from '@/components/layout/mobile-nav';
 import { AuthProvider } from '@/components/providers/auth-provider';
 import { PlanProvider } from '@/components/providers/plan-provider';
+import { planFromOrgRow, promptPlatformsAllowed } from '@/lib/guards/plan-row';
 import { AiUsageProvider } from '@/components/providers/ai-usage-provider';
 import { GetMoreProvider } from '@/components/ai-usage/get-more';
 import { RoleProvider, type TeamRole } from '@/components/providers/role-provider';
@@ -139,7 +140,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
     supabase
       .from('organizations')
       .select(
-        'name, plan, subscription_status, plan_overrides, stripe_subscription_id, subscription_ends_at, cancel_at_period_end',
+        'name, plan, subscription_status, plan_overrides, add_on_prompts, add_on_brands, add_on_slots, stripe_subscription_id, subscription_ends_at, cancel_at_period_end',
       )
       .eq('id', profile.organization_id)
       .single(),
@@ -269,6 +270,15 @@ export default async function DashboardLayout({ children }: { children: React.Re
     allowedModelIds = effective ? [...effective] : null;
   }
 
+  // Where the plan has tracking slots (00564), the engines a prompt may be
+  // set to: the platforms with slots.
+  let promptPlatformIds: string[] | null = null;
+  if (isCloud() && org) {
+    const plan = planFromOrgRow(org);
+    const allowed = plan.slots ? promptPlatformsAllowed(plan) : null;
+    promptPlatformIds = allowed ? [...allowed] : null;
+  }
+
   // The facts chatComposerSetup reads: the live role, the plan and the
   // members switch; any of them unread, the careful setup.
   const teamRole = parseTeamRole(profile.role);
@@ -324,6 +334,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
       <PlanProvider
         planId={planId}
         allowedModelIds={allowedModelIds}
+        promptPlatformIds={promptPlatformIds}
         subscriptionActive={subscriptionActive}
         subscriptionStatus={subscriptionStatus}
         planEndsAt={org?.cancel_at_period_end ? (org.subscription_ends_at as string | null) : null}

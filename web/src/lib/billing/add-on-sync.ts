@@ -2,13 +2,15 @@ import type Stripe from 'stripe';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { isSubscriptionActive } from '@/config/plans';
 import { isAddOnPrice, loadStripe, type PriceLike } from './add-ons';
+import { slotItemPlatform } from './add-on-cart';
 import { ORG_PLAN_COLUMNS, planFromOrgRow } from '@/lib/guards/plan-row';
-import { waitOverCapacity } from '@/lib/prompt-capacity';
+import { waitOverCapacity, waitOverSlots } from '@/lib/prompt-capacity';
 
 /**
  * Growth's recurring add-ons (00546) live as items on the plan's Stripe
- * subscription: one extra tracking tier, and extra brands by quantity. The
- * organization keeps what they add (add_on_prompts, add_on_brands), and the
+ * subscription: one extra tracking tier, extra brands by quantity, and
+ * tracking slots per platform (00564). The organization keeps what they add
+ * (add_on_prompts, add_on_brands, add_on_slots), and the
  * plan's limits read it (plan-row.ts). Stripe is the truth: each sync reads
  * the subscription afresh and writes the whole state, so the order and the
  * repeats of Stripe's events don't matter.
@@ -16,12 +18,22 @@ import { waitOverCapacity } from '@/lib/prompt-capacity';
 
 /** A catalog row the sync reads: what one unit of a recurring add-on adds. */
 export interface RecurringAddOnRow {
-  kind: 'tracking' | 'brand';
+  kind: 'tracking' | 'brand' | 'slots';
   stripe_price_id: string | null;
   stripe_lookup_key: string | null;
   grant_prompts: number | null;
   grant_brands: number | null;
+  /** kind 'slots': the platform, and the slots one unit adds (00564). */
+  platform?: string | null;
+  grant_slots?: number | null;
 }
+
+/** The recurring add-on kinds the sync reads. */
+export const RECURRING_ADD_ON_KINDS = ['tracking', 'brand', 'slots'] as const;
+
+/** The catalog columns the sync reads. */
+export const RECURRING_ADD_ON_COLUMNS =
+  'kind, stripe_price_id, stripe_lookup_key, grant_prompts, grant_brands, platform, grant_slots';
 
 /** A subscription item as the sync reads it. */
 export interface AddOnItemLike {
@@ -32,6 +44,8 @@ export interface AddOnItemLike {
 export interface AddOnTotals {
   prompts: number;
   brands: number;
+  /** Extra tracking slots per platform ({"chatgpt-web": 600}). */
+  slots: Record<string, number>;
 }
 
 const positive = (value: unknown) => {
@@ -50,7 +64,7 @@ export function addOnTotals(
   items: readonly AddOnItemLike[],
   catalog: readonly RecurringAddOnRow[],
 ): AddOnTotals {
-  const totals: AddOnTotals = { prompts: 0, brands: 0 };
+  const totals: AddOnTotals = { prompts: 0, brands: 0, slots: {} };
   for (const item of items) {
     const price = item.price;
     if (!price || typeof price === 'string' || !isAddOnPrice(price)) continue;
@@ -65,6 +79,11 @@ export function addOnTotals(
       totals.prompts += quantity * positive(row?.grant_prompts ?? price.metadata?.units);
     } else if (kind === 'brand') {
       totals.brands += quantity * (row ? positive(row.grant_brands) : 1);
+    } else if (kind === 'slots') {
+      const platform = slotItemPlatform(row, price);
+      if (!platform) continue;
+      const slots = quantity * positive(row?.grant_slots ?? price.metadata?.units);
+      if (slots) totals.slots[platform] = (totals.slots[platform] ?? 0) + slots;
     }
   }
   return totals;
@@ -82,12 +101,12 @@ export async function syncAddOns(subscriptionId: string): Promise<void> {
   if (!stripe) throw new Error('Stripe is not configured');
   const subscription: Stripe.Subscription = await stripe.subscriptions.retrieve(subscriptionId);
 
-  let totals: AddOnTotals = { prompts: 0, brands: 0 };
+  let totals: AddOnTotals = { prompts: 0, brands: 0, slots: {} };
   if (isSubscriptionActive(subscription.status)) {
     const { data: catalog, error } = await supabaseAdmin
       .from('add_on_products')
-      .select('kind, stripe_price_id, stripe_lookup_key, grant_prompts, grant_brands')
-      .in('kind', ['tracking', 'brand']);
+      .select(RECURRING_ADD_ON_COLUMNS)
+      .in('kind', [...RECURRING_ADD_ON_KINDS]);
     if (error) throw new Error(error.message);
     totals = addOnTotals(
       subscription.items.data as AddOnItemLike[],
@@ -97,7 +116,11 @@ export async function syncAddOns(subscriptionId: string): Promise<void> {
 
   const { error } = await supabaseAdmin
     .from('organizations')
-    .update({ add_on_prompts: totals.prompts, add_on_brands: totals.brands })
+    .update({
+      add_on_prompts: totals.prompts,
+      add_on_brands: totals.brands,
+      add_on_slots: totals.slots,
+    })
     .eq('stripe_subscription_id', subscription.id);
   if (error) throw new Error(error.message);
 
@@ -126,4 +149,8 @@ async function trimToPlan(subscriptionId: string): Promise<void> {
   const waiting = await waitOverCapacity((org as { id: string }).id, plan.limits.maxPrompts);
   if (waiting)
     console.log(`[add-ons] ${waiting} prompt(s) past the plan's limit now wait for a spot`);
+  // Then each platform past its tracking slots (00564).
+  const slotWaits = await waitOverSlots((org as { id: string }).id, plan.slots);
+  if (slotWaits)
+    console.log(`[add-ons] ${slotWaits} prompt(s) now wait on a platform past its slots`);
 }

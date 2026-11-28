@@ -277,6 +277,7 @@
       "label": "Il tuo brand non è ancora monitorato"
     },
     "actions": {
+      "changePlatforms": "Per modificare le piattaforme serve un piano",
       "addPrompts": "L'aggiunta di Prompt richiede un piano",
       "removeLocations": "La rimozione di sedi richiede un piano",
       "editPrompts": "La modifica di Prompt richiede un piano",
@@ -4539,6 +4540,10 @@
       "name": "Leggi gli Audit del sito rimasti questo mese",
       "step": "Lettura Audit del sito"
     },
+    "crawlerAccess": {
+      "name": "Leggere i problemi dei crawler IA",
+      "step": "Lettura di Site Audit · Crawler"
+    },
     "goToPage": {
       "name": "Vai a una pagina",
       "step": "Pagina aperta"
@@ -8044,6 +8049,7 @@
       "traffic": "Traffico IA e iscrizioni",
       "ai-revenue": "Clienti ed entrate dall'IA",
       "feed-advisor": "Lacune del feed Shopping",
+      "tech-fix": "Correzioni tecniche e dei crawler",
       "earn-or-pay": "Guadagna o paga",
       "ad-drafts": "Bozze di annunci",
       "paid-overlap": "Sovrapposizione a pagamento",
@@ -15784,154 +15790,30 @@
     }
   },
   "prompts": {
-    "positionsSheet": {
-      "tracked": "Prompt monitorato",
-      "paused": "In pausa",
-      "improvingTitle": "Apri l'azione e il relativo Outcome",
-      "improving": "In miglioramento · {code}",
-      "window": "{preset, select, custom {Intervallo personalizzato} other {Ultimi {preset}}}",
-      "lastRun": "Ultima esecuzione: {at}",
-      "runs": "{count, plural, one {# esecuzione} other {# esecuzioni}}",
-      "period": "Periodo",
-      "discardNote": "Cambiando il periodo, le modifiche di Migliora non inviate andranno perse.",
-      "keepEditing": "Continua a modificare",
-      "discard": "Scarta e cambia",
-      "aiAnswers": "Risposte IA",
-      "back": "Torna ai Prompt",
-      "loading": "Caricamento delle posizioni",
-      "loadError": "Impossibile caricare le posizioni: {message}",
-      "retry": "Riprova",
-      "noLongerAvailable": "Questo Prompt non è più disponibile.",
-      "loadFailed": "Caricamento delle posizioni non riuscito.",
-      "sentimentUnavailable": "Sentiment non disponibile",
-      "sentiment": {
-        "positive": "positivo",
-        "neutral": "neutro",
-        "negative": "negativo"
-      },
-      "notMentioned": "Non menzionato",
-      "mentioned": "Menzionato",
-      "positionUnavailable": "Posizione non disponibile",
-      "notCited": "Non citato",
-      "cited": "Citato",
-      "locked": {
-        "growth": "Disponibile nel piano Growth",
-        "notEnabled": "Non abilitato per questo workspace",
-        "enterprise": "Disponibile nel piano Enterprise",
-        "line": "{note} · {growth, select, yes {Passa a un piano superiore} other {Contattaci}} per monitorare risultati e posizioni su {platform}."
-      },
-      "upgrade": "Passa a un piano superiore",
-      "contactUs": "Contattaci",
-      "improve": "Migliora",
-      "stat": {
-        "platformsAnswered": "Piattaforme che hanno risposto",
-        "inLatestRun": "nell'ultima esecuzione",
-        "mentionedOn": "Menzionato su",
-        "citedOn": "Citato su",
-        "platforms": "piattaforme",
-        "avgPosition": "Posizione media",
-        "whenMentioned": "quando menzionato",
-        "whenMentionedSources": "quando menzionato · {avg} nelle fonti",
-        "runs": "Esecuzioni",
-        "trackedOf": "{tracked} su {count, plural, one {# giorno} other {# giorni}} monitorati",
-        "mentioned": "Menzionato",
-        "cited": "Citato",
-        "ofDays": "{n} / {count, plural, one {# giorno} other {# giorni}}",
-        "notMentionedCount": "{count} non menzionato",
-        "notCitedCount": "{count} non citato"
-      },
-      "tabs": {
-        "platforms": "Risultati per piattaforma",
-        "history": "Cronologia giornaliera ({count})"
-      },
-      "runAt": "Esecuzione alle {at}",
-      "noRuns": "Nessuna esecuzione di monitoraggio completata in questo periodo",
-      "noRunsDot": "Nessuna esecuzione di monitoraggio completata in questo periodo.",
-      "mention": "Menzione",
-      "citation": "Citazione",
-      "detectedEarlier": "Rilevato in precedenza in questo periodo",
-      "untracked": "{count, plural, one {# giorno} other {# giorni}} senza un'esecuzione completata. I giorni non monitorati non vengono conteggiati come non menzionato o non citato.",
-      "blocksNote": "Ogni blocco rappresenta un giorno dell'intervallo selezionato, nel tuo fuso orario. Passa il mouse su un blocco per vedere le posizioni di quel giorno; apri una piattaforma per vedere tutte le esecuzioni.",
-      "legend": {
-        "Early": "Menzionato all'inizio",
-        "Mid": "Centrale",
-        "Late": "Tardivo",
-        "cited": "Solo citato",
-        "none": "Nessun risultato",
-        "untracked": "Non monitorato"
-      },
-      "tone": {
-        "Early": "Iniziale",
-        "Mid": "Centrale",
-        "Late": "Tardiva"
-      },
-      "tip": {
-        "share": " in {n} di {runs} esecuzioni",
-        "rankOf": "#{rank} di {total}"
-      },
-      "heatmapLabel": "{platform}: menzionato in {mentioned} e citato in {cited} su {count, plural, one {# giorno monitorato} other {# giorni monitorati}}",
-      "trio": {
-        "best": "Migliore",
-        "worst": "Peggiore",
-        "avg": "Media",
-        "none": "Nessuna posizione di menzione",
-        "title": "Posizione quando menzionato"
-      },
-      "runsNote": "{runs} esecuzioni · menzionato in {mentioned} · citato in {cited}",
-      "noData": "Nessun dato di monitoraggio per questo periodo",
-      "toggle": "{open, select, yes {Nascondi} other {Mostra}} i risultati giornalieri di {platform}",
-      "runsOnDays": "{runs, plural, one {# esecuzione} other {# esecuzioni}} in {days, plural, one {# giorno} other {# giorni}}",
-      "sentimentLine": " · sentiment nelle risposte che citano il brand: {positive} positivo, {neutral} neutro, {negative} negativo",
-      "sentimentUnavailableTail": ", {count} non disponibili",
-      "moreDays": "Mostra altri {count} giorni",
-      "platformsAnswered": "{count, plural, one {# piattaforma ha risposto} other {# piattaforme hanno risposto}}"
-    },
-    "bulkImport": {
-      "intro": "Inserisci i tuoi Prompt in <b>una sola colonna</b>, un Prompt per riga, andando verso il basso. Una prima riga intitolata <b>Prompt</b> viene letta come intestazione (facoltativa). I Prompt importati usano le piattaforme selezionate in Singolo e la località del brand; imposta argomento e località di ciascuno in seguito con Modifica in Tutti i Prompt.",
-      "drop": "Trascina qui un file .xlsx o .csv, oppure fai clic per sfogliare",
-      "perRow": "Un Prompt per riga · fino a {max} righe",
-      "template": "Scarica il modello",
-      "chooseFile": "Scegli un file .xlsx o .csv.",
-      "unreadable": "Impossibile leggere questo file. Verifica che sia un file .xlsx o .csv valido.",
-      "counts": "<b>{valid} validi</b> · {duplicates, plural, one {# duplicato} other {# duplicati}} · {errors, plural, one {# errore} other {# errori}}",
-      "inUse": "· {used} / {max} località dei Prompt in uso",
-      "truncated": "Sono state lette solo le prime {max} righe; altre {more} sono state escluse. Dividi i file più grandi.",
-      "extraColumns": "Viene letta solo la colonna dei Prompt; le altre colonne del file sono state ignorate.",
-      "noneImportable": "Nessun Prompt può essere importato. Il tuo piano {plan} monitora fino a {max} località dei Prompt e {used} sono già in uso.",
-      "someImportable": "Verranno importati solo {valid} Prompt su {total}. Il tuo piano {plan} monitora fino a {max} località dei Prompt e {used} sono già in uso. {count, plural, one {Il Prompt rimanente (dalla riga {row}) non verrà importato} other {I # Prompt rimanenti (dalla riga {row}) non verranno importati}}.",
-      "toAddMore": "Per aggiungere altri Prompt, {starter, select, yes {passa a un piano superiore} other {contattaci}}.",
-      "head": {
-        "row": "Riga",
-        "prompt": "Prompt",
-        "status": "Stato"
-      },
-      "status": {
-        "valid": "Valido",
-        "duplicate": "Duplicato",
-        "error": "Errore",
-        "over_limit": "Oltre il limite del piano"
-      },
-      "reason": {
-        "empty": "Prompt vuoto",
-        "tooLong": "Più lungo di {max} caratteri",
-        "duplicate": "Già monitorato o ripetuto nel file"
-      },
-      "downloadNotImported": "Scarica i Prompt non importati (.csv)",
-      "downloadErrors": "Scarica gli errori (.csv)",
-      "importButton": "Importa {count, plural, one {# Prompt} other {# Prompt}}",
-      "importedSome": "{imported} importati · {notImported} non importati a causa del limite del piano",
-      "importedAll": "{count, plural, one {# Prompt importato} other {# Prompt importati}}",
-      "analyzing": "Analisi in corso. Imposta argomenti e località con Modifica in Tutti i Prompt.",
-      "nextRun": "Verranno acquisiti dalla prossima esecuzione di monitoraggio.",
-      "failed": "Importazione non riuscita. Riprova."
-    },
-    "workStatus": {
-      "todo": "Da fare",
-      "in_progress": "In corso",
-      "done": "Completato",
-      "set": "Imposta stato",
-      "setLabel": "Imposta stato di lavorazione",
-      "none": "Nessuno stato"
+    "bulkPlatforms": {
+      "bulkButton": "Piattaforme",
+      "bulkAdd": "Aggiungi piattaforme",
+      "bulkRemove": "Rimuovi piattaforme",
+      "modes": "Aggiungi o rimuovi",
+      "modeAdd": "Aggiungi",
+      "modeRemove": "Rimuovi",
+      "platforms": "Piattaforme",
+      "title": "Aggiungi piattaforme",
+      "lead": "Monitora i {count} Prompt selezionati su più piattaforme. Ogni posizione del Prompt usa uno slot di monitoraggio per piattaforma. Una piattaforma su cui un Prompt è in attesa viene eseguita di nuovo.",
+      "removeTitle": "Rimuovi piattaforme",
+      "removeLead": "Interrompi il monitoraggio dei {count} Prompt selezionati su alcune piattaforme. I relativi slot tornano disponibili.",
+      "none": "Nessuna piattaforma da aggiungere. Aggiungi slot di monitoraggio in Impostazioni › Fatturazione per monitorare più piattaforme.",
+      "removeNone": "I Prompt selezionati non sono eseguiti su nessuna piattaforma rimovibile.",
+      "free": "{count} liberi",
+      "previewAdd": "{count, plural, one {# Prompt verrà modificato} other {# Prompt verranno modificati}} · {unchanged} le hanno già",
+      "previewRemove": "{count, plural, one {# Prompt verrà modificato} other {# Prompt verranno modificati}} · {unchanged} non le hanno · {blocked} resterebbero senza piattaforma",
+      "short": "{platform} richiede {needed} slot e ne ha {free} liberi.",
+      "addSlots": "Aggiungi slot",
+      "save": "Aggiungi a {count, plural, one {# Prompt} other {# Prompt}}",
+      "removeSave": "Rimuovi da {count, plural, one {# Prompt} other {# Prompt}}",
+      "done": "{count, plural, one {Piattaforme aggiunte a # Prompt} other {Piattaforme aggiunte a # Prompt}}",
+      "removed": "{count, plural, one {Piattaforme rimosse da # Prompt} other {Piattaforme rimosse da # Prompt}}",
+      "saveFailed": "Impossibile modificare le piattaforme. Riprova."
     },
     "waiting": {
       "resultTitle": "{added} aggiunti, {waiting} in attesa di un posto",
@@ -16026,6 +15908,10 @@
     "loadError": "Impossibile caricare i tuoi prompt.",
     "visibilityDegraded": "I dati di Visibilità non sono al momento disponibili: visualizzazione dei prompt senza questi dati.",
     "positions": {
+      "slots": {
+        "note": "Non incluso nel tuo piano · Aggiungi slot di tracciamento per monitorare risultati e posizioni su {platform}.",
+        "add": "Aggiungi slot"
+      },
       "answers": "{count, plural, one {# risposta} other {# risposte}}",
       "answersInPeriod": "{count, plural, one {# risposta} other {# risposte}} in questo periodo",
       "mentionedIn": "In {mentioned} su {answers, plural, one {# risposta} other {# risposte}} · {mentions, plural, one {# menzione} other {# menzioni}}",
@@ -16316,6 +16202,13 @@
       "bulkTitle": "{count, plural, one {Inizia a monitorare il prompt selezionato senza ancora risposte} other {Inizia a monitorare i # prompt selezionati senza ancora risposte}}"
     },
     "usage": {
+      "slots": {
+        "title": "Slot di monitoraggio",
+        "add": "Aggiungi slot",
+        "usage": "{used} / {limit}",
+        "unlimited": "{used} · nessun limite",
+        "meter": "Slot {platform} usati"
+      },
       "panelLabel": "Utilizzo Prompt",
       "planAndUsage": "Piano e utilizzo",
       "hide": "Nascondi",
@@ -16398,7 +16291,7 @@
       "enginesLegend": "Colorato: ricerche condivise per questo prompt nell'intervallo. Sbiadito: monitorato, ma nessuna ricerca condivisa.",
       "engineEmptyTitle": "Nessuna ricerca di {engine} nell'intervallo ({range})",
       "engineEmptyBody": "{engine} di solito condivide le ricerche alla base delle sue risposte. Prova a selezionare un intervallo di date più ampio.",
-      "sourceNote": "Perplexity non è più monitorato e Microsoft Copilot non condivide le sue ricerche, quindi provengono solo da ChatGPT, che le condivide in alcuni giorni. Ce ne sono meno rispetto a prima.",
+      "sourceNote": "Perplexity non è più monitorato e Bing AI Mode non condivide le sue ricerche, quindi queste provengono solo da ChatGPT, che le condivide in alcuni giorni. Sono meno di prima.",
       "emptyTitle": "Nessun fan-out ancora rilevato",
       "emptyBody": "Le ricerche di ChatGPT vengono campionate in alcuni giorni e l'API di ChatGPT le condivide quando effettua ricerche. Google AI Overviews, AI Mode e Gemini non le condividono. Una volta eseguiti questi motori per i tuoi prompt, le ricerche appariranno qui.",
       "coverageTooltip": "Su {total} risposte monitorate in questo intervallo, {withFanout} includevano le ricerche effettuate dal motore. Quelle di ChatGPT vengono campionate in alcuni giorni e l'API di ChatGPT le condivide quando effettua ricerche."
@@ -16698,6 +16591,155 @@
       "noRoomToResume": "Spazio insufficiente per riprendere",
       "bulkFailed": "{action, select, resume {Impossibile riprendere i Prompt.} other {Impossibile mettere in pausa i Prompt.}}",
       "bulkPartial": "{action, select, resume {{failed} su {total} non è stato possibile riprenderli.} other {{failed} su {total} non è stato possibile metterli in pausa.}}"
+    },
+    "positionsSheet": {
+      "tracked": "Prompt monitorato",
+      "paused": "In pausa",
+      "improvingTitle": "Apri l'azione e il relativo Outcome",
+      "improving": "In miglioramento · {code}",
+      "window": "{preset, select, custom {Intervallo personalizzato} other {Ultimi {preset}}}",
+      "lastRun": "Ultima esecuzione: {at}",
+      "runs": "{count, plural, one {# esecuzione} other {# esecuzioni}}",
+      "period": "Periodo",
+      "discardNote": "Cambiando il periodo, le modifiche di Migliora non inviate andranno perse.",
+      "keepEditing": "Continua a modificare",
+      "discard": "Scarta e cambia",
+      "aiAnswers": "Risposte IA",
+      "back": "Torna ai Prompt",
+      "loading": "Caricamento delle posizioni",
+      "loadError": "Impossibile caricare le posizioni: {message}",
+      "retry": "Riprova",
+      "noLongerAvailable": "Questo Prompt non è più disponibile.",
+      "loadFailed": "Caricamento delle posizioni non riuscito.",
+      "sentimentUnavailable": "Sentiment non disponibile",
+      "sentiment": {
+        "positive": "positivo",
+        "neutral": "neutro",
+        "negative": "negativo"
+      },
+      "notMentioned": "Non menzionato",
+      "mentioned": "Menzionato",
+      "positionUnavailable": "Posizione non disponibile",
+      "notCited": "Non citato",
+      "cited": "Citato",
+      "locked": {
+        "growth": "Disponibile nel piano Growth",
+        "notEnabled": "Non abilitato per questo workspace",
+        "enterprise": "Disponibile nel piano Enterprise",
+        "line": "{note} · {growth, select, yes {Passa a un piano superiore} other {Contattaci}} per monitorare risultati e posizioni su {platform}."
+      },
+      "upgrade": "Passa a un piano superiore",
+      "contactUs": "Contattaci",
+      "improve": "Migliora",
+      "stat": {
+        "platformsAnswered": "Piattaforme che hanno risposto",
+        "inLatestRun": "nell'ultima esecuzione",
+        "mentionedOn": "Menzionato su",
+        "citedOn": "Citato su",
+        "platforms": "piattaforme",
+        "avgPosition": "Posizione media",
+        "whenMentioned": "quando menzionato",
+        "whenMentionedSources": "quando menzionato · {avg} nelle fonti",
+        "runs": "Esecuzioni",
+        "trackedOf": "{tracked} su {count, plural, one {# giorno} other {# giorni}} monitorati",
+        "mentioned": "Menzionato",
+        "cited": "Citato",
+        "ofDays": "{n} / {count, plural, one {# giorno} other {# giorni}}",
+        "notMentionedCount": "{count} non menzionato",
+        "notCitedCount": "{count} non citato"
+      },
+      "tabs": {
+        "platforms": "Risultati per piattaforma",
+        "history": "Cronologia giornaliera ({count})"
+      },
+      "runAt": "Esecuzione alle {at}",
+      "noRuns": "Nessuna esecuzione di monitoraggio completata in questo periodo",
+      "noRunsDot": "Nessuna esecuzione di monitoraggio completata in questo periodo.",
+      "mention": "Menzione",
+      "citation": "Citazione",
+      "detectedEarlier": "Rilevato in precedenza in questo periodo",
+      "untracked": "{count, plural, one {# giorno} other {# giorni}} senza un'esecuzione completata. I giorni non monitorati non vengono conteggiati come non menzionato o non citato.",
+      "blocksNote": "Ogni blocco rappresenta un giorno dell'intervallo selezionato, nel tuo fuso orario. Passa il mouse su un blocco per vedere le posizioni di quel giorno; apri una piattaforma per vedere tutte le esecuzioni.",
+      "legend": {
+        "Early": "Menzionato all'inizio",
+        "Mid": "Centrale",
+        "Late": "Tardivo",
+        "cited": "Solo citato",
+        "none": "Nessun risultato",
+        "untracked": "Non monitorato"
+      },
+      "tone": {
+        "Early": "Iniziale",
+        "Mid": "Centrale",
+        "Late": "Tardiva"
+      },
+      "tip": {
+        "share": " in {n} di {runs} esecuzioni",
+        "rankOf": "#{rank} di {total}"
+      },
+      "heatmapLabel": "{platform}: menzionato in {mentioned} e citato in {cited} su {count, plural, one {# giorno monitorato} other {# giorni monitorati}}",
+      "trio": {
+        "best": "Migliore",
+        "worst": "Peggiore",
+        "avg": "Media",
+        "none": "Nessuna posizione di menzione",
+        "title": "Posizione quando menzionato"
+      },
+      "runsNote": "{runs} esecuzioni · menzionato in {mentioned} · citato in {cited}",
+      "noData": "Nessun dato di monitoraggio per questo periodo",
+      "toggle": "{open, select, yes {Nascondi} other {Mostra}} i risultati giornalieri di {platform}",
+      "runsOnDays": "{runs, plural, one {# esecuzione} other {# esecuzioni}} in {days, plural, one {# giorno} other {# giorni}}",
+      "sentimentLine": " · sentiment nelle risposte che citano il brand: {positive} positivo, {neutral} neutro, {negative} negativo",
+      "sentimentUnavailableTail": ", {count} non disponibili",
+      "moreDays": "Mostra altri {count} giorni",
+      "platformsAnswered": "{count, plural, one {# piattaforma ha risposto} other {# piattaforme hanno risposto}}"
+    },
+    "bulkImport": {
+      "intro": "Inserisci i tuoi Prompt in <b>una sola colonna</b>, un Prompt per riga, andando verso il basso. Una prima riga intitolata <b>Prompt</b> viene letta come intestazione (facoltativa). I Prompt importati usano le piattaforme selezionate in Singolo e la località del brand; imposta argomento e località di ciascuno in seguito con Modifica in Tutti i Prompt.",
+      "drop": "Trascina qui un file .xlsx o .csv, oppure fai clic per sfogliare",
+      "perRow": "Un Prompt per riga · fino a {max} righe",
+      "template": "Scarica il modello",
+      "chooseFile": "Scegli un file .xlsx o .csv.",
+      "unreadable": "Impossibile leggere questo file. Verifica che sia un file .xlsx o .csv valido.",
+      "counts": "<b>{valid} validi</b> · {duplicates, plural, one {# duplicato} other {# duplicati}} · {errors, plural, one {# errore} other {# errori}}",
+      "inUse": "· {used} / {max} località dei Prompt in uso",
+      "truncated": "Sono state lette solo le prime {max} righe; altre {more} sono state escluse. Dividi i file più grandi.",
+      "extraColumns": "Viene letta solo la colonna dei Prompt; le altre colonne del file sono state ignorate.",
+      "noneImportable": "Nessun Prompt può essere importato. Il tuo piano {plan} monitora fino a {max} località dei Prompt e {used} sono già in uso.",
+      "someImportable": "Verranno importati solo {valid} Prompt su {total}. Il tuo piano {plan} monitora fino a {max} località dei Prompt e {used} sono già in uso. {count, plural, one {Il Prompt rimanente (dalla riga {row}) non verrà importato} other {I # Prompt rimanenti (dalla riga {row}) non verranno importati}}.",
+      "toAddMore": "Per aggiungere altri Prompt, {starter, select, yes {passa a un piano superiore} other {contattaci}}.",
+      "head": {
+        "row": "Riga",
+        "prompt": "Prompt",
+        "status": "Stato"
+      },
+      "status": {
+        "valid": "Valido",
+        "duplicate": "Duplicato",
+        "error": "Errore",
+        "over_limit": "Oltre il limite del piano"
+      },
+      "reason": {
+        "empty": "Prompt vuoto",
+        "tooLong": "Più lungo di {max} caratteri",
+        "duplicate": "Già monitorato o ripetuto nel file"
+      },
+      "downloadNotImported": "Scarica i Prompt non importati (.csv)",
+      "downloadErrors": "Scarica gli errori (.csv)",
+      "importButton": "Importa {count, plural, one {# Prompt} other {# Prompt}}",
+      "importedSome": "{imported} importati · {notImported} non importati a causa del limite del piano",
+      "importedAll": "{count, plural, one {# Prompt importato} other {# Prompt importati}}",
+      "analyzing": "Analisi in corso. Imposta argomenti e località con Modifica in Tutti i Prompt.",
+      "nextRun": "Verranno acquisiti dalla prossima esecuzione di monitoraggio.",
+      "failed": "Importazione non riuscita. Riprova."
+    },
+    "workStatus": {
+      "todo": "Da fare",
+      "in_progress": "In corso",
+      "done": "Completato",
+      "set": "Imposta stato",
+      "setLabel": "Imposta stato di lavorazione",
+      "none": "Nessuno stato"
     }
   },
   "volumeEstimate": {
@@ -18859,7 +18901,38 @@
     },
     "planAddOns": {
       "title": "Aggiunga altro al Suo piano",
-      "description": "Tracciamento extra, brand aggiuntivi e ricariche di utilizzo IA per il Suo piano Growth. Tutto ciò che sceglie viene addebitato una sola volta sulla carta registrata.",
+      "slots": {
+        "title": "Acquista crediti di monitoraggio extra",
+        "description": "{plan} include {included} slot per ogni piattaforma standard. Scegli slot extra su qualsiasi piattaforma; puoi ridurli fino a 0.",
+        "descriptionNone": "Scegli slot extra su qualsiasi piattaforma; puoi ridurli fino a 0.",
+        "discount": {
+          "reached": "<b>{percent}% di sconto</b> sul tracciamento extra: {off} di sconto su {list} {interval, select, year {all'anno} other {al mese}}.",
+          "list": "Tracciamento extra: {list} {interval, select, year {all'anno} other {al mese}}.",
+          "next": "Aggiungi altri {more} {interval, select, year {all'anno} other {al mese}} per ottenere <b>{percent}% di sconto</b> sulla parte eccedente {from}.",
+          "top": "Hai raggiunto il livello più alto.",
+          "drops": "Questa modifica riduce il tuo sconto dal {from}% al {to}%, quindi il prezzo ogni 100 slot aumenta.",
+          "steps": "Scaglioni di sconto sul volume",
+          "stepsLead": "Ogni scaglione applica la sua percentuale solo alla parte superiore:",
+          "step": "{percent}% di sconto oltre {from}/{interval, select, year {anno} other {mese}}",
+          "yours": "· il tuo",
+          "nextTag": "· successivo"
+        },
+        "unit": "<b>1 slot</b> = 1 Prompt monitorato in 1 località su quella piattaforma, ogni giorno.",
+        "columns": {
+          "platform": "Piattaforma",
+          "included": "Nel tuo piano",
+          "extra": "Slot extra",
+          "price": "Prezzo ogni 100 slot per {interval, select, year {anno} other {mese}}",
+          "cost": "Il tuo costo {interval, select, year {annuale} other {mensile}}"
+        },
+        "unlimited": "Nessun limite",
+        "fewer": "100 slot {platform} in meno",
+        "more": "100 slot {platform} in più",
+        "extraOn": "Slot extra su {platform}",
+        "was": "prima {slots}",
+        "undo": "Annulla",
+        "footer": "I prezzi seguono il costo di monitoraggio di ogni piattaforma: alcune risposte richiedono più lavoro (ad esempio Perplexity). Piano annuale: 2 mesi gratis."
+      },
       "tracking": {
         "title": "Tracciamento extra",
         "description": "Più località dei Prompt, monitorate ogni giorno sui motori del Suo piano. Un livello alla volta; può modificarlo o rimuoverlo in qualsiasi momento.",
@@ -18867,8 +18940,7 @@
         "none": "Nessuno",
         "tier": "+{units} località dei Prompt",
         "price": "{price}/{interval, select, year {anno} other {mese}}",
-        "contactSales": "Contatta le vendite",
-        "yearly": "Prezzi annuali: 2 mesi gratis."
+        "contactSales": "Contatta le vendite"
       },
       "brands": {
         "title": "Brand extra",
@@ -18876,7 +18948,7 @@
         "count": "{count} extra",
         "fewer": "Un brand in meno",
         "more": "Un brand in più",
-        "note": "Non può scendere sotto il numero di brand che ha: prima ne rimuova uno in Brand."
+        "limit": "Il tuo piano include {base} brand. Nuovo limite: <b>{limit}</b>."
       },
       "topUp": {
         "title": "Ricarica di utilizzo IA",
@@ -18885,10 +18957,12 @@
         "label": "Ricariche di utilizzo IA",
         "none": "Nessuna",
         "option": "+{multiplier}x",
-        "adds": "{multiplier}× l’utilizzo IA di questo mese · +{briefs} brief · +{opportunities} opportunità"
+        "usage": "Utilizzo IA {multiplier}x",
+        "adds": "{multiplier}× l’utilizzo IA di questo mese · +{briefs} brief · +{opportunities} opportunità",
+        "alsoAdds": "Aggiunge anche +{briefs} brief e +{opportunities} opportunità questo mese.",
+        "once": "{price} una tantum"
       },
       "summary": "{prompts} località dei Prompt · {brands} brand",
-      "nothing": "Scelga sopra cosa modificare.",
       "review": "Verifica e paga",
       "reviewing": "Verifica del prezzo…",
       "dialog": {
@@ -18899,20 +18973,25 @@
         "brands": "{count, plural, =0 {Nessun brand extra} one {# brand extra} other {# brand extra}}",
         "topUp": "Ricarica di utilizzo IA +{multiplier}x, un solo pagamento",
         "dueToday": "Da pagare oggi",
-        "dueTodayNote": "Il resto di questo periodo per il monitoraggio e i brand aggiuntivi, più una ricarica per intero.",
+        "dueTodayNote": "Il resto di questo periodo per slot, monitoraggio extra e brand, e una ricarica per intero.",
+        "slots": "Slot {platform}",
+        "slotsValue": "{slots} (+{extra} aggiunti)",
+        "volumeDiscount": "Sconto sul volume ({percent}%)",
+        "discountValue": "−{off} al {interval, select, year {anno} other {mese}}",
         "total": "Dal prossimo rinnovo",
         "totalValue": "{price} {interval, select, year {all'anno} other {al mese}}",
-        "credit": "Un livello inferiore o meno brand lasciano un credito per le prossime fatture.",
+        "credit": "Meno slot, un livello inferiore o meno brand generano un credito per le prossime fatture.",
         "pay": "Paga {price}",
         "confirm": "Conferma",
         "cancel": "Annulla",
-        "processing": "Elaborazione in corso…"
+        "processing": "Elaborazione in corso…",
+        "slotsWaiting": "{platform}: le {count} località di Prompt più recenti attenderanno uno slot. Nulla viene eliminato; aggiungi di nuovo slot per monitorarle."
       },
       "done": "I tuoi add-on sono aggiornati. Una ricarica viene conteggiata non appena il pagamento è confermato.",
       "states": {
         "not_admin": "Solo gli amministratori possono modificare gli add-on. Rivolgiti a un amministratore del tuo workspace.",
         "starter": "Gli add-on sono inclusi nel piano Growth. Passa a Growth per aggiungere monitoraggio, brand e utilizzo IA.",
-        "enterprise": "Il tuo contratto stabilisce i tuoi limiti. Contatta il tuo account manager per aumentarli.",
+        "enterprise": "Il tuo contratto definisce gli altri limiti. Contatta il tuo account manager per ottenerne di più.",
         "trial": "Gli add-on possono essere acquistati una volta avviato il piano.",
         "no_plan": "Gli add-on possono essere acquistati finché il piano è attivo.",
         "ending": "Il tuo piano è in scadenza. Mantieni il piano per modificarne gli add-on."
@@ -18930,7 +19009,23 @@
         "payment_failed": "Il pagamento non è andato a buon fine.",
         "failed": "Impossibile modificare i tuoi add-on. Riprova."
       },
-      "readFailed": "Impossibile leggere i tuoi add-on. Riprova più tardi."
+      "readFailed": "Impossibile leggere i tuoi add-on. Riprova più tardi.",
+      "perInterval": "{price}/{interval, select, year {anno} other {mese}}",
+      "cart": {
+        "title": "I tuoi componenti aggiuntivi",
+        "onePayment": "Pagamento unico",
+        "plan": "Piano {plan}",
+        "slots": "Monitoraggio extra {platform}",
+        "slotsCount": "{slots} slot",
+        "remove": "Rimuovi {item}",
+        "discount": "Sconto sul volume del {percent}% sul monitoraggio extra, già incluso nei prezzi sopra.",
+        "discountDrops": "Il tuo sconto sul volume scende dal {from}% al {to}%, quindi i prezzi sopra aumentano.",
+        "brands": "{count, plural, one {# brand} many {# brand} other {# brand}} · {price} ciascuno",
+        "topUp": "{multiplier}x di utilizzo IA · fino al {date}",
+        "total": "Totale {interval, select, year {annuale} other {mensile}} dal prossimo rinnovo <b>{price}</b>",
+        "undoAll": "Annulla tutte le modifiche",
+        "dueToday": "Da pagare oggi: gli elementi aggiunti per il resto di questo periodo, mostrati in Verifica e paga."
+      }
     },
     "cancelsOn": "L'abbonamento termina il {date}",
     "changePlan": "Modifica piano",

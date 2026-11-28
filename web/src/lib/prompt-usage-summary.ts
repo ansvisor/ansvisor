@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Plan, PlanId } from '@/config/plans';
 import type { Database } from '@/types/supabase';
+import { SLOT_PLATFORMS } from '@/config/tracking-slots';
 
 /**
  * The Tracked Prompts usage cards (PROMPT-012): a brand's active and paused
@@ -27,8 +28,38 @@ export interface PromptUsageSummary {
   };
   brand: { active: number; paused: number; total: number };
   account: { activePrompts: number; brands: number; locationsUsed: number };
+  /**
+   * Tracking slots per platform (00564), on Growth and Enterprise: each
+   * platform with slots or in use. Absent where the plan has none.
+   */
+  slots?: SlotMeter[];
   /** When the counts were read. */
   updatedAt: string;
+}
+
+/** One platform's tracking slots: in use and the plan's (included and bought); null limit = no limit. */
+export interface SlotMeter {
+  platform: string;
+  used: number;
+  limit: number | null;
+}
+
+/**
+ * The slot meters for a plan's slots and the slots in use, in the config's
+ * platform order: every platform with slots, and any in use without.
+ */
+export function slotMeters(
+  slots: Readonly<Record<string, number>>,
+  used: ReadonlyMap<string, number>,
+): SlotMeter[] {
+  const meters: SlotMeter[] = [];
+  for (const { id } of SLOT_PLATFORMS) {
+    const limit = slots[id] ?? 0;
+    const inUse = used.get(id) ?? 0;
+    if (limit === 0 && inUse === 0) continue;
+    meters.push({ platform: id, used: inUse, limit: limit < 0 ? null : limit });
+  }
+  return meters;
 }
 
 const PLAN_CTA: Record<PlanId, PromptUsageCta | null> = {
@@ -80,9 +111,10 @@ export function toPromptUsageSummary(
   row: PromptUsageRow,
   plan: Plan,
   now: Date = new Date(),
-  { ended = false }: { ended?: boolean } = {},
+  { ended = false, slots }: { ended?: boolean; slots?: SlotMeter[] } = {},
 ): PromptUsageSummary {
   return {
+    ...(slots ? { slots } : {}),
     plan: usagePlan(plan, ended),
     brand: {
       active: row.brand_active,

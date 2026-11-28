@@ -89,15 +89,13 @@ describe('renderReportCardEmail', () => {
       madeAt: '2026-11-04T10:00:00Z',
     });
     expect(html).toContain(
-      'We asked ChatGPT and Microsoft Copilot, the engines in Ansvisor Starter, 20 questions your buyers ask, in the United States.',
+      'We asked ChatGPT and Bing AI Mode, the engines in Ansvisor Starter, 20 questions your buyers ask, in the United States.',
     );
     expect(html).toContain(
       'We asked Gemini and Google AI Overviews too: they are in Ansvisor Growth, and the PDF shows them apart.',
     );
     expect(html).toContain('10%');
-    expect(html).toContain(
-      'AI visibility in ChatGPT and Microsoft Copilot: named in 4 of 40 answers',
-    );
+    expect(html).toContain('AI visibility in ChatGPT and Bing AI Mode: named in 4 of 40 answers');
   });
 
   it('writes a Turkish card’s e-mail in Turkish', () => {
@@ -129,7 +127,7 @@ describe('renderReportCardEmail', () => {
       'Ansvisor’da Chat ve kullanıma hazır ajanlar ilk haftanın işlerini sizinle birlikte yapar.',
     );
     expect(html).toContain(
-      'ChatGPT ve Microsoft Copilot (Ansvisor Starter’ın motorları) motorlarına Türkiye konumundan, alıcılarınızın sorduğu 25 soruyu sorduk.',
+      'ChatGPT ve Bing AI Mode (Ansvisor Starter’ın motorları) motorlarına Türkiye konumundan, alıcılarınızın sorduğu 25 soruyu sorduk.',
     );
     expect(html).toContain('50 yanıtın 0 tanesinde adınız geçiyor');
     expect(html).toContain('Ücretsiz denemeyi başlatın');

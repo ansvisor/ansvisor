@@ -24,9 +24,16 @@ vi.mock('@/lib/subscription-guard', async (importOriginal) => ({
   assertWritable: guard.assertWritable,
 }));
 
-const usage = vi.hoisted(() => ({ prompts: 150, brands: 3 }));
+const capacity = vi.hoisted(() => ({ settleSlots: vi.fn() }));
+vi.mock('@/lib/prompt-capacity', () => capacity);
+const usage = vi.hoisted(() => ({
+  prompts: 150,
+  brands: 3,
+  slots: new Map<string, number>(),
+}));
 vi.mock('@/lib/prompt-locations', () => ({
   getOrgLocationUsage: async () => ({ total: usage.prompts, byBrand: {} }),
+  getOrgSlotUsage: async () => usage.slots,
 }));
 vi.mock('@/lib/plan-brand-count', () => ({ countPlanBrands: async () => usage.brands }));
 
@@ -40,6 +47,9 @@ const stripeApi = vi.hoisted(() => ({
   finalize: vi.fn(),
   pay: vi.fn(),
   voidInvoice: vi.fn(),
+  retrievePrice: vi.fn(),
+  retrieveCoupon: vi.fn(),
+  createCoupon: vi.fn(),
 }));
 vi.mock('@/lib/stripe', () => ({
   stripe: {
@@ -52,7 +62,8 @@ vi.mock('@/lib/stripe', () => ({
       voidInvoice: stripeApi.voidInvoice,
     },
     invoiceItems: { create: stripeApi.createInvoiceItem },
-    prices: { list: stripeApi.listPrices },
+    prices: { list: stripeApi.listPrices, retrieve: stripeApi.retrievePrice },
+    coupons: { retrieve: stripeApi.retrieveCoupon, create: stripeApi.createCoupon },
   },
 }));
 
@@ -134,6 +145,7 @@ beforeEach(() => {
   auth.user = { id: 'u_admin' };
   usage.prompts = 150;
   usage.brands = 3;
+  usage.slots = new Map();
   guard.assertWritable.mockResolvedValue(undefined);
   db.failures = {};
   db.tables = {
@@ -599,5 +611,231 @@ describe('what Billing shows', () => {
     await expect(stateOf()).resolves.toBe('enterprise');
     vi.stubEnv('NEXT_PUBLIC_IS_CLOUD', 'false');
     await expect(stateOf()).resolves.toBe('not_cloud');
+  });
+});
+
+describe('tracking slots (00564)', () => {
+  const slotRow = (platform: string, cents: number, billing: 'monthly' | 'yearly' = 'monthly') => {
+    const stripeId = platform.replace(/-/g, '_');
+    const suffix = billing === 'monthly' ? 'month' : 'year';
+    return {
+      id: `slots_${stripeId}_${suffix}`,
+      kind: 'slots',
+      price_cents: billing === 'monthly' ? cents : cents * 10,
+      currency: 'usd',
+      billing,
+      grant_prompts: null,
+      grant_brands: null,
+      platform,
+      grant_slots: 100,
+      stripe_price_id: `price_slots_${stripeId}_${suffix}`,
+      stripe_lookup_key: `addon_slots_${stripeId}_${suffix}`,
+      sale: 'self_serve',
+      plans: ['growth', 'enterprise'],
+      active: true,
+    };
+  };
+  const slotItem = (platform: string, units: number) => {
+    const stripeId = platform.replace(/-/g, '_');
+    return {
+      id: `si_slots_${stripeId}`,
+      quantity: units,
+      price: {
+        id: `price_slots_${stripeId}_month`,
+        lookup_key: `addon_slots_${stripeId}_month`,
+        unit_amount: 6000,
+        product: 'prod_slots',
+        recurring: { interval: 'month' },
+        metadata: { addon: 'slots', platform: stripeId },
+      },
+    };
+  };
+
+  beforeEach(() => {
+    db.tables.add_on_products.push(
+      slotRow('claude-web', 6000),
+      slotRow('claude-web', 6000, 'yearly'),
+      slotRow('naver-web', 1500, 'yearly'),
+    );
+    stripeApi.retrievePrice.mockResolvedValue({ id: 'price_x', product: 'prod_slots' });
+    stripeApi.retrieveCoupon.mockRejectedValue(
+      Object.assign(new Error('No such coupon'), { code: 'resource_missing' }),
+    );
+    stripeApi.createCoupon.mockImplementation(async (params: { id: string }) => params);
+  });
+
+  const sentItems = () =>
+    (stripeApi.update.mock.calls[0][1] as { items: Record<string, unknown>[] }).items;
+
+  it('prices slots per platform on the plan’s period, with no discount under $500', async () => {
+    const preview = await previewAddOnChange({
+      trackingUnits: 0,
+      extraBrands: 0,
+      slots: { 'claude-web': 3 },
+    });
+    expect(preview).toMatchObject({
+      ok: true,
+      changed: true,
+      slots: { 'claude-web': 300, 'chatgpt-web': 250 },
+      slotsPrice: { listCents: 18_000, percentOff: 0, discountCents: 0 },
+      totalCents: 24_900 + 18_000,
+    });
+    const params = stripeApi.preview.mock.calls[0][0];
+    expect(params.subscription_details.items).toEqual([
+      { price: 'price_slots_claude_web_month', quantity: 3, discounts: '' },
+    ]);
+    expect(stripeApi.createCoupon).not.toHaveBeenCalled();
+  });
+
+  it('puts the marginal volume discount on the slot items as one shared coupon', async () => {
+    // 20 × $60 = $1,200: 5% of $500 + 10% of $200 = $45, 3.75%.
+    const preview = await previewAddOnChange({
+      trackingUnits: 0,
+      extraBrands: 0,
+      slots: { 'claude-web': 20 },
+    });
+    expect(preview).toMatchObject({
+      ok: true,
+      slotsPrice: { listCents: 120_000, percentOff: 3.75, discountCents: 4_500 },
+      totalCents: 24_900 + 120_000 - 4_500,
+    });
+    expect(stripeApi.createCoupon).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: 'addon_slots_off_0375',
+        percent_off: 3.75,
+        applies_to: { products: ['prod_slots'] },
+      }),
+    );
+    expect(stripeApi.preview.mock.calls[0][0].subscription_details.items).toEqual([
+      {
+        price: 'price_slots_claude_web_month',
+        quantity: 20,
+        discounts: [{ coupon: 'addon_slots_off_0375' }],
+      },
+    ]);
+  });
+
+  it('keeps the plan’s coupon (SAVE50) on the plan alone', async () => {
+    stripeApi.retrieve.mockResolvedValue(subscription([planItem()], { discounts: ['di_save50'] }));
+    const result = await applyAddOnChange({
+      trackingUnits: 0,
+      extraBrands: 0,
+      slots: { 'claude-web': 20 },
+    });
+    expect(result).toMatchObject({ ok: true, changed: true });
+    const params = stripeApi.update.mock.calls[0][1];
+    expect(params.discounts).toBe('');
+    expect(sentItems()).toEqual([
+      {
+        price: 'price_slots_claude_web_month',
+        quantity: 20,
+        discounts: [{ coupon: 'addon_slots_off_0375' }],
+      },
+      { id: 'si_plan', discounts: [{ discount: 'di_save50' }] },
+    ]);
+  });
+
+  it('writes the bought slots once applied', async () => {
+    await applyAddOnChange({ trackingUnits: 0, extraBrands: 0, slots: { 'claude-web': 3 } });
+    expect(org().add_on_slots).toEqual({ 'claude-web': 300 });
+  });
+
+  it('sells only the plan’s period: a monthly plan can’t buy yearly slots', async () => {
+    expect(
+      await previewAddOnChange({ trackingUnits: 0, extraBrands: 0, slots: { 'naver-web': 1 } }),
+    ).toMatchObject({ ok: false, failure: 'unavailable' });
+  });
+
+  it('refuses a platform slots aren’t sold for', async () => {
+    expect(
+      await previewAddOnChange({ trackingUnits: 0, extraBrands: 0, slots: { 'deepseek-web': 1 } }),
+    ).toMatchObject({ ok: false, failure: 'unavailable' });
+  });
+
+  it('lowers a platform’s slots under its use, saying how many locations will wait', async () => {
+    org().add_on_slots = { 'claude-web': 300 };
+    stripeApi.retrieve.mockResolvedValue(subscription([planItem(), slotItem('claude-web', 3)]));
+    usage.slots = new Map([['claude-web', 250]]);
+    expect(
+      await previewAddOnChange({ trackingUnits: 0, extraBrands: 0, slots: { 'claude-web': 2 } }),
+    ).toMatchObject({
+      ok: true,
+      slots: { 'claude-web': 200 },
+      slotsWaiting: [{ platform: 'claude-web', inUse: 250, limit: 200 }],
+    });
+    usage.slots = new Map([['claude-web', 180]]);
+    expect(
+      await previewAddOnChange({ trackingUnits: 0, extraBrands: 0, slots: { 'claude-web': 2 } }),
+    ).toMatchObject({ ok: true, slotsWaiting: [] });
+  });
+
+  it('sets the newest locations past the new slots waiting once paid', async () => {
+    org().add_on_slots = { 'claude-web': 300 };
+    stripeApi.retrieve.mockResolvedValue(subscription([planItem(), slotItem('claude-web', 3)]));
+    await applyAddOnChange({ trackingUnits: 0, extraBrands: 0, slots: { 'claude-web': 2 } });
+    expect(capacity.settleSlots).toHaveBeenCalledWith(
+      ORG,
+      expect.objectContaining({ 'claude-web': 200, 'chatgpt-web': 250 }),
+    );
+  });
+
+  it('keeps the slots it has when the cart doesn’t name them', async () => {
+    org().add_on_slots = { 'claude-web': 300 };
+    stripeApi.retrieve.mockResolvedValue(subscription([planItem(), slotItem('claude-web', 3)]));
+    const preview = await previewAddOnChange({ trackingUnits: 0, extraBrands: 2 });
+    expect(preview).toMatchObject({ ok: true, slots: { 'claude-web': 300 } });
+    const items = stripeApi.preview.mock.calls[0][0].subscription_details.items;
+    expect(items.some((i: { id?: string }) => i.id === 'si_slots_claude_web')).toBe(false);
+  });
+
+  it('lets Enterprise buy slots, and only slots', async () => {
+    org().plan = 'enterprise';
+    expect(
+      await previewAddOnChange({ trackingUnits: 0, extraBrands: 0, slots: { 'claude-web': 3 } }),
+    ).toMatchObject({ ok: true, slots: { 'claude-web': 300 } });
+    expect(
+      await previewAddOnChange({ trackingUnits: 0, extraBrands: 1, slots: { 'claude-web': 3 } }),
+    ).toMatchObject({ ok: false, failure: 'not_growth', plan: 'enterprise' });
+  });
+  it('shows Billing the slots on sale on the plan’s period, with what is included, bought and used', async () => {
+    org().add_on_slots = { 'claude-web': 300 };
+    usage.slots = new Map([
+      ['chatgpt-web', 120],
+      ['claude-web', 280],
+    ]);
+    const read = await readPlanAddOns();
+    expect(read.ok && read.addOns.slots).toEqual({
+      state: 'open',
+      // Only Claude is on sale monthly here; Naver is yearly only.
+      platforms: [
+        {
+          id: 'claude-web',
+          group: 'signed_in',
+          unitCents: 6000,
+          unitSlots: 100,
+          included: 0,
+          units: 3,
+          inUse: 280,
+        },
+      ],
+    });
+  });
+
+  it('shows Enterprise its slots, and Starter none', async () => {
+    org().plan = 'enterprise';
+    let read = await readPlanAddOns();
+    expect(read.ok && [read.addOns.state, read.addOns.slots?.state]).toEqual([
+      'enterprise',
+      'open',
+    ]);
+    org().plan = 'starter';
+    read = await readPlanAddOns();
+    expect(read.ok && read.addOns.slots).toBeNull();
+  });
+
+  it('shows no slots while none is on sale', async () => {
+    for (const r of db.tables.add_on_products) if (r.kind === 'slots') r.active = false;
+    const read = await readPlanAddOns();
+    expect(read.ok && read.addOns.slots).toBeNull();
   });
 });
