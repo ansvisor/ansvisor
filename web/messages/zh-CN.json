@@ -2122,6 +2122,8 @@
       "noOpen": "没有未处理的行动。已完成和已忽略的行动在“所有状态”下。",
       "showAllStatuses": "显示所有状态",
       "summary": {
+        "refreshed": "本周已刷新 {count} 项",
+        "refreshedHint": "由于 30 天内无人处理,这些操作已在过去 {days} 天内被基于最新数据生成的新操作替换。",
         "open": "{count} 项待处理",
         "closed": "本周已关闭 {count} 项",
         "closedHint": "在最近 {days} 天内已完成或已忽略。点击查看列表。",

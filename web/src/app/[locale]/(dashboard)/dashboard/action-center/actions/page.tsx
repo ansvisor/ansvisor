@@ -36,7 +36,10 @@ import {
   type ActionItem,
 } from '@/lib/actions/action-center';
 import { listBrandMembers, type TeamMember } from '@/lib/actions/team';
-import { getClosedThisWeekCount } from '@/lib/actions/action-center-counts';
+import {
+  getClosedThisWeekCount,
+  getRefreshedThisWeekCount,
+} from '@/lib/actions/action-center-counts';
 import {
   CLOSED_WEEK_DAYS,
   isClosedThisWeek,
@@ -573,11 +576,16 @@ function ActionsContent({ brand }: { brand: Brand }) {
   // own closed rows change; null until read or when the read failed.
   const closedHere = (actions ?? []).filter(CARD_FILTERS.closedWeek).length;
   const [closedCount, setClosedCount] = useState<number | null>(null);
+  // Replaced by the nightly pass with a new action from fresh data (00563).
+  const [refreshedCount, setRefreshedCount] = useState<number | null>(null);
   useEffect(() => {
     let current = true;
     getClosedThisWeekCount(brand.id)
       .then((count) => current && setClosedCount(count))
       .catch(() => current && setClosedCount(null));
+    getRefreshedThisWeekCount(brand.id)
+      .then((count) => current && setRefreshedCount(count))
+      .catch(() => current && setRefreshedCount(null));
     return () => {
       current = false;
     };
@@ -782,6 +790,14 @@ function ActionsContent({ brand }: { brand: Brand }) {
           <>
             <span aria-hidden="true">·</span>
             <span>{t('summary.new', { count: newIds.size })}</span>
+          </>
+        )}
+        {refreshedCount !== null && refreshedCount > 0 && (
+          <>
+            <span aria-hidden="true">·</span>
+            <span data-refreshed="" title={t('summary.refreshedHint', { days: CLOSED_WEEK_DAYS })}>
+              {t('summary.refreshed', { count: refreshedCount })}
+            </span>
           </>
         )}
       </p>

@@ -2122,6 +2122,8 @@
       "noOpen": "Açık aksiyon yok. Tamamlananlar ve reddedilenler Tüm durumlar altında yer alır.",
       "showAllStatuses": "Tüm durumları göster",
       "summary": {
+        "refreshed": "Bu hafta {count} yenilendi",
+        "refreshedHint": "30 gündür kimse üzerinde çalışmadığı için son {days} günde taze verilerle oluşturulmuş yeni bir aksiyonla değiştirildi.",
         "open": "{count} açık",
         "closed": "Bu hafta {count} kapatıldı",
         "closedHint": "Son {days} gün içinde tamamlandı veya kapatıldı. Listelemek için tıklayın.",

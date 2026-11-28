@@ -48,10 +48,12 @@ export interface ActionRow {
   priority_reason: unknown;
   priority_updated_at: string | null;
   stale_at?: string | null;
+  /** Why it was dismissed (00366); `replaced` when the nightly pass refreshed it (00563). */
+  dismiss_reason?: string | null;
 }
 
 export const ACTION_COLUMNS =
-  'id, action_no, brand_no, category, kind, impact, status, payload, kpi_keys, assignee_id, due_date, created_at, updated_at, priority_score, priority_level, priority_reason, priority_updated_at, stale_at';
+  'id, action_no, brand_no, category, kind, impact, status, payload, kpi_keys, assignee_id, due_date, created_at, updated_at, priority_score, priority_level, priority_reason, priority_updated_at, stale_at, dismiss_reason';
 
 export const TASK_COLUMNS =
   'id, position, task_key, title, status, skip_reason, title_params, depends_on, details, output';
@@ -90,6 +92,7 @@ export function actionItemFromRow(
     taskCompleted: extra.taskCompleted,
     signalCount: extra.signalCount,
     staleAt: row.stale_at ?? null,
+    replaced: row.status === 'dismissed' && row.dismiss_reason === 'replaced',
     priorityScore: score,
     priorityLevel: storedPriorityLevel(row.priority_level, score),
     // "Lost ground on 12 prompts", as the title counts them (AC-009).

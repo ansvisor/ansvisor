@@ -104,6 +104,11 @@ export interface ActionItem {
   dueDate: string | null;
   createdAt: string;
   updatedAt: string;
+  /**
+   * Dismissed by the nightly pass and replaced by a new action from fresh
+   * data (00563): refreshed, not closed by anyone.
+   */
+  replaced?: boolean;
   taskTotal: number;
   taskCompleted: number;
   signalCount: number;

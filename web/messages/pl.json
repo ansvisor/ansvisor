@@ -2122,6 +2122,8 @@
       "noOpen": "Brak otwartych działań. Ukończone i odrzucone znajdziesz w widoku wszystkich statusów.",
       "showAllStatuses": "Pokaż wszystkie statusy",
       "summary": {
+        "refreshed": "{count} odświeżonych w tym tygodniu",
+        "refreshedHint": "Zastąpione w ciągu ostatnich {days} dni nowym działaniem opartym na aktualnych danych, ponieważ nikt nie pracował nad nimi od 30 dni.",
         "open": "{count} otwartych",
         "closed": "{count} zamkniętych w tym tygodniu",
         "closedHint": "Ukończone lub odrzucone w ciągu ostatnich {days} dni. Kliknij, aby je wyświetlić.",

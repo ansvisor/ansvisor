@@ -1,11 +1,11 @@
 ---
 title: Work with Action Center actions
 route: /dashboard/action-center/actions
-keywords: [actions, today, todays focus, agent work, i approve first, agent starts on its own, action status, assign action, dismiss action, export actions, top actions, run agent, run with chat, stale actions, still relevant, replaced actions, no new actions, confidence, sort actions, recently updated, action number, find action by number, action code, previously, translated, your language, new since your last visit, closed this week, deleted actions, missing actions]
+keywords: [actions, today, todays focus, agent work, i approve first, agent starts on its own, action status, assign action, dismiss action, export actions, top actions, run agent, run with chat, stale actions, still relevant, replaced actions, no new actions, confidence, sort actions, recently updated, action number, find action by number, action code, previously, translated, your language, new since your last visit, closed this week, refreshed this week, deleted actions, missing actions]
 synonyms: [recommendations, work items, to-dos, action list, let an agent do this, agent on an action, what should I do today, what to do first, who starts agent work, order actions, newest first, oldest first]
 plan: all
-updated: 2026-11-25
-last_checked: 2026-11-19
+updated: 2026-11-29
+last_checked: 2026-11-29
 owner: Cihan
 app_version: 0.3.0
 approved: true
@@ -59,10 +59,11 @@ Below them, filter by category, **Priority**, **Status** (including **Open** and
 
 ## New and closed actions
 
-Above the list, a short line reads like "55 open · 12 closed this week · 3 new since your last visit". The open count doesn't always grow: a new finding on a subject with an open action joins that action, and completed or dismissed actions leave the count.
+Above the list, a line reads like "55 open · 12 closed this week · 3 new since your last visit · 5 refreshed this week". The open count doesn't always grow: a new finding on the subject of an open action joins it, closed actions leave the count, and a refreshed action is replaced by its new one.
 
-- **New**: a mark beside the title of each action created since your last visit to the list, on this browser. It shows for the whole visit and is gone on the next one. An older action that a new signal updated moves to the top without it.
-- **Closed this week**: actions completed or dismissed in the last 7 days. Click it to list them; **Clear filters** goes back.
+- **New**: a mark beside each action created since your last visit on this browser, gone on the next one.
+- **Closed this week**: completed or dismissed in the last 7 days. Click it to list them; **Clear filters** goes back.
+- **Refreshed this week**: untouched for 30 days and replaced by a new action built from fresh data. Not counted as closed; its **History** names the new one.
 
 Actions are never removed on their own. Closed ones stay under **Status: All**, with what happened in each one's **History**.
 

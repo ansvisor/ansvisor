@@ -2122,6 +2122,8 @@
       "noOpen": "No hay acciones abiertas. Las completadas y descartadas están en Todos los estados.",
       "showAllStatuses": "Mostrar todos los estados",
       "summary": {
+        "refreshed": "{count} actualizadas esta semana",
+        "refreshedHint": "Sustituidas en los últimos {days} días por una nueva acción creada a partir de datos recientes, porque nadie había trabajado en ellas durante 30 días.",
         "open": "{count} abiertas",
         "closed": "{count} cerradas esta semana",
         "closedHint": "Completadas o descartadas en los últimos {days} días. Haga clic para ver la lista.",
