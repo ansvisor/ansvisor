@@ -105,7 +105,9 @@ describe('POST /api/stripe/checkout', () => {
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ url: 'https://checkout.stripe.com/c/1' });
     expect(session().line_items).toEqual([{ price: 'price_starter_month', quantity: 1 }]);
-    expect(session().cancel_url).toBe('http://localhost:3000/dashboard/onboarding?checkout=canceled');
+    expect(session().cancel_url).toBe(
+      'http://localhost:3000/dashboard/onboarding?checkout=canceled',
+    );
     expect(session().subscription_data.trial_period_days).toBeUndefined();
     expect(session().payment_method_collection).toBe('always');
   });
@@ -127,7 +129,9 @@ describe('POST /api/stripe/checkout', () => {
     });
     expect(res.status).toBe(200);
     expect(session().line_items).toEqual([{ price: 'price_growth_year', quantity: 1 }]);
-    expect(session().cancel_url).toBe('http://localhost:3000/dashboard/settings/billing?checkout=canceled');
+    expect(session().cancel_url).toBe(
+      'http://localhost:3000/dashboard/settings/billing?checkout=canceled',
+    );
     expect(session().subscription_data.metadata).toEqual({
       organization_id: 'org1',
       plan_id: 'growth',
