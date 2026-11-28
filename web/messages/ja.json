@@ -16605,7 +16605,7 @@
       "discardNote": "期間を変更すると、未送信の改善の編集内容は破棄されます。",
       "keepEditing": "編集を続ける",
       "discard": "破棄して変更",
-      "aiAnswers": "AIの回答",
+      "seeAnswers": "AI の回答を見る",
       "back": "Promptに戻る",
       "loading": "順位を読み込み中",
       "loadError": "順位を読み込めませんでした: {message}",

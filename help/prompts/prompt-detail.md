@@ -11,7 +11,7 @@ app_version: 0.3.0
 approved: true
 sources: [docs/guides/prompts.mdx]
 ---
-Click a prompt's text in **Tracked Prompts** to open its own page. It shows the prompt's visibility, mentions, citations and per-platform results. When the prompt has a volume, an **AI searches a month** card shows its estimate. Below the figures, **Demand · is this asked for real?** shows measured signals of whether people really ask it.
+Click a prompt's text in **Tracked Prompts** to open its own page. It shows the prompt's visibility, mentions and citations, and right below them its AI answers on each platform (**Platform Results**). When the prompt has a volume, an **AI searches a month** card shows its estimate. **See AI answers**, in a prompt's row menu on Tracked Prompts or in its positions panel, opens the page on those answers. At the bottom, **Demand · is this asked for real?** shows measured signals of whether people really ask it.
 
 ## The four demand signals
 

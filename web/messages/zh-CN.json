@@ -16563,7 +16563,7 @@
       "discardNote": "更改时间段将丢弃您尚未提交的改进编辑内容。",
       "keepEditing": "继续编辑",
       "discard": "丢弃并更改",
-      "aiAnswers": "AI 回答",
+      "seeAnswers": "查看 AI 回答",
       "back": "返回 Prompts",
       "loading": "正在加载排名",
       "loadError": "无法加载排名:{message}",

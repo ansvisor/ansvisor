@@ -72,7 +72,7 @@ The **Performance** filter groups prompts by where your brand is named in their 
 - **Late**: named in the last third.
 - **Missing**: named in fewer than half the answers.
 
-Late and Missing list the furthest behind first. A prompt with no answers in the range, such as a new one, has no performance yet. The **Positions** column shows your average position and its change; hover it for each platform, or use its chart button to open the positions panel.
+Late and Missing list the furthest behind first. A prompt with no answers in the range, such as a new one, has no performance yet. The **Positions** column shows your average position and its change; hover it for each platform, or use its chart button to open the positions panel. The panel's **See AI answers** opens the prompt's answers; so does **See AI answers** in each row's menu.
 
 ## Organize with tags
 

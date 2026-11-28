@@ -16606,7 +16606,7 @@
       "discardNote": "Zmiana okresu spowoduje odrzucenie niewysłanych zmian w sekcji Popraw.",
       "keepEditing": "Kontynuuj edycję",
       "discard": "Odrzuć i zmień",
-      "aiAnswers": "Odpowiedzi AI",
+      "seeAnswers": "Zobacz odpowiedzi AI",
       "back": "Wróć do Promptów",
       "loading": "Ładowanie pozycji",
       "loadError": "Nie udało się załadować pozycji: {message}",

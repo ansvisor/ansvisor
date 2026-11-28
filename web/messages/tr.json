@@ -16604,7 +16604,7 @@
       "discardNote": "Dönemi değiştirmek, gönderilmemiş İyileştir düzenlemelerinizi siler.",
       "keepEditing": "Düzenlemeye devam et",
       "discard": "Sil ve değiştir",
-      "aiAnswers": "AI yanıtları",
+      "seeAnswers": "AI yanıtlarını gör",
       "back": "Prompt'lara dön",
       "loading": "Konumlar yükleniyor",
       "loadError": "Konumlar yüklenemedi: {message}",

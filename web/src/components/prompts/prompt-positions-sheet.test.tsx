@@ -157,6 +157,14 @@ afterEach(() => {
 });
 
 describe('PromptPositionsSheet', () => {
+  it('links to the AI answers behind the positions, on the prompt page', async () => {
+    await open();
+    const link = [...document.querySelectorAll('a')].find(
+      (a) => a.textContent === 'See AI answers',
+    );
+    expect(link?.getAttribute('href')).toBe('/dashboard/prompts/p1#ai-answers');
+  });
+
   it('offers content first in the Improve tab when no answer names the brand', async () => {
     getPromptPositions.mockResolvedValue(unnamed());
     const onStartContent = vi.fn();

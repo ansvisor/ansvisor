@@ -16616,7 +16616,7 @@
       "discardNote": "Wenn Sie den Zeitraum ändern, werden Ihre nicht gesendeten Verbesserungsänderungen verworfen.",
       "keepEditing": "Weiter bearbeiten",
       "discard": "Verwerfen & ändern",
-      "aiAnswers": "KI-Antworten",
+      "seeAnswers": "KI-Antworten ansehen",
       "back": "Zurück zu Prompts",
       "loading": "Positionen werden geladen",
       "loadError": "Positionen konnten nicht geladen werden: {message}",

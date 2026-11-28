@@ -132,6 +132,31 @@ async function render() {
 const button = (name: string) =>
   [...container.querySelectorAll('button')].find((b) => b.textContent === name)!;
 
+describe('the AI answers', () => {
+  it('scrolls to them when the page is opened on #ai-answers', async () => {
+    const scrollIntoView = vi.fn();
+    Element.prototype.scrollIntoView = scrollIntoView;
+    window.history.replaceState(null, '', `/dashboard/prompts/${PROMPT}#ai-answers`);
+    try {
+      await render();
+      const answers = container.querySelector('#ai-answers');
+      expect(answers?.textContent).toContain('Platform Results');
+      expect(scrollIntoView).toHaveBeenCalled();
+      expect(scrollIntoView.mock.contexts[0]).toBe(answers);
+    } finally {
+      window.history.replaceState(null, '', '/');
+    }
+  });
+
+  it('stays at the top without the hash', async () => {
+    const scrollIntoView = vi.fn();
+    Element.prototype.scrollIntoView = scrollIntoView;
+    window.history.replaceState(null, '', `/dashboard/prompts/${PROMPT}`);
+    await render();
+    expect(scrollIntoView).not.toHaveBeenCalled();
+  });
+});
+
 describe("what Chat's side panel sees (the owner's plan, step 9's detail pages)", () => {
   it('holds the prompt open by its id, its date range, its first Top Sources and its opportunities', async () => {
     await render();

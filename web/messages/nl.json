@@ -16612,7 +16612,7 @@
       "discardNote": "Als u de periode wijzigt, gaan uw niet-verzonden Improve-wijzigingen verloren.",
       "keepEditing": "Doorgaan met bewerken",
       "discard": "Verwerpen en wijzigen",
-      "aiAnswers": "AI-antwoorden",
+      "seeAnswers": "AI-antwoorden bekijken",
       "back": "Terug naar prompts",
       "loading": "Posities laden",
       "loadError": "Posities laden mislukt: {message}",

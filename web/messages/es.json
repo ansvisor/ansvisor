@@ -16610,7 +16610,7 @@
       "discardNote": "Cambiar el periodo descartará las ediciones de Mejorar que no haya enviado.",
       "keepEditing": "Seguir editando",
       "discard": "Descartar y cambiar",
-      "aiAnswers": "Respuestas de IA",
+      "seeAnswers": "Ver respuestas de IA",
       "back": "Volver a Prompts",
       "loading": "Cargando posiciones",
       "loadError": "No se pudieron cargar las posiciones: {message}",
