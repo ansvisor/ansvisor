@@ -2121,7 +2121,7 @@
         },
         {
           "heading": "Tools coming soon",
-          "text": "Cards marked **Soon**, such as Shopify or Zapier, can't be connected yet. To ask for a tool that isn't listed, click **Request a connection**.\n\nSlack can be connected: it receives the brand's Pulse and alerts. HubSpot is connected in **Settings › Integrations** on Growth and above (see **Connect HubSpot**), although its card here still says **Soon**."
+          "text": "Cards marked **Soon**, such as Shopify or Zapier, can't be connected yet. To ask for a tool that isn't listed, click **Request a connection**.\n\nSlack can be connected: it receives the brand's Pulse and alerts. HubSpot (Growth and above) ties AI visits to deals and revenue: its card shows the connected HubSpot account, and **Connect** opens it in **Settings › Integrations** (see **Connect HubSpot**)."
         }
       ]
     },

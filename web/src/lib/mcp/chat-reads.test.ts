@@ -748,8 +748,9 @@ describe('Workspace reads', () => {
       ai_providers: [{ provider: 'anthropic', active: true }],
     });
     expect(read?.brands[0].not_connected).toContain('Google Analytics');
-    expect(read?.brands[0].not_connected).not.toContain('HubSpot');
-    expect(read?.coming_soon).toContain('HubSpot');
+    expect(read?.brands[0].not_connected).toContain('HubSpot');
+    expect(read?.coming_soon).not.toContain('HubSpot');
+    expect(read?.coming_soon).toContain('Salesforce');
     // Google disconnected in Settings: the property is kept, but its sign-in is gone.
     reads.answers.brand_integrations = [
       {
