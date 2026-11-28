@@ -18920,6 +18920,7 @@
           "nextTag": "· następny"
         },
         "unit": "<b>1 slot</b> = 1 Prompt śledzony w 1 lokalizacji na tej platformie, codziennie.",
+        "unitInfo": "Czym jest slot?",
         "columns": {
           "platform": "Platforma",
           "included": "W Twoim planie",

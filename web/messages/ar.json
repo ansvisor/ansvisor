@@ -18911,6 +18911,7 @@
           "nextTag": "· التالية"
         },
         "unit": "<b>1 slot</b> = 1 Prompt يتم تتبعه في موقع واحد على تلك المنصة، كل يوم.",
+        "unitInfo": "ما هو الـ slot؟",
         "columns": {
           "platform": "المنصة",
           "included": "في خطتك",

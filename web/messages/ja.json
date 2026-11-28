@@ -18919,6 +18919,7 @@
           "nextTag": "· 次"
         },
         "unit": "<b>1 slot</b> = そのプラットフォームの1つのロケーションで、1つのPromptを毎日追跡できる単位です。",
+        "unitInfo": "slot とは?",
         "columns": {
           "platform": "プラットフォーム",
           "included": "プランに含まれる数",

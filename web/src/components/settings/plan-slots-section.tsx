@@ -1,7 +1,9 @@
 'use client';
 
 import { useTranslations } from 'next-intl';
+import { Info } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { platformLabel } from '@/config/platform-labels';
 import { STANDARD_SLOT_PLATFORMS } from '@/config/tracking-slots';
 import { formatNumber } from '@/lib/format';
@@ -162,7 +164,29 @@ export function PlanSlotsCard({
               <tr className="border-b text-start text-xs text-muted-foreground">
                 <th className="py-2 pe-2 text-start font-medium">{t('columns.platform')}</th>
                 <th className="py-2 pe-2 text-start font-medium">{t('columns.included')}</th>
-                <th className="py-2 pe-2 text-start font-medium">{t('columns.extra')}</th>
+                <th className="py-2 pe-2 text-start font-medium">
+                  <span className="inline-flex items-center gap-1">
+                    {t('columns.extra')}
+                    <Tooltip>
+                      <TooltipTrigger
+                        render={
+                          <button
+                            type="button"
+                            aria-label={t('unitInfo')}
+                            className="rounded-sm text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                          >
+                            <Info className="h-3.5 w-3.5" />
+                          </button>
+                        }
+                      />
+                      <TooltipContent>
+                        {t.rich('unit', {
+                          b: (chunks) => <b className="font-medium">{chunks}</b>,
+                        })}
+                      </TooltipContent>
+                    </Tooltip>
+                  </span>
+                </th>
                 <th className="py-2 pe-2 text-end font-medium">
                   {t('columns.price', { interval })}
                 </th>

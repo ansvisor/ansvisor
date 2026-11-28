@@ -18930,6 +18930,7 @@
           "nextTag": "· nächste"
         },
         "unit": "<b>1 slot</b> = 1 Prompt, der täglich an 1 Standort auf dieser Plattform getrackt wird.",
+        "unitInfo": "Was ist ein Slot?",
         "columns": {
           "platform": "Plattform",
           "included": "In Ihrem Tarif",
