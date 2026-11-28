@@ -32,6 +32,7 @@ import {
 } from '../lib/first-run-rollups.js';
 import { slottedPlatforms } from '../config/tracking-slots.js';
 import logger from '../lib/logger.js';
+import { queueFanoutIntents } from '../lib/fanout-intent-cache.js';
 
 function resolveModelPlatform(model) {
   if (model.startsWith('claude-')) return 'claude';
@@ -467,6 +468,8 @@ export async function processTrackingJob({ brandId, promptId, promptIds, source,
     firstRunRollups.note(landedSoFar());
     // Best-effort: mark target URLs cited by this answer (00032).
     await updateTargetUrlStats(row.prompt_id, row.citations, new Date().toISOString());
+    // Its sub-queries' intents, classified in the background (Query Fan-out reads them).
+    queueFanoutIntents(row.search_queries);
     // Best-effort: expand the citation array into rows (#732). The jsonb
     // column still holds the same data, so anything missed here is recoverable
     // with the backfill rather than lost.

@@ -143,3 +143,11 @@ describe('Track on the Query Fan-out tab', () => {
     expect(document.body.textContent).not.toContain('Add a topic first');
   });
 });
+
+describe('intentKey', () => {
+  it('keys a sub-query as the server caches its intent', async () => {
+    const { intentKey } = await import('./_fanout-tab');
+    expect(intentKey('  Best   CRM\ttools ')).toBe('best crm tools');
+    expect(intentKey('x'.repeat(600))).toHaveLength(512);
+  });
+});

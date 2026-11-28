@@ -74,6 +74,15 @@ type QueryFanoutTabProps = {
  */
 const INTENT_CHUNK_SIZE = 20;
 
+/**
+ * A sub-query as the server keys its intent (normalizeIntentQuery, #333):
+ * whitespace collapsed, trimmed, lower-cased, at most 512 characters. A
+ * lower-case-only key missed a query with doubled spaces.
+ */
+export function intentKey(query: string): string {
+  return query.replace(/\s+/g, ' ').trim().toLowerCase().slice(0, 512);
+}
+
 const FANOUT_PAGE_SIZE = 10;
 
 /**
@@ -150,7 +159,7 @@ export function QueryFanoutTab({
    */
   const classifyProgressively = useCallback(async (queries: string[]) => {
     const run = ++intentRunRef.current;
-    const pending = queries.filter((q) => !(q.toLowerCase() in intentsRef.current));
+    const pending = queries.filter((q) => !(intentKey(q) in intentsRef.current));
     if (pending.length === 0) return;
 
     const chunks: string[][] = [pending.slice(0, FANOUT_PAGE_SIZE)];
@@ -158,16 +167,42 @@ export function QueryFanoutTab({
       chunks.push(pending.slice(i, i + INTENT_CHUNK_SIZE));
     }
 
-    for (const chunk of chunks) {
-      if (intentRunRef.current !== run) return;
-      try {
-        const map = await classifyFanoutIntents(chunk);
+    // A failed or timed-out chunk is asked once more at the end: the server
+    // keeps what it classified meanwhile, so the second ask is mostly cached.
+    const failed: string[][] = [];
+    for (const [pass, list] of [
+      [0, chunks],
+      [1, failed],
+    ] as const) {
+      for (const chunk of list) {
         if (intentRunRef.current !== run) return;
+        try {
+          const map = await classifyFanoutIntents(chunk);
+          if (intentRunRef.current !== run) return;
+          intentsRef.current = { ...intentsRef.current, ...map };
+          setIntents(intentsRef.current);
+        } catch {
+          // Its rows keep the "—" placeholder; the next chunk still gets its shot.
+          if (pass === 0) failed.push(chunk);
+        }
+      }
+    }
+  }, []);
+
+  /**
+   * A prompt opened in By prompt: its sub-queries go first, apart from the
+   * background run (which follows the High frequency order), so the rows on
+   * screen fill in at once.
+   */
+  const classifyOpened = useCallback(async (queries: string[]) => {
+    const pending = queries.filter((q) => !(intentKey(q) in intentsRef.current));
+    for (let i = 0; i < pending.length; i += INTENT_CHUNK_SIZE) {
+      try {
+        const map = await classifyFanoutIntents(pending.slice(i, i + INTENT_CHUNK_SIZE));
         intentsRef.current = { ...intentsRef.current, ...map };
         setIntents(intentsRef.current);
       } catch {
-        // A failed/timed-out chunk must not kill the chain — its rows keep
-        // the "—" placeholder and the next chunk still gets its shot.
+        // The background run still reaches them.
       }
     }
   }, []);
@@ -412,6 +447,7 @@ export function QueryFanoutTab({
           <ByPromptView
             groups={filteredByPrompt}
             intents={intents}
+            onOpen={isLocked ? undefined : (queries) => void classifyOpened(queries)}
             addingKey={addingKey}
             pager={byPromptPager}
             rangeLabel={rangeLabel}
@@ -538,7 +574,7 @@ function HighFrequencyView({
                       <SourcedPrompts prompts={sq.sourcedPrompts} />
                     </TableCell>
                     <TableCell>
-                      <IntentBadge intent={intents[key]} />
+                      <IntentBadge intent={intents[intentKey(sq.query)]} />
                     </TableCell>
                     <TableCell className="text-end">
                       <TrackCell sq={sq} adding={addingKey === key} onTrack={onTrack} />
@@ -594,9 +630,12 @@ function ByPromptView({
   onTrack,
   searchText,
   onSearchChange,
+  onOpen,
 }: {
   groups: PromptGroup[];
   intents: Record<string, string>;
+  /** A prompt opened: its sub-queries' intents are asked first. */
+  onOpen?: (queries: string[]) => void;
   addingKey: string | null;
   pager: ReturnType<typeof usePagination>;
   rangeLabel: string;
@@ -610,12 +649,17 @@ function ByPromptView({
   const pageRows = groups.slice(pager.start, pager.end);
 
   function toggle(id: string) {
+    const opening = !expanded.has(id);
     setExpanded((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
       else next.add(id);
       return next;
     });
+    if (opening && onOpen) {
+      const group = groups.find((g) => g.prompt.id === id);
+      if (group) onOpen(group.subQueries.map((sq) => sq.query));
+    }
   }
 
   return (
@@ -736,7 +780,7 @@ function ByPromptView({
                                           {sq.timesSearched}
                                         </TableCell>
                                         <TableCell className="align-middle ps-6">
-                                          <IntentBadge intent={intents[key]} />
+                                          <IntentBadge intent={intents[intentKey(sq.query)]} />
                                         </TableCell>
                                         <TableCell className="align-middle text-end">
                                           <TrackCell
