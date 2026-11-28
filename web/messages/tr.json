@@ -18668,7 +18668,7 @@
         },
         "scheduled": {
           "name": "Zamanlanmış işler",
-          "description": "x",
+          "description": "Her iş, kendi ayarına göre e-posta gönderir.",
           "link": "İşleri aç"
         },
         "billing": {
