@@ -5,8 +5,8 @@ import { supabaseAdmin } from '@/lib/supabase/admin';
  * app keeps it per brand (Brand-level access): the brand's Search Console
  * and Analytics properties, its CMS sites (brand_cms_connections), its
  * workflow webhooks (webhook_configs), its catalog sources
- * (catalog_sources) and its Slack workspace and channel (brand_integrations,
- * #2139). An agent's connection checks (agent-connections.ts
+ * (catalog_sources), its Slack workspace and channel (brand_integrations,
+ * #2139) and its HubSpot account (brand_integrations). An agent's connection checks (agent-connections.ts
  * readBrandConnections), Chat's list_connections and the Connections page
  * (connections.ts) all build on it, so they never disagree. Server only.
  */
@@ -39,6 +39,13 @@ export interface ConnectionRows {
     connected_by?: string | null;
     created_at?: string | null;
   } | null;
+  /** Its HubSpot account: the sign-in's status and name (its Hub ID). */
+  hubspot?: {
+    status: string;
+    label?: string | null;
+    connected_by?: string | null;
+    created_at?: string | null;
+  } | null;
 }
 
 /** A brand with nothing connected. */
@@ -61,9 +68,10 @@ interface SlackAccountRow {
   created_at: string | null;
 }
 
-/** A brand's use of its Slack sign-in, with the sign-in embedded (one, or a list of one). */
+/** A brand's use of its Slack or HubSpot sign-in, with the sign-in embedded (one, or a list of one). */
 interface SlackUseRow {
   brand_id: string;
+  provider: string;
   settings: { channel?: { name?: unknown } | null } | null;
   account: SlackAccountRow | SlackAccountRow[] | null;
 }
@@ -93,9 +101,9 @@ export async function readConnectionRows(
     supabaseAdmin
       .from('brand_integrations')
       .select(
-        'brand_id, settings, account:integration_accounts!brand_integrations_account_id_fkey(status, label, connected_by, created_at)',
+        'brand_id, provider, settings, account:integration_accounts!brand_integrations_account_id_fkey(status, label, connected_by, created_at)',
       )
-      .eq('provider', 'slack')
+      .in('provider', ['slack', 'hubspot'])
       .in('brand_id', ids),
   ]);
   for (const read of [brands, cms, webhooks, catalog]) {
@@ -125,6 +133,15 @@ export async function readConnectionRows(
     const rows = out.get(row.brand_id);
     const account = Array.isArray(row.account) ? row.account[0] : row.account;
     if (!rows || !account) continue;
+    if (row.provider === 'hubspot') {
+      rows.hubspot = {
+        status: account.status,
+        label: account.label,
+        connected_by: account.connected_by,
+        created_at: account.created_at,
+      };
+      continue;
+    }
     const channel = row.settings?.channel?.name;
     rows.slack = {
       status: account.status,

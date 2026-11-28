@@ -45,8 +45,8 @@ describe('connectionRecords', () => {
       settingsHref: '/dashboard/settings/integrations#webflow',
       disconnect: 'cms',
     });
-    expect(byKey(records, 'hubspot')).toEqual({
-      key: 'hubspot',
+    expect(byKey(records, 'salesforce')).toEqual({
+      key: 'salesforce',
       category: 'crm',
       status: 'soon',
       account: null,
@@ -58,6 +58,12 @@ describe('connectionRecords', () => {
       suggested: false,
       settingsHref: null,
       disconnect: null,
+    });
+    // HubSpot is live: connected in Settings › Integrations.
+    expect(byKey(records, 'hubspot')).toMatchObject({
+      status: 'not_connected',
+      access: 'read_only',
+      settingsHref: '/dashboard/settings/integrations#hubspot',
     });
     // Merchant Center only where this deployment offers it.
     expect(byKey(records, 'merchant_center')).toBeUndefined();
@@ -473,5 +479,28 @@ describe('readConnections and readBrandConnections', () => {
     await expect(readBrandConnections(BRAND)).rejects.toThrow(
       "Could not read the brand's connections: down",
     );
+  });
+});
+
+describe('HubSpot on the Connections page', () => {
+  it('shows the brand’s HubSpot account as connected, or failing once HubSpot refused it', () => {
+    const at = '2026-11-20T10:00:00.000Z';
+    const connected = connectionRecords({
+      rows: {
+        ...NO_CONNECTION_ROWS,
+        hubspot: { status: 'connected', label: '12345678', connected_by: 'u1', created_at: at },
+      },
+    }).find((r) => r.key === 'hubspot');
+    expect(connected).toMatchObject({ status: 'connected', account: '12345678', connectedAt: at });
+
+    const failing = connectionRecords({
+      rows: { ...NO_CONNECTION_ROWS, hubspot: { status: 'auth_failed', label: '12345678' } },
+    }).find((r) => r.key === 'hubspot');
+    expect(failing?.status).toBe('failing');
+
+    const pending = connectionRecords({
+      rows: { ...NO_CONNECTION_ROWS, hubspot: { status: 'pending', label: null } },
+    }).find((r) => r.key === 'hubspot');
+    expect(pending?.status).toBe('not_connected');
   });
 });

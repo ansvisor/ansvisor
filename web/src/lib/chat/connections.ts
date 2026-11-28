@@ -67,6 +67,8 @@ export interface ConnectionTool {
 const INTEGRATIONS = '/dashboard/settings/integrations';
 /** Slack's kind (#2139): no agent asks for it; it carries the brand's messages. */
 const SLACK_CONNECTION = 'slack';
+/** HubSpot's kind: no agent asks for it yet; it reads deals and revenue (00520). */
+const HUBSPOT_CONNECTION = 'hubspot';
 /** Stores, feeds and uploads share Settings › Integrations' product catalog card. */
 const CATALOG_CARD = `${INTEGRATIONS}#product-catalog` as const;
 
@@ -121,7 +123,8 @@ export const CONNECTION_TOOLS: readonly ConnectionTool[] = [
     settingsHref: CATALOG_CARD,
   }),
   soon('shopify', 'ecommerce'),
-  soon('hubspot', 'crm'),
+  // A brand's HubSpot account (Growth+): AI-sourced deals and revenue, connected in Settings.
+  tool('hubspot', 'crm', HUBSPOT_CONNECTION, 'read_only'),
   soon('salesforce', 'crm'),
   soon('pipedrive', 'crm'),
   soon('stripe', 'crm'),
@@ -282,6 +285,18 @@ function stateOf(t: ConnectionTool, input: RecordInput): ToolState {
       account: accountsLine([slack.channel ? `#${slack.channel}` : null, slack.label]),
       connectedById: slack.connected_by ?? null,
       connectedAt: slack.created_at ?? null,
+    };
+  }
+  if (t.key === 'hubspot') {
+    const hubspot = rows.hubspot;
+    if (!hubspot || (hubspot.status !== 'connected' && hubspot.status !== 'auth_failed')) {
+      return NOT_CONNECTED;
+    }
+    return {
+      status: hubspot.status === 'connected' ? 'connected' : 'failing',
+      account: hubspot.label?.trim() || null,
+      connectedById: hubspot.connected_by ?? null,
+      connectedAt: hubspot.created_at ?? null,
     };
   }
   if (t.key === 'webhook') {
@@ -497,6 +512,7 @@ function connectorIds(rows: ConnectionRows, signIns: readonly SignInRow[]): (str
     ...rows.cms.map((c) => c.connected_by ?? null),
     ...rows.catalog.map((c) => c.created_by ?? null),
     rows.slack?.connected_by ?? null,
+    rows.hubspot?.connected_by ?? null,
     ...signIns.map((s) => s.connected_by),
   ];
 }
