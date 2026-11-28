@@ -553,6 +553,25 @@
     }
   },
   "planOffer": {
+    "why": {
+      "label": "Why Ansvisor",
+      "answers": {
+        "title": "Real answers, not guesses",
+        "body": "See the AI answers behind each number, and how it's calculated. Open source."
+      },
+      "actions": {
+        "title": "Actions, not reports",
+        "body": "Each finding becomes a task. Agents can do many of them for you."
+      },
+      "price": {
+        "title": "Clear price",
+        "body": "Pay for the prompts you track on each platform. Add more when you need it."
+      },
+      "results": {
+        "title": "Results you can show",
+        "body": "Visibility and AI visits over time, in reports you can share."
+      }
+    },
     "checkoutCanceled": {
       "title": "Your payment wasn’t completed, so nothing was charged.",
       "body": "You can try again whenever you’re ready.",

@@ -553,6 +553,25 @@
     }
   },
   "planOffer": {
+    "why": {
+      "label": "Neden Ansvisor",
+      "answers": {
+        "title": "Tahmin değil, gerçek yanıtlar",
+        "body": "Her sayının arkasındaki AI yanıtlarını ve nasıl hesaplandığını görün. Açık kaynak."
+      },
+      "actions": {
+        "title": "Rapor değil, aksiyon",
+        "body": "Her bulgu bir göreve dönüşür. Birçoğunu ajanlar sizin için yapar."
+      },
+      "price": {
+        "title": "Net fiyat",
+        "body": "Her platformda takip ettiğiniz Prompt'lar için ödersiniz. Gerektiğinde artırın."
+      },
+      "results": {
+        "title": "Gösterebileceğiniz sonuçlar",
+        "body": "Zaman içinde görünürlük ve AI ziyaretleri, paylaşabileceğiniz raporlarda."
+      }
+    },
     "checkoutCanceled": {
       "title": "Ödemeniz tamamlanmadı, bu nedenle herhangi bir ücret alınmadı.",
       "body": "Hazır olduğunuzda tekrar deneyebilirsiniz.",

@@ -553,6 +553,25 @@
     }
   },
   "planOffer": {
+    "why": {
+      "label": "Dlaczego Ansvisor",
+      "answers": {
+        "title": "Prawdziwe odpowiedzi, nie szacunki",
+        "body": "Zobacz odpowiedzi AI stojące za każdą liczbą i sposób jej liczenia. Open source."
+      },
+      "actions": {
+        "title": "Działania, nie raporty",
+        "body": "Każde ustalenie staje się zadaniem. Wiele z nich wykonają za Ciebie agenci."
+      },
+      "price": {
+        "title": "Jasna cena",
+        "body": "Płacisz za Prompty śledzone na każdej platformie. Dodaj więcej, gdy trzeba."
+      },
+      "results": {
+        "title": "Wyniki do pokazania",
+        "body": "Widoczność i wizyty z AI w czasie, w raportach do udostępnienia."
+      }
+    },
     "checkoutCanceled": {
       "title": "Płatność nie została dokończona, więc nie pobraliśmy żadnych środków.",
       "body": "Możesz spróbować ponownie, kiedy tylko będziesz gotowy.",
