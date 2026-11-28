@@ -18973,6 +18973,19 @@
         "slotsWaiting": "{platform}: 최신 Prompt 위치 {count}개는 slot이 생길 때까지 대기합니다. 삭제되는 항목은 없으며, slots를 다시 추가하면 추적됩니다."
       },
       "done": "애드온이 업데이트되었습니다. 충전분은 결제가 확인되는 즉시 반영됩니다.",
+      "notice": {
+        "failedTitle": "완료되지 않음: 변경되거나 청구된 것이 없습니다",
+        "paidTitle": "결제 완료",
+        "savedTitle": "변경 사항 저장됨",
+        "added": "추가됨: {items}.",
+        "removed": "제거됨: {items}. 사용하지 않은 기간은 다음 청구서에 크레딧으로 적용됩니다.",
+        "charged": "오늘 청구액: {price}.",
+        "slots": "{platform} slot {slots}개",
+        "brands": "{count, plural, other {브랜드 #개}}",
+        "topUp": "AI 사용량 {multiplier}x 충전",
+        "topUpNote": "충전은 결제가 확인되는 즉시 적용됩니다.",
+        "dismiss": "닫기"
+      },
       "states": {
         "not_admin": "애드온은 관리자만 변경할 수 있습니다. 워크스페이스 관리자에게 문의해 주세요.",
         "starter": "애드온은 Growth 플랜에서 사용할 수 있습니다. Growth로 업그레이드하여 트래킹, 브랜드, AI 사용량을 추가하세요.",

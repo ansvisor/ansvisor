@@ -18603,6 +18603,19 @@
         "slotsWaiting": "{platform}: the newest {count} prompt locations will wait for a slot. Nothing is deleted; add slots again to track them."
       },
       "done": "Your add-ons are updated. A top-up counts as soon as the payment is confirmed.",
+      "notice": {
+        "failedTitle": "Not completed: nothing was changed or charged",
+        "paidTitle": "Payment complete",
+        "savedTitle": "Change saved",
+        "added": "Added: {items}.",
+        "removed": "Removed: {items}. The unused time is credited to your next invoices.",
+        "charged": "Charged today: {price}.",
+        "slots": "{slots} {platform} slots",
+        "brands": "{count, plural, one {# brand} other {# brands}}",
+        "topUp": "{multiplier}x AI usage top-up",
+        "topUpNote": "The top-up counts as soon as the payment is confirmed.",
+        "dismiss": "Dismiss"
+      },
       "states": {
         "not_admin": "Only admins change add-ons. Ask an admin of your workspace.",
         "starter": "Add-ons come with the Growth plan. Upgrade to Growth to add tracking, brands and AI usage.",
