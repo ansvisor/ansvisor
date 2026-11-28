@@ -575,7 +575,7 @@ describe('ChoosePlanDialog from the demo brand', () => {
     );
     expect(dialog().querySelector('h2')?.textContent).toBe('Use Ansvisor for your own brand');
     expect(dialog().textContent).toContain(demoBody);
-    expect(choices()).toEqual(['14-day trial', 'Monthly', 'YearlySave 20%']);
+    expect(choices()).toEqual(['7-day trial', 'Monthly', 'YearlySave 20%']);
     // The demo is onboarding's way in, not a choice here.
     expect(dialog().querySelector('[data-choice="demo"]')).toBeNull();
     expect(choiceButton('month')?.getAttribute('aria-pressed')).toBe('true');
@@ -595,13 +595,13 @@ describe('ChoosePlanDialog from the demo brand', () => {
     await render({ demo: 'trial' });
     await choose('trial');
     expect(mode('starter')).toBe('trial');
-    expect(startButton('starter').textContent).toBe('Start 14-day free trial');
-    expect(startButton('growth').textContent).toBe('Start 14-day free trial');
+    expect(startButton('starter').textContent).toBe('Start 7-day free trial');
+    expect(startButton('growth').textContent).toBe('Start 7-day free trial');
     // No offer with the trial: the plain price.
     expect(price('starter')).toBe('$49/mo');
     expect(due('starter')).toBe('$0');
-    expect(terms('starter')).toBe('Free until Nov 11, then $49/monthLimited AI usage for 14 days');
-    expect(terms('growth')).toBe('Free until Nov 11, then $249/monthLimited AI usage for 14 days');
+    expect(terms('starter')).toBe('Free until Nov 4, then $49/monthLimited AI usage for 7 days');
+    expect(terms('growth')).toBe('Free until Nov 4, then $249/monthLimited AI usage for 7 days');
   });
 
   it('opens Checkout for the trial without the offer', async () => {
@@ -683,7 +683,7 @@ describe('ChoosePlanDialog from the demo brand', () => {
     try {
       await render({ demo: 'trial' });
       expect(fetchMock).not.toHaveBeenCalled();
-      expect(choices()).toEqual(['14-day trial', 'Monthly', 'YearlySave 20%']);
+      expect(choices()).toEqual(['7-day trial', 'Monthly', 'YearlySave 20%']);
       expect(startButton('starter').textContent).toBe('Choose Starter');
       expect(due('starter')).toBe('$49');
       expect(terms('starter')).toBe('Full plan from day one');
@@ -714,7 +714,7 @@ describe("ChoosePlanDialog for a brand that isn't tracked yet", () => {
     expect(dialog().textContent).not.toContain('demo brand');
     expect(startButton('starter').textContent).toBe('Buy now');
     await choose('trial');
-    expect(startButton('starter').textContent).toBe('Start 14-day free trial');
+    expect(startButton('starter').textContent).toBe('Start 7-day free trial');
   });
 
   it('names the brand on screen', async () => {

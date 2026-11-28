@@ -17,7 +17,7 @@ When you start with Ansvisor, a setup wizard walks you through your first brand.
 
 The first screen, **How do you want to start?**, opens on the free trial. You can pick **Monthly**, **Yearly** or **Demo** instead.
 
-- **Start 14-day free trial** opens checkout. Nothing is charged until the trial ends, and you can cancel any time. The trial comes with an organization's first subscription only.
+- **Start 7-day free trial** opens checkout. Nothing is charged until the trial ends, and you can cancel any time. The trial comes with an organization's first subscription only.
 - **Buy now**, or a plan without a trial, starts the plan the same day.
 
 After checkout, the five setup steps open; your brand's first run starts when you finish.

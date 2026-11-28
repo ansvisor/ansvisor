@@ -147,6 +147,8 @@ export function mentionsPlatformOf(engine: string): string {
   // ChatGPT (resolveAIProvider's default), as modelFamilyValue notes.
   const name = MODEL_PROVIDER_LABELS[slugs[0]] ?? PLATFORM_LABELS[slugs[0]];
   if (!name) return '';
+  // Claude's API models answer under "claude", not the Claude app (claude-web).
+  if (MODEL_PROVIDER_LABELS[slugs[0]] === 'Claude' && slugs[0] !== 'claude-web') return 'claude';
   return (
     POSITION_PLATFORMS.find(
       (platform) => platform.label === name || modelLabel(platform.id) === name,

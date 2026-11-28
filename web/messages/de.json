@@ -15912,6 +15912,10 @@
     "loadError": "Ihre Prompts konnten nicht geladen werden.",
     "visibilityDegraded": "Werte zur Sichtbarkeit sind vorübergehend nicht verfügbar – Prompts werden ohne diese angezeigt.",
     "positions": {
+      "slots": {
+        "note": "Noch nicht in Ihrem Tarif enthalten · Fügen Sie Tracking-slots hinzu, um {platform}-Ergebnisse und -Positionen zu verfolgen.",
+        "add": "Slots hinzufügen"
+      },
       "answers": "{count, plural, one {# Antwort} other {# Antworten}}",
       "answersInPeriod": "{count, plural, one {# Antwort} other {# Antworten}} in diesem Zeitraum",
       "mentionedIn": "In {mentioned} von {answers, plural, one {# Antwort} other {# Antworten}} · {mentions, plural, one {# Erwähnung} other {# Erwähnungen}}",

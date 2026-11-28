@@ -27,10 +27,10 @@ describe('hasUsedTrial', () => {
 });
 
 describe('trialEndDate', () => {
-  it('ends a trial started now 14 days later, as Checkout counts it', () => {
+  it('ends a trial started now 7 days later, as Checkout counts it', () => {
     const now = Date.parse('2026-10-28T12:00:00Z');
-    expect(TRIAL_DAYS).toBe(14);
-    expect(trialEndDate(now).toISOString()).toBe('2026-11-11T12:00:00.000Z');
-    expect(trialEndDate(now, 7).toISOString()).toBe('2026-11-04T12:00:00.000Z');
+    expect(TRIAL_DAYS).toBe(7);
+    expect(trialEndDate(now).toISOString()).toBe('2026-11-04T12:00:00.000Z');
+    expect(trialEndDate(now, 14).toISOString()).toBe('2026-11-11T12:00:00.000Z');
   });
 });

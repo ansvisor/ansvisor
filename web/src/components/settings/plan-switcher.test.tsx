@@ -605,16 +605,16 @@ describe('choosing a plan once the old one has ended', () => {
     promo = SAVE50;
     await render('starter', { status: 'incomplete', trialOffered: true });
     expect(container.textContent).toContain(
-      "Buy a plan now, or try one free for 14 days first. Either way you add a card on Stripe's secure checkout.",
+      "Buy a plan now, or try one free for 7 days first. Either way you add a card on Stripe's secure checkout.",
     );
     await vi.waitFor(() => expect(startButton('Starter', 'buy')?.textContent).toBe('Buy now'));
     expect(cardText().Starter).toContain('Full plan from day one');
     await choose('trial');
     expect(startButton('Starter', 'buy')).toBeNull();
-    expect(startButton('Growth', 'trial')?.textContent).toBe('Start 14-day free trial');
+    expect(startButton('Growth', 'trial')?.textContent).toBe('Start 7-day free trial');
     expect(dueToday('Growth')).toBe('$0');
     expect(cardText().Growth).toMatch(/Free until [A-Z][a-z]{2} \d{1,2}, then \$249\/month/);
-    expect(cardText().Growth).toContain('Limited AI usage for 14 days');
+    expect(cardText().Growth).toContain('Limited AI usage for 7 days');
 
     // The trial comes without the offer's code.
     await act(async () => startButton('Growth', 'trial')!.click());

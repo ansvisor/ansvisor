@@ -15859,6 +15859,10 @@
     "loadError": "无法加载您的 Prompt。",
     "visibilityDegraded": "可见度数据暂时不可用 — 正在显示未包含这些数据的 Prompt。",
     "positions": {
+      "slots": {
+        "note": "您的套餐尚未包含 · 添加跟踪 slots 以跟踪 {platform} 的结果和排名。",
+        "add": "添加 slots"
+      },
       "answers": "{count, plural, other {# 个回答}}",
       "answersInPeriod": "在此期间共有 {count, plural, other {# 个回答}}",
       "mentionedIn": "在 {answers, plural, other {# 个回答}}中的 {mentioned} 个被提及 · {mentions, plural, other {# 次提及}}",
