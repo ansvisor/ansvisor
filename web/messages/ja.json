@@ -16760,6 +16760,107 @@
       "set": "ステータスを設定",
       "setLabel": "作業ステータスを設定",
       "none": "ステータスなし"
+    },
+    "detail": {
+      "presets": {
+        "24h": "24時間",
+        "7d": "7日間",
+        "30d": "30日間",
+        "90d": "90日間"
+      },
+      "unknownModel": "不明",
+      "sentiment": {
+        "positive": "ポジティブ",
+        "neutral": "ニュートラル",
+        "negative": "ネガティブ"
+      },
+      "active": "アクティブ",
+      "paused": "一時停止中",
+      "lastRun": "前回実行: {time}",
+      "loadFailed": "Promptの詳細を読み込めませんでした",
+      "errorTitle": "このPromptを読み込めませんでした",
+      "retry": "再試行",
+      "notFoundTitle": "Promptが見つかりません",
+      "notFoundBody": "このPromptは削除されたか、存在しない可能性があります。",
+      "goBack": "戻る",
+      "statusUpdateFailed": "ステータスを更新できませんでした",
+      "opportunitiesLoadFailed": "コンテンツのオポチュニティを読み込めませんでした",
+      "kpi": {
+        "visibility": "可視性 — {total, plural, one {#件} other {#件}}の回答のうち{mentioned}件で言及、{cited}件で引用",
+        "mentions": "メンション",
+        "citations": "引用"
+      },
+      "results": {
+        "title": "プラットフォーム別の結果",
+        "summary": "プラットフォームとモデル別にグループ化した{count, plural, one {#件} other {#件}}の結果。",
+        "empty": "このPromptのトラッキング結果はまだありません。",
+        "emptyRange": "選択した期間に結果はありません。",
+        "showAll": "すべてのデータを表示"
+      },
+      "group": {
+        "runs": "{count, plural, one {#回の実行} other {#回の実行}}",
+        "mentions": "メンション",
+        "citations": "引用",
+        "runsHeading": "実行",
+        "mentionCount": "{count, plural, one {<n>#</n><l>件のメンション</l>} other {<n>#</n><l>件のメンション</l>}}",
+        "citationCount": "{count, plural, one {<n>#</n><l>件の引用</l>} other {<n>#</n><l>件の引用</l>}}",
+        "showResponse": "回答を表示",
+        "hideResponse": "回答を非表示",
+        "openFullPage": "ページ全体で開く",
+        "showingLatest": "このプラットフォームの{total, plural, one {#回} other {#回}}の実行のうち、最新の{shown}回を表示しています。"
+      },
+      "sources": {
+        "title": "上位の参照元",
+        "description": "AIプラットフォームがこのPromptに回答する際に引用する参照元。",
+        "filterPlaceholder": "ドメイン、URL、タイトルで絞り込み...",
+        "domainsTab": "ドメイン ({count})",
+        "urlsTab": "URL ({count})",
+        "rank": "順位",
+        "domain": "ドメイン",
+        "url": "URL",
+        "platforms": "プラットフォーム",
+        "usage": "使用状況",
+        "citations": "引用",
+        "openDomain": "{domain} を新しいタブで開く",
+        "openCitedPage": "引用されたページを新しいタブで開く",
+        "openCitedPageTitle": "引用されたページを開く"
+      },
+      "notes": {
+        "title": "メモ",
+        "description": "このPromptに関する作業を記録します — 公開したもの、計画したもの、決めたこと。",
+        "placeholder": "例: このPromptを狙った比較ブログ記事を公開した…",
+        "add": "メモを追加",
+        "empty": "メモはまだありません — 上から最初のメモを追加してください。",
+        "emptyReadOnly": "メモはまだありません。",
+        "unknownAuthor": "不明",
+        "delete": "メモを削除",
+        "addFailed": "メモを追加できませんでした",
+        "deleteFailed": "メモを削除できませんでした"
+      },
+      "targets": {
+        "title": "ターゲットURL",
+        "description": "このPromptでAIの回答に引用してほしいページ。新しいトラッキング結果が届くと、引用ステータスは自動で更新されます。",
+        "add": "追加",
+        "empty": "ターゲットURLはまだありません — 引用してほしいページを追加してください。",
+        "emptyReadOnly": "ターゲットURLはまだありません。",
+        "remove": "ターゲットURLを削除",
+        "addFailed": "URLを追加できませんでした",
+        "removeFailed": "URLを削除できませんでした",
+        "notCited": "未引用",
+        "cited": "引用 ×{count}",
+        "citedIn": "{count, plural, one {#件の回答で引用} other {#件の回答で引用}}",
+        "first": "初回 {date}",
+        "last": "最終 {date}",
+        "alreadyCited": "ターゲットにする前から引用されていました"
+      },
+      "opportunities": {
+        "title": "コンテンツのオポチュニティ",
+        "description": "このPromptで見つかった、対応待ちのオポチュニティ。",
+        "loadFailed": "コンテンツのオポチュニティを読み込めませんでした。",
+        "empty": "このPromptに未対応のオポチュニティはありません。",
+        "briefReady": "ブリーフ準備完了",
+        "viewAll": "すべて表示 ({total})"
+      }
     }
   },
   "volumeEstimate": {

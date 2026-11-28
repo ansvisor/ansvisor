@@ -16767,6 +16767,107 @@
       "set": "Status instellen",
       "setLabel": "Werkstatus instellen",
       "none": "Geen status"
+    },
+    "detail": {
+      "presets": {
+        "24h": "24u",
+        "7d": "7d",
+        "30d": "30d",
+        "90d": "90d"
+      },
+      "unknownModel": "Onbekend",
+      "sentiment": {
+        "positive": "positief",
+        "neutral": "neutraal",
+        "negative": "negatief"
+      },
+      "active": "Actief",
+      "paused": "Gepauzeerd",
+      "lastRun": "Laatste uitvoering: {time}",
+      "loadFailed": "Prompt-details konden niet worden geladen",
+      "errorTitle": "Deze Prompt kon niet worden geladen",
+      "retry": "Opnieuw proberen",
+      "notFoundTitle": "Prompt niet gevonden",
+      "notFoundBody": "Deze Prompt is mogelijk verwijderd of bestaat niet.",
+      "goBack": "Teruggaan",
+      "statusUpdateFailed": "Status kon niet worden bijgewerkt",
+      "opportunitiesLoadFailed": "Contentkansen konden niet worden geladen",
+      "kpi": {
+        "visibility": "Zichtbaarheid — vermeld in {mentioned} van {total, plural, one {# antwoord} other {# antwoorden}}, geciteerd in {cited}",
+        "mentions": "Vermeldingen",
+        "citations": "Citaten"
+      },
+      "results": {
+        "title": "Platformresultaten",
+        "summary": "{count, plural, one {# resultaat} other {# resultaten}}, gegroepeerd per platform en model.",
+        "empty": "Nog geen trackingresultaten voor deze Prompt.",
+        "emptyRange": "Geen resultaten in de gekozen periode.",
+        "showAll": "Alle gegevens tonen"
+      },
+      "group": {
+        "runs": "{count, plural, one {# uitvoering} other {# uitvoeringen}}",
+        "mentions": "Vermeldingen",
+        "citations": "Citaten",
+        "runsHeading": "Uitvoeringen",
+        "mentionCount": "{count, plural, one {<n>#</n><l> vermelding</l>} other {<n>#</n><l> vermeldingen</l>}}",
+        "citationCount": "{count, plural, one {<n>#</n><l> citaat</l>} other {<n>#</n><l> citaten</l>}}",
+        "showResponse": "Antwoord tonen",
+        "hideResponse": "Antwoord verbergen",
+        "openFullPage": "Volledige pagina openen",
+        "showingLatest": "De laatste {shown} van {total, plural, one {# uitvoering} other {# uitvoeringen}} voor dit platform."
+      },
+      "sources": {
+        "title": "Belangrijkste bronnen",
+        "description": "Bronnen die AI-platforms citeren bij het beantwoorden van deze Prompt.",
+        "filterPlaceholder": "Filteren op domein, URL of titel...",
+        "domainsTab": "Domeinen ({count})",
+        "urlsTab": "URL's ({count})",
+        "rank": "Positie",
+        "domain": "Domein",
+        "url": "URL",
+        "platforms": "Platforms",
+        "usage": "Gebruik",
+        "citations": "Citaten",
+        "openDomain": "{domain} openen in een nieuw tabblad",
+        "openCitedPage": "Geciteerde pagina openen in een nieuw tabblad",
+        "openCitedPageTitle": "Geciteerde pagina openen"
+      },
+      "notes": {
+        "title": "Notities",
+        "description": "Houd het werk achter deze Prompt bij — wat is gepubliceerd, gepland of besloten.",
+        "placeholder": "bijv. Een vergelijkend blogartikel gepubliceerd dat op deze Prompt mikt…",
+        "add": "Notitie toevoegen",
+        "empty": "Nog geen notities — voeg hierboven de eerste toe.",
+        "emptyReadOnly": "Nog geen notities.",
+        "unknownAuthor": "Onbekend",
+        "delete": "Notitie verwijderen",
+        "addFailed": "Notitie kon niet worden toegevoegd",
+        "deleteFailed": "Notitie kon niet worden verwijderd"
+      },
+      "targets": {
+        "title": "Doel-URL's",
+        "description": "Pagina's die AI-antwoorden voor deze Prompt moeten citeren. De citatiestatus wordt automatisch bijgewerkt zodra er nieuwe trackingresultaten binnenkomen.",
+        "add": "Toevoegen",
+        "empty": "Nog geen doel-URL's — voeg de pagina's toe die je geciteerd wilt zien.",
+        "emptyReadOnly": "Nog geen doel-URL's.",
+        "remove": "Doel-URL verwijderen",
+        "addFailed": "URL kon niet worden toegevoegd",
+        "removeFailed": "URL kon niet worden verwijderd",
+        "notCited": "Nog niet geciteerd",
+        "cited": "Geciteerd ×{count}",
+        "citedIn": "{count, plural, one {Geciteerd in # antwoord} other {Geciteerd in # antwoorden}}",
+        "first": "eerst {date}",
+        "last": "laatst {date}",
+        "alreadyCited": "werd al geciteerd voordat je erop mikte"
+      },
+      "opportunities": {
+        "title": "Contentkansen",
+        "description": "Kansen die voor deze Prompt zijn gevonden en op actie wachten.",
+        "loadFailed": "Contentkansen konden niet worden geladen.",
+        "empty": "Geen open kansen voor deze Prompt.",
+        "briefReady": "Brief klaar",
+        "viewAll": "Alle {total} bekijken"
+      }
     }
   },
   "volumeEstimate": {

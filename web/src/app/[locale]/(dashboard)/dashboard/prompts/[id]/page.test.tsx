@@ -3,6 +3,8 @@ import { createRoot, type Root } from 'react-dom/client';
 import { NextIntlClientProvider } from 'next-intl';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import messages from '../../../../../../../messages/en.json';
+import trMessages from '../../../../../../../messages/tr.json';
+import { mergeMessages, type Messages } from '@/i18n/messages';
 import type { PromptDetailData } from '@/lib/actions/tracking';
 
 /**
@@ -63,7 +65,7 @@ const { default: PromptDetailPage } = await import('./page');
 
 const source = (domain: string) => ({
   domain,
-  category: 'third_party',
+  category: 'editorial',
   models: ['chatgpt-web'],
   totalCitations: 3,
   resultsCiting: 2,
@@ -118,10 +120,12 @@ afterEach(() => {
   container.remove();
 });
 
-async function render() {
+async function render(locale: 'en' | 'tr' = 'en') {
+  const localeMessages =
+    locale === 'en' ? messages : mergeMessages(messages as unknown as Messages, trMessages);
   await act(async () => {
     root.render(
-      <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
+      <NextIntlClientProvider locale={locale} messages={localeMessages} timeZone="UTC">
         <PromptDetailPage />
       </NextIntlClientProvider>,
     );
@@ -204,5 +208,26 @@ describe("what Chat's side panel sees (the owner's plan, step 9's detail pages)"
     getPromptDetail.mockReturnValue(new Promise(() => {}));
     await render();
     expect(chatPage.mock.lastCall![0]).toBeNull();
+  });
+});
+
+describe("the page's copy", () => {
+  it('reads from the messages, in English', async () => {
+    await render();
+    const text = container.textContent;
+    expect(text).toContain('Platform Results');
+    expect(text).toContain('4 results grouped by platform and model.');
+    expect(text).toContain('Visibility — mentioned in 2 of 4 answers, cited in 1');
+    expect(text).toContain('Active');
+    expect(text).toContain('Domains (12)');
+  });
+
+  it('follows the language: Turkish', async () => {
+    await render('tr');
+    const text = container.textContent;
+    expect(text).toContain('Platform Sonuçları');
+    expect(text).toContain('En İyi Kaynaklar');
+    expect(text).toContain('Aktif');
+    expect(text).not.toContain('Platform Results');
   });
 });

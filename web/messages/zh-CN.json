@@ -16718,6 +16718,107 @@
       "set": "设置状态",
       "setLabel": "设置工作状态",
       "none": "无状态"
+    },
+    "detail": {
+      "presets": {
+        "24h": "24小时",
+        "7d": "7天",
+        "30d": "30天",
+        "90d": "90天"
+      },
+      "unknownModel": "未知",
+      "sentiment": {
+        "positive": "正面",
+        "neutral": "中性",
+        "negative": "负面"
+      },
+      "active": "活跃",
+      "paused": "已暂停",
+      "lastRun": "上次运行：{time}",
+      "loadFailed": "无法加载 Prompt 详情",
+      "errorTitle": "无法加载此 Prompt",
+      "retry": "重试",
+      "notFoundTitle": "未找到 Prompt",
+      "notFoundBody": "此 Prompt 可能已被删除或不存在。",
+      "goBack": "返回",
+      "statusUpdateFailed": "无法更新状态",
+      "opportunitiesLoadFailed": "无法加载内容机会",
+      "kpi": {
+        "visibility": "可见度 — 在 {total, plural, one {# 条} other {# 条}}回答中，{mentioned} 条提及，{cited} 条引用",
+        "mentions": "提及",
+        "citations": "引用"
+      },
+      "results": {
+        "title": "各平台结果",
+        "summary": "按平台和模型分组的 {count, plural, one {# 条} other {# 条}}结果。",
+        "empty": "此 Prompt 暂无跟踪结果。",
+        "emptyRange": "所选日期范围内没有结果。",
+        "showAll": "显示全部数据"
+      },
+      "group": {
+        "runs": "{count, plural, one {# 次运行} other {# 次运行}}",
+        "mentions": "提及",
+        "citations": "引用",
+        "runsHeading": "运行记录",
+        "mentionCount": "{count, plural, one {<n>#</n><l> 次提及</l>} other {<n>#</n><l> 次提及</l>}}",
+        "citationCount": "{count, plural, one {<n>#</n><l> 次引用</l>} other {<n>#</n><l> 次引用</l>}}",
+        "showResponse": "显示回答",
+        "hideResponse": "隐藏回答",
+        "openFullPage": "打开完整页面",
+        "showingLatest": "显示此平台 {total, plural, one {# 次} other {# 次}}运行中最近的 {shown} 次。"
+      },
+      "sources": {
+        "title": "热门来源",
+        "description": "AI 平台回答此 Prompt 时引用的来源。",
+        "filterPlaceholder": "按域名、URL 或标题筛选...",
+        "domainsTab": "域名（{count}）",
+        "urlsTab": "URL（{count}）",
+        "rank": "排名",
+        "domain": "域名",
+        "url": "URL",
+        "platforms": "平台",
+        "usage": "使用情况",
+        "citations": "引用",
+        "openDomain": "在新标签页中打开 {domain}",
+        "openCitedPage": "在新标签页中打开被引用的页面",
+        "openCitedPageTitle": "打开被引用的页面"
+      },
+      "notes": {
+        "title": "备注",
+        "description": "记录此 Prompt 背后的工作 — 发布了什么、计划了什么、决定了什么。",
+        "placeholder": "例如：发布了一篇针对此 Prompt 的对比博客文章…",
+        "add": "添加备注",
+        "empty": "暂无备注 — 在上方添加第一条。",
+        "emptyReadOnly": "暂无备注。",
+        "unknownAuthor": "未知",
+        "delete": "删除备注",
+        "addFailed": "无法添加备注",
+        "deleteFailed": "无法删除备注"
+      },
+      "targets": {
+        "title": "目标 URL",
+        "description": "你希望 AI 回答在此 Prompt 中引用的页面。新的跟踪结果到达时，引用状态会自动更新。",
+        "add": "添加",
+        "empty": "暂无目标 URL — 添加你希望被引用的页面。",
+        "emptyReadOnly": "暂无目标 URL。",
+        "remove": "移除目标 URL",
+        "addFailed": "无法添加 URL",
+        "removeFailed": "无法移除 URL",
+        "notCited": "尚未被引用",
+        "cited": "已引用 ×{count}",
+        "citedIn": "{count, plural, one {在 # 条回答中被引用} other {在 # 条回答中被引用}}",
+        "first": "首次 {date}",
+        "last": "最近 {date}",
+        "alreadyCited": "设为目标前已被引用"
+      },
+      "opportunities": {
+        "title": "内容机会",
+        "description": "为此 Prompt 找到的、等待处理的机会。",
+        "loadFailed": "无法加载内容机会。",
+        "empty": "此 Prompt 没有待处理的机会。",
+        "briefReady": "简报已就绪",
+        "viewAll": "查看全部 {total} 个"
+      }
     }
   },
   "volumeEstimate": {

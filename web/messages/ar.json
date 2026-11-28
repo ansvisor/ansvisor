@@ -16752,6 +16752,107 @@
       "set": "تعيين الحالة",
       "setLabel": "تعيين حالة العمل",
       "none": "بدون حالة"
+    },
+    "detail": {
+      "presets": {
+        "24h": "24 ساعة",
+        "7d": "7 أيام",
+        "30d": "30 يومًا",
+        "90d": "90 يومًا"
+      },
+      "unknownModel": "غير معروف",
+      "sentiment": {
+        "positive": "إيجابي",
+        "neutral": "محايد",
+        "negative": "سلبي"
+      },
+      "active": "نشط",
+      "paused": "متوقف مؤقتًا",
+      "lastRun": "آخر تشغيل: {time}",
+      "loadFailed": "تعذّر تحميل تفاصيل الـ Prompt",
+      "errorTitle": "تعذّر تحميل هذا الـ Prompt",
+      "retry": "إعادة المحاولة",
+      "notFoundTitle": "لم يتم العثور على الـ Prompt",
+      "notFoundBody": "ربما حُذف هذا الـ Prompt أو أنه غير موجود.",
+      "goBack": "الرجوع",
+      "statusUpdateFailed": "تعذّر تحديث الحالة",
+      "opportunitiesLoadFailed": "تعذّر تحميل فرص المحتوى",
+      "kpi": {
+        "visibility": "الظهور — ذُكر في {mentioned} من {total, plural, zero {# إجابة} one {إجابة واحدة} two {إجابتين} few {# إجابات} many {# إجابة} other {# إجابة}}، واستُشهد به في {cited}",
+        "mentions": "الإشارات",
+        "citations": "الاستشهادات"
+      },
+      "results": {
+        "title": "النتائج حسب المنصة",
+        "summary": "{count, plural, zero {# نتيجة} one {نتيجة واحدة} two {نتيجتان} few {# نتائج} many {# نتيجة} other {# نتيجة}} مجمّعة حسب المنصة والنموذج.",
+        "empty": "لا توجد نتائج تتبّع لهذا الـ Prompt بعد.",
+        "emptyRange": "لا توجد نتائج في النطاق الزمني المحدد.",
+        "showAll": "عرض كل البيانات"
+      },
+      "group": {
+        "runs": "{count, plural, zero {# عملية تشغيل} one {عملية تشغيل واحدة} two {عمليتا تشغيل} few {# عمليات تشغيل} many {# عملية تشغيل} other {# عملية تشغيل}}",
+        "mentions": "الإشارات",
+        "citations": "الاستشهادات",
+        "runsHeading": "عمليات التشغيل",
+        "mentionCount": "{count, plural, zero {<n>#</n><l> إشارة</l>} one {<n>#</n><l> إشارة</l>} two {<n>#</n><l> إشارة</l>} few {<n>#</n><l> إشارات</l>} many {<n>#</n><l> إشارة</l>} other {<n>#</n><l> إشارة</l>}}",
+        "citationCount": "{count, plural, zero {<n>#</n><l> استشهاد</l>} one {<n>#</n><l> استشهاد</l>} two {<n>#</n><l> استشهاد</l>} few {<n>#</n><l> استشهادات</l>} many {<n>#</n><l> استشهادًا</l>} other {<n>#</n><l> استشهاد</l>}}",
+        "showResponse": "عرض الإجابة",
+        "hideResponse": "إخفاء الإجابة",
+        "openFullPage": "فتح الصفحة كاملة",
+        "showingLatest": "يتم عرض أحدث {shown} من {total, plural, zero {# عملية تشغيل} one {عملية تشغيل واحدة} two {عمليتي تشغيل} few {# عمليات تشغيل} many {# عملية تشغيل} other {# عملية تشغيل}} لهذه المنصة."
+      },
+      "sources": {
+        "title": "أهم المصادر",
+        "description": "المصادر التي تستشهد بها منصات الذكاء الاصطناعي عند الإجابة عن هذا الـ Prompt.",
+        "filterPlaceholder": "التصفية حسب النطاق أو عنوان URL أو العنوان...",
+        "domainsTab": "النطاقات ({count})",
+        "urlsTab": "عناوين URL ({count})",
+        "rank": "المرتبة",
+        "domain": "النطاق",
+        "url": "URL",
+        "platforms": "المنصات",
+        "usage": "الاستخدام",
+        "citations": "الاستشهادات",
+        "openDomain": "فتح {domain} في علامة تبويب جديدة",
+        "openCitedPage": "فتح الصفحة المستشهد بها في علامة تبويب جديدة",
+        "openCitedPageTitle": "فتح الصفحة المستشهد بها"
+      },
+      "notes": {
+        "title": "الملاحظات",
+        "description": "تابِع العمل الخاص بهذا الـ Prompt — ما نُشر أو خُطط له أو تقرّر.",
+        "placeholder": "مثال: نشرنا مقالة مقارنة في المدونة تستهدف هذا الـ Prompt…",
+        "add": "إضافة ملاحظة",
+        "empty": "لا توجد ملاحظات بعد — أضف أول ملاحظة أعلاه.",
+        "emptyReadOnly": "لا توجد ملاحظات بعد.",
+        "unknownAuthor": "غير معروف",
+        "delete": "حذف الملاحظة",
+        "addFailed": "تعذّرت إضافة الملاحظة",
+        "deleteFailed": "تعذّر حذف الملاحظة"
+      },
+      "targets": {
+        "title": "عناوين URL المستهدفة",
+        "description": "الصفحات التي تريد أن تستشهد بها إجابات الذكاء الاصطناعي لهذا الـ Prompt. تتحدّث حالة الاستشهاد تلقائيًا مع وصول نتائج تتبّع جديدة.",
+        "add": "إضافة",
+        "empty": "لا توجد عناوين URL مستهدفة بعد — أضف الصفحات التي تريد أن يُستشهد بها.",
+        "emptyReadOnly": "لا توجد عناوين URL مستهدفة بعد.",
+        "remove": "إزالة عنوان URL المستهدف",
+        "addFailed": "تعذّرت إضافة عنوان URL",
+        "removeFailed": "تعذّرت إزالة عنوان URL",
+        "notCited": "لم يُستشهد به بعد",
+        "cited": "مُستشهد به ×{count}",
+        "citedIn": "{count, plural, zero {استُشهد به في # إجابة} one {استُشهد به في إجابة واحدة} two {استُشهد به في إجابتين} few {استُشهد به في # إجابات} many {استُشهد به في # إجابة} other {استُشهد به في # إجابة}}",
+        "first": "أول مرة {date}",
+        "last": "آخر مرة {date}",
+        "alreadyCited": "كان مُستشهدًا به قبل استهدافه"
+      },
+      "opportunities": {
+        "title": "فرص المحتوى",
+        "description": "الفرص التي حُدّدت لهذا الـ Prompt وتنتظر إجراءً.",
+        "loadFailed": "تعذّر تحميل فرص المحتوى.",
+        "empty": "لا توجد فرص مفتوحة لهذا الـ Prompt.",
+        "briefReady": "الملخص جاهز",
+        "viewAll": "عرض الكل ({total})"
+      }
     }
   },
   "volumeEstimate": {

@@ -16761,6 +16761,107 @@
       "set": "Ustaw status",
       "setLabel": "Ustaw status pracy",
       "none": "Brak statusu"
+    },
+    "detail": {
+      "presets": {
+        "24h": "24 godz.",
+        "7d": "7 dni",
+        "30d": "30 dni",
+        "90d": "90 dni"
+      },
+      "unknownModel": "Nieznany",
+      "sentiment": {
+        "positive": "pozytywny",
+        "neutral": "neutralny",
+        "negative": "negatywny"
+      },
+      "active": "Aktywny",
+      "paused": "Wstrzymany",
+      "lastRun": "Ostatnie uruchomienie: {time}",
+      "loadFailed": "Nie udało się wczytać szczegółów Promptu",
+      "errorTitle": "Nie udało się wczytać tego Promptu",
+      "retry": "Ponów",
+      "notFoundTitle": "Nie znaleziono Promptu",
+      "notFoundBody": "Ten Prompt mógł zostać usunięty lub nie istnieje.",
+      "goBack": "Wróć",
+      "statusUpdateFailed": "Nie udało się zaktualizować statusu",
+      "opportunitiesLoadFailed": "Nie udało się wczytać szans na treści",
+      "kpi": {
+        "visibility": "Widoczność — wzmianka w {mentioned} z {total, plural, one {# odpowiedzi} few {# odpowiedzi} many {# odpowiedzi} other {# odpowiedzi}}, cytowanie w {cited}",
+        "mentions": "Wzmianki",
+        "citations": "Cytowania"
+      },
+      "results": {
+        "title": "Wyniki według platform",
+        "summary": "{count, plural, one {# wynik pogrupowany} few {# wyniki pogrupowane} many {# wyników pogrupowanych} other {# wyniku pogrupowanego}} według platformy i modelu.",
+        "empty": "Brak jeszcze wyników śledzenia dla tego Promptu.",
+        "emptyRange": "Brak wyników w wybranym zakresie dat.",
+        "showAll": "Pokaż wszystkie dane"
+      },
+      "group": {
+        "runs": "{count, plural, one {# uruchomienie} few {# uruchomienia} many {# uruchomień} other {# uruchomienia}}",
+        "mentions": "Wzmianki",
+        "citations": "Cytowania",
+        "runsHeading": "Uruchomienia",
+        "mentionCount": "{count, plural, one {<n>#</n><l> wzmianka</l>} few {<n>#</n><l> wzmianki</l>} many {<n>#</n><l> wzmianek</l>} other {<n>#</n><l> wzmianki</l>}}",
+        "citationCount": "{count, plural, one {<n>#</n><l> cytowanie</l>} few {<n>#</n><l> cytowania</l>} many {<n>#</n><l> cytowań</l>} other {<n>#</n><l> cytowania</l>}}",
+        "showResponse": "Pokaż odpowiedź",
+        "hideResponse": "Ukryj odpowiedź",
+        "openFullPage": "Otwórz pełną stronę",
+        "showingLatest": "Pokazano najnowsze {shown} z {total, plural, one {# uruchomienia} few {# uruchomień} many {# uruchomień} other {# uruchomienia}} dla tej platformy."
+      },
+      "sources": {
+        "title": "Najważniejsze źródła",
+        "description": "Źródła, które platformy AI cytują, odpowiadając na ten Prompt.",
+        "filterPlaceholder": "Filtruj według domeny, URL lub tytułu...",
+        "domainsTab": "Domeny ({count})",
+        "urlsTab": "Adresy URL ({count})",
+        "rank": "Pozycja",
+        "domain": "Domena",
+        "url": "URL",
+        "platforms": "Platformy",
+        "usage": "Użycie",
+        "citations": "Cytowania",
+        "openDomain": "Otwórz {domain} w nowej karcie",
+        "openCitedPage": "Otwórz cytowaną stronę w nowej karcie",
+        "openCitedPageTitle": "Otwórz cytowaną stronę"
+      },
+      "notes": {
+        "title": "Notatki",
+        "description": "Zapisuj pracę związaną z tym Promptem — co opublikowano, zaplanowano lub postanowiono.",
+        "placeholder": "np. Opublikowano porównawczy wpis na blogu pod ten Prompt…",
+        "add": "Dodaj notatkę",
+        "empty": "Brak notatek — dodaj pierwszą powyżej.",
+        "emptyReadOnly": "Brak notatek.",
+        "unknownAuthor": "Nieznany",
+        "delete": "Usuń notatkę",
+        "addFailed": "Nie udało się dodać notatki",
+        "deleteFailed": "Nie udało się usunąć notatki"
+      },
+      "targets": {
+        "title": "Docelowe adresy URL",
+        "description": "Strony, które mają być cytowane w odpowiedziach AI dla tego Promptu. Status cytowania aktualizuje się automatycznie, gdy pojawiają się nowe wyniki śledzenia.",
+        "add": "Dodaj",
+        "empty": "Brak docelowych adresów URL — dodaj strony, które mają być cytowane.",
+        "emptyReadOnly": "Brak docelowych adresów URL.",
+        "remove": "Usuń docelowy URL",
+        "addFailed": "Nie udało się dodać adresu URL",
+        "removeFailed": "Nie udało się usunąć adresu URL",
+        "notCited": "Jeszcze nie cytowano",
+        "cited": "Cytowano ×{count}",
+        "citedIn": "{count, plural, one {Cytowano w # odpowiedzi} few {Cytowano w # odpowiedziach} many {Cytowano w # odpowiedziach} other {Cytowano w # odpowiedzi}}",
+        "first": "pierwszy raz {date}",
+        "last": "ostatnio {date}",
+        "alreadyCited": "była cytowana już przed ustawieniem jako docelowa"
+      },
+      "opportunities": {
+        "title": "Szanse na treści",
+        "description": "Szanse znalezione dla tego Promptu, które czekają na działanie.",
+        "loadFailed": "Nie udało się wczytać szans na treści.",
+        "empty": "Brak otwartych szans dla tego Promptu.",
+        "briefReady": "Brief gotowy",
+        "viewAll": "Zobacz wszystkie ({total})"
+      }
     }
   },
   "volumeEstimate": {

@@ -16769,6 +16769,107 @@
       "set": "Definir status",
       "setLabel": "Definir status do trabalho",
       "none": "Sem status"
+    },
+    "detail": {
+      "presets": {
+        "24h": "24h",
+        "7d": "7d",
+        "30d": "30d",
+        "90d": "90d"
+      },
+      "unknownModel": "Desconhecido",
+      "sentiment": {
+        "positive": "positivo",
+        "neutral": "neutro",
+        "negative": "negativo"
+      },
+      "active": "Ativo",
+      "paused": "Pausado",
+      "lastRun": "Última execução: {time}",
+      "loadFailed": "Falha ao carregar os detalhes do Prompt",
+      "errorTitle": "Não foi possível carregar este Prompt",
+      "retry": "Tentar novamente",
+      "notFoundTitle": "Prompt não encontrado",
+      "notFoundBody": "Este Prompt pode ter sido excluído ou não existe.",
+      "goBack": "Voltar",
+      "statusUpdateFailed": "Falha ao atualizar o status",
+      "opportunitiesLoadFailed": "Falha ao carregar as oportunidades de conteúdo",
+      "kpi": {
+        "visibility": "Visibilidade — mencionado em {mentioned} de {total, plural, one {# resposta} other {# respostas}}, citado em {cited}",
+        "mentions": "Menções",
+        "citations": "Citações"
+      },
+      "results": {
+        "title": "Resultados por plataforma",
+        "summary": "{count, plural, one {# resultado agrupado} other {# resultados agrupados}} por plataforma e modelo.",
+        "empty": "Ainda não há resultados de monitoramento para este Prompt.",
+        "emptyRange": "Nenhum resultado no período selecionado.",
+        "showAll": "Mostrar todos os dados"
+      },
+      "group": {
+        "runs": "{count, plural, one {# execução} other {# execuções}}",
+        "mentions": "Menções",
+        "citations": "Citações",
+        "runsHeading": "Execuções",
+        "mentionCount": "{count, plural, one {<n>#</n><l> menção</l>} other {<n>#</n><l> menções</l>}}",
+        "citationCount": "{count, plural, one {<n>#</n><l> citação</l>} other {<n>#</n><l> citações</l>}}",
+        "showResponse": "Mostrar resposta",
+        "hideResponse": "Ocultar resposta",
+        "openFullPage": "Abrir página completa",
+        "showingLatest": "Mostrando as {shown} mais recentes de {total, plural, one {# execução} other {# execuções}} desta plataforma."
+      },
+      "sources": {
+        "title": "Principais fontes",
+        "description": "Fontes que as plataformas de IA citam ao responder a este Prompt.",
+        "filterPlaceholder": "Filtrar por domínio, URL ou título...",
+        "domainsTab": "Domínios ({count})",
+        "urlsTab": "URLs ({count})",
+        "rank": "Classificação",
+        "domain": "Domínio",
+        "url": "URL",
+        "platforms": "Plataformas",
+        "usage": "Uso",
+        "citations": "Citações",
+        "openDomain": "Abrir {domain} em uma nova aba",
+        "openCitedPage": "Abrir a página citada em uma nova aba",
+        "openCitedPageTitle": "Abrir a página citada"
+      },
+      "notes": {
+        "title": "Notas",
+        "description": "Registre o trabalho por trás deste Prompt — o que foi publicado, planejado ou decidido.",
+        "placeholder": "ex.: Publicamos um post comparativo voltado para este Prompt…",
+        "add": "Adicionar nota",
+        "empty": "Ainda não há notas — adicione a primeira acima.",
+        "emptyReadOnly": "Ainda não há notas.",
+        "unknownAuthor": "Desconhecido",
+        "delete": "Excluir nota",
+        "addFailed": "Falha ao adicionar a nota",
+        "deleteFailed": "Falha ao excluir a nota"
+      },
+      "targets": {
+        "title": "URLs de destino",
+        "description": "Páginas que você quer que as respostas de IA citem para este Prompt. O status de citação é atualizado automaticamente conforme chegam novos resultados de monitoramento.",
+        "add": "Adicionar",
+        "empty": "Ainda não há URLs de destino — adicione as páginas que você quer que sejam citadas.",
+        "emptyReadOnly": "Ainda não há URLs de destino.",
+        "remove": "Remover URL de destino",
+        "addFailed": "Falha ao adicionar a URL",
+        "removeFailed": "Falha ao remover a URL",
+        "notCited": "Ainda não citada",
+        "cited": "Citada ×{count}",
+        "citedIn": "{count, plural, one {Citada em # resposta} other {Citada em # respostas}}",
+        "first": "primeira {date}",
+        "last": "última {date}",
+        "alreadyCited": "já era citada antes de virar destino"
+      },
+      "opportunities": {
+        "title": "Oportunidades de conteúdo",
+        "description": "Oportunidades identificadas para este Prompt que aguardam uma ação.",
+        "loadFailed": "Não foi possível carregar as oportunidades de conteúdo.",
+        "empty": "Nenhuma oportunidade aberta para este Prompt.",
+        "briefReady": "Brief pronto",
+        "viewAll": "Ver todas ({total})"
+      }
     }
   },
   "volumeEstimate": {
