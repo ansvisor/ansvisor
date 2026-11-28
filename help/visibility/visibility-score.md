@@ -1,17 +1,17 @@
 ---
 title: How the AI Visibility Score is calculated
 route: /dashboard/insights
-keywords: [AI Visibility Score, visibility formula, mention rate, citation rate, position, score calculation, formulas]
+keywords: [AI Visibility Score, visibility formula, how is this calculated, mention rate, citation rate, position, score calculation, formulas]
 synonyms: [how is visibility calculated, score weights, what makes up my score, visibility math, how the score works]
 plan: all
-updated: 2026-11-06
-last_checked: 2026-11-06
+updated: 2026-11-28
+last_checked: 2026-11-28
 owner: Cihan
 app_version: 0.3.0
 approved: true
 sources: [docs/concepts/visibility-scoring.mdx, docs/guides/answer-engine-insights.mdx, docs/guides/competitors.mdx]
 ---
-The **AI Visibility Score** is a score from 0 to 100, not a percentage. It blends three things over the answers in your date range and filters: how many answers name your brand, how many cite a page of yours, and how early you're named. A score of 0 means no answer names or cites you; the closer every answer comes to naming you first and citing you, the closer the score gets to 100. **Formulas** on the **Visibility** page shows the exact formula.
+The **AI Visibility Score** is a score from 0 to 100, not a percentage. It blends three things over the answers in your date range and filters: how many answers name your brand, how many cite a page of yours, and how early you're named. A score of 0 means no answer names or cites you; the closer every answer comes to naming you first and citing you, the closer the score gets to 100. **Formulas** on the **Visibility** page shows the exact formula. Each card there also has a small Σ button, **How is this calculated?**, that opens Formulas on that card's own formula and says how many answers its number is based on.
 
 ## The three parts
 

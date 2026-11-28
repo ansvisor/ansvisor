@@ -64,4 +64,47 @@ describe('FormulaDialog', () => {
     expect(text).toContain('Kapsam');
     expect(text).not.toContain('How metrics are calculated');
   });
+
+  it('opened from a card, marks and scrolls to that section with its sample', async () => {
+    const scrolled: string[] = [];
+    const original = Element.prototype.scrollIntoView;
+    Element.prototype.scrollIntoView = function (this: Element) {
+      scrolled.push(this.getAttribute('data-formula-section') ?? '');
+    };
+    try {
+      await act(async () => {
+        root.render(
+          <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
+            <FormulaDialog
+              open
+              onOpenChange={() => {}}
+              section="position"
+              samples={{ position: { count: 12, of: 'placed' } }}
+            />
+          </NextIntlClientProvider>,
+        );
+      });
+    } finally {
+      Element.prototype.scrollIntoView = original;
+    }
+    // Controlled: no header button of its own.
+    expect(container.querySelector('button')).toBeNull();
+    const active = document.querySelectorAll('[role="dialog"] [data-active]');
+    expect(active).toHaveLength(1);
+    expect(active[0].getAttribute('data-formula-section')).toBe('position');
+    expect(active[0].getAttribute('aria-current')).toBe('true');
+    expect(scrolled).toEqual(['position']);
+    const sample = document.querySelectorAll('[data-slot="formula-sample"]');
+    expect(sample).toHaveLength(1);
+    expect(sample[0].textContent).toBe('Based on 12 answers that place you in this period.');
+    expect(sample[0].closest('[data-formula-section]')?.getAttribute('data-formula-section')).toBe(
+      'position',
+    );
+  });
+
+  it('from the header button, marks no section', async () => {
+    await openIn(messages);
+    expect(document.querySelector('[role="dialog"] [data-active]')).toBeNull();
+    expect(document.querySelector('[data-slot="formula-sample"]')).toBeNull();
+  });
 });

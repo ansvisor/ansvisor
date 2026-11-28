@@ -6921,6 +6921,7 @@
       "keywords": [
         "AI Visibility Score",
         "visibility formula",
+        "how is this calculated",
         "mention rate",
         "citation rate",
         "position",
@@ -6935,11 +6936,11 @@
         "how the score works"
       ],
       "plan": "all",
-      "updated": "2026-11-06",
+      "updated": "2026-11-28",
       "sections": [
         {
           "heading": null,
-          "text": "The **AI Visibility Score** is a score from 0 to 100, not a percentage. It blends three things over the answers in your date range and filters: how many answers name your brand, how many cite a page of yours, and how early you're named. A score of 0 means no answer names or cites you; the closer every answer comes to naming you first and citing you, the closer the score gets to 100. **Formulas** on the **Visibility** page shows the exact formula."
+          "text": "The **AI Visibility Score** is a score from 0 to 100, not a percentage. It blends three things over the answers in your date range and filters: how many answers name your brand, how many cite a page of yours, and how early you're named. A score of 0 means no answer names or cites you; the closer every answer comes to naming you first and citing you, the closer the score gets to 100. **Formulas** on the **Visibility** page shows the exact formula. Each card there also has a small Σ button, **How is this calculated?**, that opens Formulas on that card's own formula and says how many answers its number is based on."
         },
         {
           "heading": "The three parts",
