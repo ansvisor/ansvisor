@@ -11,7 +11,13 @@ vi.mock('../logger.js', () => ({
 const categoryPageFor = vi.hoisted(() => vi.fn());
 vi.mock('./category-play.js', () => ({ categoryPageFor: (...a) => categoryPageFor(...a) }));
 
-import { generateActionsForBrand, isReplaceable } from './generate.js';
+import {
+  generateActionsForBrand,
+  isReplaceable,
+  nextSlotKey,
+  opensExtraCycle,
+  slotDefinition,
+} from './generate.js';
 import { ENGINE_THRESHOLDS } from '../../config/action-engine.js';
 
 const { maxNewActionsPerDay } = ENGINE_THRESHOLDS.noise;
@@ -186,7 +192,7 @@ describe('generateActionsForBrand', () => {
    */
   it('never rewrites an active action’s scope', async () => {
     const writes = mockDb({
-      signals: [signal({ id: 's2' })],
+      signals: [signal({ id: 's2', impact: 'medium' })],
       activeActions: [{ id: 'a1', dedup_key: 'recover_visibility', status: 'in_progress' }],
     });
 
@@ -206,7 +212,7 @@ describe('generateActionsForBrand', () => {
 
   it('links new signals to the active action as evidence', async () => {
     const writes = mockDb({
-      signals: [signal({ id: 's3' })],
+      signals: [signal({ id: 's3', impact: 'medium' })],
       activeActions: [{ id: 'a1', dedup_key: 'recover_visibility', status: 'new' }],
     });
 
@@ -453,7 +459,7 @@ describe('a stale action', () => {
 
   it('is kept when someone is working on it', async () => {
     const writes = mockDb({
-      signals: [signal({ id: 's2' })],
+      signals: [signal({ id: 's2', impact: 'medium' })],
       activeActions: [stale({ status: 'in_progress' })],
     });
 
@@ -465,7 +471,7 @@ describe('a stale action', () => {
 
   it('is kept when it is not stale', async () => {
     const writes = mockDb({
-      signals: [signal({ id: 's2' })],
+      signals: [signal({ id: 's2', impact: 'medium' })],
       activeActions: [stale({ stale_at: null })],
     });
 
@@ -1035,7 +1041,7 @@ describe('the candidate queue', () => {
 
   it('queues a finding it cannot act on, instead of only logging it as evidence', async () => {
     const writes = mockDb({
-      signals: [signal({ id: 'newcomer' })],
+      signals: [signal({ id: 'newcomer', impact: 'medium' })],
       activeActions: [{ id: 'a1', dedup_key: 'recover_visibility', status: 'in_progress' }],
     });
 
@@ -1123,7 +1129,7 @@ describe('the candidate queue', () => {
    */
   it('keeps a newcomer queued on the nights after it was linked', async () => {
     const writes = mockDb({
-      signals: [signal({ id: 'newcomer', action_id: 'a1' })],
+      signals: [signal({ id: 'newcomer', action_id: 'a1', impact: 'medium' })],
       activeActions: [
         {
           id: 'a1',
@@ -1306,6 +1312,8 @@ describe('the priority score', () => {
           category: 'recover',
           impact: 'high',
           payload: {},
+          // Its own scope: the signal is its evidence, not a new subject.
+          baseline: { signals: [{ id: 's9' }] },
         },
       ],
       promptVolumes: VOLUMES,
@@ -1343,5 +1351,110 @@ describe('the priority score', () => {
 
     const summary = await generateActionsForBrand(BRAND, { now: NOW, sources: ALL_SOURCES });
     expect(summary.rescored).toBe(0);
+  });
+});
+
+describe('a new subject beside an open action of its kind', () => {
+  const open = (over = {}) => ({
+    id: 'a1',
+    dedup_key: 'recover_visibility',
+    kind: 'recover_visibility',
+    status: 'in_progress',
+    created_at: daysAgo(10),
+    baseline: { signals: [{ id: 'old' }] },
+    ...over,
+  });
+
+  it('opens an action of its own, keyed #2, leaving the open one as it is', async () => {
+    const writes = mockDb({
+      signals: [signal({ id: 'old', action_id: 'a1' }), signal({ id: 'n1' }), signal({ id: 'n2' })],
+      activeActions: [open()],
+    });
+
+    const summary = await generateActionsForBrand(BRAND, { now: NOW });
+
+    expect(summary.created).toBe(1);
+    const action = writes.inserted.find((w) => w.table === 'actions').rows[0];
+    expect(action.dedup_key).toBe('recover_visibility#2');
+    // Its scope is the new subject only, never the open action's.
+    expect(action.baseline.signals.map((s) => s.id)).toEqual(['n1', 'n2']);
+    expect(writes.updated.some((w) => w.patch.dismiss_reason)).toBe(false);
+  });
+
+  it('opens one for a lone signal of high impact, not for a lone lower one', async () => {
+    let writes = mockDb({ signals: [signal({ id: 'n1' })], activeActions: [open()] });
+    expect((await generateActionsForBrand(BRAND, { now: NOW })).created).toBe(1);
+
+    writes = mockDb({
+      signals: [signal({ id: 'n1', impact: 'medium' })],
+      activeActions: [open()],
+    });
+    const summary = await generateActionsForBrand(BRAND, { now: NOW });
+    expect(summary).toMatchObject({ created: 0, refreshed: 1 });
+    expect(writes.inserted.find((w) => w.table === 'actions')).toBeUndefined();
+  });
+
+  it('stops at the open actions a kind may have, linking newcomers as evidence', async () => {
+    const writes = mockDb({
+      signals: [signal({ id: 'n1' }), signal({ id: 'n2' })],
+      activeActions: [
+        open(),
+        open({ id: 'a2', dedup_key: 'recover_visibility#2', baseline: { signals: [] } }),
+        open({ id: 'a3', dedup_key: 'recover_visibility#3', baseline: { signals: [] } }),
+      ],
+    });
+
+    const summary = await generateActionsForBrand(BRAND, { now: NOW });
+
+    expect(summary.created).toBe(0);
+    expect(writes.inserted.find((w) => w.table === 'actions')).toBeUndefined();
+    expect(
+      writes.inserted.some(
+        (w) => w.table === 'action_events' && w.rows[0].event === 'signals_linked',
+      ),
+    ).toBe(true);
+  });
+
+  it('ignores the rest window of a closed cycle while one of its kind is open', async () => {
+    const writes = mockDb({
+      signals: [signal({ id: 'n1' })],
+      activeActions: [open()],
+      closedActions: [
+        { dedup_key: 'recover_visibility#2', completed_at: daysAgo(1), created_at: daysAgo(9) },
+      ],
+    });
+    const summary = await generateActionsForBrand(BRAND, { now: NOW });
+    expect(summary.created).toBe(1);
+    expect(writes.inserted.find((w) => w.table === 'actions').rows[0].dedup_key).toBe(
+      'recover_visibility#2',
+    );
+  });
+
+  it('rests the kind after a closed #2 cycle when none is open', async () => {
+    mockDb({
+      signals: [signal({ id: 'n1' })],
+      closedActions: [
+        { dedup_key: 'recover_visibility#2', completed_at: daysAgo(1), created_at: daysAgo(9) },
+      ],
+    });
+    const summary = await generateActionsForBrand(BRAND, { now: NOW });
+    expect(summary).toMatchObject({ created: 0, resting: 1 });
+  });
+});
+
+describe('slot keys', () => {
+  it('numbers further open cycles of a definition', () => {
+    expect(nextSlotKey('k', [])).toBe('k');
+    expect(nextSlotKey('k', [{ dedup_key: 'k' }])).toBe('k#2');
+    expect(nextSlotKey('k', [{ dedup_key: 'k' }, { dedup_key: 'k#2' }])).toBe('k#3');
+    expect(nextSlotKey('k', [{ dedup_key: 'k#2' }])).toBe('k');
+    expect(slotDefinition('k#3')).toBe('k');
+    expect(slotDefinition('k')).toBe('k');
+  });
+
+  it('opens an extra cycle for enough newcomers, or one of high impact', () => {
+    expect(opensExtraCycle([{ impact: 'low' }, { impact: 'low' }])).toBe(true);
+    expect(opensExtraCycle([{ impact: 'high' }])).toBe(true);
+    expect(opensExtraCycle([{ impact: 'medium' }])).toBe(false);
   });
 });

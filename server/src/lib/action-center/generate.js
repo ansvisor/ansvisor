@@ -25,6 +25,13 @@
  *  - closing frees the definition's slot. Once the rest window has passed, a
  *    still firing condition opens a NEW action beside the old one, with its
  *    own baseline, tasks and outcome;
+ *  - a NEW SUBJECT gets its own action: a still open action keeps its scope,
+ *    and signals of its kind outside it (other prompts, another platform)
+ *    open another action of that kind beside it, up to
+ *    noise.maxActivePerKind open at once and when they are enough
+ *    (noise.minSignalsForExtraCycle, or one of high impact). Its dedup key
+ *    is the definition's with `#2`, `#3`; past the cap, or for a lone low
+ *    signal, newcomers are linked as the newest action's evidence;
  *  - a STALE action (stale.js: still New, nobody's event for staleAfterDays)
  *    gives way: when its definition still matches tonight, it is dismissed
  *    as `replaced` and a new action opens from tonight's signals, the old
@@ -73,6 +80,35 @@ const CATEGORY_PLAY_DEFINITION = 'create_content_for_topics';
 const { noise } = resolve();
 
 const IMPACT_RANK = { high: 3, medium: 2, low: 1 };
+
+/** Between a definition's id and a further open cycle's number in its dedup key. */
+export const CYCLE_SEPARATOR = '#';
+
+/** Whether an active action holds one of a definition's slots (its own key, or `#n`). */
+export function holdsSlot(row, definitionId) {
+  const key = row.dedup_key ?? '';
+  return key === definitionId || key.startsWith(`${definitionId}${CYCLE_SEPARATOR}`);
+}
+
+/** The definition a dedup key belongs to: the part before `#n`. */
+export function slotDefinition(key) {
+  return String(key ?? '').split(CYCLE_SEPARATOR)[0];
+}
+
+/** The first free dedup key of a definition, beside the open actions' keys. */
+export function nextSlotKey(definitionId, openRows) {
+  const used = new Set(openRows.map((row) => row.dedup_key));
+  if (!used.has(definitionId)) return definitionId;
+  for (let n = 2; ; n += 1) {
+    const key = `${definitionId}${CYCLE_SEPARATOR}${n}`;
+    if (!used.has(key)) return key;
+  }
+}
+
+/** Whether newcomers are enough to open another action of their kind beside an open one. */
+export function opensExtraCycle(signals, minSignals = noise.minSignalsForExtraCycle) {
+  return signals.length >= minSignals || signals.some((signal) => signal.impact === 'high');
+}
 
 function buildBaseline(signals) {
   return {
@@ -280,6 +316,7 @@ async function openCycle({
   payload: found,
   priority,
   now,
+  dedupKey = definition.id,
 }) {
   const payload = await playedPayload(
     brandId,
@@ -297,7 +334,7 @@ async function openCycle({
       payload,
       kpi_keys: [...new Set(signals.flatMap((signal) => signal.kpi_keys ?? []))],
       baseline: buildBaseline(signals),
-      dedup_key: definition.id,
+      dedup_key: dedupKey,
       ...priorityColumns(priority, now),
     })
     .select('id')
@@ -365,7 +402,6 @@ export async function generateActionsForBrand(brandId, { now = new Date(), sourc
     .not('status', 'in', '("completed","dismissed")')
     .limit(1000);
   if (actionsErr) throw new Error(actionsErr.message);
-  const active = new Map((activeRows ?? []).map((row) => [row.dedup_key, row]));
   // A signal is taken while an active action holds it. One whose action has
   // closed is free again: if it is still open, the condition is still firing,
   // and it is evidence for the definition's next cycle (AC-007). Before,
@@ -375,9 +411,8 @@ export async function generateActionsForBrand(brandId, { now = new Date(), sourc
   // What active actions cover: the signals each was created from. A signal
   // linked to one later is its evidence, not its scope, so it is still what
   // the next cycle is for (#818 phase 6).
-  const inScope = new Set(
-    (activeRows ?? []).flatMap((row) => (row.baseline?.signals ?? []).map((s) => s.id)),
-  );
+  const scopeOf = (row) => (row.baseline?.signals ?? []).map((s) => s.id);
+  const inScope = new Set((activeRows ?? []).flatMap(scopeOf));
 
   // How recently each definition was closed, so a condition that is still
   // firing does not reopen as a fresh action the very next night.
@@ -392,9 +427,9 @@ export async function generateActionsForBrand(brandId, { now = new Date(), sourc
   const lastClosedAt = new Map();
   for (const row of closedRows ?? []) {
     const closed = Date.parse(row.completed_at ?? row.updated_at ?? '') || 0;
-    if (closed > (lastClosedAt.get(row.dedup_key) ?? 0)) {
-      lastClosedAt.set(row.dedup_key, closed);
-    }
+    // By definition: a closed `#2` cycle rests its kind like the first.
+    const slot = slotDefinition(row.dedup_key);
+    if (closed > (lastClosedAt.get(slot) ?? 0)) lastClosedAt.set(slot, closed);
   }
 
   // The day's budget, counted from rows already fetched rather than asked
@@ -452,10 +487,26 @@ export async function generateActionsForBrand(brandId, { now = new Date(), sourc
     );
     if (matched.length === 0) continue;
 
-    const current = active.get(definition.id);
+    // The definition's open actions, oldest first.
+    const actives = (activeRows ?? [])
+      .filter((row) => holdsSlot(row, definition.id))
+      .sort(
+        (a, b) => (Date.parse(a.created_at ?? '') || 0) - (Date.parse(b.created_at ?? '') || 0),
+      );
     // Stale and untouched: tonight's signals go to the action replacing it.
-    const replacing = current && isReplaceable(current) ? current : null;
-    if (current && !replacing) {
+    const replacing = actives.find(isReplaceable) ?? null;
+    // The newest one still being kept: where evidence goes.
+    const current = actives.filter((row) => row !== replacing).at(-1) ?? null;
+    // Outside every open action's scope: a new subject.
+    const outside = matched.filter((signal) => !inScope.has(signal.id));
+    // A new subject beside open actions of its kind gets an action of its own.
+    const extraCycle =
+      !replacing &&
+      actives.length > 0 &&
+      actives.length < noise.maxActivePerKind &&
+      outside.length > 0 &&
+      opensExtraCycle(outside);
+    if (current && !replacing && !extraCycle) {
       // An active action keeps the scope it was created with. Signals that
       // arrived since are linked as evidence — they are why this action
       // exists — but `payload` is the work package someone may already be
@@ -483,7 +534,10 @@ export async function generateActionsForBrand(brandId, { now = new Date(), sourc
     // with what is actually true tonight — and a newcomer stays in it on the
     // nights after it was linked, not only the first.
     // A replacement covers everything that still fires, its old scope too.
-    const unclaimed = replacing ? matched : matched.filter((signal) => !inScope.has(signal.id));
+    // A replacement covers what still fires in its own scope and outside any
+    // other open action's: never another action's work.
+    const othersScope = new Set(actives.filter((row) => row !== replacing).flatMap(scopeOf));
+    const unclaimed = replacing ? matched.filter((signal) => !othersScope.has(signal.id)) : outside;
     if (unclaimed.length === 0) continue;
 
     const impact = unclaimed
@@ -543,15 +597,16 @@ export async function generateActionsForBrand(brandId, { now = new Date(), sourc
     // Whether it can be promoted tonight is a separate question from whether
     // it is real, and it is asked after the queue is written — so a finding
     // that cannot be acted on now is still recorded as found.
-    if (current && !replacing) continue;
+    if (current && !replacing && !extraCycle) continue;
 
     if (!isEligible(definition, available)) {
       ineligible += 1;
       continue;
     }
 
-    // The rest window is for a cycle someone closed; a replacement has none.
-    const closedAt = replacing ? 0 : (lastClosedAt.get(definition.id) ?? 0);
+    // The rest window is for a cycle someone closed with none of its kind
+    // left open; a replacement or a new subject beside an open one has none.
+    const closedAt = replacing || extraCycle ? 0 : (lastClosedAt.get(definition.id) ?? 0);
     if (closedAt && now.getTime() - closedAt < noise.restAfterCloseDays * DAY_MS) {
       resting += 1;
       continue;
@@ -569,6 +624,8 @@ export async function generateActionsForBrand(brandId, { now = new Date(), sourc
       priorityScore: priority.score,
       firstSeenAt,
       replaces: replacing?.id ?? null,
+      // The replaced action's key, else the definition's first free one.
+      dedupKey: replacing ? replacing.dedup_key : nextSlotKey(definition.id, actives),
     });
   }
 
@@ -595,7 +652,7 @@ export async function generateActionsForBrand(brandId, { now = new Date(), sourc
   const replaced = new Set();
   let opened = 0;
   for (const candidate of opening) {
-    // The stale action steps aside first: one active action per kind.
+    // The stale action steps aside first: its key is the new one's.
     if (candidate.replaces && !(await retireStale(candidate.replaces, nowIso))) continue;
     let actionId;
     try {
