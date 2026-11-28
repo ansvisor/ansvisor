@@ -10696,6 +10696,7 @@
       "sectionLabel": "Métricas principais",
       "noData": "Sem dados",
       "viewBreakdown": "{metric}: ver detalhamento",
+      "howCalculated": "{metric}: como isso é calculado?",
       "openPrompts": "Prompts monitorados: abrir Prompts",
       "openCitations": "Citações: abrir Citações",
       "openMentions": "Menções: abrir Menções",
