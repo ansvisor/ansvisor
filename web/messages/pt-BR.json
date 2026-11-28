@@ -15915,6 +15915,10 @@
     "loadError": "Não foi possível carregar seus Prompts.",
     "visibilityDegraded": "Os números de Visibilidade estão temporariamente indisponíveis — exibindo Prompts sem eles.",
     "positions": {
+      "slots": {
+        "note": "Ainda não está no seu plano · Adicione slots de rastreamento para acompanhar os resultados e as posições em {platform}.",
+        "add": "Adicionar slots"
+      },
       "answers": "{count, plural, one {# resposta} other {# respostas}}",
       "answersInPeriod": "{count, plural, one {# resposta} other {# respostas}} neste período",
       "mentionedIn": "Em {mentioned} de {answers, plural, one {# resposta} other {# respostas}} · {mentions, plural, one {# menção} other {# menções}}",

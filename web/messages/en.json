@@ -15518,6 +15518,10 @@
     "loadError": "Couldn't load your prompts.",
     "visibilityDegraded": "Visibility figures are temporarily unavailable — showing prompts without them.",
     "positions": {
+      "slots": {
+        "note": "Not in your plan yet · Add tracking slots to track {platform} results and positions.",
+        "add": "Add slots"
+      },
       "answers": "{count, plural, one {# answer} other {# answers}}",
       "answersInPeriod": "{count, plural, one {# answer} other {# answers}} in this period",
       "mentionedIn": "In {mentioned} of {answers, plural, one {# answer} other {# answers}} · {mentions, plural, one {# mention} other {# mentions}}",

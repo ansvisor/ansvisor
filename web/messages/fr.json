@@ -15917,6 +15917,10 @@
     "loadError": "Impossible de charger vos Prompts.",
     "visibilityDegraded": "Les chiffres de Visibilité sont temporairement indisponibles — affichage des Prompts sans ceux-ci.",
     "positions": {
+      "slots": {
+        "note": "Pas encore inclus dans votre forfait · Ajoutez des slots de suivi pour suivre les résultats et les positions de {platform}.",
+        "add": "Ajouter des slots"
+      },
       "answers": "{count, plural, one {# réponse} other {# réponses}}",
       "answersInPeriod": "{count, plural, one {# réponse} other {# réponses}} sur cette période",
       "mentionedIn": "Dans {mentioned} sur {answers, plural, one {# réponse} other {# réponses}} · {mentions, plural, one {# mention} other {# mentions}}",

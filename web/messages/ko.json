@@ -15888,6 +15888,10 @@
     "loadError": "Prompt를 불러올 수 없습니다.",
     "visibilityDegraded": "가시성 수치를 일시적으로 사용할 수 없어 가시성 수치 없이 Prompt를 표시합니다.",
     "positions": {
+      "slots": {
+        "note": "아직 요금제에 포함되어 있지 않습니다 · {platform} 결과와 순위를 추적하려면 추적 slots를 추가하세요.",
+        "add": "slots 추가"
+      },
       "answers": "답변 {count, plural, other {#개}}",
       "answersInPeriod": "해당 기간 내 답변 {count, plural, other {#개}}",
       "mentionedIn": "답변 {answers, plural, other {#개}} 중 {mentioned}개에 포함 · 언급 {mentions, plural, other {#회}}",

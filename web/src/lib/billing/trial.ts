@@ -1,7 +1,7 @@
 import type Stripe from 'stripe';
 
 /** Length of the free trial a first subscription starts with. */
-export const TRIAL_DAYS = 14;
+export const TRIAL_DAYS = 7;
 
 /** The day a free trial started now ends, as Checkout's trial_period_days counts it. */
 export function trialEndDate(now: number = Date.now(), days: number = TRIAL_DAYS): Date {

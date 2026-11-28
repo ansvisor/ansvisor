@@ -15898,6 +15898,10 @@
     "loadError": "تعذر تحميل الـ Prompts الخاصة بك.",
     "visibilityDegraded": "أرقام الظهور غير متاحة مؤقتًا — يتم عرض الـ Prompts بدونها.",
     "positions": {
+      "slots": {
+        "note": "غير متوفر في خطتك حاليًا · أضف slots للتتبع لتتبع نتائج {platform} ومراكزها.",
+        "add": "إضافة slots"
+      },
       "answers": "{count, plural, zero {لا توجد إجابات} one {إجابة واحدة} two {إجابتان} few {# إجابات} many {# إجابة} other {# إجابة}}",
       "answersInPeriod": "{count, plural, zero {لا توجد إجابات} one {إجابة واحدة} two {إجابتان} few {# إجابات} many {# إجابة} other {# إجابة}} في هذه الفترة",
       "mentionedIn": "في {mentioned} من {answers, plural, zero {لا توجد إجابات} one {إجابة واحدة} two {إجابتين} few {# إجابات} many {# إجابة} other {# إجابة}} · {mentions, plural, zero {لا توجد إشارات} one {إشارة واحدة} two {إشارتان} few {# إشارات} many {# إشارة} other {# إشارة}}",

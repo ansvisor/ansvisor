@@ -69,6 +69,7 @@ import {
   useStartCheckout,
 } from '@/components/billing/plan-start';
 import { CheckoutCanceledNote } from '@/components/billing/checkout-canceled-note';
+import { TRIAL_DAYS } from '@/lib/billing/trial';
 import { setPersonProperties, track } from '@/lib/analytics';
 
 /**
@@ -347,7 +348,7 @@ export default function OnboardingPage() {
   const [startFirst, setStartFirst] = useState(false);
   // Trial length when the plan step is reached; null once the organization has
   // had a subscription, which then only buys now (Checkout refuses its trial).
-  const [trialDays, setTrialDays] = useState<number | null>(14);
+  const [trialDays, setTrialDays] = useState<number | null>(TRIAL_DAYS);
   // How the plan starts, as on the plan dialog: one choice above the cards,
   // the first-month offer shown from the first frame (the person setting up
   // the workspace is its admin), its code checked once the step is reached.

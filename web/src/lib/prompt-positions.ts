@@ -9,6 +9,7 @@
  */
 import { PLANS, PLAN_ORDER, type Plan } from '@/config/plans';
 import { ENGINE_NAMES } from '@/config/platform-labels';
+import { slotPlatform } from '@/config/tracking-slots';
 import { extractHostname, normalizeDomain } from '@/lib/citations/classify';
 import { pageKey } from '@/lib/content/sources';
 import { dayIn, nextDay, startOfDayIn } from '@/lib/time-zone';
@@ -16,16 +17,25 @@ import type { Sentiment } from '@/types';
 
 /**
  * The engines the panel and the table's platform dots list, in the order
- * they list them: Starter's, ChatGPT and Gemini, first. Copilot and
- * Perplexity are no longer tracked, so they aren't listed: a card for them
- * would stay empty, or offer an upgrade to an engine no plan tracks.
+ * they list them: Starter's, ChatGPT and Gemini, first, then the rest of
+ * Growth's standard five (Bing AI Mode is copilot-web), then the platforms
+ * sold as tracking slots (00564), which a workspace with slots for them sees
+ * as its own and one without is offered.
  */
 export const POSITION_PLATFORMS = [
   { id: 'chatgpt-web', label: ENGINE_NAMES['chatgpt-web'] },
   { id: 'gemini-web', label: ENGINE_NAMES['gemini-web'] },
   { id: 'google-aio', label: ENGINE_NAMES['google-aio'] },
   { id: 'google-aimode', label: ENGINE_NAMES['google-aimode'] },
+  { id: 'copilot-web', label: ENGINE_NAMES['copilot-web'] },
+  { id: 'perplexity-web', label: ENGINE_NAMES['perplexity-web'] },
+  { id: 'claude-web', label: ENGINE_NAMES['claude-web'] },
   { id: 'grok-web', label: ENGINE_NAMES['grok-web'] },
+  { id: 'copilot-app', label: ENGINE_NAMES['copilot-app'] },
+  { id: 'chatgpt-ads', label: ENGINE_NAMES['chatgpt-ads'] },
+  { id: 'meta-ai-web', label: ENGINE_NAMES['meta-ai-web'] },
+  { id: 'naver-web', label: ENGINE_NAMES['naver-web'] },
+  { id: 'wenxin-web', label: ENGINE_NAMES['wenxin-web'] },
   // API-model tracking stores its answers under this platform.
   { id: 'claude', label: ENGINE_NAMES.claude },
 ] as const;
@@ -34,7 +44,8 @@ export type PositionPlatformId = (typeof POSITION_PLATFORMS)[number]['id'];
 
 export type PlatformAccess =
   | { state: 'included' }
-  | { state: 'locked'; requiredPlan: 'growth' | 'enterprise' };
+  /** `addSlots`: the plan sells tracking slots for it; buying them unlocks it (00564). */
+  | { state: 'locked'; requiredPlan: 'growth' | 'enterprise'; addSlots?: true };
 
 /**
  * Whether a plan's limits cover an engine. Claude is an API model, gated by
@@ -51,24 +62,22 @@ function limitsAllow(limits: Plan['limits'], platform: PositionPlatformId): bool
 }
 
 /**
- * Engines the panel offers only through sales on every cloud plan, whatever
- * the plan's scraper list says. Grok is paused for everyone (Cloro fails
- * every Grok task; see UNAVAILABLE_PLATFORMS in the tracking worker), so an
- * included-but-empty card would only look broken. It stays in the plan lists
- * because removing it there would strip it from stored prompts. Self-hosted
- * keeps it: there is no sales team behind that plan.
- */
-const SALES_ONLY_PLATFORMS: readonly PositionPlatformId[] = ['grok-web'];
-
-/**
  * Whether the org's plan includes an engine, and if not, what unlocks it:
- * the next subscribable plan that covers it, or a conversation with sales.
+ * tracking slots on a plan that sells them, else the next subscribable plan
+ * that covers it, or a conversation with sales.
  * `plan` must be the org's effective plan (getOrgPlan), so Enterprise
  * per-customer overrides are already merged in.
  */
 export function platformAccess(plan: Plan, platform: PositionPlatformId): PlatformAccess {
-  if (SALES_ONLY_PLATFORMS.includes(platform) && PLAN_ORDER.includes(plan.id)) {
-    return { state: 'locked', requiredPlan: 'enterprise' };
+  // A plan with tracking slots (Growth, Enterprise): a platform runs where it
+  // has slots, and is bought where it has none.
+  if (plan.slots && slotPlatform(platform)) {
+    if ((plan.slots[platform] ?? 0) !== 0) return { state: 'included' };
+    return {
+      state: 'locked',
+      requiredPlan: plan.id === 'enterprise' ? 'enterprise' : 'growth',
+      addSlots: true,
+    };
   }
   if (limitsAllow(plan.limits, platform)) return { state: 'included' };
   const above = PLAN_ORDER.slice(PLAN_ORDER.indexOf(plan.id) + 1);

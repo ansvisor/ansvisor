@@ -15907,6 +15907,10 @@
     "loadError": "Nie udało się załadować Twoich promptów.",
     "visibilityDegraded": "Dane o widoczności są chwilowo niedostępne — prompty wyświetlają się bez nich.",
     "positions": {
+      "slots": {
+        "note": "Nie ma jeszcze w Twoim planie · Dodaj slots śledzenia, aby śledzić wyniki i pozycje w {platform}.",
+        "add": "Dodaj slots"
+      },
       "answers": "{count, plural, one {# odpowiedź} few {# odpowiedzi} many {# odpowiedzi} other {# odpowiedzi}}",
       "answersInPeriod": "{count, plural, one {# odpowiedź} few {# odpowiedzi} many {# odpowiedzi} other {# odpowiedzi}} w tym okresie",
       "mentionedIn": "W {mentioned} z {answers, plural, one {# odpowiedzi} few {# odpowiedzi} many {# odpowiedzi} other {# odpowiedzi}} · {mentions, plural, one {# wzmianka} few {# wzmianki} many {# wzmianek} other {# wzmianki}}",
