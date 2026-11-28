@@ -10404,6 +10404,30 @@
       "noRuns": "No runs this period",
       "biggestDrop": "biggest drop"
     },
+    "dataHealth": {
+      "title": "Data health",
+      "summary": "{range} · {percent} of expected answers received",
+      "loading": "Loading data health",
+      "tableLabel": "Answers received by AI platform",
+      "platform": "Platform",
+      "expected": "Expected",
+      "received": "Received",
+      "missing": "Missing",
+      "lastAnswer": "Last answer",
+      "none": "None yet",
+      "empty": "No tracked Prompts on any AI platform in this window yet.",
+      "loadFailed": "Couldn't load data health",
+      "footnote": "Expected = today's tracked prompts × locations × days since each prompt was added. A day with no answer counts as not tracked, never as not mentioned.",
+      "pausedNote": "A prompt paused for a while can show as missing on those days. Today's answers count as they arrive, never as missing.",
+      "range": {
+        "24h": "Last 24 hours",
+        "7d": "Last 7 days",
+        "30d": "Last 30 days",
+        "90d": "Last 90 days",
+        "all": "All time",
+        "custom": "{from} – {to}"
+      }
+    },
     "leaderboard": {
       "title": "Leaderboard",
       "headToHead": "Head-to-Head",

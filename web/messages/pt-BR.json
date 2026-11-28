@@ -10771,6 +10771,30 @@
       "noRuns": "Nenhuma execução neste período",
       "biggestDrop": "maior queda"
     },
+    "dataHealth": {
+      "title": "Saúde dos dados",
+      "summary": "{range} · {percent} das respostas esperadas recebidas",
+      "loading": "Carregando a saúde dos dados",
+      "tableLabel": "Respostas recebidas por plataforma de IA",
+      "platform": "Plataforma",
+      "expected": "Esperadas",
+      "received": "Recebidas",
+      "missing": "Faltando",
+      "lastAnswer": "Última resposta",
+      "none": "Nenhuma ainda",
+      "empty": "Ainda não há Prompts monitorados em nenhuma plataforma de IA neste período.",
+      "loadFailed": "Não foi possível carregar a saúde dos dados",
+      "footnote": "Esperadas = Prompts monitorados hoje × locais × dias desde que cada Prompt foi adicionado. Um dia sem resposta conta como não monitorado, nunca como não mencionado.",
+      "pausedNote": "Um Prompt pausado por um tempo pode aparecer como faltando nesses dias. As respostas de hoje contam conforme chegam, nunca como faltando.",
+      "range": {
+        "24h": "Últimas 24 horas",
+        "7d": "Últimos 7 dias",
+        "30d": "Últimos 30 dias",
+        "90d": "Últimos 90 dias",
+        "all": "Todo o período",
+        "custom": "{from} – {to}"
+      }
+    },
     "leaderboard": {
       "title": "Classificação",
       "headToHead": "Confronto direto",

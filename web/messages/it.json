@@ -10769,6 +10769,30 @@
       "noRuns": "Nessuna esecuzione in questo periodo",
       "biggestDrop": "calo maggiore"
     },
+    "dataHealth": {
+      "title": "Stato dei dati",
+      "summary": "{range} · {percent} delle risposte attese ricevute",
+      "loading": "Caricamento dello stato dei dati",
+      "tableLabel": "Risposte ricevute per piattaforma di IA",
+      "platform": "Piattaforma",
+      "expected": "Attese",
+      "received": "Ricevute",
+      "missing": "Mancanti",
+      "lastAnswer": "Ultima risposta",
+      "none": "Nessuna per ora",
+      "empty": "Ancora nessun Prompt monitorato su una piattaforma di IA in questo periodo.",
+      "loadFailed": "Impossibile caricare lo stato dei dati",
+      "footnote": "Attese = Prompt monitorati oggi × località × giorni dall'aggiunta di ciascun Prompt. Un giorno senza risposta conta come non monitorato, mai come non menzionato.",
+      "pausedNote": "Un Prompt messo in pausa per un periodo può risultare mancante in quei giorni. Le risposte di oggi contano man mano che arrivano, mai come mancanti.",
+      "range": {
+        "24h": "Ultime 24 ore",
+        "7d": "Ultimi 7 giorni",
+        "30d": "Ultimi 30 giorni",
+        "90d": "Ultimi 90 giorni",
+        "all": "Sempre",
+        "custom": "{from} – {to}"
+      }
+    },
     "leaderboard": {
       "title": "Classifica",
       "headToHead": "Confronto diretto",

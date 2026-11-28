@@ -29,6 +29,8 @@ vi.mock('@/lib/visibility-reads', () => ({
   getBrandFilterOptions: actions.getBrandFilterOptions,
   getInsightsOpportunities: actions.getInsightsOpportunities,
   getTopics: actions.getTopics,
+  // Data health's own read: nothing tracked, so its card shows its empty state.
+  getDataHealth: async () => ({ rows: [], expected: 0, received: 0, missing: 0, percent: null }),
 }));
 vi.mock('@/lib/actions/tracking', () => ({ exportPromptResults: actions.exportPromptResults }));
 vi.mock('@/hooks/use-first-run', () => ({ useFirstRun: () => null }));

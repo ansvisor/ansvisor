@@ -10763,6 +10763,30 @@
       "noRuns": "Brak uruchomień w tym okresie",
       "biggestDrop": "największy spadek"
     },
+    "dataHealth": {
+      "title": "Kondycja danych",
+      "summary": "{range} · otrzymano {percent} oczekiwanych odpowiedzi",
+      "loading": "Wczytywanie kondycji danych",
+      "tableLabel": "Otrzymane odpowiedzi według platformy AI",
+      "platform": "Platforma",
+      "expected": "Oczekiwane",
+      "received": "Otrzymane",
+      "missing": "Brakujące",
+      "lastAnswer": "Ostatnia odpowiedź",
+      "none": "Jeszcze brak",
+      "empty": "W tym okresie nie ma jeszcze śledzonych Promptów na żadnej platformie AI.",
+      "loadFailed": "Nie udało się wczytać kondycji danych",
+      "footnote": "Oczekiwane = dzisiaj śledzone Prompty × lokalizacje × dni od dodania każdego Promptu. Dzień bez odpowiedzi liczy się jako nieśledzony, nigdy jako bez wzmianki.",
+      "pausedNote": "Prompt wstrzymany na jakiś czas może w te dni pokazywać się jako brakujący. Dzisiejsze odpowiedzi liczą się w miarę napływania, nigdy jako brakujące.",
+      "range": {
+        "24h": "Ostatnie 24 godziny",
+        "7d": "Ostatnie 7 dni",
+        "30d": "Ostatnie 30 dni",
+        "90d": "Ostatnie 90 dni",
+        "all": "Cały okres",
+        "custom": "{from} – {to}"
+      }
+    },
     "leaderboard": {
       "title": "Ranking",
       "headToHead": "Porównanie bezpośrednie",

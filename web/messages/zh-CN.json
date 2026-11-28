@@ -10720,6 +10720,30 @@
       "noRuns": "此周期内无运行",
       "biggestDrop": "降幅最大"
     },
+    "dataHealth": {
+      "title": "数据健康度",
+      "summary": "{range} · 已收到预期回答的 {percent}",
+      "loading": "正在加载数据健康度",
+      "tableLabel": "按 AI 平台统计的已收到回答",
+      "platform": "平台",
+      "expected": "预期",
+      "received": "已收到",
+      "missing": "缺失",
+      "lastAnswer": "最近回答",
+      "none": "暂无",
+      "empty": "此时间段内尚无任何 AI 平台上跟踪的 Prompt。",
+      "loadFailed": "无法加载数据健康度",
+      "footnote": "预期 = 当前跟踪的 Prompt × 地区 × 每个 Prompt 添加以来的天数。没有回答的日子算作未跟踪，绝不算作未提及。",
+      "pausedNote": "暂停过一段时间的 Prompt 在那些日子可能显示为缺失。今天的回答到达后即计入，绝不算作缺失。",
+      "range": {
+        "24h": "过去 24 小时",
+        "7d": "过去 7 天",
+        "30d": "过去 30 天",
+        "90d": "过去 90 天",
+        "all": "全部时间",
+        "custom": "{from} – {to}"
+      }
+    },
     "leaderboard": {
       "title": "排行榜",
       "headToHead": "正面对决",

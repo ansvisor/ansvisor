@@ -10744,6 +10744,30 @@
       "noRuns": "이 기간에 실행된 내역 없음",
       "biggestDrop": "최대 하락"
     },
+    "dataHealth": {
+      "title": "데이터 상태",
+      "summary": "{range} · 예상 답변의 {percent} 수신",
+      "loading": "데이터 상태 불러오는 중",
+      "tableLabel": "AI 플랫폼별 수신 답변",
+      "platform": "플랫폼",
+      "expected": "예상",
+      "received": "수신",
+      "missing": "누락",
+      "lastAnswer": "마지막 답변",
+      "none": "아직 없음",
+      "empty": "이 기간에 추적 중인 Prompt가 어떤 AI 플랫폼에도 아직 없습니다.",
+      "loadFailed": "데이터 상태를 불러오지 못했습니다",
+      "footnote": "예상 = 현재 추적 중인 Prompt × 위치 × 각 Prompt를 추가한 후의 일수. 답변이 없는 날은 '추적 안 됨'으로 계산되며, '언급 없음'으로 계산되지 않습니다.",
+      "pausedNote": "한동안 일시 중지된 Prompt는 그 기간 동안 누락으로 표시될 수 있습니다. 오늘의 답변은 도착하는 대로 계산되며, 누락으로 계산되지 않습니다.",
+      "range": {
+        "24h": "최근 24시간",
+        "7d": "최근 7일",
+        "30d": "최근 30일",
+        "90d": "최근 90일",
+        "all": "전체 기간",
+        "custom": "{from} – {to}"
+      }
+    },
     "leaderboard": {
       "title": "리더보드",
       "headToHead": "직접 비교",

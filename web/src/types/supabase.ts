@@ -9116,6 +9116,21 @@ export type Database = {
         }
         Returns: Json
       }
+      brand_data_health: {
+        Args: {
+          p_brand_id: string
+          p_day_from?: string
+          p_day_to?: string
+          p_region?: string
+          p_topic_id?: string
+        }
+        Returns: {
+          expected: number
+          last_answer_at: string | null
+          platform: string
+          received: number
+        }[]
+      }
       can_access_brand: {
         Args: { p_brand_id: string; p_user_id?: string }
         Returns: boolean

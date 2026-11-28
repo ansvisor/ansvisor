@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { createClient } from '@/lib/supabase/server';
 import { brandHasCitations, getCitationGaps, getCitationsOverview } from '@/lib/actions/citations';
 import { getCompetitors } from '@/lib/actions/competitor';
+import { getDataHealth } from '@/lib/actions/data-health';
 import { getMentionsOverview, getMentionsPerception, listMentions } from '@/lib/actions/mentions';
 import {
   getCompetitorProducts,
@@ -47,6 +48,7 @@ export const runtime = 'nodejs';
 const READS: Record<VisibilityRead, (brandId: string, ...rest: any[]) => Promise<unknown>> = {
   insights: getInsightsData,
   insightsOpportunities: getInsightsOpportunities,
+  dataHealth: getDataHealth,
   filterOptions: getBrandFilterOptions,
   trackingWindow: getTrackingWindow,
   prompts: getBrandPrompts,

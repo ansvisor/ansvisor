@@ -10773,6 +10773,30 @@
       "noRuns": "Aucune exécution sur cette période",
       "biggestDrop": "plus forte baisse"
     },
+    "dataHealth": {
+      "title": "Santé des données",
+      "summary": "{range} · {percent} des réponses attendues reçues",
+      "loading": "Chargement de la santé des données",
+      "tableLabel": "Réponses reçues par plateforme d'IA",
+      "platform": "Plateforme",
+      "expected": "Attendues",
+      "received": "Reçues",
+      "missing": "Manquantes",
+      "lastAnswer": "Dernière réponse",
+      "none": "Aucune pour l'instant",
+      "empty": "Aucun Prompt suivi sur une plateforme d'IA pour cette période.",
+      "loadFailed": "Impossible de charger la santé des données",
+      "footnote": "Attendues = Prompts suivis aujourd'hui × emplacements × jours depuis l'ajout de chaque Prompt. Un jour sans réponse compte comme non suivi, jamais comme non mentionné.",
+      "pausedNote": "Un Prompt mis en pause pendant un temps peut apparaître comme manquant ces jours-là. Les réponses du jour comptent à leur arrivée, jamais comme manquantes.",
+      "range": {
+        "24h": "Dernières 24 heures",
+        "7d": "7 derniers jours",
+        "30d": "30 derniers jours",
+        "90d": "90 derniers jours",
+        "all": "Toute la période",
+        "custom": "{from} – {to}"
+      }
+    },
     "leaderboard": {
       "title": "Classement",
       "headToHead": "Face-à-face",

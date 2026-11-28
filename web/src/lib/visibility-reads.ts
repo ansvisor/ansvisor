@@ -1,5 +1,6 @@
 import type * as citations from '@/lib/actions/citations';
 import type * as competitor from '@/lib/actions/competitor';
+import type * as dataHealth from '@/lib/actions/data-health';
 import type * as mentions from '@/lib/actions/mentions';
 import type * as shopping from '@/lib/actions/shopping';
 import type * as shoppingMarket from '@/lib/actions/shopping-market';
@@ -24,6 +25,7 @@ import type * as shoppingPage from '@/lib/shopping/page-reads';
 export const VISIBILITY_READS = [
   'insights',
   'insightsOpportunities',
+  'dataHealth',
   'filterOptions',
   'trackingWindow',
   'prompts',
@@ -76,6 +78,7 @@ const via =
 export const getInsightsData = via<typeof tracking.getInsightsData>('insights');
 export const getInsightsOpportunities =
   via<typeof tracking.getInsightsOpportunities>('insightsOpportunities');
+export const getDataHealth = via<typeof dataHealth.getDataHealth>('dataHealth');
 export const getBrandFilterOptions = via<typeof tracking.getBrandFilterOptions>('filterOptions');
 export const getTrackingWindow = via<typeof tracking.getTrackingWindow>('trackingWindow');
 export const getBrandPrompts = via<typeof tracking.getBrandPrompts>('prompts');
