@@ -301,6 +301,22 @@ export const ENGINE_THRESHOLDS = Object.freeze({
     maxNewActionsPerDay: 5,
 
     /**
+     * How many actions of one kind may be open at once. An open action keeps
+     * the scope it was created with; a new problem of the same kind outside
+     * it (other prompts, another platform) opens an action of its own, up to
+     * this many, rather than being filed as the old one's evidence where
+     * nobody would see it. Past it, newcomers are linked as evidence as before.
+     */
+    maxActivePerKind: 3,
+
+    /**
+     * What a newcomer needs to open a second (or third) action of its kind
+     * beside an open one: this many signals outside the open ones' scope, or
+     * one of high impact. A lone low signal is filed as evidence instead.
+     */
+    minSignalsForExtraCycle: 2,
+
+    /**
      * How many tasks the engine may carry out for itself in one nightly sweep,
      * across every brand.
      *
