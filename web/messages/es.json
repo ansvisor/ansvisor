@@ -553,6 +553,11 @@
     }
   },
   "planOffer": {
+    "checkoutCanceled": {
+      "title": "No se completó su pago, por lo que no se ha realizado ningún cargo.",
+      "body": "Puede volver a intentarlo cuando quiera.",
+      "bodyDemo": "Puede volver a intentarlo cuando quiera o explorar primero la marca de demostración, sin necesidad de tarjeta."
+    },
     "buyNow": "Comprar ahora",
     "startTrial": "Comenzar prueba gratuita de {days} días",
     "fullPlan": "Plan completo desde el primer día",

@@ -553,6 +553,11 @@
     }
   },
   "planOffer": {
+    "checkoutCanceled": {
+      "title": "Ihre Zahlung wurde nicht abgeschlossen, daher wurde nichts berechnet.",
+      "body": "Sie können es jederzeit erneut versuchen, wenn Sie bereit sind.",
+      "bodyDemo": "Sie können es jederzeit erneut versuchen, wenn Sie bereit sind, oder zuerst die Demo-Marke ausprobieren, ganz ohne Karte."
+    },
     "buyNow": "Jetzt kaufen",
     "startTrial": "{days}-tägige kostenlose Testversion starten",
     "fullPlan": "Vollständiger Tarif ab dem ersten Tag",

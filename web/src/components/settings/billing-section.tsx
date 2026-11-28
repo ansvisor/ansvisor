@@ -1,5 +1,6 @@
 'use client';
 
+import { CheckoutCanceledNote } from '@/components/billing/checkout-canceled-note';
 import { useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -194,7 +195,8 @@ export function BillingSection() {
           {noPlanYet ? tOffer('chooseHowToStart') : ended ? t('choosePlanTitle') : t('changePlan')}
         </CardTitle>
       </CardHeader>
-      <CardContent>
+      <CardContent className="space-y-4">
+        <CheckoutCanceledNote />
         <PlanSwitcher
           subscription={subscription}
           onUpdate={(data) => {

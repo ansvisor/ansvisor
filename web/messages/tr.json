@@ -553,6 +553,11 @@
     }
   },
   "planOffer": {
+    "checkoutCanceled": {
+      "title": "Ödemeniz tamamlanmadı, bu nedenle herhangi bir ücret alınmadı.",
+      "body": "Hazır olduğunuzda tekrar deneyebilirsiniz.",
+      "bodyDemo": "Hazır olduğunuzda tekrar deneyebilir ya da önce demo markayı kart gerekmeden inceleyebilirsiniz."
+    },
     "buyNow": "Satın alın",
     "startTrial": "{days} günlük ücretsiz denemeyi başlatın",
     "fullPlan": "İlk günden itibaren tam plan",
