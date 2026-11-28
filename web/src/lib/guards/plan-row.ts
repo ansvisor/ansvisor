@@ -48,20 +48,24 @@ export function planFromOrgRow(data: OrgPlanRow | null): Plan {
 /** The plans whose subscription can carry extra tracking and brands. */
 const ADD_ON_PLANS = new Set(['growth']);
 
+/** The plans whose workspaces buy extra brands themselves: Growth and Enterprise (00566). */
+const BRAND_ADD_ON_PLANS = new Set(['growth', 'enterprise']);
+
 /** A count the row holds: a whole number above 0, else 0. */
 const addOnCount = (value: unknown) =>
   typeof value === 'number' && Number.isInteger(value) && value > 0 ? value : 0;
 
 /**
  * The plan with what its subscription adds (00546): Growth's extra tracking
- * on top of its prompt locations, its extra brands on top of its brands. A
+ * on top of its prompt locations, its extra brands on top of its brands
+ * (Enterprise's too, 00566). A
  * limit that is already unlimited stays so; other plans never add any. Then
  * its tracking slots per platform (withSlots).
  */
 function withAddOns(plan: Plan, data: OrgPlanRow | null): Plan {
   let next = plan;
   const prompts = ADD_ON_PLANS.has(plan.id) ? addOnCount(data?.add_on_prompts) : 0;
-  const brands = ADD_ON_PLANS.has(plan.id) ? addOnCount(data?.add_on_brands) : 0;
+  const brands = BRAND_ADD_ON_PLANS.has(plan.id) ? addOnCount(data?.add_on_brands) : 0;
   if (prompts || brands) {
     const add = (base: number, extra: number) => (base === -1 ? -1 : base + extra);
     next = {

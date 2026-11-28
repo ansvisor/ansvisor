@@ -53,7 +53,7 @@ describe('add-ons in the plan’s limits', () => {
     expect(limits({ plan: 'growth', subscription_status: 'active' })).toEqual([250, 4]);
   });
 
-  it('count only on Growth: Starter and Enterprise keep their own limits', () => {
+  it('count on Growth, and Enterprise’s brands on its contract’s (00566); Starter keeps its own', () => {
     vi.stubEnv('NEXT_PUBLIC_IS_CLOUD', 'true');
     const extra = { add_on_prompts: 100, add_on_brands: 1 };
     expect(limits({ plan: 'starter', subscription_status: 'active', ...extra })).toEqual([50, 1]);
@@ -64,7 +64,7 @@ describe('add-ons in the plan’s limits', () => {
         plan_overrides: { maxPrompts: 3000, maxBrands: 2 },
         ...extra,
       }),
-    ).toEqual([3000, 2]);
+    ).toEqual([3000, 3]);
   });
 
   it('end with the plan: an ended Growth shows its own limits', () => {

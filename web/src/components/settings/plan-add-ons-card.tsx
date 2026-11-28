@@ -97,9 +97,9 @@ function PlanAddOnsBody({ addOns, onChange }: { addOns: PlanAddOnsView; onChange
   const open = addOns.state === 'open';
   const slotsView = addOns.slots;
   const slotsOpen = slotsView?.state === 'open';
-  // Enterprise buys only slots; its other limits are its contract's.
   const enterprise = addOns.state === 'enterprise';
-  const slotsOnly = enterprise && !!slotsView;
+  // Enterprise buys slots, extra brands and AI top-ups (00566); not the retired tiers.
+  const buyOpen = open || (enterprise && addOns.buyState === 'open');
   const money = (cents: number) => formatPackPrice(cents, addOns.currency);
   const interval = addOns.interval;
   const per = (cents: number) => t('perInterval', { price: money(cents), interval });
@@ -193,12 +193,14 @@ function PlanAddOnsBody({ addOns, onChange }: { addOns: PlanAddOnsView; onChange
   }
 
   // Enterprise with no slots on sale: nothing here it can buy, so nothing shows.
-  if (enterprise && !slotsView) return null;
+  if (enterprise && !slotsView && addOns.brandPriceCents == null && !addOns.topUps.length) {
+    return null;
+  }
 
   const renews = addOns.renewsOn ? formatDate(addOns.renewsOn) : null;
-  const shownState = slotsOnly ? slotsView.state : addOns.state;
+  const shownState = enterprise ? addOns.buyState : addOns.state;
   // Extra tracking tiers are retired (00564): shown only to a workspace that still holds one.
-  const showTiers = !slotsOnly && (addOns.tiers.length > 0 || addOns.current.trackingUnits > 0);
+  const showTiers = !enterprise && (addOns.tiers.length > 0 || addOns.current.trackingUnits > 0);
   const discounts = slotsView ? slotDiscounts(slotsView, slotUnits, interval) : null;
 
   // The cart: what the plan will have, line by line, each with its price.
@@ -210,8 +212,8 @@ function PlanAddOnsBody({ addOns, onChange }: { addOns: PlanAddOnsView; onChange
     (addOns.planPriceCents ?? 0) +
     slotsCents +
     (tier?.priceCents ?? 0) +
-    (slotsOnly ? 0 : brands * (addOns.brandPriceCents ?? 0));
-  const canBuy = open || slotsOpen;
+    brands * (addOns.brandPriceCents ?? 0);
+  const canBuy = open || slotsOpen || buyOpen;
 
   return (
     <>
@@ -298,7 +300,7 @@ function PlanAddOnsBody({ addOns, onChange }: { addOns: PlanAddOnsView; onChange
       )}
 
       {/* Extra brands: a count. */}
-      {!slotsOnly && addOns.brandPriceCents != null && (
+      {addOns.brandPriceCents != null && (
         <Card>
           <CardHeader>
             <CardTitle>{t('brands.title')}</CardTitle>
@@ -320,7 +322,7 @@ function PlanAddOnsBody({ addOns, onChange }: { addOns: PlanAddOnsView; onChange
                 variant="ghost"
                 size="icon"
                 aria-label={t('brands.fewer')}
-                disabled={!open || brands === 0}
+                disabled={!buyOpen || brands === 0}
                 onClick={() => setBrands((b) => Math.max(0, b - 1))}
               >
                 <Minus className="h-4 w-4" />
@@ -333,7 +335,7 @@ function PlanAddOnsBody({ addOns, onChange }: { addOns: PlanAddOnsView; onChange
                 variant="ghost"
                 size="icon"
                 aria-label={t('brands.more')}
-                disabled={!open}
+                disabled={!buyOpen}
                 onClick={() => setBrands((b) => b + 1)}
               >
                 <Plus className="h-4 w-4" />
@@ -344,7 +346,7 @@ function PlanAddOnsBody({ addOns, onChange }: { addOns: PlanAddOnsView; onChange
       )}
 
       {/* AI usage top-up: one payment, until the plan renews. */}
-      {!slotsOnly && addOns.topUps.length > 0 && (
+      {addOns.topUps.length > 0 && (
         <Card>
           <CardHeader>
             <CardTitle>{t('topUp.title')}</CardTitle>
@@ -367,7 +369,7 @@ function PlanAddOnsBody({ addOns, onChange }: { addOns: PlanAddOnsView; onChange
                   type="button"
                   role="radio"
                   aria-checked={topUp === option.multiplier}
-                  disabled={!open}
+                  disabled={!buyOpen}
                   onClick={() => setTopUp(option.multiplier)}
                   title={
                     option.multiplier
@@ -468,14 +470,14 @@ function PlanAddOnsBody({ addOns, onChange }: { addOns: PlanAddOnsView; onChange
                 names={{ remove: t('cart.remove', { item: t('tracking.title') }) }}
               />
             )}
-            {!slotsOnly && brands > 0 && addOns.brandPriceCents != null && (
+            {brands > 0 && addOns.brandPriceCents != null && (
               <CartLine
                 label={t('brands.title')}
                 sub={t('cart.brands', { count: brands, price: per(addOns.brandPriceCents) })}
                 price={per(addOns.brandPriceCents * brands)}
-                onFewer={open ? () => setBrands((b) => Math.max(0, b - 1)) : undefined}
-                onMore={open ? () => setBrands((b) => b + 1) : undefined}
-                onRemove={open ? () => setBrands(0) : undefined}
+                onFewer={buyOpen ? () => setBrands((b) => Math.max(0, b - 1)) : undefined}
+                onMore={buyOpen ? () => setBrands((b) => b + 1) : undefined}
+                onRemove={buyOpen ? () => setBrands(0) : undefined}
                 names={{
                   fewer: t('brands.fewer'),
                   more: t('brands.more'),
@@ -563,37 +565,37 @@ function PlanAddOnsBody({ addOns, onChange }: { addOns: PlanAddOnsView; onChange
                   </span>
                 </li>
               )}
-              {!slotsOnly && (
-                <>
-                  {showTiers && (
-                    <li className="flex justify-between gap-2 px-3 py-2">
-                      <span>{t('dialog.tracking')}</span>
-                      <span className="tabular-nums text-muted-foreground">
-                        {units
-                          ? t('tracking.tier', { units: formatNumber(units) })
-                          : t('dialog.trackingNone')}
-                      </span>
-                    </li>
-                  )}
-                  <li className="flex justify-between gap-2 px-3 py-2">
-                    <span>{t('brands.title')}</span>
-                    <span className="text-muted-foreground">
-                      {t('dialog.brands', { count: brands })}
-                    </span>
-                  </li>
-                  {topUp > 0 && (
-                    <li className="px-3 py-2">{t('dialog.topUp', { multiplier: topUp })}</li>
-                  )}
-                  <li className="flex justify-between gap-2 px-3 py-2">
-                    <span>{t('dialog.newLimits')}</span>
-                    <span className="text-muted-foreground">
-                      {t('summary', {
-                        prompts: formatNumber(preview.limits.prompts),
-                        brands: preview.limits.brands,
-                      })}
-                    </span>
-                  </li>
-                </>
+              {showTiers && (
+                <li className="flex justify-between gap-2 px-3 py-2">
+                  <span>{t('dialog.tracking')}</span>
+                  <span className="tabular-nums text-muted-foreground">
+                    {units
+                      ? t('tracking.tier', { units: formatNumber(units) })
+                      : t('dialog.trackingNone')}
+                  </span>
+                </li>
+              )}
+              {(addOns.brandPriceCents != null || !enterprise) && (
+                <li className="flex justify-between gap-2 px-3 py-2">
+                  <span>{t('brands.title')}</span>
+                  <span className="text-muted-foreground">
+                    {t('dialog.brands', { count: brands })}
+                  </span>
+                </li>
+              )}
+              {topUp > 0 && (
+                <li className="px-3 py-2">{t('dialog.topUp', { multiplier: topUp })}</li>
+              )}
+              {!enterprise && (
+                <li className="flex justify-between gap-2 px-3 py-2">
+                  <span>{t('dialog.newLimits')}</span>
+                  <span className="text-muted-foreground">
+                    {t('summary', {
+                      prompts: formatNumber(preview.limits.prompts),
+                      brands: preview.limits.brands,
+                    })}
+                  </span>
+                </li>
               )}
             </ul>
             {preview.slotsWaiting.length > 0 && (
