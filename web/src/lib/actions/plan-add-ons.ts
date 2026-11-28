@@ -12,6 +12,7 @@ import { SLOT_PLATFORMS, slotPlatform, type SlotGroup } from '@/config/tracking-
 import { ORG_PLAN_COLUMNS, planFromOrgRow, boughtSlots } from '@/lib/guards/plan-row';
 import { slotDiscount } from '@/lib/billing/slot-discount';
 import { ensureSlotCoupon } from '@/lib/billing/slot-coupon';
+import { movedDiscount, type MovedDiscount } from '@/lib/billing/plan-coupon-move';
 import { countPlanBrands } from '@/lib/plan-brand-count';
 import {
   ADD_ON_PURCHASE_KEY,
@@ -50,7 +51,8 @@ import {
  *
  * A subscription-level discount (a coupon from the plan's checkout) would
  * discount the add-ons too: when the subscription will hold an add-on, the
- * discount moves onto the plan's item, so it keeps discounting the plan
+ * discount moves onto the plan's item as its coupon (a copy for the months
+ * left, when it runs for some months), so it keeps discounting the plan
  * alone.
  *
  * An AI usage top-up (+5x, +10x, +20x) can be in the same cart: one
@@ -510,7 +512,11 @@ async function prepare(raw: AddOnChangeInput): Promise<Cart | AddOnChangeRefusal
 
   const stripe = await loadStripe();
   if (!stripe) return refuse('unavailable');
-  const subscription = await stripe.subscriptions.retrieve(org.stripe_subscription_id as string);
+  // Its discounts with their coupons: a discount moving onto the plan's item
+  // goes as a coupon (plan-coupon-move.ts).
+  const subscription = await stripe.subscriptions.retrieve(org.stripe_subscription_id as string, {
+    expand: ['discounts.source.coupon'],
+  });
   if (subscription.status === 'trialing') return refuse('trial');
   if (subscription.status !== 'active') return refuse('no_plan');
   if (subscription.cancel_at_period_end) return refuse('ending');
@@ -698,10 +704,12 @@ async function prepare(raw: AddOnChangeInput): Promise<Cart | AddOnChangeRefusal
   }
 
   // The subscription's own discount moves onto the plan's item once an
-  // add-on is there, so the add-ons are charged in full.
-  const subscriptionDiscounts = (subscription.discounts ?? [])
-    .map((d) => idOf(d as string | { id: string }))
-    .filter((d): d is string => !!d);
+  // add-on is there, so the add-ons are charged in full. Stripe only takes a
+  // new discount on an item, so it goes as its coupon, for the months it
+  // had left (plan-coupon-move.ts).
+  const subscriptionDiscounts = (subscription.discounts ?? []).filter(
+    (d): d is Stripe.Discount => typeof d === 'object' && d != null,
+  );
   const withAddOns = !!trackingPriceId || input.extraBrands > 0 || slotTargets.size > 0;
   const discountsMove = changes.length > 0 && withAddOns && subscriptionDiscounts.length > 0;
   const planItemDiscounts = ((planItem as { discounts?: unknown[] }).discounts ?? [])
@@ -709,11 +717,13 @@ async function prepare(raw: AddOnChangeInput): Promise<Cart | AddOnChangeRefusal
     .filter((d): d is string => !!d);
   const sent: Record<string, unknown>[] = [...changes];
   if (discountsMove) {
+    const now = Math.floor(Date.now() / 1000);
+    const moved = (
+      await Promise.all(subscriptionDiscounts.map((d) => movedDiscount(stripe, d, now)))
+    ).filter((d): d is MovedDiscount => d != null);
     sent.push({
       id: planItem.id,
-      discounts: [...new Set([...planItemDiscounts, ...subscriptionDiscounts])].map((discount) => ({
-        discount,
-      })),
+      discounts: [...[...new Set(planItemDiscounts)].map((discount) => ({ discount })), ...moved],
     });
   }
 
