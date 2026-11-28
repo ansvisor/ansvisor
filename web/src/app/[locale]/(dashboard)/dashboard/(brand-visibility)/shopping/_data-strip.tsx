@@ -60,8 +60,8 @@ export function useProductSources(brandId: string | null) {
 /**
  * The marketplaces and feeds a brand's products also sell through (ECOM-spec
  * §3.0). Google Merchant Center connects in Settings › Integrations, as a
- * catalog source, where the deployment offers it; else it is Soon, as the
- * marketplaces with no connector yet.
+ * catalog source, where the deployment offers it. A marketplace with no
+ * connector yet (and Merchant Center where it isn't offered) isn't shown.
  */
 const MARKETPLACES = [
   { id: 'merchant_center', name: 'Google Merchant Center', mark: 'G' },
@@ -125,6 +125,10 @@ export function ProductDataStrip({
   const products = catalog.reduce((sum, source) => sum + source.products, 0);
   const synced = lastSync(catalog);
   const failing = catalog.some((source) => source.lastStatus && source.lastStatus !== 'ok');
+  const shownPlaces = MARKETPLACES.map((place) => ({
+    place,
+    state: chipState(place.id, catalog, sources.merchantCenterOffered),
+  })).filter(({ state }) => state !== 'soon');
   const settingsLink = (label: string, primary = false) => (
     <Link
       href={CATALOG_SETTINGS_PATH}
@@ -194,41 +198,47 @@ export function ProductDataStrip({
         )}
       </section>
 
-      <div className="flex flex-wrap items-center gap-1.5">
-        <span className="me-1 text-xs font-medium text-muted-foreground">{t('marketplaces')}</span>
-        {MARKETPLACES.map((place) => {
-          const state = chipState(place.id, catalog, sources.merchantCenterOffered);
-          return (
-            <span
-              key={place.id}
-              data-marketplace={place.id}
-              className="inline-flex items-center gap-1.5 rounded-full border bg-card py-0.5 ps-1 pe-2.5 text-xs"
-            >
+      {/* Only the marketplaces that are connected or can connect now: one
+          with no connector yet isn't listed (no "Soon" rows), and the line
+          goes when none is left. */}
+      {shownPlaces.length > 0 && (
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="me-1 text-xs font-medium text-muted-foreground">
+            {t('marketplaces')}
+          </span>
+          {shownPlaces.map(({ place, state }) => {
+            return (
               <span
-                aria-hidden
-                className="grid h-4 w-4 place-items-center rounded-full bg-muted text-[10px] font-semibold"
+                key={place.id}
+                data-marketplace={place.id}
+                className="inline-flex items-center gap-1.5 rounded-full border bg-card py-0.5 ps-1 pe-2.5 text-xs"
               >
-                {place.mark}
-              </span>
-              <span className="font-medium">{place.name}</span>
-              {state === 'connected' ? (
-                <span className="text-emerald-700 dark:text-emerald-400">{t('connected')}</span>
-              ) : state === 'connect' && canConnect ? (
-                <Link
-                  href={CATALOG_SETTINGS_PATH}
-                  className="font-medium text-primary underline-offset-2 hover:underline"
+                <span
+                  aria-hidden
+                  className="grid h-4 w-4 place-items-center rounded-full bg-muted text-[10px] font-semibold"
                 >
-                  {t('connect')}
-                </Link>
-              ) : (
-                <span className="text-muted-foreground">
-                  {state === 'connect' ? t('notConnected') : t('soon')}
+                  {place.mark}
                 </span>
-              )}
-            </span>
-          );
-        })}
-      </div>
+                <span className="font-medium">{place.name}</span>
+                {state === 'connected' ? (
+                  <span className="text-emerald-700 dark:text-emerald-400">{t('connected')}</span>
+                ) : state === 'connect' && canConnect ? (
+                  <Link
+                    href={CATALOG_SETTINGS_PATH}
+                    className="font-medium text-primary underline-offset-2 hover:underline"
+                  >
+                    {t('connect')}
+                  </Link>
+                ) : (
+                  <span className="text-muted-foreground">
+                    {state === 'connect' ? t('notConnected') : t('soon')}
+                  </span>
+                )}
+              </span>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
