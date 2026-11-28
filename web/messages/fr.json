@@ -10698,6 +10698,7 @@
       "sectionLabel": "Indicateurs clés",
       "noData": "Aucune donnée",
       "viewBreakdown": "{metric} : afficher la répartition",
+      "howCalculated": "{metric} : comment est-ce calculé ?",
       "openPrompts": "Prompts suivis : ouvrir Prompts",
       "openCitations": "Citations : ouvrir Citations",
       "openMentions": "Mentions : ouvrir Mentions",

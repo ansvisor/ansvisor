@@ -10686,6 +10686,7 @@
       "sectionLabel": "Temel metrikler",
       "noData": "Veri yok",
       "viewBreakdown": "{metric}: kırılımı görüntüle",
+      "howCalculated": "{metric}: bu nasıl hesaplanıyor?",
       "openPrompts": "Takip edilen promptlar: Prompts sayfasını aç",
       "openCitations": "Atıflar: Atıflar sayfasını aç",
       "openMentions": "Bahsedilmeler: Bahsedilmeler'i aç",

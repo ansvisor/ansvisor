@@ -10687,6 +10687,7 @@
       "sectionLabel": "主要指標",
       "noData": "データがありません",
       "viewBreakdown": "{metric}: 内訳を表示",
+      "howCalculated": "{metric}: どのように計算されていますか?",
       "openPrompts": "追跡中のPrompt: Promptsを開く",
       "openCitations": "引用: 引用を開く",
       "openMentions": "言及: 言及を開く",

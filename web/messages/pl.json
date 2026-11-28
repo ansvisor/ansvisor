@@ -10688,6 +10688,7 @@
       "sectionLabel": "Kluczowe wskaźniki",
       "noData": "Brak danych",
       "viewBreakdown": "{metric}: zobacz szczegółowy podział",
+      "howCalculated": "{metric}: jak to jest liczone?",
       "openPrompts": "Śledzone Prompty: otwórz Prompty",
       "openCitations": "Cytowania: otwórz Cytowania",
       "openMentions": "Wzmianki: otwórz Wzmianki",

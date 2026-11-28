@@ -10645,6 +10645,7 @@
       "sectionLabel": "关键指标",
       "noData": "暂无数据",
       "viewBreakdown": "{metric}：查看明细",
+      "howCalculated": "{metric}：这是如何计算的？",
       "openPrompts": "已跟踪 Prompt：打开 Prompts",
       "openCitations": "引用：打开引用",
       "openMentions": "提及：打开提及",
