@@ -170,7 +170,7 @@ beforeEach(() => {
       row('tracking_1000_month', 'tracking', 1000),
       row('tracking_5000_month', 'tracking', 5000, { sale: 'contact_sales' }),
       row('tracking_1000_year', 'tracking', 1000),
-      // Extra brands: Growth's and Enterprise's (00565).
+      // Extra brands: Growth's and Enterprise's (00566).
       row('brand_month', 'brand', null, { plans: ['growth', 'enterprise'] }),
       row('brand_year', 'brand', null, { plans: ['growth', 'enterprise'] }),
       topUpRow(5, 3900),
@@ -817,6 +817,60 @@ describe('tracking slots (00564)', () => {
     expect(params.subscription_details.items).toEqual([
       { price: 'price_brand_month', quantity: 2 },
     ]);
+  });
+
+  it('sells no extra brands to Enterprise with unlimited brands (00548)', async () => {
+    org().plan = 'enterprise';
+    org().plan_overrides = { maxBrands: -1, maxPrompts: -1 };
+    expect(await previewAddOnChange({ trackingUnits: 0, extraBrands: 1 })).toMatchObject({
+      ok: false,
+      failure: 'unavailable',
+    });
+    expect(await applyAddOnChange({ trackingUnits: 0, extraBrands: 2 })).toMatchObject({
+      ok: false,
+      failure: 'unavailable',
+    });
+    expect(stripeApi.update).not.toHaveBeenCalled();
+    // A top-up alone still sells; brands stay unlimited.
+    expect(await previewAddOnChange({ trackingUnits: 0, extraBrands: 0, topUp: 5 })).toMatchObject({
+      ok: true,
+      limits: { brands: -1, prompts: -1 },
+    });
+  });
+
+  it('lets unlimited Enterprise drop brands it bought before, never below use', async () => {
+    org().plan = 'enterprise';
+    org().plan_overrides = { maxBrands: -1, maxPrompts: -1 };
+    stripeApi.retrieve.mockResolvedValue(
+      subscription([planItem(), addOnItem('si_b', 'brand_month', 2)]),
+    );
+    usage.brands = 40;
+    // Keeping them unchanged is no sale either.
+    expect(await previewAddOnChange({ trackingUnits: 0, extraBrands: 2 })).toMatchObject({
+      ok: true,
+      changed: false,
+    });
+    expect(await previewAddOnChange({ trackingUnits: 0, extraBrands: 3 })).toMatchObject({
+      ok: false,
+      failure: 'unavailable',
+    });
+    await expect(applyAddOnChange({ trackingUnits: 0, extraBrands: 0 })).resolves.toMatchObject({
+      ok: true,
+      changed: true,
+      limits: { brands: -1 },
+    });
+    expect(stripeApi.update).toHaveBeenCalledTimes(1);
+  });
+
+  it('offers unlimited Enterprise no extra brands on Billing', async () => {
+    org().plan = 'enterprise';
+    org().plan_overrides = { maxBrands: -1, maxPrompts: -1 };
+    const read = await readPlanAddOns();
+    expect(read.ok && read.addOns).toMatchObject({
+      state: 'enterprise',
+      brandPriceCents: null,
+      topUps: [{ multiplier: 5 }, { multiplier: 10 }, { multiplier: 20 }],
+    });
   });
 
   it('shows Enterprise its brand price and top-ups, and no tiers', async () => {

@@ -79,7 +79,8 @@ import {
  *   - ending: the plan is set to end; "Keep my plan" first.
  *   - contact_sales: the tier is sold by sales (+5,000, +10,000).
  *   - unavailable: the tier or the brand isn't on sale here (no Stripe
- *     price that fits it, switched off, no Stripe key).
+ *     price that fits it, switched off, no Stripe key, or the plan's brands
+ *     are unlimited: an Enterprise contract's, 00548).
  *   - below_usage: the new limits are under what's in use; `inUse` and
  *     `limits` carry the numbers ("pause N prompt locations first").
  *     Tracking slots aren't refused below use: the newest prompt locations
@@ -492,7 +493,7 @@ async function prepare(raw: AddOnChangeInput): Promise<Cart | AddOnChangeRefusal
   if (!org) return refuse('failed');
   const planId = (org.plan as string | null) ?? 'starter';
   // Enterprise buys tracking slots, extra brands and AI top-ups here (00564,
-  // 00565); the retired tracking tiers are Growth's.
+  // 00566); the retired tracking tiers are Growth's.
   const enterprise = planId === 'enterprise';
   if (planId !== 'growth' && !enterprise) return refuse('not_growth', { plan: planId });
   if (enterprise && input.trackingUnits > 0) {
@@ -548,9 +549,19 @@ async function prepare(raw: AddOnChangeInput): Promise<Cart | AddOnChangeRefusal
   if (enterprise && current.tracking) return refuse('not_growth', { plan: planId });
   const slotUnits = input.slots ?? keptSlots;
   const base = ownLimits(planId, org.plan_overrides);
+  // Unlimited brands (an Enterprise contract, 00548): an extra brand adds
+  // nothing, so none is sold; removing ones bought before stays open.
+  const unlimitedBrands = base.maxBrands < 0;
+  if (
+    unlimitedBrands &&
+    input.extraBrands > 0 &&
+    input.extraBrands !== (current.brands?.quantity ?? 0)
+  ) {
+    return refuse('unavailable');
+  }
   const limits: AddOnLimits = {
-    prompts: base.maxPrompts + input.trackingUnits,
-    brands: base.maxBrands + input.extraBrands,
+    prompts: base.maxPrompts < 0 ? -1 : base.maxPrompts + input.trackingUnits,
+    brands: unlimitedBrands ? -1 : base.maxBrands + input.extraBrands,
   };
 
   // The tier: unchanged needs no sale; a new one must be sold here.
@@ -670,16 +681,17 @@ async function prepare(raw: AddOnChangeInput): Promise<Cart | AddOnChangeRefusal
   // Never below what's in use: a change that lowers a limit under it waits
   // until prompt locations are paused or brands removed.
   const before = addOnTotals(items, recurring);
-  const lowers = input.trackingUnits < before.prompts || input.extraBrands < before.brands;
-  if (changes.length && lowers) {
+  const fewerPrompts = input.trackingUnits < before.prompts && limits.prompts >= 0;
+  const fewerBrands = input.extraBrands < before.brands && !unlimitedBrands;
+  if (changes.length && (fewerPrompts || fewerBrands)) {
     const [usage, brandsInUse] = await Promise.all([
       getOrgLocationUsage(supabase, organizationId),
       countPlanBrands(supabase, organizationId),
     ]);
     const inUse = { prompts: usage.total, brands: brandsInUse };
     if (
-      (input.trackingUnits < before.prompts && inUse.prompts > limits.prompts) ||
-      (input.extraBrands < before.brands && inUse.brands > limits.brands)
+      (fewerPrompts && inUse.prompts > limits.prompts) ||
+      (fewerBrands && inUse.brands > limits.brands)
     ) {
       return refuse('below_usage', { inUse, limits });
     }
@@ -963,7 +975,8 @@ export async function readPlanAddOns(): Promise<PlanAddOnsRead> {
           extraBrands: count(org.add_on_brands),
         },
         tiers,
-        brandPriceCents: brand?.price_cents ?? null,
+        // Unlimited brands (00548): an extra one adds nothing, so none is offered.
+        brandPriceCents: base.maxBrands < 0 ? null : (brand?.price_cents ?? null),
         topUps,
         renewsOn: (org.subscription_ends_at as string | null) ?? null,
         buyState: running,

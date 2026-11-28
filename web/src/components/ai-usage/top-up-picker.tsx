@@ -67,7 +67,7 @@ export function TopUpPicker({ onBought }: { onBought?: () => void }) {
     );
   }
 
-  // Enterprise buys top-ups too (00565), when its plan lets this person buy.
+  // Enterprise buys top-ups too (00566), when its plan lets this person buy.
   const shownState = view.state === 'enterprise' ? view.buyState : view.state;
   const open = shownState === 'open';
   const option = view.topUps.find((o) => o.multiplier === picked) ?? null;

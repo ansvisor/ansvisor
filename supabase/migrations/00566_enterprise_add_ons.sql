@@ -1,4 +1,4 @@
--- 00565: Enterprise buys extra brands and AI usage top-ups itself
+-- 00566: Enterprise buys extra brands and AI usage top-ups itself
 --
 -- Extra brands and AI usage top-ups (00546) were sold to Growth only; an
 -- Enterprise workspace had to ask Ansvisor to raise its limits. Enterprise

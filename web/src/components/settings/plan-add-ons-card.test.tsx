@@ -342,6 +342,21 @@ describe('the add-ons card', () => {
     );
   });
 
+  it('shows unlimited Enterprise top-ups and slots, no extra brands', async () => {
+    await render({
+      state: 'enterprise',
+      planId: 'enterprise',
+      slots: SLOTS,
+      tiers: [],
+      base: { prompts: -1, brands: -1 },
+      brandPriceCents: null,
+    });
+    const text = container.textContent ?? '';
+    expect(text).not.toContain('Extra brands');
+    expect(text).toContain('AI usage top-up');
+    expect(document.querySelector('[aria-label="One brand more"]')).toBeNull();
+  });
+
   it('says on Review and pay how many locations will wait when slots go below use', async () => {
     api.preview.mockResolvedValue({
       ok: true,

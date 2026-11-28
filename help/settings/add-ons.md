@@ -12,7 +12,7 @@ approved: true
 sources: [web/src/components/settings/plan-add-ons-card.tsx, web/src/components/settings/plan-slots-section.tsx, web/src/lib/billing/slot-discount.ts, web/src/lib/actions/plan-add-ons.ts, web/src/components/settings/add-ons-card.tsx, web/src/components/ai-usage/get-more.tsx, web/src/lib/actions/add-ons.ts]
 ---
 
-**Settings › Billing** sells more for your plan. On Growth, **Add more to your plan** adds tracking slots, extra brands and AI usage top-ups, picked together and paid once. Enterprise buys the same tracking slots, extra brands and AI usage top-ups, at the same prices; extra brands add to the brands your contract includes. **Add-ons** shows AI credit you have left and the packs you bought. Everything is paid with Stripe, added only after the payment goes through, and shown on your invoice.
+**Settings › Billing** sells more for your plan. On Growth, **Add more to your plan** adds tracking slots, extra brands and AI usage top-ups, picked together and paid once. Enterprise buys the same tracking slots, extra brands and AI usage top-ups, at the same prices; extra brands add to the brands your contract includes. A contract with unlimited brands isn't offered extra brands. **Add-ons** shows AI credit you have left and the packs you bought. Everything is paid with Stripe, added only after the payment goes through, and shown on your invoice.
 
 ## Tracking slots
 

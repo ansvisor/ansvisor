@@ -5553,7 +5553,7 @@
       "sections": [
         {
           "heading": null,
-          "text": "**Settings › Billing** sells more for your plan. On Growth, **Add more to your plan** adds tracking slots, extra brands and AI usage top-ups, picked together and paid once. Enterprise buys the same tracking slots, extra brands and AI usage top-ups, at the same prices; extra brands add to the brands your contract includes. **Add-ons** shows AI credit you have left and the packs you bought. Everything is paid with Stripe, added only after the payment goes through, and shown on your invoice."
+          "text": "**Settings › Billing** sells more for your plan. On Growth, **Add more to your plan** adds tracking slots, extra brands and AI usage top-ups, picked together and paid once. Enterprise buys the same tracking slots, extra brands and AI usage top-ups, at the same prices; extra brands add to the brands your contract includes. A contract with unlimited brands isn't offered extra brands. **Add-ons** shows AI credit you have left and the packs you bought. Everything is paid with Stripe, added only after the payment goes through, and shown on your invoice."
         },
         {
           "heading": "Tracking slots",

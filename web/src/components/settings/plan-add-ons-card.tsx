@@ -97,9 +97,8 @@ function PlanAddOnsBody({ addOns, onChange }: { addOns: PlanAddOnsView; onChange
   const open = addOns.state === 'open';
   const slotsView = addOns.slots;
   const slotsOpen = slotsView?.state === 'open';
-  // Enterprise buys only slots; its other limits are its contract's.
   const enterprise = addOns.state === 'enterprise';
-  // Enterprise buys slots, extra brands and AI top-ups (00565); not the retired tiers.
+  // Enterprise buys slots, extra brands and AI top-ups (00566); not the retired tiers.
   const buyOpen = open || (enterprise && addOns.buyState === 'open');
   const money = (cents: number) => formatPackPrice(cents, addOns.currency);
   const interval = addOns.interval;
@@ -566,39 +565,37 @@ function PlanAddOnsBody({ addOns, onChange }: { addOns: PlanAddOnsView; onChange
                   </span>
                 </li>
               )}
+              {showTiers && (
+                <li className="flex justify-between gap-2 px-3 py-2">
+                  <span>{t('dialog.tracking')}</span>
+                  <span className="tabular-nums text-muted-foreground">
+                    {units
+                      ? t('tracking.tier', { units: formatNumber(units) })
+                      : t('dialog.trackingNone')}
+                  </span>
+                </li>
+              )}
               {(addOns.brandPriceCents != null || !enterprise) && (
-                <>
-                  {showTiers && (
-                    <li className="flex justify-between gap-2 px-3 py-2">
-                      <span>{t('dialog.tracking')}</span>
-                      <span className="tabular-nums text-muted-foreground">
-                        {units
-                          ? t('tracking.tier', { units: formatNumber(units) })
-                          : t('dialog.trackingNone')}
-                      </span>
-                    </li>
-                  )}
-                  <li className="flex justify-between gap-2 px-3 py-2">
-                    <span>{t('brands.title')}</span>
-                    <span className="text-muted-foreground">
-                      {t('dialog.brands', { count: brands })}
-                    </span>
-                  </li>
-                  {topUp > 0 && (
-                    <li className="px-3 py-2">{t('dialog.topUp', { multiplier: topUp })}</li>
-                  )}
-                  {!enterprise && (
-                    <li className="flex justify-between gap-2 px-3 py-2">
-                      <span>{t('dialog.newLimits')}</span>
-                      <span className="text-muted-foreground">
-                        {t('summary', {
-                          prompts: formatNumber(preview.limits.prompts),
-                          brands: preview.limits.brands,
-                        })}
-                      </span>
-                    </li>
-                  )}
-                </>
+                <li className="flex justify-between gap-2 px-3 py-2">
+                  <span>{t('brands.title')}</span>
+                  <span className="text-muted-foreground">
+                    {t('dialog.brands', { count: brands })}
+                  </span>
+                </li>
+              )}
+              {topUp > 0 && (
+                <li className="px-3 py-2">{t('dialog.topUp', { multiplier: topUp })}</li>
+              )}
+              {!enterprise && (
+                <li className="flex justify-between gap-2 px-3 py-2">
+                  <span>{t('dialog.newLimits')}</span>
+                  <span className="text-muted-foreground">
+                    {t('summary', {
+                      prompts: formatNumber(preview.limits.prompts),
+                      brands: preview.limits.brands,
+                    })}
+                  </span>
+                </li>
               )}
             </ul>
             {preview.slotsWaiting.length > 0 && (
