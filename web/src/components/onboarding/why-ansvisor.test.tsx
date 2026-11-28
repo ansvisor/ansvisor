@@ -24,7 +24,7 @@ describe('WhyAnsvisor', () => {
     const items = [...list.querySelectorAll('li')].map((li) => li.textContent);
     expect(items).toHaveLength(WHY_ANSVISOR.length);
     expect(items[0]).toContain('Real answers, not guesses');
-    expect(items[1]).toContain('Actions, not reports');
+    expect(items[1]).toContain('Actions, not only reports');
     expect(items[2]).toContain('Clear price');
     expect(items[3]).toContain('Results you can show');
     act(() => root.unmount());
