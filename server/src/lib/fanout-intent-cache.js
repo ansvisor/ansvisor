@@ -9,10 +9,13 @@ import { logger } from './logger.js';
  * query in `fanout_query_intents`: brand-independent, so a query is
  * classified once and read everywhere after.
  *
- * Sub-queries are classified as their answers are stored (queueFanoutIntents,
- * called by both result paths), so Query Fan-out only reads the cache. The
- * route behind the tab and the backfill script use classifyAndCache for
- * whatever is still missing.
+ * With the decision model on (FANOUT_INTENTS_DECIDER and a configured
+ * decider), sub-queries are classified as their answers are stored
+ * (queueFanoutIntents, called by both result paths), 128 per request, so
+ * Query Fan-out mostly reads the cache. Without it nothing is classified on
+ * arrival: a chat-model call per query for every stored answer would cost
+ * too much. The route behind the tab and the backfill script use
+ * classifyAndCache for whatever is still missing.
  */
 
 /** Cache reads per request: keeps each `.in('query', …)` URL short. */
@@ -96,8 +99,17 @@ let timer = null;
 let flushing = null;
 
 /**
+ * True when sub-queries are classified on arrival: only with the decision
+ * model (FANOUT_INTENTS_DECIDER and a configured decider), read on each call.
+ */
+export function classifiesOnArrival() {
+  return Boolean(process.env.FANOUT_INTENTS_DECIDER) && isDeciderConfigured();
+}
+
+/**
  * Holds an answer's sub-queries to classify in the background: in batches of
- * QUEUE_FLUSH_SIZE, or after QUEUE_FLUSH_MS. Never throws and never blocks
+ * QUEUE_FLUSH_SIZE, or after QUEUE_FLUSH_MS. Does nothing unless the
+ * decision model is on (classifiesOnArrival). Never throws and never blocks
  * the caller: storing the answer matters, the intent can come later (the tab
  * classifies what's still missing).
  *
@@ -105,6 +117,7 @@ let flushing = null;
  */
 export function queueFanoutIntents(searchQueries) {
   try {
+    if (!classifiesOnArrival()) return;
     for (const query of queryTexts(searchQueries)) {
       if (queue.size >= QUEUE_MAX) break;
       queue.add(query);

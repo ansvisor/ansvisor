@@ -1,10 +1,14 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 /** Fan-out sub-query intents, cached once per query and classified as answers arrive (#333). */
 
 vi.mock('../config/supabase.js', () => ({ default: {} }));
 vi.mock('./ai-provider.js', () => ({ resolveModel: vi.fn() }));
-vi.mock('./decider.js', () => ({ decide: vi.fn(), isDeciderConfigured: () => false }));
+const decider = vi.hoisted(() => ({ configured: false }));
+vi.mock('./decider.js', () => ({
+  decide: vi.fn(),
+  isDeciderConfigured: () => decider.configured,
+}));
 
 const {
   classifyAndCache,
@@ -89,6 +93,24 @@ describe('classifyAndCache', () => {
 describe('queueFanoutIntents', () => {
   beforeEach(async () => {
     await flushFanoutIntents({ db: fakeDb(), classify: async () => ({}) });
+    vi.stubEnv('FANOUT_INTENTS_DECIDER', '1');
+    decider.configured = true;
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    decider.configured = false;
+  });
+
+  it('holds nothing without the decision model: no chat-model call per query', async () => {
+    decider.configured = false;
+    queueFanoutIntents([{ query: 'One' }]);
+    expect(queuedFanoutIntents()).toEqual([]);
+
+    decider.configured = true;
+    vi.stubEnv('FANOUT_INTENTS_DECIDER', '');
+    queueFanoutIntents([{ query: 'One' }]);
+    expect(queuedFanoutIntents()).toEqual([]);
   });
 
   it('holds an answer’s sub-queries and classifies them in batches', async () => {

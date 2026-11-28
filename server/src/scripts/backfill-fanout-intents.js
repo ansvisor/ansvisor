@@ -12,6 +12,11 @@
  *   --pause-ms N    wait after each batch (default 500)
  *   --dry-run       count the queries still unclassified, classify nothing
  *
+ * Cost: with the decision model (FANOUT_INTENTS_DECIDER and a configured
+ * DECIDER_PROVIDER) it classifies 128 queries per request; without it, it
+ * makes one chat-model call per query. Run --dry-run first to see how many
+ * queries that is.
+ *
  * Safe to stop and run again: a query already in fanout_query_intents is
  * never asked again, and a query that fails to classify is asked on the next
  * run. On a failure it prints the --from to resume with, and exits 1.
