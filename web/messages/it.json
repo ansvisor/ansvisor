@@ -18822,6 +18822,7 @@
       },
       "summary": "{prompts} località dei Prompt · {brands} brand",
       "review": "Verifica e paga",
+      "reviewPrice": "Controlla e paga {price}",
       "reviewing": "Verifica del prezzo…",
       "dialog": {
         "title": "Verifichi i Suoi componenti aggiuntivi",
@@ -18873,6 +18874,7 @@
         "title": "I tuoi componenti aggiuntivi",
         "onePayment": "Pagamento unico",
         "plan": "Piano {plan}",
+        "planSub": "Già nel tuo abbonamento · nessuna modifica",
         "slots": "Monitoraggio extra {platform}",
         "slotsCount": "{slots} slot",
         "remove": "Rimuovi {item}",
@@ -18882,7 +18884,8 @@
         "topUp": "{multiplier}x di utilizzo IA · fino al {date}",
         "total": "Totale {interval, select, year {annuale} other {mensile}} dal prossimo rinnovo <b>{price}</b>",
         "undoAll": "Annulla tutte le modifiche",
-        "dueToday": "Da pagare oggi: gli elementi aggiunti per il resto di questo periodo, mostrati in Verifica e paga."
+        "dueToday": "Da pagare oggi: gli elementi aggiunti per il resto di questo periodo, mostrati in Verifica e paga.",
+        "dueTodayAmount": "Da pagare oggi: <b>{price}</b> per gli elementi aggiunti, per il resto di questo periodo."
       }
     },
     "cancelsOn": "L'abbonamento termina il {date}",

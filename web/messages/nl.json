@@ -18822,6 +18822,7 @@
       },
       "summary": "{prompts} Prompt-locaties · {brands} merken",
       "review": "Controleren en betalen",
+      "reviewPrice": "Controleren en betalen {price}",
       "reviewing": "Prijs controleren…",
       "dialog": {
         "title": "Controleer uw add-ons",
@@ -18873,6 +18874,7 @@
         "title": "Uw add-ons",
         "onePayment": "Eén betaling",
         "plan": "Abonnement {plan}",
+        "planSub": "Al in je abonnement · geen wijziging",
         "slots": "Extra tracking {platform}",
         "slotsCount": "{slots} slots",
         "remove": "{item} verwijderen",
@@ -18882,7 +18884,8 @@
         "topUp": "{multiplier}x AI-gebruik · tot {date}",
         "total": "{interval, select, year {Jaarlijks} other {Maandelijks}} totaal vanaf de volgende verlenging <b>{price}</b>",
         "undoAll": "Alle wijzigingen ongedaan maken",
-        "dueToday": "Vandaag verschuldigd: de toegevoegde items voor de rest van deze periode, weergegeven bij Controleren en betalen."
+        "dueToday": "Vandaag verschuldigd: de toegevoegde items voor de rest van deze periode, weergegeven bij Controleren en betalen.",
+        "dueTodayAmount": "Vandaag te betalen: <b>{price}</b> voor de toevoegingen, voor de rest van deze periode."
       }
     },
     "cancelsOn": "Abonnement eindigt op {date}",

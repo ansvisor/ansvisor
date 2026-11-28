@@ -131,6 +131,33 @@ describe('the add-ons card', () => {
     expect(text).toContain('10x AI usage');
   });
 
+  it('says what is due today on the button, and marks the plan as already paid', async () => {
+    api.preview.mockResolvedValue({
+      ok: true,
+      changed: true,
+      limits: { prompts: 200, brands: 5 },
+      dueTodayCents: 4688,
+      totalCents: 27400,
+      currency: 'usd',
+      interval: 'month',
+      prorationDate: 1_800_000_000,
+      slots: {},
+      slotsPrice: SLOTS_PRICE,
+      slotsWaiting: [],
+    });
+    await render();
+    expect(container.textContent).toContain('Already in your subscription · no change');
+    await click(document.querySelector<HTMLElement>('[aria-label="One brand more"]')!);
+    // Before Stripe answers, the button doesn't guess an amount.
+    expect(byText('Review and pay')?.textContent).toBe('Review and pay');
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 700));
+    });
+    expect(api.preview).toHaveBeenCalledWith({ trackingUnits: 0, extraBrands: 1, topUp: 0 });
+    expect(byText('Review and pay')?.textContent).toBe('Review and pay $46.88');
+    expect(container.textContent).toContain('Due today: $46.88 for the added items');
+  });
+
   it('reviews the whole cart with Stripe’s figures, then pays it once', async () => {
     api.preview.mockResolvedValue({
       ok: true,
@@ -233,7 +260,7 @@ describe('the add-ons card', () => {
     expect(text()).toContain('Add $460 more a month for 10% off the part above $1,000.');
     // The cart: what the plan will have, and the monthly total.
     const cart = document.querySelector('[data-slot="add-ons-cart"]')!.textContent ?? '';
-    expect(cart).toContain('Growth plan$249/mo');
+    expect(cart).toContain('Growth planAlready in your subscription · no change$249/mo');
     expect(cart).toContain('Claude extra tracking900 slots');
     expect(cart).toContain('$538/mo');
     expect(cart).toContain('Monthly total from the next renewal $787/mo');

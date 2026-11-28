@@ -18826,6 +18826,7 @@
       },
       "summary": "{prompts} Prompt-Standorte · {brands} Marken",
       "review": "Prüfen und bezahlen",
+      "reviewPrice": "Prüfen und zahlen {price}",
       "reviewing": "Preis wird geprüft…",
       "dialog": {
         "title": "Ihre Zusatzoptionen prüfen",
@@ -18877,6 +18878,7 @@
         "title": "Ihre Add-ons",
         "onePayment": "Einmalzahlung",
         "plan": "Tarif {plan}",
+        "planSub": "Bereits in Ihrem Abo · keine Änderung",
         "slots": "Zusätzliches Tracking für {platform}",
         "slotsCount": "{slots} slots",
         "remove": "{item} entfernen",
@@ -18886,7 +18888,8 @@
         "topUp": "{multiplier}x KI-Nutzung · bis {date}",
         "total": "{interval, select, year {Jährliche} other {Monatliche}} Summe ab der nächsten Verlängerung: <b>{price}</b>",
         "undoAll": "Alle Änderungen rückgängig machen",
-        "dueToday": "Heute fällig: die hinzugefügten Positionen für den Rest dieses Zeitraums, angezeigt unter „Prüfen und bezahlen“."
+        "dueToday": "Heute fällig: die hinzugefügten Positionen für den Rest dieses Zeitraums, angezeigt unter „Prüfen und bezahlen“.",
+        "dueTodayAmount": "Heute fällig: <b>{price}</b> für die hinzugefügten Posten, für den Rest dieses Zeitraums."
       }
     },
     "cancelsOn": "Abonnement endet am {date}",

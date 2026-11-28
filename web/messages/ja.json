@@ -18815,6 +18815,7 @@
       },
       "summary": "{prompts} Prompt ロケーション・{brands}ブランド",
       "review": "確認して支払う",
+      "reviewPrice": "確認して支払う {price}",
       "reviewing": "料金を確認中…",
       "dialog": {
         "title": "オプションの確認",
@@ -18866,6 +18867,7 @@
         "title": "アドオン",
         "onePayment": "1回払い",
         "plan": "{plan}プラン",
+        "planSub": "ご契約に含まれています · 変更なし",
         "slots": "{platform}の追加トラッキング",
         "slotsCount": "{slots} slots",
         "remove": "{item}を削除",
@@ -18875,7 +18877,8 @@
         "topUp": "AI使用量{multiplier}倍 · {date}まで",
         "total": "次回更新からの{interval, select, year {年額} other {月額}}合計 <b>{price}</b>",
         "undoAll": "すべての変更を元に戻す",
-        "dueToday": "本日のお支払い:今期の残り期間に追加された項目の料金です。「確認してお支払い」に表示されます。"
+        "dueToday": "本日のお支払い:今期の残り期間に追加された項目の料金です。「確認してお支払い」に表示されます。",
+        "dueTodayAmount": "本日のお支払い: 追加分の今期残り期間として <b>{price}</b>。"
       }
     },
     "cancelsOn": "サブスクリプションは {date} に終了します",

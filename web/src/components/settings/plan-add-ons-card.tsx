@@ -37,6 +37,9 @@ import {
   type SlotUnits,
 } from './plan-slots-section';
 
+/** How long the cart waits after a change before asking Stripe what is due today. */
+const DUE_TODAY_DELAY_MS = 600;
+
 /** The tier a deep link asks for: `?add=tracking` preselects the next one up. */
 function askedForMoreTracking(): boolean {
   return (
@@ -166,6 +169,31 @@ function PlanAddOnsBody({ addOns, onChange }: { addOns: PlanAddOnsView; onChange
     // Only what can be bought: slots once they are open.
     ...(slotsOpen ? { slots: { ...slotUnits } } : {}),
   };
+
+  // What Pay will charge today for the cart as it stands: asked from Stripe a
+  // moment after the last change, so the button can say it before Review.
+  const inputKey = JSON.stringify(input);
+  const canPreview = (open || slotsOpen || buyOpen) && changed;
+  const [due, setDue] = useState<{ key: string; cents: number } | null>(null);
+  useEffect(() => {
+    if (!canPreview) return;
+    let cancelled = false;
+    const timer = setTimeout(async () => {
+      try {
+        const answer = await previewAddOnChange(JSON.parse(inputKey) as typeof input);
+        if (!cancelled && answer.ok) {
+          setDue({ key: inputKey, cents: Math.max(0, answer.dueTodayCents) });
+        }
+      } catch {
+        // Review and pay asks again and says what went wrong.
+      }
+    }, DUE_TODAY_DELAY_MS);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [inputKey, canPreview]);
+  const dueToday = canPreview && due?.key === inputKey ? due.cents : null;
 
   async function review() {
     setMessage(null);
@@ -415,7 +443,9 @@ function PlanAddOnsBody({ addOns, onChange }: { addOns: PlanAddOnsView; onChange
           <ul className="max-h-[38vh] divide-y overflow-y-auto rounded-lg border text-sm">
             <CartLine
               label={t('cart.plan', { plan: planName })}
+              sub={t('cart.planSub')}
               price={addOns.planPriceCents != null ? per(addOns.planPriceCents) : ''}
+              muted
             />
             {slotLines.map((p) => {
               const picked = slotUnits[p.id] ?? 0;
@@ -517,10 +547,23 @@ function PlanAddOnsBody({ addOns, onChange }: { addOns: PlanAddOnsView; onChange
                   </button>
                 )}
               </div>
-              <div className="text-muted-foreground">{t('cart.dueToday')}</div>
+              <div className="text-muted-foreground">
+                {dueToday != null
+                  ? t.rich('cart.dueTodayAmount', {
+                      price: money(dueToday),
+                      b: (chunks) => (
+                        <strong className="tabular-nums text-foreground">{chunks}</strong>
+                      ),
+                    })
+                  : t('cart.dueToday')}
+              </div>
             </div>
             <Button onClick={review} disabled={!canBuy || !changed || busy != null}>
-              {busy === 'preview' ? t('reviewing') : t('review')}
+              {busy === 'preview'
+                ? t('reviewing')
+                : dueToday != null
+                  ? t('reviewPrice', { price: money(dueToday) })
+                  : t('review')}
             </Button>
           </div>
           {message && (
@@ -659,17 +702,25 @@ function CartLine({
   onMore,
   onRemove,
   names,
+  muted,
 }: {
   label: string;
   sub?: ReactNode;
   price: string;
+  /** Shown for context only: already paid, not added by this cart. */
+  muted?: boolean;
   onFewer?: () => void;
   onMore?: () => void;
   onRemove?: () => void;
   names?: { fewer?: string; more?: string; remove?: string };
 }) {
   return (
-    <li className="flex items-center justify-between gap-3 px-3 py-2">
+    <li
+      className={cn(
+        'flex items-center justify-between gap-3 px-3 py-2',
+        muted && 'bg-muted/40 text-muted-foreground',
+      )}
+    >
       <div className="min-w-0">
         <div>{label}</div>
         {sub && <div className="text-xs tabular-nums text-muted-foreground">{sub}</div>}

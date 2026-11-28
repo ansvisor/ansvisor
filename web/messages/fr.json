@@ -18826,6 +18826,7 @@
       },
       "summary": "{prompts} emplacements de Prompts · {brands} marques",
       "review": "Vérifier et payer",
+      "reviewPrice": "Vérifier et payer {price}",
       "reviewing": "Vérification du prix…",
       "dialog": {
         "title": "Vérifiez vos options",
@@ -18877,6 +18878,7 @@
         "title": "Vos modules complémentaires",
         "onePayment": "Paiement unique",
         "plan": "Offre {plan}",
+        "planSub": "Déjà dans votre abonnement · aucun changement",
         "slots": "Suivi supplémentaire {platform}",
         "slotsCount": "{slots} slots",
         "remove": "Retirer {item}",
@@ -18886,7 +18888,8 @@
         "topUp": "{multiplier}x d'utilisation de l'IA · jusqu'au {date}",
         "total": "Total {interval, select, year {annuel} other {mensuel}} à partir du prochain renouvellement : <b>{price}</b>",
         "undoAll": "Annuler toutes les modifications",
-        "dueToday": "À payer aujourd'hui : les éléments ajoutés pour le reste de cette période, affichés dans Vérifier et payer."
+        "dueToday": "À payer aujourd'hui : les éléments ajoutés pour le reste de cette période, affichés dans Vérifier et payer.",
+        "dueTodayAmount": "À payer aujourd'hui : <b>{price}</b> pour les ajouts, pour le reste de cette période."
       }
     },
     "cancelsOn": "L'abonnement prend fin le {date}",
