@@ -18828,6 +18828,11 @@
       "review": "Prüfen und bezahlen",
       "reviewPrice": "Prüfen und zahlen {price}",
       "reviewing": "Preis wird geprüft…",
+      "value": {
+        "line": "Bis zu <b>{answers} Antworten im Monat</b> · <b>{price} pro 1.000</b>",
+        "note": "{slots} Slots am Tag × 30 Tage",
+        "cart": "Bis zu {answers} Antworten im Monat · {price} pro 1.000"
+      },
       "dialog": {
         "title": "Ihre Zusatzoptionen prüfen",
         "newLimits": "Neue Limits",

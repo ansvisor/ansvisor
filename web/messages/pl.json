@@ -18818,6 +18818,11 @@
       "review": "Sprawdź i zapłać",
       "reviewPrice": "Sprawdź i zapłać {price}",
       "reviewing": "Sprawdzanie ceny…",
+      "value": {
+        "line": "Do <b>{answers} odpowiedzi miesięcznie</b> · <b>{price} za 1000</b>",
+        "note": "{slots} slotów dziennie × 30 dni",
+        "cart": "Do {answers} odpowiedzi miesięcznie · {price} za 1000"
+      },
       "dialog": {
         "title": "Sprawdź swoje dodatki",
         "newLimits": "Nowe limity",

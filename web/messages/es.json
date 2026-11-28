@@ -18822,6 +18822,11 @@
       "review": "Revisar y pagar",
       "reviewPrice": "Revisar y pagar {price}",
       "reviewing": "Comprobando el precio…",
+      "value": {
+        "line": "Hasta <b>{answers} respuestas al mes</b> · <b>{price} por cada 1.000</b>",
+        "note": "{slots} slots al día × 30 días",
+        "cart": "Hasta {answers} respuestas al mes · {price} por cada 1.000"
+      },
       "dialog": {
         "title": "Revise sus complementos",
         "newLimits": "Nuevos límites",

@@ -18824,6 +18824,11 @@
       "review": "Controleren en betalen",
       "reviewPrice": "Controleren en betalen {price}",
       "reviewing": "Prijs controleren…",
+      "value": {
+        "line": "Tot <b>{answers} antwoorden per maand</b> · <b>{price} per 1.000</b>",
+        "note": "{slots} slots per dag × 30 dagen",
+        "cart": "Tot {answers} antwoorden per maand · {price} per 1.000"
+      },
       "dialog": {
         "title": "Controleer uw add-ons",
         "newLimits": "Nieuwe limieten",

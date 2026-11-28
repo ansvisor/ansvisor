@@ -16,7 +16,7 @@ sources: [web/src/components/settings/plan-add-ons-card.tsx, web/src/components/
 
 ## Tracking slots
 
-A slot tracks one prompt in one location on one platform, every day. Your plan includes slots on its own platforms (Growth: 250 on each standard platform). Under **Tracking slots**, each platform shows how many slots are used, your total and what is included. Click **+** or **−** to add or remove 100 slots on it.
+A slot tracks one prompt in one location on one platform, every day. **Current Plan** shows how many answers a month your plan and slots give, at most, and the price of 1,000 of them; the cart shows the same for what you pick. Your plan includes slots on its own platforms (Growth: 250 on each standard platform). Under **Tracking slots**, each platform shows how many slots are used, your total and what is included. Click **+** or **−** to add or remove 100 slots on it.
 
 Prices per 100 slots a month: $15 on the standard platforms, $45 on ChatGPT Ads and Meta AI, $60 on Perplexity, Claude, Grok and Microsoft Copilot. On a yearly plan, prices are yearly, with 2 months free. Add-ons follow your plan's billing period.
 

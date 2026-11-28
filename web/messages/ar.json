@@ -18809,6 +18809,11 @@
       "review": "مراجعة والدفع",
       "reviewPrice": "راجع وادفع {price}",
       "reviewing": "جارٍ التحقق من السعر…",
+      "value": {
+        "line": "<b>حتى {answers} إجابة شهريًا</b> · <b>{price} لكل 1,000</b>",
+        "note": "{slots} slot يوميًا × 30 يومًا",
+        "cart": "حتى {answers} إجابة شهريًا · {price} لكل 1,000"
+      },
       "dialog": {
         "title": "مراجعة الإضافات الخاصة بك",
         "newLimits": "الحدود الجديدة",

@@ -13,6 +13,8 @@ import { AiUsageCard } from '@/components/settings/ai-usage-card';
 import { PLAN_STARTED_EVENT } from '@/lib/billing/plan-started';
 import { AddOnsCard } from '@/components/settings/add-ons-card';
 import { PlanAddOnsCard } from '@/components/settings/plan-add-ons-card';
+import { TrackingValueLine } from '@/components/settings/tracking-value-line';
+import type { PlanAddOnsView } from '@/lib/actions/plan-add-ons';
 import { usePlanContext } from '@/components/providers/plan-provider';
 import { useDemoBrand } from '@/components/providers/demo-brand-provider';
 import { createClient } from '@/lib/supabase/client';
@@ -72,6 +74,8 @@ export function BillingSection() {
   // Plan changes made on this page: each has the AI usage card read again,
   // since a trial bought starts a new period with its usage at 0.
   const [planChanges, setPlanChanges] = useState(0);
+  // The add-ons card's read, for the plan's answers and price per 1,000.
+  const [addOnsView, setAddOnsView] = useState<PlanAddOnsView | null>(null);
 
   useEffect(() => {
     async function loadSubscription() {
@@ -254,13 +258,15 @@ export function BillingSection() {
               })}
             </p>
           )}
+
+          {addOnsView && !noPlanYet && !ended && <TrackingValueLine addOns={addOnsView} />}
         </CardContent>
       </Card>
 
       <AiUsageCard key={planChanges} />
 
       {/* Growth's extra tracking, brands and AI top-ups (00546), one cart. */}
-      <PlanAddOnsCard key={`plan-add-ons-${planChanges}`} />
+      <PlanAddOnsCard key={`plan-add-ons-${planChanges}`} onRead={setAddOnsView} />
 
       {/* AI credit and storage packs (CHAT-18): nothing while Chat is off. */}
       <AddOnsCard />

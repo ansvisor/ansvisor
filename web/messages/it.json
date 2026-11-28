@@ -18824,6 +18824,11 @@
       "review": "Verifica e paga",
       "reviewPrice": "Controlla e paga {price}",
       "reviewing": "Verifica del prezzo…",
+      "value": {
+        "line": "Fino a <b>{answers} risposte al mese</b> · <b>{price} ogni 1.000</b>",
+        "note": "{slots} slot al giorno × 30 giorni",
+        "cart": "Fino a {answers} risposte al mese · {price} ogni 1.000"
+      },
       "dialog": {
         "title": "Verifichi i Suoi componenti aggiuntivi",
         "newLimits": "Nuovi limiti",

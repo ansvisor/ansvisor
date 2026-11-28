@@ -18799,6 +18799,11 @@
       "review": "검토 및 결제",
       "reviewPrice": "검토 후 결제 {price}",
       "reviewing": "가격 확인 중…",
+      "value": {
+        "line": "<b>월 최대 답변 {answers}개</b> · <b>1,000개당 {price}</b>",
+        "note": "하루 {slots} slot × 30일",
+        "cart": "월 최대 답변 {answers}개 · 1,000개당 {price}"
+      },
       "dialog": {
         "title": "추가 항목 검토",
         "newLimits": "새 한도",

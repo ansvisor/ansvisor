@@ -18817,6 +18817,11 @@
       "review": "確認して支払う",
       "reviewPrice": "確認して支払う {price}",
       "reviewing": "料金を確認中…",
+      "value": {
+        "line": "<b>月最大{answers}件の回答</b> · <b>1,000件あたり{price}</b>",
+        "note": "1日{slots} slot × 30日",
+        "cart": "月最大{answers}件の回答 · 1,000件あたり{price}"
+      },
       "dialog": {
         "title": "オプションの確認",
         "newLimits": "新しい上限",

@@ -290,6 +290,27 @@ describe('the add-ons card', () => {
     expect(dialog).toContain('Volume discount (0.37%)−$2 a month');
   });
 
+  it('shows the answers a month and price per 1,000 the picked slots give', async () => {
+    await render({ slots: SLOTS });
+    expect(container.textContent).not.toContain('answers a month');
+    await click(document.querySelector<HTMLElement>('[aria-label="100 more Claude slots"]')!);
+    // 250 + 100 slots a day × 30 days; $249 + $60 over 10,500 answers.
+    expect(container.textContent).toContain('Up to 10,500 answers a month · $29.43 per 1,000');
+  });
+
+  it('tells the page what it read', async () => {
+    const onRead = vi.fn();
+    api.read.mockResolvedValue({ ok: true, addOns: { ...VIEW, slots: SLOTS } });
+    await act(async () => {
+      root.render(
+        <NextIntlClientProvider locale="en" messages={messages}>
+          <PlanAddOnsCard onRead={onRead} />
+        </NextIntlClientProvider>,
+      );
+    });
+    expect(onRead).toHaveBeenCalledWith(expect.objectContaining({ slots: SLOTS }));
+  });
+
   it('takes a platform out of the cart with ×, and undoes everything', async () => {
     await render({ slots: { ...SLOTS, platforms: [{ ...SLOTS.platforms[1], units: 3 }] } });
     const cart = () => document.querySelector('[data-slot="add-ons-cart"]')!.textContent ?? '';

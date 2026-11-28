@@ -18816,6 +18816,11 @@
       "review": "İncele ve öde",
       "reviewPrice": "İncele ve öde {price}",
       "reviewing": "Fiyat kontrol ediliyor…",
+      "value": {
+        "line": "Ayda <b>{answers} yanıta kadar</b> · <b>1.000 yanıt başına {price}</b>",
+        "note": "Günde {slots} slot × 30 gün",
+        "cart": "Ayda {answers} yanıta kadar · 1.000 yanıt başına {price}"
+      },
       "dialog": {
         "title": "Eklentilerinizi inceleyin",
         "newLimits": "Yeni limitler",

@@ -18775,6 +18775,11 @@
       "review": "查看并付款",
       "reviewPrice": "查看并支付 {price}",
       "reviewing": "正在核对价格…",
+      "value": {
+        "line": "<b>每月最多 {answers} 条回答</b> · <b>每 1,000 条 {price}</b>",
+        "note": "每天 {slots} 个 slot × 30 天",
+        "cart": "每月最多 {answers} 条回答 · 每 1,000 条 {price}"
+      },
       "dialog": {
         "title": "查看您的加购项",
         "newLimits": "新的限额",

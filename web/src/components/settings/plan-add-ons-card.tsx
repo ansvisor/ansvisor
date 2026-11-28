@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { useTranslations } from 'next-intl';
+import { trackingValue } from '@/lib/billing/tracking-value';
 import { Minus, Plus, X } from 'lucide-react';
 import { useRouter } from '@/i18n/navigation';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -57,7 +58,12 @@ function askedForMoreTracking(): boolean {
  * active plan buy; everyone else sees why they can't. Enterprise buys only
  * tracking slots. Shown whatever Chat's flag is.
  */
-export function PlanAddOnsCard() {
+export function PlanAddOnsCard({
+  onRead,
+}: {
+  /** Told each read's view (null when it failed), e.g. for the plan's answers line. */
+  onRead?: (addOns: PlanAddOnsView | null) => void;
+} = {}) {
   const t = useTranslations('settings.planAddOns');
   const [read, setRead] = useState<PlanAddOnsRead | undefined>(undefined);
   const [version, setVersion] = useState(0);
@@ -66,12 +72,14 @@ export function PlanAddOnsCard() {
   useEffect(() => {
     let cancelled = false;
     void readPlanAddOns().then((next) => {
-      if (!cancelled) setRead(next);
+      if (cancelled) return;
+      setRead(next);
+      onRead?.(next.ok ? next.addOns : null);
     });
     return () => {
       cancelled = true;
     };
-  }, [version]);
+  }, [version, onRead]);
 
   // Nothing until it's read, and nothing off the cloud.
   if (!read || (!read.ok && read.failure === 'not_cloud')) return null;
@@ -242,6 +250,8 @@ function PlanAddOnsBody({ addOns, onChange }: { addOns: PlanAddOnsView; onChange
     (tier?.priceCents ?? 0) +
     brands * (addOns.brandPriceCents ?? 0);
   const canBuy = open || slotsOpen || buyOpen;
+  // What the slots picked give: shown once they change.
+  const pickedValue = slotsChanged ? trackingValue(addOns, slotUnits) : null;
 
   return (
     <>
@@ -547,6 +557,14 @@ function PlanAddOnsBody({ addOns, onChange }: { addOns: PlanAddOnsView; onChange
                   </button>
                 )}
               </div>
+              {pickedValue && (
+                <div className="text-muted-foreground tabular-nums">
+                  {t('value.cart', {
+                    answers: formatNumber(pickedValue.answersPerMonth),
+                    price: money(pickedValue.centsPer1000),
+                  })}
+                </div>
+              )}
               <div className="text-muted-foreground">
                 {dueToday != null
                   ? t.rich('cart.dueTodayAmount', {

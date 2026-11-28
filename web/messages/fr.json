@@ -18828,6 +18828,11 @@
       "review": "Vérifier et payer",
       "reviewPrice": "Vérifier et payer {price}",
       "reviewing": "Vérification du prix…",
+      "value": {
+        "line": "Jusqu'à <b>{answers} réponses par mois</b> · <b>{price} les 1 000</b>",
+        "note": "{slots} slots par jour × 30 jours",
+        "cart": "Jusqu'à {answers} réponses par mois · {price} les 1 000"
+      },
       "dialog": {
         "title": "Vérifiez vos options",
         "newLimits": "Nouvelles limites",

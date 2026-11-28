@@ -18429,6 +18429,11 @@
       "review": "Review and pay",
       "reviewPrice": "Review and pay {price}",
       "reviewing": "Checking the price…",
+      "value": {
+        "line": "Up to <b>{answers} answers a month</b> · <b>{price} per 1,000</b>",
+        "note": "{slots} slots a day × 30 days",
+        "cart": "Up to {answers} answers a month · {price} per 1,000"
+      },
       "dialog": {
         "title": "Review your add-ons",
         "newLimits": "New limits",
