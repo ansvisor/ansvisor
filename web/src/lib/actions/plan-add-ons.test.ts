@@ -127,6 +127,12 @@ const addOnItem = (id: string, product: string, quantity = 1) => ({
     metadata: { addon: product.startsWith('brand') ? 'brand' : 'tracking' },
   },
 });
+/** A subscription discount as Stripe returns it with `discounts.source.coupon` expanded. */
+const discount = (id: string, coupon: Record<string, unknown>, end: number | null = null) => ({
+  id,
+  end,
+  source: { type: 'coupon', coupon: { valid: true, ...coupon } },
+});
 const subscription = (items: unknown[], over = {}) => ({
   id: 'sub_1',
   customer: 'cus_1',
@@ -304,15 +310,59 @@ describe('applying', () => {
 
   it('moves the subscription’s discount onto the plan’s item, so add-ons are charged in full', async () => {
     stripeApi.retrieve.mockResolvedValue(
-      subscription([planItem()], { discounts: ['di_teknopark'] }),
+      subscription([planItem()], {
+        discounts: [
+          discount('di_teknopark', { id: 'TEKNOPARK', duration: 'forever', percent_off: 20 }),
+        ],
+      }),
     );
     await applyAddOnChange({ trackingUnits: 100, extraBrands: 0 });
+    expect(stripeApi.retrieve).toHaveBeenCalledWith('sub_1', {
+      expand: ['discounts.source.coupon'],
+    });
     const params = stripeApi.update.mock.calls[0][1];
     expect(params.discounts).toBe('');
+    // Stripe takes no existing discount (di_…) on an item: the coupon goes as a new one.
     expect(params.items).toEqual([
       { price: 'price_tracking_100_month' },
-      { id: 'si_plan', discounts: [{ discount: 'di_teknopark' }] },
+      { id: 'si_plan', discounts: [{ coupon: 'TEKNOPARK' }] },
     ]);
+  });
+
+  it('moves a coupon that runs for months as a copy for the whole months it has left', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-11-28T12:00:00Z'));
+    try {
+      // SAVE50 for 3 months from Oct 10: it ends Jan 10, so Dec 10 is its last renewal.
+      stripeApi.retrieve.mockResolvedValue(
+        subscription([planItem()], {
+          discounts: [
+            discount(
+              'di_save50',
+              { id: 'SAVE50', name: 'SAVE50', duration: 'repeating', percent_off: 50 },
+              Date.UTC(2027, 0, 10) / 1000,
+            ),
+          ],
+        }),
+      );
+      stripeApi.retrieveCoupon.mockRejectedValue({ code: 'resource_missing' });
+      stripeApi.createCoupon.mockImplementation(async (params: { id: string }) => params);
+      await applyAddOnChange({ trackingUnits: 100, extraBrands: 0 });
+      expect(stripeApi.createCoupon).toHaveBeenCalledWith({
+        id: 'SAVE50_plan_1m',
+        name: 'SAVE50',
+        percent_off: 50,
+        duration: 'repeating',
+        duration_in_months: 1,
+        metadata: { moved_from: 'SAVE50' },
+      });
+      expect(stripeApi.update.mock.calls[0][1].items).toContainEqual({
+        id: 'si_plan',
+        discounts: [{ coupon: 'SAVE50_plan_1m' }],
+      });
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('answers Stripe’s words when the card is declined, and keeps the limits', async () => {
@@ -717,7 +767,11 @@ describe('tracking slots (00564)', () => {
   });
 
   it('keeps the plan’s coupon (SAVE50) on the plan alone', async () => {
-    stripeApi.retrieve.mockResolvedValue(subscription([planItem()], { discounts: ['di_save50'] }));
+    stripeApi.retrieve.mockResolvedValue(
+      subscription([planItem()], {
+        discounts: [discount('di_save50', { id: 'SAVE50', duration: 'forever', percent_off: 50 })],
+      }),
+    );
     const result = await applyAddOnChange({
       trackingUnits: 0,
       extraBrands: 0,
@@ -732,7 +786,7 @@ describe('tracking slots (00564)', () => {
         quantity: 20,
         discounts: [{ coupon: 'addon_slots_off_0375' }],
       },
-      { id: 'si_plan', discounts: [{ discount: 'di_save50' }] },
+      { id: 'si_plan', discounts: [{ coupon: 'SAVE50' }] },
     ]);
   });
 
