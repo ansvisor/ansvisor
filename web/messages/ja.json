@@ -2177,8 +2177,8 @@
         "notScored": "未スコア",
         "why": "この優先度の理由",
         "lowConfidence": {
-          "tip": "{why}に基づいています。信頼度はスコアの一部にすぎないため、影響度や需要によっては上位に表示されることもあります。対応する前に確認してください。",
-          "sentTip": "検出された結果ではなく、送信時の内容から評価されています。対応する前に確認してください。"
+          "tip": "{why}に基づいています。Google Analytics、Search Console、サイト監査で2つ目の種類の根拠を追加できます。これはスコアの一部にすぎず、影響度と需要も順位に反映されます。",
+          "sentTip": "検出された結果ではなく、送信時の内容から評価されています。"
         },
         "reason": {
           "change": {
@@ -2234,9 +2234,9 @@
           "sources": "{count}件のソースで確認済み",
           "confidence": {
             "line": "{level} — {why}。",
-            "low": "低い確信度",
-            "medium": "中程度の確信度",
-            "high": "高い確信度",
+            "low": "単一ソース",
+            "medium": "確認済み",
+            "high": "十分に確認済み",
             "found": "{sources, plural, =0 {{kinds, plural, other {#種類の検出事項}}} other {{sources, plural, other {#件の情報源}}から{kinds, plural, other {#種類の検出事項}}}}",
             "sent": "検出された事項ではなく、送信された内容から評価されました"
           },

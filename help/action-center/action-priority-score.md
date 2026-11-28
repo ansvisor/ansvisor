@@ -1,7 +1,7 @@
 ---
 title: Action Priority Score
 route: /dashboard/action-center/actions
-keywords: [priority score, priority level, critical, why this priority, action ranking, low confidence]
+keywords: [priority score, priority level, critical, why this priority, action ranking, low confidence, single source, confirmed]
 synonyms: [action priority, ranking, how actions are sorted, urgency]
 plan: all
 updated: 2026-11-20
@@ -46,11 +46,11 @@ An action sent from another page has no detection signals, so it is scored from 
 
 The action's **Overview** tab starts with **Why this priority?**: one sentence written from the facts the score rests on. It says what changed, on what, how recently, and what makes it matter. When past success moves the score by a point or more, it says so too.
 
-## Low confidence
+## Single source
 
-When an action's score rests on little evidence, such as one kind of finding from one source, a **Low confidence** tag sits next to its score in the **Actions** list and next to **Why this priority?** in the open action. Hover or focus the tag to see why.
+Confidence says how many kinds of evidence agree, not whether a finding is right. Most actions come from your tracked AI answers alone: one kind of finding from one source. They show a **Single source** tag next to the score in the **Actions** list and next to **Why this priority?** in the open action. Hover or focus it to see why.
 
-The score itself doesn't change. Confidence is only one part of it, so an action with strong impact and demand can still rank high. Check what it found before you act on it.
+A second kind of evidence, such as Google Analytics, Search Console or a site audit, makes it **Confirmed** or **Well confirmed**. Confidence is only one part of the score, so impact and demand still rank the action.
 
 ## Not the Content Plan's score
 

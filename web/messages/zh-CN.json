@@ -2177,8 +2177,8 @@
         "notScored": "尚未评分",
         "why": "为什么是此优先级？",
         "lowConfidence": {
-          "tip": "依据:{why}。置信度只是评分的一部分,因此影响和需求仍可能使其排名靠前。请在行动前核实。",
-          "sentTip": "根据发送时附带的信息评级,而非检测到的发现。请在行动前核实。"
+          "tip": "基于{why}。Google Analytics、Search Console 或网站审计可以增加第二类证据。这只是评分的一部分，影响和需求同样决定排序。",
+          "sentTip": "根据发送时附带的内容评估，而非检测到的发现。"
         },
         "reason": {
           "change": {
@@ -2234,9 +2234,9 @@
           "sources": "经 {count} 个来源确认",
           "confidence": {
             "line": "{level} — {why}。",
-            "low": "低置信度",
-            "medium": "中置信度",
-            "high": "高置信度",
+            "low": "单一来源",
+            "medium": "已确认",
+            "high": "充分确认",
             "found": "来自 {sources, plural, =0 {} other {# 个来源的 }}{kinds, plural, other {# 种发现}}",
             "sent": "根据发送内容评估，而非基于检测到的发现"
           },

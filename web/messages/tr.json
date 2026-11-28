@@ -2177,8 +2177,8 @@
         "notScored": "Henüz puanlanmadı",
         "why": "Neden bu öncelik?",
         "lowConfidence": {
-          "tip": "{why} temel alınmıştır. Güven puanın yalnızca bir parçasıdır; bu yüzden etki ve talep yine de üst sıralara taşıyabilir. İşlem yapmadan önce kontrol edin.",
-          "sentTip": "Tespit edilen bulgulara göre değil, birlikte gönderildiği içeriğe göre derecelendirildi. İşlem yapmadan önce kontrol edin."
+          "tip": "{why} temel alınmıştır. Google Analytics, Search Console veya bir site denetimi ikinci bir kanıt türü ekleyebilir. Bu, puanın yalnızca bir parçasıdır; sıralamayı etki ve talep de belirler.",
+          "sentTip": "Tespit edilen bulgulara göre değil, birlikte gönderildiği içeriğe göre derecelendirildi."
         },
         "reason": {
           "change": {
@@ -2234,9 +2234,9 @@
           "sources": "{count} kaynak tarafından doğrulandı",
           "confidence": {
             "line": "{level} — {why}.",
-            "low": "Düşük güvenilirlik",
-            "medium": "Orta güvenilirlik",
-            "high": "Yüksek güvenilirlik",
+            "low": "Tek kaynak",
+            "medium": "Doğrulandı",
+            "high": "Güçlü şekilde doğrulandı",
             "found": "{sources, plural, =0 {} other {# kaynaktan }}{kinds, plural, other {# tür bulgu}}",
             "sent": "tespit edilen bulgulardan değil, birlikte gönderildiği verilerden değerlendirildi"
           },

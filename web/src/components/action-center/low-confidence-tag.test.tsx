@@ -51,9 +51,9 @@ describe('LowConfidenceTag (AC-26)', () => {
     const onRow = vi.fn();
     render(low(), onRow);
     const tag = container.querySelector('button')!;
-    expect(tag.textContent).toBe('Low confidence');
+    expect(tag.textContent).toBe('Single source');
     expect(tag.getAttribute('aria-label')).toBe(
-      'Low confidence: Based on one kind of finding from one source. Confidence is only one part of the score, so impact and demand can still rank it high. Check it before acting.',
+      'Single source: Based on one kind of finding from one source. Google Analytics, Search Console or a site audit can add a second kind of evidence. This is one part of the score; impact and demand still rank it.',
     );
     act(() => tag.click());
     expect(onRow).not.toHaveBeenCalled();
@@ -62,7 +62,7 @@ describe('LowConfidenceTag (AC-26)', () => {
   it('says an action sent by a person was rated from what it was sent with', () => {
     render(low({ kinds: 0, sources: 0 }));
     expect(container.querySelector('button')!.getAttribute('aria-label')).toBe(
-      'Low confidence: Rated from what it was sent with, not from detected findings. Check it before acting.',
+      'Single source: Rated from what it was sent with, not from detected findings.',
     );
   });
 

@@ -2177,8 +2177,8 @@
         "notScored": "Noch nicht bewertet",
         "why": "Warum diese Priorität?",
         "lowConfidence": {
-          "tip": "Basierend auf {why}. Die Konfidenz ist nur ein Teil der Bewertung, daher können Wirkung und Nachfrage sie trotzdem weit oben einstufen. Prüfen Sie sie, bevor Sie handeln.",
-          "sentTip": "Bewertet anhand dessen, womit sie gesendet wurde, nicht anhand erkannter Befunde. Prüfen Sie sie, bevor Sie handeln."
+          "tip": "Basierend auf {why}. Google Analytics, Search Console oder ein Site-Audit können eine zweite Art von Beleg hinzufügen. Das ist nur ein Teil der Bewertung; Wirkung und Nachfrage bestimmen die Reihenfolge mit.",
+          "sentTip": "Bewertet anhand dessen, womit sie gesendet wurde, nicht anhand erkannter Befunde."
         },
         "reason": {
           "change": {
@@ -2234,9 +2234,9 @@
           "sources": "bestätigt durch {count} Quellen",
           "confidence": {
             "line": "{level} — {why}.",
-            "low": "Geringe Konfidenz",
-            "medium": "Mittlere Konfidenz",
-            "high": "Hohe Konfidenz",
+            "low": "Eine Quelle",
+            "medium": "Bestätigt",
+            "high": "Gut bestätigt",
             "found": "{kinds, plural, one {eine Art von Befund} other {# Arten von Befunden}}{sources, plural, =0 {} one { aus einer Quelle} other { aus # Quellen}}",
             "sent": "bewertet anhand der übermittelten Daten, nicht anhand erkannter Befunde"
           },

@@ -110,13 +110,13 @@ describe('confidence', () => {
     const one = parsePriorityReason({ kinds: 1, sources: 1, factors: { confidence: 0.3 } });
     expect(one?.confidence).toEqual({ level: 'low', score: 0.3, kinds: 1, sources: 1 });
     expect(priorityConfidenceText(one!.confidence!, t)).toBe(
-      'Low confidence — one kind of finding from one source.',
+      'Single source — one kind of finding from one source.',
     );
     expect(confidenceNote(one!.confidence!)).toBe('one kind of finding from one source');
 
     const two = parsePriorityReason({ kinds: 2, sources: 3, factors: { confidence: 0.9 } });
     expect(priorityConfidenceText(two!.confidence!, t)).toBe(
-      'High confidence — 2 kinds of finding from 3 sources.',
+      'Well confirmed — 2 kinds of finding from 3 sources.',
     );
     expect(confidenceNote(two!.confidence!)).toBe('2 kinds of finding from 3 sources');
   });
@@ -125,7 +125,7 @@ describe('confidence', () => {
     const sent = parsePriorityReason({ kinds: 0, sources: 0, factors: { confidence: 0.6 } });
     expect(sent?.confidence?.level).toBe('medium');
     expect(priorityConfidenceText(sent!.confidence!, t)).toBe(
-      'Medium confidence — rated from what it was sent with, not from detected findings.',
+      'Confirmed — rated from what it was sent with, not from detected findings.',
     );
     expect(parsePriorityReason({ factors: { impact: 1 } })?.confidence).toBeNull();
   });

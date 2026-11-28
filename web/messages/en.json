@@ -2177,8 +2177,8 @@
         "notScored": "Not scored yet",
         "why": "Why this priority?",
         "lowConfidence": {
-          "tip": "Based on {why}. Confidence is only one part of the score, so impact and demand can still rank it high. Check it before acting.",
-          "sentTip": "Rated from what it was sent with, not from detected findings. Check it before acting."
+          "tip": "Based on {why}. Google Analytics, Search Console or a site audit can add a second kind of evidence. This is one part of the score; impact and demand still rank it.",
+          "sentTip": "Rated from what it was sent with, not from detected findings."
         },
         "reason": {
           "change": {
@@ -2234,9 +2234,9 @@
           "sources": "confirmed by {count} sources",
           "confidence": {
             "line": "{level} — {why}.",
-            "low": "Low confidence",
-            "medium": "Medium confidence",
-            "high": "High confidence",
+            "low": "Single source",
+            "medium": "Confirmed",
+            "high": "Well confirmed",
             "found": "{kinds, plural, one {one kind of finding} other {# kinds of finding}}{sources, plural, =0 {} one { from one source} other { from # sources}}",
             "sent": "rated from what it was sent with, not from detected findings"
           },
