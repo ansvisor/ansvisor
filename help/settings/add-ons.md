@@ -36,7 +36,7 @@ On a yearly plan, slots and brands show yearly prices, with 2 months free.
 
 ## Review and pay
 
-Pick what you want. The cart then shows what you pay today, also on the button, and marks your plan as already paid. Click **Review and pay**. The window shows your new slots and limits, the volume discount, what is **Due today** (the rest of this period for slots and brands, and a top-up in full) and your total from the next renewal. **Pay** charges the card on file once. Fewer slots or brands leave a credit for your next invoices. You can't go below what you use: pause prompts or remove brands first.
+Pick what you want. The cart then shows what you pay today, also on the button, and marks your plan as already paid. Click **Review and pay**. The window shows your new slots and limits, the volume discount, what is **Due today** (the rest of this period for slots and brands, and a top-up in full) and your total from the next renewal. **Pay** charges the card on file once. The cart then says what was added or removed and what was charged; if it fails, it says why, and nothing changes. Fewer slots or brands leave a credit for your next invoices. You can't go below what you use: pause prompts or remove brands first.
 
 Only admins of an active Growth or Enterprise plan buy. In a free trial, start your plan first; if your plan is set to end, keep it first.
 

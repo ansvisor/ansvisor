@@ -18998,6 +18998,19 @@
         "slotsWaiting": "{platform}: le {count} località di Prompt più recenti attenderanno uno slot. Nulla viene eliminato; aggiungi di nuovo slot per monitorarle."
       },
       "done": "I tuoi add-on sono aggiornati. Una ricarica viene conteggiata non appena il pagamento è confermato.",
+      "notice": {
+        "failedTitle": "Non completato: niente è stato modificato o addebitato",
+        "paidTitle": "Pagamento completato",
+        "savedTitle": "Modifica salvata",
+        "added": "Aggiunto: {items}.",
+        "removed": "Rimosso: {items}. Il tempo non usato è accreditato sulle prossime fatture.",
+        "charged": "Addebitato oggi: {price}.",
+        "slots": "{slots} slot {platform}",
+        "brands": "{count, plural, one {# brand} other {# brand}}",
+        "topUp": "Ricarica uso AI {multiplier}x",
+        "topUpNote": "La ricarica vale appena il pagamento è confermato.",
+        "dismiss": "Chiudi"
+      },
       "states": {
         "not_admin": "Solo gli amministratori possono modificare gli add-on. Rivolgiti a un amministratore del tuo workspace.",
         "starter": "Gli add-on sono inclusi nel piano Growth. Passa a Growth per aggiungere monitoraggio, brand e utilizzo IA.",

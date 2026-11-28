@@ -19002,6 +19002,19 @@
         "slotsWaiting": "{platform}: Die neuesten {count} Prompt-Standorte warten auf einen slot. Nichts wird gelöscht; fügen Sie wieder slots hinzu, um sie zu tracken."
       },
       "done": "Ihre Add-ons wurden aktualisiert. Eine Aufladung gilt, sobald die Zahlung bestätigt ist.",
+      "notice": {
+        "failedTitle": "Nicht abgeschlossen: nichts wurde geändert oder berechnet",
+        "paidTitle": "Zahlung abgeschlossen",
+        "savedTitle": "Änderung gespeichert",
+        "added": "Hinzugefügt: {items}.",
+        "removed": "Entfernt: {items}. Die ungenutzte Zeit wird Ihren nächsten Rechnungen gutgeschrieben.",
+        "charged": "Heute berechnet: {price}.",
+        "slots": "{slots} {platform}-Slots",
+        "brands": "{count, plural, one {# Marke} other {# Marken}}",
+        "topUp": "{multiplier}x KI-Nutzung als Aufladung",
+        "topUpNote": "Die Aufladung zählt, sobald die Zahlung bestätigt ist.",
+        "dismiss": "Schließen"
+      },
       "states": {
         "not_admin": "Nur Admins können Add-ons ändern. Wenden Sie sich an einen Admin Ihres Workspace.",
         "starter": "Add-ons sind im Growth-Tarif enthalten. Wechseln Sie zu Growth, um Tracking, Marken und KI-Nutzung hinzuzufügen.",

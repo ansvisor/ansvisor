@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { useTranslations } from 'next-intl';
-import { Minus, Plus, X } from 'lucide-react';
+import { AlertCircle, CheckCircle2, Minus, Plus, X } from 'lucide-react';
+import { toast } from 'sonner';
 import { useRouter } from '@/i18n/navigation';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -62,6 +63,9 @@ export function PlanAddOnsCard() {
   const [read, setRead] = useState<PlanAddOnsRead | undefined>(undefined);
   const [version, setVersion] = useState(0);
   const reload = useCallback(() => setVersion((v) => v + 1), []);
+  // What the last Pay did, kept here so it stays after the reload that
+  // shows the new add-ons (the body remounts on it).
+  const [notice, setNotice] = useState<AddOnsNotice | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -79,7 +83,13 @@ export function PlanAddOnsCard() {
   return (
     <div id="plan-add-ons" className="scroll-mt-6 space-y-6">
       {read.ok ? (
-        <PlanAddOnsBody key={version} addOns={read.addOns} onChange={reload} />
+        <PlanAddOnsBody
+          key={version}
+          addOns={read.addOns}
+          onChange={reload}
+          notice={notice}
+          onNotice={setNotice}
+        />
       ) : (
         <Card>
           <CardHeader>
@@ -94,7 +104,24 @@ export function PlanAddOnsCard() {
   );
 }
 
-function PlanAddOnsBody({ addOns, onChange }: { addOns: PlanAddOnsView; onChange: () => void }) {
+/** What the cart says after Pay: what changed, or why nothing did. */
+export interface AddOnsNotice {
+  kind: 'success' | 'error';
+  title: string;
+  lines: string[];
+}
+
+function PlanAddOnsBody({
+  addOns,
+  onChange,
+  notice,
+  onNotice,
+}: {
+  addOns: PlanAddOnsView;
+  onChange: () => void;
+  notice: AddOnsNotice | null;
+  onNotice: (notice: AddOnsNotice | null) => void;
+}) {
   const t = useTranslations('settings.planAddOns');
   const router = useRouter();
   const open = addOns.state === 'open';
@@ -121,7 +148,6 @@ function PlanAddOnsBody({ addOns, onChange }: { addOns: PlanAddOnsView; onChange
   );
   const [preview, setPreview] = useState<Extract<AddOnChangePreview, { ok: true }> | null>(null);
   const [busy, setBusy] = useState<'preview' | 'apply' | null>(null);
-  const [message, setMessage] = useState<string | null>(null);
 
   // Reached by a link to these cards (?add=tracking, or #plan-add-ons): they
   // render after their read, past the browser's own jump, so scroll here.
@@ -195,26 +221,68 @@ function PlanAddOnsBody({ addOns, onChange }: { addOns: PlanAddOnsView; onChange
   }, [inputKey, canPreview]);
   const dueToday = canPreview && due?.key === inputKey ? due.cents : null;
 
+  const failed = (text: string) => {
+    const next: AddOnsNotice = { kind: 'error', title: t('notice.failedTitle'), lines: [text] };
+    onNotice(next);
+    toast.error(next.title, { description: text });
+  };
+
   async function review() {
-    setMessage(null);
+    onNotice(null);
     setBusy('preview');
     const answer = await previewAddOnChange(input);
     setBusy(null);
     if (answer.ok) setPreview(answer);
-    else setMessage(refusal(answer));
+    else failed(refusal(answer));
+  }
+
+  /** What this cart adds and removes, in words, before it's paid. */
+  function changeLines(dueTodayCents: number): AddOnsNotice {
+    const added: string[] = [];
+    const removed: string[] = [];
+    for (const p of slotsView?.platforms ?? []) {
+      const diff = ((slotUnits[p.id] ?? 0) - p.units) * p.unitSlots;
+      if (!diff) continue;
+      const item = t('notice.slots', {
+        slots: formatNumber(Math.abs(diff)),
+        platform: platformLabel(p.id),
+      });
+      (diff > 0 ? added : removed).push(item);
+    }
+    const brandDiff = brands - addOns.current.extraBrands;
+    if (brandDiff) {
+      (brandDiff > 0 ? added : removed).push(t('notice.brands', { count: Math.abs(brandDiff) }));
+    }
+    if (units !== addOns.current.trackingUnits) {
+      (units > addOns.current.trackingUnits ? added : removed).push(t('tracking.title'));
+    }
+    if (topUp > 0) added.push(t('notice.topUp', { multiplier: topUp }));
+    const lines = [
+      ...(added.length ? [t('notice.added', { items: added.join(', ') })] : []),
+      ...(removed.length ? [t('notice.removed', { items: removed.join(', ') })] : []),
+      ...(dueTodayCents > 0 ? [t('notice.charged', { price: money(dueTodayCents) })] : []),
+      ...(topUp > 0 ? [t('notice.topUpNote')] : []),
+    ];
+    return {
+      kind: 'success',
+      title: added.length ? t('notice.paidTitle') : t('notice.savedTitle'),
+      lines,
+    };
   }
 
   async function pay() {
     if (!preview) return;
+    const done = changeLines(Math.max(0, preview.dueTodayCents));
     setBusy('apply');
     const answer = await applyAddOnChange({ ...input, prorationDate: preview.prorationDate });
     setBusy(null);
     setPreview(null);
     if (!answer.ok) {
-      setMessage(refusal(answer));
+      failed(refusal(answer));
       return;
     }
-    setMessage(t('done'));
+    onNotice(done);
+    toast.success(done.title, { description: done.lines.join(' ') });
     setTopUp(0);
     router.refresh();
     onChange();
@@ -566,10 +634,37 @@ function PlanAddOnsBody({ addOns, onChange }: { addOns: PlanAddOnsView; onChange
                   : t('review')}
             </Button>
           </div>
-          {message && (
-            <p className="text-sm" role="status">
-              {message}
-            </p>
+          {notice && (
+            <div
+              role={notice.kind === 'error' ? 'alert' : 'status'}
+              data-slot="add-ons-notice"
+              className={cn(
+                'flex items-start gap-2 rounded-lg border px-3 py-2 text-sm',
+                notice.kind === 'success'
+                  ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-900 dark:text-emerald-200'
+                  : 'border-red-500/30 bg-red-500/10 text-red-900 dark:text-red-200',
+              )}
+            >
+              {notice.kind === 'success' ? (
+                <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
+              ) : (
+                <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
+              )}
+              <div className="min-w-0 flex-1 space-y-0.5">
+                <p className="font-medium">{notice.title}</p>
+                {notice.lines.map((line) => (
+                  <p key={line}>{line}</p>
+                ))}
+              </div>
+              <button
+                type="button"
+                aria-label={t('notice.dismiss')}
+                onClick={() => onNotice(null)}
+                className="rounded-md p-0.5 opacity-70 hover:opacity-100"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </div>
           )}
         </div>
       </section>

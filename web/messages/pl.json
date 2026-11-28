@@ -18992,6 +18992,19 @@
         "slotsWaiting": "{platform}: najnowsze lokalizacje Promptów ({count}) będą czekać na slot. Nic nie zostanie usunięte; dodaj slots ponownie, aby je śledzić."
       },
       "done": "Twoje dodatki zostały zaktualizowane. Doładowanie zostanie naliczone zaraz po potwierdzeniu płatności.",
+      "notice": {
+        "failedTitle": "Nie ukończono: nic nie zmieniono ani nie pobrano",
+        "paidTitle": "Płatność zakończona",
+        "savedTitle": "Zmiana zapisana",
+        "added": "Dodano: {items}.",
+        "removed": "Usunięto: {items}. Niewykorzystany czas zostanie zaliczony na kolejne faktury.",
+        "charged": "Pobrano dziś: {price}.",
+        "slots": "{slots} slotów {platform}",
+        "brands": "{count, plural, one {# marka} few {# marki} many {# marek} other {# marki}}",
+        "topUp": "Doładowanie użycia AI {multiplier}x",
+        "topUpNote": "Doładowanie liczy się od razu po potwierdzeniu płatności.",
+        "dismiss": "Zamknij"
+      },
       "states": {
         "not_admin": "Dodatki mogą zmieniać tylko administratorzy. Skontaktuj się z administratorem swojego workspace'u.",
         "starter": "Dodatki są dostępne w planie Growth. Przejdź na Growth, aby dodać śledzenie, marki i zużycie AI.",

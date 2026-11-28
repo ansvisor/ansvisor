@@ -18991,6 +18991,19 @@
         "slotsWaiting": "{platform}: 新しい順に{count}件のPromptロケーションはslotの空きを待機します。削除されることはありません。追跡するにはslotsを再度追加してください。"
       },
       "done": "アドオンを更新しました。追加購入分は、支払いが確認され次第すぐに反映されます。",
+      "notice": {
+        "failedTitle": "完了しませんでした：変更も請求もされていません",
+        "paidTitle": "お支払いが完了しました",
+        "savedTitle": "変更を保存しました",
+        "added": "追加：{items}。",
+        "removed": "削除：{items}。未使用期間は次回以降の請求に充当されます。",
+        "charged": "本日の請求額：{price}。",
+        "slots": "{platform} の slot {slots} 個",
+        "brands": "{count, plural, other {# ブランド}}",
+        "topUp": "AI 使用量 {multiplier}x のチャージ",
+        "topUpNote": "チャージはお支払いが確認され次第有効になります。",
+        "dismiss": "閉じる"
+      },
       "states": {
         "not_admin": "アドオンを変更できるのは管理者のみです。ワークスペースの管理者にご依頼ください。",
         "starter": "アドオンはGrowthプランでご利用いただけます。Growthにアップグレードすると、トラッキング、ブランド、AI使用量を追加できます。",

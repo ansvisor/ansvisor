@@ -195,6 +195,75 @@ describe('the add-ons card', () => {
     });
     expect(refresh).toHaveBeenCalled();
     expect(api.read).toHaveBeenCalledTimes(2);
+    // After the reload that shows the new add-ons, the cart still says what was paid.
+    const notice = container.querySelector('[data-slot="add-ons-notice"]')!;
+    expect(notice.getAttribute('role')).toBe('status');
+    expect(notice.textContent).toContain('Payment complete');
+    expect(notice.textContent).toContain('Added: 3 brands, Extra tracking, 10x AI usage top-up.');
+    expect(notice.textContent).toContain('Charged today: $558.');
+  });
+
+  it('says what was removed and that nothing more is charged', async () => {
+    api.preview.mockResolvedValue({
+      ok: true,
+      changed: true,
+      limits: { prompts: 200, brands: 4 },
+      dueTodayCents: -2000,
+      totalCents: 24900,
+      currency: 'usd',
+      interval: 'month',
+      prorationDate: 1_800_000_000,
+      slots: {},
+      slotsPrice: SLOTS_PRICE,
+      slotsWaiting: [],
+    });
+    api.apply.mockResolvedValue({ ok: true, changed: true, limits: { prompts: 200, brands: 4 } });
+    await render({ slots: { ...SLOTS, platforms: [{ ...SLOTS.platforms[1], units: 1 }] } });
+    await click(document.querySelector<HTMLElement>('[aria-label="100 fewer Claude slots"]')!);
+    await click(byText('Review and pay'));
+    await click(
+      [...document.querySelectorAll<HTMLElement>('button')].find(
+        (b) => b.textContent === 'Confirm',
+      ),
+    );
+    const notice = container.querySelector('[data-slot="add-ons-notice"]')!;
+    expect(notice.textContent).toContain('Change saved');
+    expect(notice.textContent).toContain('Removed: 100 Claude slots.');
+    expect(notice.textContent).not.toContain('Charged today');
+  });
+
+  it('makes a failed payment plain, and nothing changes', async () => {
+    api.preview.mockResolvedValue({
+      ok: true,
+      changed: true,
+      limits: { prompts: 200, brands: 5 },
+      dueTodayCents: 2500,
+      totalCents: 27400,
+      currency: 'usd',
+      interval: 'month',
+      prorationDate: 1_800_000_000,
+      slots: {},
+      slotsPrice: SLOTS_PRICE,
+      slotsWaiting: [],
+    });
+    api.apply.mockResolvedValue({
+      ok: false,
+      failure: 'payment_failed',
+      message: 'Your card was declined.',
+    });
+    await render();
+    await click(document.querySelector<HTMLElement>('[aria-label="One brand more"]')!);
+    await click(byText('Review and pay'));
+    await click(
+      [...document.querySelectorAll<HTMLElement>('button')].find((b) =>
+        b.textContent?.startsWith('Pay'),
+      ),
+    );
+    const notice = container.querySelector('[data-slot="add-ons-notice"]')!;
+    expect(notice.getAttribute('role')).toBe('alert');
+    expect(notice.textContent).toContain('Not completed: nothing was changed or charged');
+    expect(notice.textContent).toContain('Your card was declined.');
+    expect(api.read).toHaveBeenCalledTimes(1);
   });
 
   it('says why a change is refused, with the numbers when it is below use', async () => {
@@ -207,7 +276,7 @@ describe('the add-ons card', () => {
     await render({ current: { trackingUnits: 1000, extraBrands: 2 } });
     await click(byText('+100 prompt locations'));
     await click(byText('Review and pay'));
-    expect(container.textContent).toContain(
+    expect(container.querySelector('[role="alert"]')?.textContent).toContain(
       'You use 950 prompt locations and 6 brands; the new limits are 300 and 6.',
     );
   });

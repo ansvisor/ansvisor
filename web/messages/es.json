@@ -18996,6 +18996,19 @@
         "slotsWaiting": "{platform}: las {count} ubicaciones de Prompts más recientes esperarán a que haya un slot. No se elimina nada; vuelva a añadir slots para monitorizarlas."
       },
       "done": "Sus complementos se han actualizado. Una recarga cuenta en cuanto se confirma el pago.",
+      "notice": {
+        "failedTitle": "No completado: no se cambió ni se cobró nada",
+        "paidTitle": "Pago completado",
+        "savedTitle": "Cambio guardado",
+        "added": "Añadido: {items}.",
+        "removed": "Quitado: {items}. El tiempo no usado se abona en tus próximas facturas.",
+        "charged": "Cobrado hoy: {price}.",
+        "slots": "{slots} slots de {platform}",
+        "brands": "{count, plural, one {# marca} other {# marcas}}",
+        "topUp": "Recarga de uso de IA {multiplier}x",
+        "topUpNote": "La recarga cuenta en cuanto se confirma el pago.",
+        "dismiss": "Cerrar"
+      },
       "states": {
         "not_admin": "Solo los administradores pueden cambiar los complementos. Consulte con un administrador de su espacio de trabajo.",
         "starter": "Los complementos se incluyen con el plan Growth. Mejore a Growth para añadir seguimiento, marcas y uso de IA.",

@@ -19000,6 +19000,19 @@
         "slotsWaiting": "{platform}: as {count} localizações de prompts mais recentes aguardarão um slot. Nada é excluído; adicione slots novamente para monitorá-las."
       },
       "done": "Seus complementos foram atualizados. Uma recarga é contabilizada assim que o pagamento é confirmado.",
+      "notice": {
+        "failedTitle": "Não concluído: nada foi alterado nem cobrado",
+        "paidTitle": "Pagamento concluído",
+        "savedTitle": "Alteração salva",
+        "added": "Adicionado: {items}.",
+        "removed": "Removido: {items}. O tempo não usado vira crédito nas próximas faturas.",
+        "charged": "Cobrado hoje: {price}.",
+        "slots": "{slots} slots de {platform}",
+        "brands": "{count, plural, one {# marca} other {# marcas}}",
+        "topUp": "Recarga de uso de IA {multiplier}x",
+        "topUpNote": "A recarga vale assim que o pagamento for confirmado.",
+        "dismiss": "Fechar"
+      },
       "states": {
         "not_admin": "Somente administradores alteram os complementos. Fale com um administrador do seu workspace.",
         "starter": "Os complementos acompanham o plano Growth. Faça upgrade para o Growth para adicionar rastreamento, marcas e uso de IA.",

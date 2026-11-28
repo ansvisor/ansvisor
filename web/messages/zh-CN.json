@@ -18949,6 +18949,19 @@
         "slotsWaiting": "{platform}:最新的 {count} 个 Prompt 地区将等待 slot。不会删除任何内容;再次添加 slots 即可继续追踪。"
       },
       "done": "您的附加项已更新。充值将在付款确认后立即生效。",
+      "notice": {
+        "failedTitle": "未完成：没有任何更改，也未收费",
+        "paidTitle": "付款完成",
+        "savedTitle": "更改已保存",
+        "added": "已添加：{items}。",
+        "removed": "已移除：{items}。未使用的时间将抵扣到之后的账单。",
+        "charged": "今日扣款：{price}。",
+        "slots": "{slots} 个 {platform} slot",
+        "brands": "{count, plural, other {# 个品牌}}",
+        "topUp": "AI 用量 {multiplier}x 充值",
+        "topUpNote": "付款确认后充值立即生效。",
+        "dismiss": "关闭"
+      },
       "states": {
         "not_admin": "只有管理员可以更改附加项。请联系您工作区的管理员。",
         "starter": "附加项包含在 Growth 套餐中。升级到 Growth 即可添加追踪、品牌和 AI 用量。",

@@ -18990,6 +18990,19 @@
         "slotsWaiting": "{platform}: en yeni {count} Prompt konumu bir slot bekleyecek. Hiçbir şey silinmez; takip etmek için tekrar slot ekleyin."
       },
       "done": "Eklentileriniz güncellendi. Yükleme, ödeme onaylanır onaylanmaz hesaba katılır.",
+      "notice": {
+        "failedTitle": "Tamamlanmadı: hiçbir şey değişmedi, ücret alınmadı",
+        "paidTitle": "Ödeme tamamlandı",
+        "savedTitle": "Değişiklik kaydedildi",
+        "added": "Eklendi: {items}.",
+        "removed": "Çıkarıldı: {items}. Kullanılmayan süre sonraki faturalarınıza alacak olarak yansır.",
+        "charged": "Bugün tahsil edilen: {price}.",
+        "slots": "{slots} {platform} slot",
+        "brands": "{count, plural, one {# marka} other {# marka}}",
+        "topUp": "{multiplier}x AI kullanım paketi",
+        "topUpNote": "Paket, ödeme onaylanır onaylanmaz geçerli olur.",
+        "dismiss": "Kapat"
+      },
       "states": {
         "not_admin": "Eklentileri yalnızca adminler değiştirebilir. Çalışma alanınızın bir adminine danışın.",
         "starter": "Eklentiler Growth planıyla birlikte gelir. Takip, marka ve AI kullanımı eklemek için Growth'a yükseltin.",

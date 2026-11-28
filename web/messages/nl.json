@@ -18998,6 +18998,19 @@
         "slotsWaiting": "{platform}: de nieuwste {count} Prompt-locaties wachten op een slot. Er wordt niets verwijderd; voeg opnieuw slots toe om ze te volgen."
       },
       "done": "Uw add-ons zijn bijgewerkt. Een opwaardering telt mee zodra de betaling is bevestigd.",
+      "notice": {
+        "failedTitle": "Niet voltooid: er is niets gewijzigd of in rekening gebracht",
+        "paidTitle": "Betaling voltooid",
+        "savedTitle": "Wijziging opgeslagen",
+        "added": "Toegevoegd: {items}.",
+        "removed": "Verwijderd: {items}. De ongebruikte tijd wordt verrekend met je volgende facturen.",
+        "charged": "Vandaag afgeschreven: {price}.",
+        "slots": "{slots} {platform}-slots",
+        "brands": "{count, plural, one {# merk} other {# merken}}",
+        "topUp": "{multiplier}x AI-gebruik als opwaardering",
+        "topUpNote": "De opwaardering telt zodra de betaling is bevestigd.",
+        "dismiss": "Sluiten"
+      },
       "states": {
         "not_admin": "Alleen beheerders kunnen add-ons wijzigen. Vraag het aan een beheerder van uw werkruimte.",
         "starter": "Add-ons zijn beschikbaar bij het Growth-abonnement. Upgrade naar Growth om tracking, merken en AI-gebruik toe te voegen.",

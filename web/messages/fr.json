@@ -19002,6 +19002,19 @@
         "slotsWaiting": "{platform} : les {count} localisations de Prompts les plus récentes attendront un slot. Rien n'est supprimé ; ajoutez à nouveau des slots pour les suivre."
       },
       "done": "Vos modules complémentaires sont mis à jour. Une recharge est prise en compte dès que le paiement est confirmé.",
+      "notice": {
+        "failedTitle": "Non terminé : rien n'a été modifié ni facturé",
+        "paidTitle": "Paiement effectué",
+        "savedTitle": "Modification enregistrée",
+        "added": "Ajouté : {items}.",
+        "removed": "Retiré : {items}. Le temps non utilisé est crédité sur vos prochaines factures.",
+        "charged": "Facturé aujourd'hui : {price}.",
+        "slots": "{slots} slots {platform}",
+        "brands": "{count, plural, one {# marque} other {# marques}}",
+        "topUp": "Recharge d'usage IA {multiplier}x",
+        "topUpNote": "La recharge compte dès que le paiement est confirmé.",
+        "dismiss": "Fermer"
+      },
       "states": {
         "not_admin": "Seuls les administrateurs peuvent modifier les modules complémentaires. Contactez un administrateur de votre espace de travail.",
         "starter": "Les modules complémentaires sont inclus avec le plan Growth. Passez au plan Growth pour ajouter du suivi, des marques et de l'usage IA.",
