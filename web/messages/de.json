@@ -16771,6 +16771,107 @@
       "set": "Status festlegen",
       "setLabel": "Arbeitsstatus festlegen",
       "none": "Kein Status"
+    },
+    "detail": {
+      "presets": {
+        "24h": "24 Std.",
+        "7d": "7 T.",
+        "30d": "30 T.",
+        "90d": "90 T."
+      },
+      "unknownModel": "Unbekannt",
+      "sentiment": {
+        "positive": "positiv",
+        "neutral": "neutral",
+        "negative": "negativ"
+      },
+      "active": "Aktiv",
+      "paused": "Pausiert",
+      "lastRun": "Letzte Ausführung: {time}",
+      "loadFailed": "Prompt-Details konnten nicht geladen werden",
+      "errorTitle": "Dieser Prompt konnte nicht geladen werden",
+      "retry": "Erneut versuchen",
+      "notFoundTitle": "Prompt nicht gefunden",
+      "notFoundBody": "Dieser Prompt wurde möglicherweise gelöscht oder existiert nicht.",
+      "goBack": "Zurück",
+      "statusUpdateFailed": "Status konnte nicht aktualisiert werden",
+      "opportunitiesLoadFailed": "Content-Potenziale konnten nicht geladen werden",
+      "kpi": {
+        "visibility": "Sichtbarkeit — erwähnt in {mentioned} von {total, plural, one {# Antwort} other {# Antworten}}, zitiert in {cited}",
+        "mentions": "Erwähnungen",
+        "citations": "Zitierungen"
+      },
+      "results": {
+        "title": "Plattform-Ergebnisse",
+        "summary": "{count, plural, one {# Ergebnis} other {# Ergebnisse}}, gruppiert nach Plattform und Modell.",
+        "empty": "Noch keine Tracking-Ergebnisse für diesen Prompt.",
+        "emptyRange": "Keine Ergebnisse im gewählten Zeitraum.",
+        "showAll": "Alle Daten anzeigen"
+      },
+      "group": {
+        "runs": "{count, plural, one {# Ausführung} other {# Ausführungen}}",
+        "mentions": "Erwähnungen",
+        "citations": "Zitierungen",
+        "runsHeading": "Ausführungen",
+        "mentionCount": "{count, plural, one {<n>#</n><l> Erwähnung</l>} other {<n>#</n><l> Erwähnungen</l>}}",
+        "citationCount": "{count, plural, one {<n>#</n><l> Zitierung</l>} other {<n>#</n><l> Zitierungen</l>}}",
+        "showResponse": "Antwort anzeigen",
+        "hideResponse": "Antwort ausblenden",
+        "openFullPage": "Ganze Seite öffnen",
+        "showingLatest": "Die neuesten {shown} von {total, plural, one {# Ausführung} other {# Ausführungen}} für diese Plattform."
+      },
+      "sources": {
+        "title": "Top-Quellen",
+        "description": "Quellen, die KI-Plattformen bei der Antwort auf diesen Prompt zitieren.",
+        "filterPlaceholder": "Nach Domain, URL oder Titel filtern...",
+        "domainsTab": "Domains ({count})",
+        "urlsTab": "URLs ({count})",
+        "rank": "Rang",
+        "domain": "Domain",
+        "url": "URL",
+        "platforms": "Plattformen",
+        "usage": "Nutzung",
+        "citations": "Zitierungen",
+        "openDomain": "{domain} in einem neuen Tab öffnen",
+        "openCitedPage": "Zitierte Seite in einem neuen Tab öffnen",
+        "openCitedPageTitle": "Zitierte Seite öffnen"
+      },
+      "notes": {
+        "title": "Notizen",
+        "description": "Halten Sie die Arbeit hinter diesem Prompt fest — was veröffentlicht, geplant oder entschieden wurde.",
+        "placeholder": "z. B. Einen Vergleichs-Blogartikel zu diesem Prompt veröffentlicht…",
+        "add": "Notiz hinzufügen",
+        "empty": "Noch keine Notizen — fügen Sie oben die erste hinzu.",
+        "emptyReadOnly": "Noch keine Notizen.",
+        "unknownAuthor": "Unbekannt",
+        "delete": "Notiz löschen",
+        "addFailed": "Notiz konnte nicht hinzugefügt werden",
+        "deleteFailed": "Notiz konnte nicht gelöscht werden"
+      },
+      "targets": {
+        "title": "Ziel-URLs",
+        "description": "Seiten, die KI-Antworten für diesen Prompt zitieren sollen. Der Zitierstatus wird automatisch aktualisiert, sobald neue Tracking-Ergebnisse eintreffen.",
+        "add": "Hinzufügen",
+        "empty": "Noch keine Ziel-URLs — fügen Sie die Seiten hinzu, die zitiert werden sollen.",
+        "emptyReadOnly": "Noch keine Ziel-URLs.",
+        "remove": "Ziel-URL entfernen",
+        "addFailed": "URL konnte nicht hinzugefügt werden",
+        "removeFailed": "URL konnte nicht entfernt werden",
+        "notCited": "Noch nicht zitiert",
+        "cited": "Zitiert ×{count}",
+        "citedIn": "{count, plural, one {Zitiert in # Antwort} other {Zitiert in # Antworten}}",
+        "first": "zuerst {date}",
+        "last": "zuletzt {date}",
+        "alreadyCited": "wurde schon vor dem Targeting zitiert"
+      },
+      "opportunities": {
+        "title": "Content-Potenziale",
+        "description": "Für diesen Prompt erkannte Potenziale, die auf eine Aktion warten.",
+        "loadFailed": "Content-Potenziale konnten nicht geladen werden.",
+        "empty": "Keine offenen Potenziale für diesen Prompt.",
+        "briefReady": "Brief fertig",
+        "viewAll": "Alle {total} anzeigen"
+      }
     }
   },
   "volumeEstimate": {

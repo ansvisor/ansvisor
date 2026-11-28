@@ -16771,6 +16771,107 @@
       "set": "Définir le statut",
       "setLabel": "Définir le statut de travail",
       "none": "Aucun statut"
+    },
+    "detail": {
+      "presets": {
+        "24h": "24 h",
+        "7d": "7 j",
+        "30d": "30 j",
+        "90d": "90 j"
+      },
+      "unknownModel": "Inconnu",
+      "sentiment": {
+        "positive": "positif",
+        "neutral": "neutre",
+        "negative": "négatif"
+      },
+      "active": "Actif",
+      "paused": "Suspendu",
+      "lastRun": "Dernière exécution : {time}",
+      "loadFailed": "Impossible de charger le détail du Prompt",
+      "errorTitle": "Impossible de charger ce Prompt",
+      "retry": "Réessayer",
+      "notFoundTitle": "Prompt introuvable",
+      "notFoundBody": "Ce Prompt a peut-être été supprimé ou n'existe pas.",
+      "goBack": "Retour",
+      "statusUpdateFailed": "Impossible de mettre à jour le statut",
+      "opportunitiesLoadFailed": "Impossible de charger les opportunités de contenu",
+      "kpi": {
+        "visibility": "Visibilité — mentionné dans {mentioned} {total, plural, one {réponse sur #} other {réponses sur #}}, cité dans {cited}",
+        "mentions": "Mentions",
+        "citations": "Citations"
+      },
+      "results": {
+        "title": "Résultats par plateforme",
+        "summary": "{count, plural, one {# résultat regroupé} other {# résultats regroupés}} par plateforme et modèle.",
+        "empty": "Aucun résultat de suivi pour ce Prompt pour le moment.",
+        "emptyRange": "Aucun résultat sur la période sélectionnée.",
+        "showAll": "Afficher toutes les données"
+      },
+      "group": {
+        "runs": "{count, plural, one {# exécution} other {# exécutions}}",
+        "mentions": "Mentions",
+        "citations": "Citations",
+        "runsHeading": "Exécutions",
+        "mentionCount": "{count, plural, one {<n>#</n><l> mention</l>} other {<n>#</n><l> mentions</l>}}",
+        "citationCount": "{count, plural, one {<n>#</n><l> citation</l>} other {<n>#</n><l> citations</l>}}",
+        "showResponse": "Afficher la réponse",
+        "hideResponse": "Masquer la réponse",
+        "openFullPage": "Ouvrir la page complète",
+        "showingLatest": "Affichage des {shown} dernières sur {total, plural, one {# exécution} other {# exécutions}} pour cette plateforme."
+      },
+      "sources": {
+        "title": "Meilleures sources",
+        "description": "Les sources que les plateformes d’IA citent en répondant à ce Prompt.",
+        "filterPlaceholder": "Filtrer par domaine, URL ou titre...",
+        "domainsTab": "Domaines ({count})",
+        "urlsTab": "URL ({count})",
+        "rank": "Rang",
+        "domain": "Domaine",
+        "url": "URL",
+        "platforms": "Plateformes",
+        "usage": "Utilisation",
+        "citations": "Citations",
+        "openDomain": "Ouvrir {domain} dans un nouvel onglet",
+        "openCitedPage": "Ouvrir la page citée dans un nouvel onglet",
+        "openCitedPageTitle": "Ouvrir la page citée"
+      },
+      "notes": {
+        "title": "Notes",
+        "description": "Gardez une trace du travail lié à ce Prompt — ce qui a été publié, prévu ou décidé.",
+        "placeholder": "ex. Publication d’un article comparatif ciblant ce Prompt…",
+        "add": "Ajouter une note",
+        "empty": "Aucune note pour le moment — ajoutez la première ci-dessus.",
+        "emptyReadOnly": "Aucune note pour le moment.",
+        "unknownAuthor": "Inconnu",
+        "delete": "Supprimer la note",
+        "addFailed": "Impossible d'ajouter la note",
+        "deleteFailed": "Impossible de supprimer la note"
+      },
+      "targets": {
+        "title": "URL cibles",
+        "description": "Les pages que vous voulez voir citées par les réponses d’IA pour ce Prompt. Le statut de citation se met à jour automatiquement à l'arrivée de nouveaux résultats de suivi.",
+        "add": "Ajouter",
+        "empty": "Aucune URL cible pour le moment — ajoutez les pages que vous voulez voir citées.",
+        "emptyReadOnly": "Aucune URL cible pour le moment.",
+        "remove": "Retirer l'URL cible",
+        "addFailed": "Impossible d'ajouter l'URL",
+        "removeFailed": "Impossible de retirer l'URL",
+        "notCited": "Pas encore citée",
+        "cited": "Citée ×{count}",
+        "citedIn": "{count, plural, one {Citée dans # réponse} other {Citée dans # réponses}}",
+        "first": "première {date}",
+        "last": "dernière {date}",
+        "alreadyCited": "était déjà citée avant le ciblage"
+      },
+      "opportunities": {
+        "title": "Opportunités de contenu",
+        "description": "Opportunités identifiées pour ce Prompt et en attente d’action.",
+        "loadFailed": "Les opportunités de contenu n'ont pas pu être chargées.",
+        "empty": "Aucune opportunité ouverte pour ce Prompt.",
+        "briefReady": "Brief prêt",
+        "viewAll": "Tout voir ({total})"
+      }
     }
   },
   "volumeEstimate": {

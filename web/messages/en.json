@@ -16372,6 +16372,107 @@
       "set": "Set status",
       "setLabel": "Set work status",
       "none": "No status"
+    },
+    "detail": {
+      "presets": {
+        "24h": "24h",
+        "7d": "7d",
+        "30d": "30d",
+        "90d": "90d"
+      },
+      "unknownModel": "Unknown",
+      "sentiment": {
+        "positive": "positive",
+        "neutral": "neutral",
+        "negative": "negative"
+      },
+      "active": "Active",
+      "paused": "Paused",
+      "lastRun": "Last run: {time}",
+      "loadFailed": "Failed to load prompt detail",
+      "errorTitle": "Couldn't load this prompt",
+      "retry": "Retry",
+      "notFoundTitle": "Prompt not found",
+      "notFoundBody": "This prompt may have been deleted or does not exist.",
+      "goBack": "Go back",
+      "statusUpdateFailed": "Failed to update status",
+      "opportunitiesLoadFailed": "Failed to load content opportunities",
+      "kpi": {
+        "visibility": "Visibility — mentioned in {mentioned} of {total, plural, one {# answer} other {# answers}}, cited in {cited}",
+        "mentions": "Mentions",
+        "citations": "Citations"
+      },
+      "results": {
+        "title": "Platform Results",
+        "summary": "{count, plural, one {# result} other {# results}} grouped by platform and model.",
+        "empty": "No tracking results yet for this prompt.",
+        "emptyRange": "No results in the selected date range.",
+        "showAll": "Show all data"
+      },
+      "group": {
+        "runs": "{count, plural, one {# run} other {# runs}}",
+        "mentions": "Mentions",
+        "citations": "Citations",
+        "runsHeading": "Runs",
+        "mentionCount": "{count, plural, one {<n>#</n><l> mention</l>} other {<n>#</n><l> mentions</l>}}",
+        "citationCount": "{count, plural, one {<n>#</n><l> citation</l>} other {<n>#</n><l> citations</l>}}",
+        "showResponse": "Show response",
+        "hideResponse": "Hide response",
+        "openFullPage": "Open full page",
+        "showingLatest": "Showing latest {shown} of {total, plural, one {# run} other {# runs}} for this platform."
+      },
+      "sources": {
+        "title": "Top Sources",
+        "description": "Sources AI platforms cite when answering this prompt.",
+        "filterPlaceholder": "Filter by domain, URL or title...",
+        "domainsTab": "Domains ({count})",
+        "urlsTab": "URLs ({count})",
+        "rank": "Rank",
+        "domain": "Domain",
+        "url": "URL",
+        "platforms": "Platforms",
+        "usage": "Usage",
+        "citations": "Citations",
+        "openDomain": "Open {domain} in a new tab",
+        "openCitedPage": "Open cited page in a new tab",
+        "openCitedPageTitle": "Open cited page"
+      },
+      "notes": {
+        "title": "Notes",
+        "description": "Keep track of the work behind this prompt — what was published, planned or decided.",
+        "placeholder": "e.g. Published a comparison blog post targeting this prompt…",
+        "add": "Add note",
+        "empty": "No notes yet — add the first one above.",
+        "emptyReadOnly": "No notes yet.",
+        "unknownAuthor": "Unknown",
+        "delete": "Delete note",
+        "addFailed": "Failed to add note",
+        "deleteFailed": "Failed to delete note"
+      },
+      "targets": {
+        "title": "Target URLs",
+        "description": "Pages you want AI answers to cite for this prompt. Citation status updates automatically as new tracking results arrive.",
+        "add": "Add",
+        "empty": "No target URLs yet — add the pages you want cited.",
+        "emptyReadOnly": "No target URLs yet.",
+        "remove": "Remove target URL",
+        "addFailed": "Failed to add URL",
+        "removeFailed": "Failed to remove URL",
+        "notCited": "Not cited yet",
+        "cited": "Cited ×{count}",
+        "citedIn": "{count, plural, one {Cited in # answer} other {Cited in # answers}}",
+        "first": "first {date}",
+        "last": "last {date}",
+        "alreadyCited": "was already cited before targeting"
+      },
+      "opportunities": {
+        "title": "Content opportunities",
+        "description": "Opportunities identified for this prompt that are waiting for action.",
+        "loadFailed": "Content opportunities couldn't be loaded.",
+        "empty": "No open opportunities for this prompt.",
+        "briefReady": "Brief ready",
+        "viewAll": "View all {total}"
+      }
     }
   },
   "volumeEstimate": {

@@ -128,10 +128,13 @@ function DateRangeBar({
   onCustomTo: (v: string) => void;
 }) {
   const tCommon = useTranslations('common');
+  const t = useTranslations('prompts.detail');
   return (
     <div className="flex flex-wrap items-end gap-3">
       <div>
-        <label className="mb-1.5 block text-xs font-medium text-muted-foreground">Date Range</label>
+        <label className="mb-1.5 block text-xs font-medium text-muted-foreground">
+          {tCommon('dateRange')}
+        </label>
         <div className="flex overflow-hidden rounded-md border">
           {DATE_PRESETS.map((p) => (
             <button
@@ -145,7 +148,11 @@ function DateRangeBar({
                   : 'bg-card hover:bg-muted text-foreground',
               )}
             >
-              {p === 'custom' ? 'Custom' : p === 'all' ? 'All' : p}
+              {p === 'custom'
+                ? tCommon('custom')
+                : p === 'all'
+                  ? tCommon('all')
+                  : t(`presets.${p}`)}
             </button>
           ))}
         </div>
@@ -153,7 +160,9 @@ function DateRangeBar({
       {preset === 'custom' && (
         <>
           <div>
-            <label className="mb-1.5 block text-xs font-medium text-muted-foreground">From</label>
+            <label className="mb-1.5 block text-xs font-medium text-muted-foreground">
+              {tCommon('from')}
+            </label>
             <DatePicker
               aria-label={tCommon('from')}
               value={customFrom || null}
@@ -162,7 +171,9 @@ function DateRangeBar({
             />
           </div>
           <div>
-            <label className="mb-1.5 block text-xs font-medium text-muted-foreground">To</label>
+            <label className="mb-1.5 block text-xs font-medium text-muted-foreground">
+              {tCommon('to')}
+            </label>
             <DatePicker
               aria-label={tCommon('to')}
               value={customTo || null}
@@ -176,10 +187,14 @@ function DateRangeBar({
   );
 }
 
-function getModelDisplayName(model?: string, platform?: string): string {
+function getModelDisplayName(
+  model: string | undefined,
+  platform: string | undefined,
+  unknown: string,
+): string {
   if (model && MODEL_PROVIDER_LABELS[model]) return MODEL_PROVIDER_LABELS[model];
   if (platform && PLATFORM_LABELS[platform]) return PLATFORM_LABELS[platform];
-  return model ?? platform ?? 'Unknown';
+  return model ?? platform ?? unknown;
 }
 
 /**
@@ -200,6 +215,7 @@ function formatTimestamp(iso: string): string {
 }
 
 function SentimentBadge({ sentiment }: { sentiment: 'positive' | 'neutral' | 'negative' }) {
+  const t = useTranslations('prompts.detail');
   return (
     <Badge
       variant="outline"
@@ -213,17 +229,18 @@ function SentimentBadge({ sentiment }: { sentiment: 'positive' | 'neutral' | 'ne
           'border-red-500/30 bg-red-500/10 text-red-600 dark:text-red-400',
       )}
     >
-      {sentiment}
+      {t(`sentiment.${sentiment}`)}
     </Badge>
   );
 }
 
 function ModelBadge({ model, platform }: { model?: string; platform?: string }) {
+  const t = useTranslations('prompts.detail');
   const provider = resolveAIProvider(model ?? platform ?? '', platform);
   return (
     <span className="inline-flex items-center gap-1.5 rounded-full border bg-background px-2 py-1">
       <AIProviderAvatar provider={provider} className="h-4 w-4" />
-      <span className="text-xs">{getModelDisplayName(model, platform)}</span>
+      <span className="text-xs">{getModelDisplayName(model, platform, t('unknownModel'))}</span>
     </span>
   );
 }
@@ -245,6 +262,12 @@ function VisibilityBar({ score }: { score: number }) {
     </div>
   );
 }
+
+/** The rich-text parts of a run's "3 mentions": the number bold, the word muted. */
+const countParts = {
+  n: (chunks: React.ReactNode) => <span className="font-semibold">{chunks}</span>,
+  l: (chunks: React.ReactNode) => <span className="text-muted-foreground">{chunks}</span>,
+};
 
 /** The KPI row's columns for its number of cards: three, four, or five with Demand. */
 function kpiGridColumns(count: number): string {
@@ -284,6 +307,7 @@ function TopSourceDomainsTable({
   filterKey: string;
   pageSize?: number;
 }) {
+  const t = useTranslations('prompts.detail.sources');
   const pager = usePagination(rows.length, filterKey, pageSize ?? 10);
   const pageRows = rows.slice(pager.start, pager.end);
 
@@ -292,11 +316,11 @@ function TopSourceDomainsTable({
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead className="w-[56px] text-xs">Rank</TableHead>
-            <TableHead className="text-xs">Domain</TableHead>
-            <TableHead className="text-xs">Platforms</TableHead>
-            <TableHead className="text-xs">Usage</TableHead>
-            <TableHead className="text-end text-xs">Citations</TableHead>
+            <TableHead className="w-[56px] text-xs">{t('rank')}</TableHead>
+            <TableHead className="text-xs">{t('domain')}</TableHead>
+            <TableHead className="text-xs">{t('platforms')}</TableHead>
+            <TableHead className="text-xs">{t('usage')}</TableHead>
+            <TableHead className="text-end text-xs">{t('citations')}</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -318,7 +342,7 @@ function TopSourceDomainsTable({
                         target="_blank"
                         rel="noreferrer noopener"
                         className="inline-flex items-center text-muted-foreground hover:text-foreground"
-                        aria-label={`Open ${row.domain} in a new tab`}
+                        aria-label={t('openDomain', { domain: row.domain })}
                       >
                         <ExternalLink className="h-3 w-3" />
                       </a>
@@ -358,6 +382,7 @@ function TopSourceUrlsTable({
   filterKey: string;
   pageSize?: number;
 }) {
+  const t = useTranslations('prompts.detail.sources');
   const pager = usePagination(rows.length, filterKey, pageSize ?? 10);
   const pageRows = rows.slice(pager.start, pager.end);
 
@@ -366,11 +391,11 @@ function TopSourceUrlsTable({
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead className="w-[56px] text-xs">Rank</TableHead>
-            <TableHead className="text-xs">URL</TableHead>
-            <TableHead className="text-xs">Platforms</TableHead>
-            <TableHead className="text-xs">Usage</TableHead>
-            <TableHead className="text-end text-xs">Citations</TableHead>
+            <TableHead className="w-[56px] text-xs">{t('rank')}</TableHead>
+            <TableHead className="text-xs">{t('url')}</TableHead>
+            <TableHead className="text-xs">{t('platforms')}</TableHead>
+            <TableHead className="text-xs">{t('usage')}</TableHead>
+            <TableHead className="text-end text-xs">{t('citations')}</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -397,8 +422,8 @@ function TopSourceUrlsTable({
                         target="_blank"
                         rel="noreferrer noopener"
                         className="shrink-0 text-muted-foreground hover:text-foreground"
-                        aria-label="Open cited page in a new tab"
-                        title="Open cited page"
+                        aria-label={t('openCitedPage')}
+                        title={t('openCitedPageTitle')}
                       >
                         <ExternalLink className="h-3 w-3" />
                       </a>
@@ -442,6 +467,7 @@ function TopSourcesCard({
   sources: PromptTopSource[];
   sourceUrls: PromptTopSourceUrl[];
 }) {
+  const t = useTranslations('prompts.detail.sources');
   const [filter, setFilter] = useState('');
 
   const q = filter.toLowerCase();
@@ -455,22 +481,22 @@ function TopSourcesCard({
   return (
     <Card>
       <CardHeader className="pb-3">
-        <CardTitle className="text-sm font-medium">Top Sources</CardTitle>
-        <p className="text-xs text-muted-foreground">
-          Sources AI platforms cite when answering this prompt.
-        </p>
+        <CardTitle className="text-sm font-medium">{t('title')}</CardTitle>
+        <p className="text-xs text-muted-foreground">{t('description')}</p>
       </CardHeader>
       <CardContent>
         <Input
-          placeholder="Filter by domain, URL or title..."
+          placeholder={t('filterPlaceholder')}
           value={filter}
           onChange={(e) => setFilter(e.target.value)}
           className="h-8 text-xs mb-4"
         />
         <Tabs defaultValue="domains">
           <TabsList>
-            <TabsTrigger value="domains">Domains ({filteredSources.length})</TabsTrigger>
-            <TabsTrigger value="urls">URLs ({filteredUrls.length})</TabsTrigger>
+            <TabsTrigger value="domains">
+              {t('domainsTab', { count: filteredSources.length })}
+            </TabsTrigger>
+            <TabsTrigger value="urls">{t('urlsTab', { count: filteredUrls.length })}</TabsTrigger>
           </TabsList>
           <TabsContent value="domains" keepMounted className="mt-4">
             <TopSourceDomainsTable rows={filteredSources} filterKey={filter} />
@@ -493,6 +519,7 @@ function PlatformResultGroup({
   expanded: boolean;
   onToggle: () => void;
 }) {
+  const t = useTranslations('prompts.detail.group');
   const visibleRuns = group.results.slice(0, 10);
   const hiddenCount = group.results.length - visibleRuns.length;
   // Several answers can be open at once, so two runs can be read side by side.
@@ -534,17 +561,17 @@ function PlatformResultGroup({
               </Badge>
             )}
             <span className="text-[11px] text-muted-foreground">
-              {group.results.length} run{group.results.length !== 1 ? 's' : ''}
+              {t('runs', { count: group.results.length })}
             </span>
           </div>
         </div>
         <div className="hidden items-center gap-5 sm:flex">
           <div className="text-end">
-            <p className="text-[10px] text-muted-foreground">Mentions</p>
+            <p className="text-[10px] text-muted-foreground">{t('mentions')}</p>
             <p className="text-xs font-semibold tabular-nums">{group.totalMentions}</p>
           </div>
           <div className="text-end">
-            <p className="text-[10px] text-muted-foreground">Citations</p>
+            <p className="text-[10px] text-muted-foreground">{t('citations')}</p>
             <p className="text-xs font-semibold tabular-nums">{group.totalCitations}</p>
           </div>
           <div className="w-32">
@@ -556,7 +583,7 @@ function PlatformResultGroup({
       {expanded && (
         <div className="border-t bg-muted/10 px-4 py-3">
           <p className="mb-2 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-            Runs
+            {t('runsHeading')}
           </p>
           <div className="overflow-hidden rounded-md border bg-background">
             {visibleRuns.map((result, index) => {
@@ -587,12 +614,10 @@ function PlatformResultGroup({
                       </span>
                     </div>
                     <div className="hidden text-center tabular-nums sm:block">
-                      <span className="font-semibold">{result.mentionCount}</span>
-                      <span className="text-muted-foreground"> mentions</span>
+                      {t.rich('mentionCount', { count: result.mentionCount, ...countParts })}
                     </div>
                     <div className="hidden text-center tabular-nums sm:block">
-                      <span className="font-semibold">{result.citationCount}</span>
-                      <span className="text-muted-foreground"> citations</span>
+                      {t.rich('citationCount', { count: result.citationCount, ...countParts })}
                     </div>
                     <div className="hidden justify-center sm:flex">
                       <SentimentBadge sentiment={result.sentiment} />
@@ -604,8 +629,8 @@ function PlatformResultGroup({
                       variant={open ? 'secondary' : 'ghost'}
                       size="icon"
                       className="h-6 w-6 justify-self-end"
-                      title={open ? 'Hide response' : 'Show response'}
-                      aria-label={open ? 'Hide response' : 'Show response'}
+                      title={open ? t('hideResponse') : t('showResponse')}
+                      aria-label={open ? t('hideResponse') : t('showResponse')}
                       aria-expanded={open}
                       onClick={(event) => {
                         event.stopPropagation();
@@ -616,12 +641,10 @@ function PlatformResultGroup({
                     </Button>
                     <div className="col-span-2 flex flex-wrap items-center gap-2 sm:hidden">
                       <span className="tabular-nums">
-                        <span className="font-semibold">{result.mentionCount}</span>
-                        <span className="text-muted-foreground"> mentions</span>
+                        {t.rich('mentionCount', { count: result.mentionCount, ...countParts })}
                       </span>
                       <span className="tabular-nums">
-                        <span className="font-semibold">{result.citationCount}</span>
-                        <span className="text-muted-foreground"> citations</span>
+                        {t.rich('citationCount', { count: result.citationCount, ...countParts })}
                       </span>
                       <SentimentBadge sentiment={result.sentiment} />
                       <div className="w-32">
@@ -639,7 +662,7 @@ function PlatformResultGroup({
                           rel="noopener noreferrer"
                           className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
                         >
-                          Open full page
+                          {t('openFullPage')}
                           <ExternalLink className="h-3 w-3" />
                         </Link>
                       </div>
@@ -652,7 +675,7 @@ function PlatformResultGroup({
           </div>
           {hiddenCount > 0 && (
             <p className="mt-2 text-xs text-muted-foreground">
-              Showing latest {visibleRuns.length} of {group.results.length} runs for this platform.
+              {t('showingLatest', { shown: visibleRuns.length, total: group.results.length })}
             </p>
           )}
         </div>
@@ -667,6 +690,8 @@ export default function PromptDetailPage() {
   const promptId = params.id as string;
 
   const { canManage } = useUserRole();
+  const t = useTranslations('prompts.detail');
+  const tCommon = useTranslations('common');
   const [data, setData] = useState<PromptDetailData | null>(null);
   const promptBrandId = data?.prompt.brandId;
   const [opportunities, setOpportunities] = useState<ContentOpportunity[]>([]);
@@ -788,7 +813,7 @@ export default function PromptDetailPage() {
         setOpportunities([]);
         setOpportunitiesTotal(0);
         setOpportunitiesFailed(true);
-        toast.error('Failed to load content opportunities');
+        toast.error(t('opportunitiesLoadFailed'));
       })
       .finally(() => {
         if (!cancelled) setOpportunitiesLoading(false);
@@ -797,14 +822,14 @@ export default function PromptDetailPage() {
     return () => {
       cancelled = true;
     };
-  }, [promptBrandId, promptId]);
+  }, [promptBrandId, promptId, t]);
 
   const handleStatusChange = (status: PromptWorkStatus | null) => {
     const previous = workStatus;
     setWorkStatus(status);
     setPromptWorkStatus(promptId, status).catch(() => {
       setWorkStatus(previous);
-      toast.error('Failed to update status');
+      toast.error(t('statusUpdateFailed'));
     });
   };
 
@@ -839,16 +864,16 @@ export default function PromptDetailPage() {
 
         console.error('Failed to load prompt detail:', err);
 
-        setError(err instanceof Error ? err.message : 'Failed to load prompt detail');
+        setError(err instanceof Error ? err.message : t('loadFailed'));
 
-        toast.error('Failed to load prompt detail');
+        toast.error(t('loadFailed'));
       } finally {
         if (!isCancelled?.()) {
           setLoading(false);
         }
       }
     },
-    [promptId, datePreset, customFrom, customTo],
+    [promptId, datePreset, customFrom, customTo, t],
   );
 
   useEffect(() => {
@@ -944,13 +969,13 @@ export default function PromptDetailPage() {
           <CardContent className="pt-6 text-center">
             <AlertCircle className="mx-auto h-9 w-9 text-destructive/60" />
 
-            <h2 className="mt-3 text-base font-semibold">Couldn&apos;t load this prompt</h2>
+            <h2 className="mt-3 text-base font-semibold">{t('errorTitle')}</h2>
 
             <p className="mt-1 text-sm text-muted-foreground">{error}</p>
 
             <Button className="mt-4 gap-2" size="sm" variant="outline" onClick={() => void load()}>
               <RotateCw className="h-3.5 w-3.5" />
-              Retry
+              {t('retry')}
             </Button>
           </CardContent>
         </Card>
@@ -962,13 +987,11 @@ export default function PromptDetailPage() {
     return (
       <div className="flex flex-col items-center justify-center py-24 text-center">
         <MessageSquareText className="mb-4 h-12 w-12 text-muted-foreground/40" />
-        <h2 className="text-lg font-semibold">Prompt not found</h2>
-        <p className="mt-1 text-sm text-muted-foreground">
-          This prompt may have been deleted or does not exist.
-        </p>
+        <h2 className="text-lg font-semibold">{t('notFoundTitle')}</h2>
+        <p className="mt-1 text-sm text-muted-foreground">{t('notFoundBody')}</p>
         <Button variant="outline" className="mt-6 gap-2" onClick={() => router.back()}>
           <ArrowLeft className="h-4 w-4" />
-          Go back
+          {t('goBack')}
         </Button>
       </div>
     );
@@ -985,7 +1008,7 @@ export default function PromptDetailPage() {
             onClick={() => router.back()}
           >
             <ArrowLeft className="h-4 w-4" />
-            Back
+            {tCommon('back')}
           </Button>
 
           <div className="space-y-3">
@@ -1005,12 +1028,12 @@ export default function PromptDetailPage() {
                     : 'border-muted-foreground/20 text-muted-foreground',
                 )}
               >
-                {data.prompt.isActive ? 'Active' : 'Paused'}
+                {data.prompt.isActive ? t('active') : t('paused')}
               </Badge>
               {data.summary.lastCheckedAt && (
                 <Badge variant="outline" className="gap-1 text-xs">
                   <Clock className="h-3 w-3" />
-                  Last run: {formatTimestamp(data.summary.lastCheckedAt)}
+                  {t('lastRun', { time: formatTimestamp(data.summary.lastCheckedAt) })}
                 </Badge>
               )}
               <WorkStatusBadge
@@ -1051,17 +1074,21 @@ export default function PromptDetailPage() {
             )}
           >
             <KpiCard
-              title={`Visibility — mentioned in ${data.summary.mentionAnswers} of ${data.summary.totalResults} answers, cited in ${data.summary.citationAnswers}`}
+              title={t('kpi.visibility', {
+                mentioned: data.summary.mentionAnswers,
+                total: data.summary.totalResults,
+                cited: data.summary.citationAnswers,
+              })}
               value={data.summary.score ?? 0}
               icon={Eye}
             />
             <KpiCard
-              title="Mentions"
+              title={t('kpi.mentions')}
               value={formatNumber(data.summary.totalMentions)}
               icon={MessageSquareText}
             />
             <KpiCard
-              title="Citations"
+              title={t('kpi.citations')}
               value={formatNumber(data.summary.totalCitations)}
               icon={Quote}
             />
@@ -1094,26 +1121,25 @@ export default function PromptDetailPage() {
               here. */}
           <Card id={PROMPT_ANSWERS_ANCHOR} className="scroll-mt-20">
             <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium">Platform Results</CardTitle>
+              <CardTitle className="text-sm font-medium">{t('results.title')}</CardTitle>
               <p className="text-xs text-muted-foreground">
-                {data.summary.totalResults} result{data.summary.totalResults !== 1 ? 's' : ''}{' '}
-                grouped by platform and model.
+                {t('results.summary', { count: data.summary.totalResults })}
               </p>
             </CardHeader>
             <CardContent className="space-y-3">
               {platformGroups.length === 0 ? (
                 <div className="rounded-lg border border-dashed py-12 text-center text-sm text-muted-foreground">
                   {datePreset === 'all' ? (
-                    'No tracking results yet for this prompt.'
+                    t('results.empty')
                   ) : (
                     <>
-                      No results in the selected date range.{' '}
+                      {t('results.emptyRange')}{' '}
                       <button
                         type="button"
                         className="font-medium text-foreground underline underline-offset-2"
                         onClick={() => setDatePreset('all')}
                       >
-                        Show all data
+                        {t('results.showAll')}
                       </button>
                     </>
                   )}

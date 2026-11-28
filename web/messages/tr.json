@@ -16759,6 +16759,107 @@
       "set": "Durumu ayarla",
       "setLabel": "Çalışma durumunu ayarla",
       "none": "Durum yok"
+    },
+    "detail": {
+      "presets": {
+        "24h": "24 sa",
+        "7d": "7g",
+        "30d": "30g",
+        "90d": "90g"
+      },
+      "unknownModel": "Bilinmiyor",
+      "sentiment": {
+        "positive": "olumlu",
+        "neutral": "nötr",
+        "negative": "olumsuz"
+      },
+      "active": "Aktif",
+      "paused": "Duraklatıldı",
+      "lastRun": "Son çalıştırma: {time}",
+      "loadFailed": "Prompt ayrıntıları yüklenemedi",
+      "errorTitle": "Bu Prompt yüklenemedi",
+      "retry": "Tekrar dene",
+      "notFoundTitle": "Prompt bulunamadı",
+      "notFoundBody": "Bu Prompt silinmiş veya hiç var olmamış olabilir.",
+      "goBack": "Geri dön",
+      "statusUpdateFailed": "Durum güncellenemedi",
+      "opportunitiesLoadFailed": "İçerik fırsatları yüklenemedi",
+      "kpi": {
+        "visibility": "Görünürlük — {total, plural, one {# yanıtın} other {# yanıtın}} {mentioned} tanesinde bahsedildi, {cited} tanesinde atıf yapıldı",
+        "mentions": "Bahsedilmeler",
+        "citations": "Atıflar"
+      },
+      "results": {
+        "title": "Platform Sonuçları",
+        "summary": "Platform ve modele göre gruplanmış {count, plural, one {# sonuç} other {# sonuç}}.",
+        "empty": "Bu Prompt için henüz takip sonucu yok.",
+        "emptyRange": "Seçilen tarih aralığında sonuç yok.",
+        "showAll": "Tüm verileri göster"
+      },
+      "group": {
+        "runs": "{count, plural, one {# çalıştırma} other {# çalıştırma}}",
+        "mentions": "Bahsedilmeler",
+        "citations": "Atıflar",
+        "runsHeading": "Çalıştırmalar",
+        "mentionCount": "{count, plural, one {<n>#</n><l> bahsedilme</l>} other {<n>#</n><l> bahsedilme</l>}}",
+        "citationCount": "{count, plural, one {<n>#</n><l> atıf</l>} other {<n>#</n><l> atıf</l>}}",
+        "showResponse": "Yanıtı göster",
+        "hideResponse": "Yanıtı gizle",
+        "openFullPage": "Tam sayfada aç",
+        "showingLatest": "Bu platform için {total, plural, one {# çalıştırmanın} other {# çalıştırmanın}} en son {shown} tanesi gösteriliyor."
+      },
+      "sources": {
+        "title": "En İyi Kaynaklar",
+        "description": "AI platformlarının bu Prompt'u yanıtlarken atıf yaptığı kaynaklar.",
+        "filterPlaceholder": "Alan adı, URL veya başlığa göre filtrele...",
+        "domainsTab": "Alan Adları ({count})",
+        "urlsTab": "URL'ler ({count})",
+        "rank": "Sıra",
+        "domain": "Alan adı",
+        "url": "URL",
+        "platforms": "Platformlar",
+        "usage": "Kullanım",
+        "citations": "Atıflar",
+        "openDomain": "{domain} sitesini yeni sekmede aç",
+        "openCitedPage": "Atıf yapılan sayfayı yeni sekmede aç",
+        "openCitedPageTitle": "Atıf yapılan sayfayı aç"
+      },
+      "notes": {
+        "title": "Notlar",
+        "description": "Bu Prompt'un arkasındaki çalışmayı takip edin — neyin yayımlandığını, planlandığını veya kararlaştırıldığını.",
+        "placeholder": "ör. Bu Prompt'u hedefleyen bir karşılaştırma blog yazısı yayımlandı…",
+        "add": "Not ekle",
+        "empty": "Henüz not yok — ilkini yukarıdan ekleyin.",
+        "emptyReadOnly": "Henüz not yok.",
+        "unknownAuthor": "Bilinmiyor",
+        "delete": "Notu sil",
+        "addFailed": "Not eklenemedi",
+        "deleteFailed": "Not silinemedi"
+      },
+      "targets": {
+        "title": "Hedef URL'ler",
+        "description": "AI yanıtlarının bu Prompt için atıf yapmasını istediğiniz sayfalar. Yeni takip sonuçları geldikçe atıf durumu otomatik olarak güncellenir.",
+        "add": "Ekle",
+        "empty": "Henüz hedef URL yok — atıf almasını istediğiniz sayfaları ekleyin.",
+        "emptyReadOnly": "Henüz hedef URL yok.",
+        "remove": "Hedef URL'yi kaldır",
+        "addFailed": "URL eklenemedi",
+        "removeFailed": "URL kaldırılamadı",
+        "notCited": "Henüz atıf yok",
+        "cited": "Atıf ×{count}",
+        "citedIn": "{count, plural, one {# yanıtta atıf yapıldı} other {# yanıtta atıf yapıldı}}",
+        "first": "ilk {date}",
+        "last": "son {date}",
+        "alreadyCited": "hedeflenmeden önce zaten atıf alıyordu"
+      },
+      "opportunities": {
+        "title": "İçerik fırsatları",
+        "description": "Bu Prompt için belirlenen ve aksiyon bekleyen fırsatlar.",
+        "loadFailed": "İçerik fırsatları yüklenemedi.",
+        "empty": "Bu Prompt için açık fırsat yok.",
+        "briefReady": "Brief hazır",
+        "viewAll": "Tümünü gör ({total})"
+      }
     }
   },
   "volumeEstimate": {

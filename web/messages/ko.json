@@ -16742,6 +16742,107 @@
       "set": "상태 설정",
       "setLabel": "작업 상태 설정",
       "none": "상태 없음"
+    },
+    "detail": {
+      "presets": {
+        "24h": "24시간",
+        "7d": "7일",
+        "30d": "30일",
+        "90d": "90일"
+      },
+      "unknownModel": "알 수 없음",
+      "sentiment": {
+        "positive": "긍정",
+        "neutral": "중립",
+        "negative": "부정"
+      },
+      "active": "활성",
+      "paused": "일시중지됨",
+      "lastRun": "최근 실행: {time}",
+      "loadFailed": "Prompt 세부 정보를 불러오지 못했습니다",
+      "errorTitle": "이 Prompt를 불러오지 못했습니다",
+      "retry": "다시 시도",
+      "notFoundTitle": "Prompt를 찾을 수 없습니다",
+      "notFoundBody": "이 Prompt는 삭제되었거나 존재하지 않을 수 있습니다.",
+      "goBack": "돌아가기",
+      "statusUpdateFailed": "상태를 업데이트하지 못했습니다",
+      "opportunitiesLoadFailed": "콘텐츠 기회를 불러오지 못했습니다",
+      "kpi": {
+        "visibility": "가시성 — {total, plural, one {#개} other {#개}} 답변 중 {mentioned}개에서 언급, {cited}개에서 인용",
+        "mentions": "멘션",
+        "citations": "인용"
+      },
+      "results": {
+        "title": "플랫폼별 결과",
+        "summary": "플랫폼 및 모델별로 그룹화된 {count, plural, one {#개} other {#개}}의 결과입니다.",
+        "empty": "이 Prompt에 대한 추적 결과가 아직 없습니다.",
+        "emptyRange": "선택한 기간에 결과가 없습니다.",
+        "showAll": "모든 데이터 보기"
+      },
+      "group": {
+        "runs": "{count, plural, one {#회 실행} other {#회 실행}}",
+        "mentions": "멘션",
+        "citations": "인용",
+        "runsHeading": "실행 기록",
+        "mentionCount": "{count, plural, one {<n>#</n><l>회 멘션</l>} other {<n>#</n><l>회 멘션</l>}}",
+        "citationCount": "{count, plural, one {<n>#</n><l>회 인용</l>} other {<n>#</n><l>회 인용</l>}}",
+        "showResponse": "답변 보기",
+        "hideResponse": "답변 숨기기",
+        "openFullPage": "전체 페이지로 열기",
+        "showingLatest": "이 플랫폼의 {total, plural, one {#회} other {#회}} 실행 중 최근 {shown}회를 표시합니다."
+      },
+      "sources": {
+        "title": "상위 출처",
+        "description": "AI 플랫폼이 이 Prompt에 답변할 때 인용하는 출처입니다.",
+        "filterPlaceholder": "도메인, URL 또는 제목으로 필터링...",
+        "domainsTab": "도메인 ({count})",
+        "urlsTab": "URL ({count})",
+        "rank": "순위",
+        "domain": "도메인",
+        "url": "URL",
+        "platforms": "플랫폼",
+        "usage": "사용량",
+        "citations": "인용",
+        "openDomain": "새 탭에서 {domain} 열기",
+        "openCitedPage": "새 탭에서 인용된 페이지 열기",
+        "openCitedPageTitle": "인용된 페이지 열기"
+      },
+      "notes": {
+        "title": "메모",
+        "description": "이 Prompt와 관련된 작업을 기록하세요 — 게시한 것, 계획한 것, 결정한 것.",
+        "placeholder": "예: 이 Prompt를 겨냥한 비교 블로그 글을 게시함…",
+        "add": "메모 추가",
+        "empty": "아직 메모가 없습니다 — 위에서 첫 메모를 추가하세요.",
+        "emptyReadOnly": "아직 메모가 없습니다.",
+        "unknownAuthor": "알 수 없음",
+        "delete": "메모 삭제",
+        "addFailed": "메모를 추가하지 못했습니다",
+        "deleteFailed": "메모를 삭제하지 못했습니다"
+      },
+      "targets": {
+        "title": "타겟 URL",
+        "description": "이 Prompt에서 AI 답변이 인용하기를 원하는 페이지입니다. 새 추적 결과가 들어오면 인용 상태가 자동으로 업데이트됩니다.",
+        "add": "추가",
+        "empty": "아직 타겟 URL이 없습니다 — 인용되기를 원하는 페이지를 추가하세요.",
+        "emptyReadOnly": "아직 타겟 URL이 없습니다.",
+        "remove": "타겟 URL 제거",
+        "addFailed": "URL을 추가하지 못했습니다",
+        "removeFailed": "URL을 제거하지 못했습니다",
+        "notCited": "아직 인용되지 않음",
+        "cited": "인용 ×{count}",
+        "citedIn": "{count, plural, one {#개 답변에서 인용됨} other {#개 답변에서 인용됨}}",
+        "first": "최초 {date}",
+        "last": "최근 {date}",
+        "alreadyCited": "타겟으로 지정하기 전부터 인용되고 있었음"
+      },
+      "opportunities": {
+        "title": "콘텐츠 기회",
+        "description": "이 Prompt에서 발견되어 조치를 기다리는 기회입니다.",
+        "loadFailed": "콘텐츠 기회를 불러오지 못했습니다.",
+        "empty": "이 Prompt에 열린 기회가 없습니다.",
+        "briefReady": "브리프 준비됨",
+        "viewAll": "모두 보기 ({total})"
+      }
     }
   },
   "volumeEstimate": {
