@@ -15908,6 +15908,10 @@
     "loadError": "Kan uw prompts niet laden.",
     "visibilityDegraded": "Zichtbaarheidscijfers zijn tijdelijk niet beschikbaar — prompts worden zonder cijfers getoond.",
     "positions": {
+      "slots": {
+        "note": "Nog niet in uw abonnement · Voeg tracking slots toe om resultaten en posities van {platform} te volgen.",
+        "add": "Slots toevoegen"
+      },
       "answers": "{count, plural, one {# antwoord} other {# antwoorden}}",
       "answersInPeriod": "{count, plural, one {# antwoord} other {# antwoorden}} in deze periode",
       "mentionedIn": "In {mentioned} van {answers, plural, one {# antwoord} other {# antwoorden}} · {mentions, plural, one {# vermelding} other {# vermeldingen}}",
