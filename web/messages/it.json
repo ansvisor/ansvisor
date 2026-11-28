@@ -16631,7 +16631,7 @@
       "discardNote": "Cambiando il periodo, le modifiche di Migliora non inviate andranno perse.",
       "keepEditing": "Continua a modificare",
       "discard": "Scarta e cambia",
-      "aiAnswers": "Risposte IA",
+      "seeAnswers": "Vedi le risposte AI",
       "back": "Torna ai Prompt",
       "loading": "Caricamento delle posizioni",
       "loadError": "Impossibile caricare le posizioni: {message}",

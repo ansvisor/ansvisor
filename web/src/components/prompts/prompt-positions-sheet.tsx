@@ -66,6 +66,7 @@ import type {
 } from '@/lib/prompt-positions';
 import type { Sentiment } from '@/types';
 import { actionCenterLink } from '@/lib/prompt-improve';
+import { promptAnswersHref } from '@/lib/prompt-answers-link';
 import { actionCode } from '@/lib/action-center/action-ref';
 
 export type { PositionsRange } from '@/lib/positions-range';
@@ -269,6 +270,16 @@ export function PromptPositionsSheet({
               )}
             </div>
           )}
+          {prompt && (
+            // The answers behind these positions, one click away.
+            <Link
+              href={promptAnswersHref(prompt.id)}
+              className={cn(buttonVariants({ variant: 'outline', size: 'sm' }), 'w-fit')}
+            >
+              <MessageSquareText />
+              {t('seeAnswers')}
+            </Link>
+          )}
           <SheetDescription className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
             <CalendarDays className="h-3.5 w-3.5" />
             <span className="font-medium text-foreground">{windowTitle(preset, t)}</span>
@@ -344,18 +355,7 @@ export function PromptPositionsSheet({
             ))}
         </div>
 
-        <div className="flex items-center justify-between gap-2 border-t px-5 py-3">
-          {prompt ? (
-            <Link
-              href={`/dashboard/prompts/${prompt.id}`}
-              className={buttonVariants({ variant: 'ghost', size: 'sm' })}
-            >
-              <MessageSquareText />
-              {t('aiAnswers')}
-            </Link>
-          ) : (
-            <span />
-          )}
+        <div className="flex items-center justify-end gap-2 border-t px-5 py-3">
           <SheetClose render={<Button variant="outline" size="sm" />}>{t('back')}</SheetClose>
         </div>
       </SheetContent>

@@ -16236,7 +16236,7 @@
       "discardNote": "Changing the period discards your unsent Improve edits.",
       "keepEditing": "Keep editing",
       "discard": "Discard & change",
-      "aiAnswers": "AI answers",
+      "seeAnswers": "See AI answers",
       "back": "Back to prompts",
       "loading": "Loading positions",
       "loadError": "Couldn't load positions: {message}",

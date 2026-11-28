@@ -114,6 +114,7 @@ import {
   FilePlus,
   FileText,
   RotateCw,
+  MessageSquareText,
 } from 'lucide-react';
 import { NewContentDialog, type DialogPreset } from '@/components/content/new-content-dialog';
 import { getDraftForPrompt } from '@/lib/actions/content-drafts';
@@ -268,6 +269,7 @@ import {
 } from '@/components/prompts/volume-estimate';
 import { usePagination, TablePager } from '@/components/table-pager';
 import { PromptPositionsSheet } from '@/components/prompts/prompt-positions-sheet';
+import { promptAnswersHref } from '@/lib/prompt-answers-link';
 import {
   ClampedText,
   ClampedTextPreview,
@@ -3003,6 +3005,7 @@ function RowActionsMenu({
 }) {
   const t = useTranslations('prompts.content');
   const tWaiting = useTranslations('prompts.waiting');
+  const tSheet = useTranslations('prompts.positionsSheet');
   const router = useRouter();
   // With the month's quota used up, or without an active plan, a prompt that
   // already has a suggestion can still open it, which costs nothing; the menu
@@ -3031,6 +3034,14 @@ function RowActionsMenu({
         <MoreHorizontal className="h-4 w-4" />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-56">
+        <DropdownMenuItem
+          className="gap-2"
+          onClick={() => router.push(promptAnswersHref(prompt.id))}
+        >
+          <MessageSquareText className="h-3.5 w-3.5" />
+          {tSheet('seeAnswers')}
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
         <DropdownMenuItem className="gap-2" onClick={onEdit}>
           <Pencil className="h-3.5 w-3.5" />
           Edit

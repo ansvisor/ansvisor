@@ -82,6 +82,7 @@ import { MODEL_PROVIDER_LABELS, PLATFORM_LABELS } from '@/config/platform-labels
 import { groupByPlatform, type PlatformGroup } from './grouping';
 import { dayRangeBounds, viewerTimeZone } from '@/lib/time-zone';
 import { formatNumber } from '@/lib/format';
+import { PROMPT_ANSWERS_ANCHOR } from '@/lib/prompt-answers-link';
 import { HeaderWithAiUsage } from '@/components/ai-usage/ai-usage-meter';
 import { useChatPageContext } from '@/components/chat/panel/chat-panel-context';
 import { rangeChipLabel } from '@/lib/chat/page-context';
@@ -862,6 +863,14 @@ export default function PromptDetailPage() {
 
   const platformGroups = useMemo(() => groupByPlatform(data?.results ?? []), [data?.results]);
 
+  // Opened on #ai-answers: scroll to the answers once they're on the page
+  // (the browser's own jump runs before the data is read).
+  const hasData = data !== null;
+  useEffect(() => {
+    if (!hasData || window.location.hash !== `#${PROMPT_ANSWERS_ANCHOR}`) return;
+    document.getElementById(PROMPT_ANSWERS_ANCHOR)?.scrollIntoView?.({ block: 'start' });
+  }, [hasData]);
+
   const togglePlatform = (key: string) =>
     setExpanded((prev) => {
       const next = new Set(prev);
@@ -1080,19 +1089,10 @@ export default function PromptDetailPage() {
             )}
           </div>
 
-          {!demandUnavailable && (
-            <DemandSection
-              demand={demand}
-              failed={demandFailed}
-              gscStatus={gscStatus}
-              brandId={data.prompt.brandId}
-              topic={data.prompt.topicName ?? ''}
-              canManage={canManage}
-              onGscConnected={() => setSourcesRead((n) => n + 1)}
-            />
-          )}
-
-          <Card>
+          {/* The AI answers first, right under the numbers they make up; a
+              link to #ai-answers (Tracked Prompts, the positions panel) lands
+              here. */}
+          <Card id={PROMPT_ANSWERS_ANCHOR} className="scroll-mt-20">
             <CardHeader className="pb-3">
               <CardTitle className="text-sm font-medium">Platform Results</CardTitle>
               <p className="text-xs text-muted-foreground">
@@ -1161,6 +1161,19 @@ export default function PromptDetailPage() {
           loading={opportunitiesLoading}
           failed={opportunitiesFailed}
         />
+
+        {/* Demand last: background for the prompt, after its answers and work. */}
+        {!demandUnavailable && (
+          <DemandSection
+            demand={demand}
+            failed={demandFailed}
+            gscStatus={gscStatus}
+            brandId={data.prompt.brandId}
+            topic={data.prompt.topicName ?? ''}
+            canManage={canManage}
+            onGscConnected={() => setSourcesRead((n) => n + 1)}
+          />
+        )}
       </div>
     </div>
   );

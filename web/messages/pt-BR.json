@@ -16633,7 +16633,7 @@
       "discardNote": "Alterar o período descartará as edições de Melhoria não enviadas.",
       "keepEditing": "Continuar editando",
       "discard": "Descartar e alterar",
-      "aiAnswers": "Respostas de IA",
+      "seeAnswers": "Ver respostas de IA",
       "back": "Voltar para Prompts",
       "loading": "Carregando posições",
       "loadError": "Não foi possível carregar as posições: {message}",

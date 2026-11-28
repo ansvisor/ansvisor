@@ -16635,7 +16635,7 @@
       "discardNote": "Changer de période supprimera vos modifications d'amélioration non envoyées.",
       "keepEditing": "Continuer la modification",
       "discard": "Supprimer et changer",
-      "aiAnswers": "Réponses IA",
+      "seeAnswers": "Voir les réponses IA",
       "back": "Retour aux Prompts",
       "loading": "Chargement des positions",
       "loadError": "Impossible de charger les positions : {message}",

@@ -16606,7 +16606,7 @@
       "discardNote": "기간을 변경하면 전송하지 않은 개선 편집 내용이 삭제됩니다.",
       "keepEditing": "계속 편집",
       "discard": "삭제하고 변경",
-      "aiAnswers": "AI 답변",
+      "seeAnswers": "AI 답변 보기",
       "back": "Prompts로 돌아가기",
       "loading": "순위를 불러오는 중",
       "loadError": "순위를 불러오지 못했습니다: {message}",
