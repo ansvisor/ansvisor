@@ -95,7 +95,11 @@ vi.mock('@/stores/use-brand-store', () => ({
     }),
 }));
 vi.mock('@/lib/actions/action-center', () => ({ getActions, getActionsAffected }));
-vi.mock('@/lib/actions/action-center-counts', () => ({ getClosedThisWeekCount: closedCount }));
+const refreshedCount = vi.hoisted(() => vi.fn(async () => 0));
+vi.mock('@/lib/actions/action-center-counts', () => ({
+  getClosedThisWeekCount: closedCount,
+  getRefreshedThisWeekCount: refreshedCount,
+}));
 vi.mock('@/stores/use-auth-store', () => ({
   useAuthStore: (selector: (state: { user: { id: string } }) => unknown) =>
     selector({ user: { id: 'user-id' } }),
@@ -185,6 +189,7 @@ beforeEach(() => {
   window.history.replaceState(null, '', '/');
   getActions.mockReset().mockResolvedValue([action]);
   closedCount.mockReset().mockResolvedValue(0);
+  refreshedCount.mockReset().mockResolvedValue(0);
   visits.clear();
   role.canManage = true;
   container = document.createElement('div');
@@ -715,6 +720,27 @@ describe('the summary and the New marks', () => {
     await render();
     expect([...table.props!.newIds!]).toEqual(['fresh']);
     expect(summary()).toContain('summary.new:1');
+  });
+
+  it('says how many actions were refreshed this week, apart from those closed', async () => {
+    refreshedCount.mockResolvedValue(5);
+    await render();
+    expect(refreshedCount).toHaveBeenCalledWith('brand-id');
+    expect(summary()).toContain('summary.refreshed:5');
+  });
+
+  it('says nothing about refreshing when none was', async () => {
+    await render();
+    expect(summary()).not.toContain('summary.refreshed');
+  });
+
+  it('lists a replaced action as refreshed, not closed this week', async () => {
+    const { isClosedThisWeek, isRefreshedThisWeek } =
+      await import('@/lib/action-center/actions-visit');
+    const replaced = { status: 'dismissed' as const, updatedAt: daysAgo(1), replaced: true };
+    expect(isClosedThisWeek(replaced, new Date())).toBe(false);
+    expect(isRefreshedThisWeek(replaced, new Date())).toBe(true);
+    expect(isClosedThisWeek({ ...replaced, replaced: false }, new Date())).toBe(true);
   });
 
   it('leaves the closed count out when it cannot be read', async () => {

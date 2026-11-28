@@ -2127,6 +2127,8 @@
       "noOpen": "Keine offenen Aktionen. Abgeschlossene und verworfene finden Sie unter „Alle Status“.",
       "showAllStatuses": "Alle Status anzeigen",
       "summary": {
+        "refreshed": "{count} diese Woche aktualisiert",
+        "refreshedHint": "In den letzten {days} Tagen durch eine neue Aktion auf Basis aktueller Daten ersetzt, da seit 30 Tagen niemand daran gearbeitet hatte.",
         "open": "{count} offen",
         "closed": "{count} diese Woche abgeschlossen",
         "closedHint": "In den letzten {days} Tagen abgeschlossen oder verworfen. Klicken, um sie aufzulisten.",

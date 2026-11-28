@@ -2127,6 +2127,8 @@
       "noOpen": "열린 액션이 없습니다. 완료되거나 무시된 액션은 모든 상태에서 볼 수 있습니다.",
       "showAllStatuses": "모든 상태 보기",
       "summary": {
+        "refreshed": "이번 주 {count}개 새로 고침됨",
+        "refreshedHint": "30일 동안 아무도 작업하지 않아 최신 데이터로 만든 새 액션으로 최근 {days}일 이내에 교체되었습니다.",
         "open": "진행 중 {count}개",
         "closed": "이번 주 완료 {count}개",
         "closedHint": "최근 {days}일 동안 완료되거나 무시된 항목입니다. 클릭하여 목록을 확인하세요.",

@@ -54,6 +54,28 @@ export async function getClosedThisWeekCount(brandId: string): Promise<number> {
     .eq('brand_id', brandId)
     .in('status', [...CLOSED_ACTION_STATUSES])
     .is('deleted_at', null)
+    // Refreshed ones (replaced by the nightly pass, 00563) are counted apart.
+    .or('dismiss_reason.is.null,dismiss_reason.neq.replaced')
+    .gte('updated_at', closedSince(new Date()));
+  if (error) throw new Error(error.message);
+  return count ?? 0;
+}
+
+/**
+ * A brand's actions refreshed this week, for the Actions list's summary:
+ * dismissed as `replaced` by the nightly pass (00563), a new action from
+ * fresh data in their place, in the past 7 days. A count only, read as the
+ * person (RLS). Throws when it can't be read, so a failed count shows nothing.
+ */
+export async function getRefreshedThisWeekCount(brandId: string): Promise<number> {
+  const supabase = await createClient();
+  const { count, error } = await supabase
+    .from('actions')
+    .select('id', { count: 'exact', head: true })
+    .eq('brand_id', brandId)
+    .eq('status', 'dismissed')
+    .eq('dismiss_reason', 'replaced')
+    .is('deleted_at', null)
     .gte('updated_at', closedSince(new Date()));
   if (error) throw new Error(error.message);
   return count ?? 0;

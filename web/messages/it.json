@@ -2127,6 +2127,8 @@
       "noOpen": "Nessuna azione aperta. Quelle completate e archiviate si trovano in Tutti gli stati.",
       "showAllStatuses": "Mostra tutti gli stati",
       "summary": {
+        "refreshed": "{count} aggiornate questa settimana",
+        "refreshedHint": "Sostituite negli ultimi {days} giorni da una nuova azione basata su dati aggiornati, perché nessuno ci aveva lavorato per 30 giorni.",
         "open": "{count} aperte",
         "closed": "{count} chiuse questa settimana",
         "closedHint": "Completate o ignorate negli ultimi {days} giorni. Fai clic per visualizzarle.",

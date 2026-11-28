@@ -2127,6 +2127,8 @@
       "noOpen": "No open actions. Completed and dismissed ones are under every status.",
       "showAllStatuses": "Show every status",
       "summary": {
+        "refreshed": "{count} refreshed this week",
+        "refreshedHint": "Replaced in the last {days} days by a new action built from fresh data, because nobody had worked on them for 30 days.",
         "open": "{count} open",
         "closed": "{count} closed this week",
         "closedHint": "Completed or dismissed in the last {days} days. Click to list them.",

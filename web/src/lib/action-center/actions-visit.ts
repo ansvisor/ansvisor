@@ -54,10 +54,26 @@ export function closedSince(now: Date): string {
  * the same rows on the server.
  */
 export function isClosedThisWeek(
-  action: { status: ActionStatus; updatedAt: string },
+  action: { status: ActionStatus; updatedAt: string; replaced?: boolean },
   now: Date,
 ): boolean {
+  // A refreshed action was replaced by the nightly pass, not closed by anyone.
+  if (action.replaced) return false;
   if (!CLOSED_ACTION_STATUSES.includes(action.status)) return false;
+  const updated = Date.parse(action.updatedAt);
+  return !Number.isNaN(updated) && updated >= Date.parse(closedSince(now));
+}
+
+/**
+ * Whether an action was refreshed this week: replaced by a new one from
+ * fresh data after nobody worked on it (00563), in the same 7 days as
+ * isClosedThisWeek. The open count stays level as these come and go.
+ */
+export function isRefreshedThisWeek(
+  action: { replaced?: boolean; updatedAt: string },
+  now: Date,
+): boolean {
+  if (!action.replaced) return false;
   const updated = Date.parse(action.updatedAt);
   return !Number.isNaN(updated) && updated >= Date.parse(closedSince(now));
 }

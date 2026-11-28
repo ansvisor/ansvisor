@@ -33,6 +33,7 @@
         "your language",
         "new since your last visit",
         "closed this week",
+        "refreshed this week",
         "deleted actions",
         "missing actions"
       ],
@@ -51,7 +52,7 @@
         "oldest first"
       ],
       "plan": "all",
-      "updated": "2026-11-25",
+      "updated": "2026-11-29",
       "sections": [
         {
           "heading": null,
@@ -79,7 +80,7 @@
         },
         {
           "heading": "New and closed actions",
-          "text": "Above the list, a short line reads like \"55 open · 12 closed this week · 3 new since your last visit\". The open count doesn't always grow: a new finding on a subject with an open action joins that action, and completed or dismissed actions leave the count.\n\n- **New**: a mark beside the title of each action created since your last visit to the list, on this browser. It shows for the whole visit and is gone on the next one. An older action that a new signal updated moves to the top without it.\n- **Closed this week**: actions completed or dismissed in the last 7 days. Click it to list them; **Clear filters** goes back.\n\nActions are never removed on their own. Closed ones stay under **Status: All**, with what happened in each one's **History**."
+          "text": "Above the list, a line reads like \"55 open · 12 closed this week · 3 new since your last visit · 5 refreshed this week\". The open count doesn't always grow: a new finding on the subject of an open action joins it, closed actions leave the count, and a refreshed action is replaced by its new one.\n\n- **New**: a mark beside each action created since your last visit on this browser, gone on the next one.\n- **Closed this week**: completed or dismissed in the last 7 days. Click it to list them; **Clear filters** goes back.\n- **Refreshed this week**: untouched for 30 days and replaced by a new action built from fresh data. Not counted as closed; its **History** names the new one.\n\nActions are never removed on their own. Closed ones stay under **Status: All**, with what happened in each one's **History**."
         },
         {
           "heading": "Action codes",

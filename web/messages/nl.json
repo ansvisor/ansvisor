@@ -2127,6 +2127,8 @@
       "noOpen": "Geen open acties. Voltooide en afgewezen acties vindt u onder Alle statussen.",
       "showAllStatuses": "Alle statussen tonen",
       "summary": {
+        "refreshed": "{count} deze week vernieuwd",
+        "refreshedHint": "In de afgelopen {days} dagen vervangen door een nieuwe actie op basis van actuele gegevens, omdat er 30 dagen niemand aan had gewerkt.",
         "open": "{count} open",
         "closed": "{count} gesloten deze week",
         "closedHint": "Voltooid of genegeerd in de afgelopen {days} dagen. Klik om ze weer te geven.",

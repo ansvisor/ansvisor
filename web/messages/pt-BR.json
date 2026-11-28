@@ -2127,6 +2127,8 @@
       "noOpen": "Nenhuma ação aberta. As concluídas e dispensadas estão em Todos os status.",
       "showAllStatuses": "Mostrar todos os status",
       "summary": {
+        "refreshed": "{count} atualizadas esta semana",
+        "refreshedHint": "Substituídas nos últimos {days} dias por uma nova ação criada com dados recentes, porque ninguém trabalhou nelas por 30 dias.",
         "open": "{count} abertas",
         "closed": "{count} fechadas esta semana",
         "closedHint": "Concluídas ou descartadas nos últimos {days} dias. Clique para listá-las.",

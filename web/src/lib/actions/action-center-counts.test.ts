@@ -19,7 +19,7 @@ vi.mock('@/lib/supabase/server', () => ({
     from: (table: string) => {
       calls.push(['from', table]);
       const chain: Record<string, unknown> = {};
-      for (const method of ['select', 'eq', 'in', 'is', 'limit', 'gte']) {
+      for (const method of ['select', 'eq', 'in', 'is', 'or', 'limit', 'gte']) {
         chain[method] = (...args: unknown[]) => (calls.push([method, ...args]), chain);
       }
       chain.then = (resolve: (value: unknown) => unknown) => resolve(countResult ?? result);
@@ -28,7 +28,8 @@ vi.mock('@/lib/supabase/server', () => ({
   })),
 }));
 
-const { getClosedThisWeekCount, getOpenActionCounts } = await import('./action-center-counts');
+const { getClosedThisWeekCount, getOpenActionCounts, getRefreshedThisWeekCount } =
+  await import('./action-center-counts');
 
 beforeEach(() => {
   countResult = null;
@@ -92,6 +93,8 @@ describe('getClosedThisWeekCount', () => {
       ['eq', 'brand_id', 'b1'],
       ['in', 'status', ['completed', 'dismissed']],
       ['is', 'deleted_at', null],
+      // Refreshed ones are counted apart.
+      ['or', 'dismiss_reason.is.null,dismiss_reason.neq.replaced'],
       ['gte', 'updated_at', '2026-11-14T12:00:00.000Z'],
     ]);
   });
@@ -104,5 +107,32 @@ describe('getClosedThisWeekCount', () => {
   it('throws when the count fails, so the summary leaves it out', async () => {
     countResult = { count: null, error: { message: 'boom' } };
     await expect(getClosedThisWeekCount('b1')).rejects.toThrow('boom');
+  });
+});
+
+describe('getRefreshedThisWeekCount', () => {
+  it('counts the actions the nightly pass replaced in the last 7 days', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-11-21T12:00:00.000Z'));
+    countResult = { count: 5, error: null };
+    try {
+      expect(await getRefreshedThisWeekCount('b1')).toBe(5);
+    } finally {
+      vi.useRealTimers();
+    }
+    expect(calls).toEqual([
+      ['from', 'actions'],
+      ['select', 'id', { count: 'exact', head: true }],
+      ['eq', 'brand_id', 'b1'],
+      ['eq', 'status', 'dismissed'],
+      ['eq', 'dismiss_reason', 'replaced'],
+      ['is', 'deleted_at', null],
+      ['gte', 'updated_at', '2026-11-14T12:00:00.000Z'],
+    ]);
+  });
+
+  it('throws when the count fails', async () => {
+    countResult = { count: null, error: { message: 'boom' } };
+    await expect(getRefreshedThisWeekCount('b1')).rejects.toThrow('boom');
   });
 });

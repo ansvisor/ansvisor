@@ -2127,6 +2127,8 @@
       "noOpen": "Aucune action ouverte. Les actions terminées et ignorées se trouvent sous Tous les statuts.",
       "showAllStatuses": "Afficher tous les statuts",
       "summary": {
+        "refreshed": "{count} actualisées cette semaine",
+        "refreshedHint": "Remplacées au cours des {days} derniers jours par une nouvelle action élaborée à partir de données récentes, car personne n'y avait travaillé depuis 30 jours.",
         "open": "{count} ouvertes",
         "closed": "{count} fermées cette semaine",
         "closedHint": "Terminées ou ignorées au cours des {days} derniers jours. Cliquez pour les lister.",
