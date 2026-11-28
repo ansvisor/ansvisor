@@ -553,6 +553,25 @@
     }
   },
   "planOffer": {
+    "why": {
+      "label": "Perché Ansvisor",
+      "answers": {
+        "title": "Risposte reali, non stime",
+        "body": "Guarda le risposte AI dietro ogni numero e come viene calcolato. Open source."
+      },
+      "actions": {
+        "title": "Azioni, non solo report",
+        "body": "Ogni scoperta diventa un'attività. Molte le svolgono gli agenti per te."
+      },
+      "price": {
+        "title": "Prezzo chiaro",
+        "body": "Paghi i Prompt che monitori su ogni piattaforma. Aggiungine quando serve."
+      },
+      "results": {
+        "title": "Risultati da mostrare",
+        "body": "Visibilità e visite dall'AI nel tempo, in report da condividere."
+      }
+    },
     "checkoutCanceled": {
       "title": "Il pagamento non è stato completato, quindi non è stato addebitato nulla.",
       "body": "Potrà riprovare quando vorrà.",

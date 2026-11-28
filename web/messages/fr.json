@@ -553,6 +553,25 @@
     }
   },
   "planOffer": {
+    "why": {
+      "label": "Pourquoi Ansvisor",
+      "answers": {
+        "title": "De vraies réponses, pas des estimations",
+        "body": "Voyez les réponses d'IA derrière chaque chiffre, et comment il est calculé. Open source."
+      },
+      "actions": {
+        "title": "Des actions, pas seulement des rapports",
+        "body": "Chaque constat devient une tâche. Les agents en font beaucoup pour vous."
+      },
+      "price": {
+        "title": "Un prix clair",
+        "body": "Vous payez les Prompts suivis sur chaque plateforme. Ajoutez-en quand il le faut."
+      },
+      "results": {
+        "title": "Des résultats à montrer",
+        "body": "Visibilité et visites IA dans le temps, dans des rapports à partager."
+      }
+    },
     "checkoutCanceled": {
       "title": "Votre paiement n’a pas été finalisé, aucun montant n’a donc été débité.",
       "body": "Vous pouvez réessayer quand vous le souhaitez.",

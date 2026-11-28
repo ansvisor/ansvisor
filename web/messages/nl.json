@@ -553,6 +553,25 @@
     }
   },
   "planOffer": {
+    "why": {
+      "label": "Waarom Ansvisor",
+      "answers": {
+        "title": "Echte antwoorden, geen schattingen",
+        "body": "Zie de AI-antwoorden achter elk getal en hoe het berekend wordt. Open source."
+      },
+      "actions": {
+        "title": "Acties, niet alleen rapporten",
+        "body": "Elke bevinding wordt een taak. Veel daarvan doen agents voor je."
+      },
+      "price": {
+        "title": "Duidelijke prijs",
+        "body": "Je betaalt voor de Prompts die je per platform volgt. Meer wanneer je het nodig hebt."
+      },
+      "results": {
+        "title": "Resultaten om te laten zien",
+        "body": "Zichtbaarheid en AI-bezoeken door de tijd, in rapporten om te delen."
+      }
+    },
     "checkoutCanceled": {
       "title": "Uw betaling is niet voltooid, dus er is niets in rekening gebracht.",
       "body": "U kunt het opnieuw proberen wanneer u er klaar voor bent.",

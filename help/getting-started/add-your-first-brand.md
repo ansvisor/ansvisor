@@ -15,14 +15,14 @@ When you start with Ansvisor, a setup wizard walks you through your first brand.
 
 ## On the cloud: choose how to start
 
-The first screen, **How do you want to start?**, opens on the free trial. You can pick **Monthly**, **Yearly** or **Demo** instead.
+The first screen, **How do you want to start?**, opens on the free trial, under four cards on why Ansvisor. You can pick **Monthly**, **Yearly** or **Demo** instead.
 
-- **Start 7-day free trial** opens checkout. Nothing is charged until the trial ends, and you can cancel any time. The trial comes with an organization's first subscription only.
+- **Start 7-day free trial** opens checkout. Nothing is charged until the trial ends; cancel any time. The trial comes with an organization's first subscription only.
 - **Buy now**, or a plan without a trial, starts the plan the same day.
 
 After checkout, the five setup steps open; your brand's first run starts when you finish.
 
-Not ready to add a card? Pick **Demo**, then **Explore the sample brand**, or select **Explore a sample brand first** under the plans. It's made up, with sample data: every page opens, but nothing runs or changes. When you pick a plan there, you set up your own brand. If it doesn't open after it's prepared, **Open the demo** loads it again.
+Not ready to add a card? Pick **Demo**, then **Explore the sample brand**, or select **Explore a sample brand first** under the plans. It's sample data: every page opens, but nothing runs or changes. When you pick a plan there, you set up your own brand. If it doesn't open after it's prepared, **Open the demo** loads it again.
 
 A self-hosted install has no such screen.
 

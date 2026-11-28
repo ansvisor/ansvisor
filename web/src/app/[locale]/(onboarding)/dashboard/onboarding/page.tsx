@@ -114,6 +114,7 @@ import {
 } from '@/lib/ai-brand-setup';
 import { DashboardPreview } from '@/components/onboarding/dashboard-preview';
 import { ExploreDemoChoice, ExploreDemoLine } from '@/components/onboarding/explore-demo-card';
+import { WhyAnsvisor } from '@/components/onboarding/why-ansvisor';
 import { ConnectSite } from '@/components/onboarding/connect-site';
 import { DemoSetupDialog } from '@/components/demo/demo-setup-dialog';
 import { useExploreDemo, usePreloadDemo } from '@/hooks/use-explore-demo';
@@ -2235,6 +2236,9 @@ export default function OnboardingPage() {
               )}
             </div>
           </div>
+
+          {/* Why Ansvisor: four short reasons before the choice. */}
+          <WhyAnsvisor className="mb-4" />
 
           {/* How the plan starts: the trial, monthly, or a year; or the demo first */}
           <div className="mb-5 flex">

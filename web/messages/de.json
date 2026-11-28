@@ -553,6 +553,25 @@
     }
   },
   "planOffer": {
+    "why": {
+      "label": "Warum Ansvisor",
+      "answers": {
+        "title": "Echte Antworten statt Schätzungen",
+        "body": "Sehen Sie die KI-Antworten hinter jeder Zahl und wie sie berechnet wird. Open Source."
+      },
+      "actions": {
+        "title": "Aufgaben, nicht nur Berichte",
+        "body": "Jeder Befund wird zur Aufgabe. Viele davon erledigen Agents für Sie."
+      },
+      "price": {
+        "title": "Klarer Preis",
+        "body": "Sie zahlen für die Prompts, die Sie auf jeder Plattform tracken. Mehr, wenn Sie es brauchen."
+      },
+      "results": {
+        "title": "Ergebnisse zum Vorzeigen",
+        "body": "Sichtbarkeit und KI-Besuche im Zeitverlauf, in Berichten zum Teilen."
+      }
+    },
     "checkoutCanceled": {
       "title": "Ihre Zahlung wurde nicht abgeschlossen, daher wurde nichts berechnet.",
       "body": "Sie können es jederzeit erneut versuchen, wenn Sie bereit sind.",
