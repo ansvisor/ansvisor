@@ -130,20 +130,23 @@ describe('ProductDataStrip', () => {
     );
   });
 
-  it('marks Merchant Center connected when it is a catalog source, and the marketplaces as to come', () => {
+  it('marks Merchant Center connected when it is a catalog source, and lists no marketplace with no connector', () => {
     render([source({})]);
     expect(chip('merchant_center')).toContain('Connect');
-    expect(chip('amazon')).toBe('aAmazonSoon');
-    expect(chip('hepsiburada')).toBe('HHepsiburadaSoon');
+    expect(chip('amazon')).toBeUndefined();
+    expect(chip('hepsiburada')).toBeUndefined();
+    expect(container.textContent).not.toContain('Soon');
     render([source({ kind: 'merchant_center' })]);
     expect(chip('merchant_center')).toBe('GGoogle Merchant CenterConnected');
     render([source({})], false);
     expect(chip('merchant_center')).toBe('GGoogle Merchant CenterNot connected');
   });
 
-  it("calls Merchant Center Soon where this server doesn't offer it, unless the brand has it", () => {
+  it("hides Merchant Center where this server doesn't offer it, unless the brand has it", () => {
     render([source({})], true, true, false);
-    expect(chip('merchant_center')).toBe('GGoogle Merchant CenterSoon');
+    expect(chip('merchant_center')).toBeUndefined();
+    // Nothing left to list: the marketplaces line goes too.
+    expect(container.textContent).not.toContain('Marketplaces & feeds');
     render([source({ kind: 'merchant_center' })], true, true, false);
     expect(chip('merchant_center')).toBe('GGoogle Merchant CenterConnected');
   });
