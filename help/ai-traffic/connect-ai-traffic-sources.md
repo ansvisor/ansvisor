@@ -62,3 +62,11 @@ Fastly sends every request log, including non-bot requests; all records count to
 ## When the first numbers arrive
 
 Google Analytics' first numbers arrive in about 15 minutes; up to 14 months of history can take up to 24 hours. Search Console's can take up to 48 hours, because Google reports about two days late.
+
+## Connect Netlify AI bot logs
+
+Netlify log drains are available on Enterprise plans. On **AI Traffic Analytics**, open **Connect** on the **AI bots** card and choose **Netlify log drain**. Create the connection and copy its endpoint and bearer header. The secret is shown once.
+
+In Netlify, open your site's **Log drains** and add a **General HTTP endpoint** drain. Use the endpoint from Ansvisor, choose **JSON** as the format, and add the **Authorization** header with the bearer value. Netlify documents Authorization headers for [General HTTP endpoint drains](https://docs.netlify.com/manage/monitoring/log-drains/#general-http-endpoint).
+
+Netlify sends every request log, including non-bot requests; all records count toward the monthly raw-log cap. Ansvisor stores only requests whose user agent and source IP match a known AI bot and its published ranges.

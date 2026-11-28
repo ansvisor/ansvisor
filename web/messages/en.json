@@ -14568,6 +14568,11 @@
           "what": "Fastly sends request logs to Ansvisor over HTTPS; only AI bots with a verified user agent and source IP are counted.",
           "cost": "All incoming log records count toward the monthly raw-log cap, including requests that are not AI bots."
         },
+        "netlify_log_drain": {
+          "name": "Netlify log drain",
+          "what": "Netlify sends your site's request logs to Ansvisor over HTTPS; only AI bots with a verified user agent and source IP are counted.",
+          "cost": "Netlify log drains are on Enterprise plans. All incoming log records count toward the monthly raw-log cap, including requests that are not AI bots."
+        },
         "log_webhook": {
           "name": "Any server (webhook)",
           "what": "Any server or CDN: your log shipper posts your access log as JSON lines; Ansvisor keeps the AI bots and drops the rest.",
@@ -14595,6 +14600,11 @@
           "In Fastly, open your service and add an HTTPS logging endpoint.",
           "Set the endpoint URL below, use POST, set Content-Type to application/json, and add the custom header below (Authorization with the Bearer value).",
           "Choose JSON log entries with Newline delimited output and a custom log line format. Paste the format below, then activate the service configuration. Ansvisor automatically answers Fastly's domain-control challenge for its API endpoint; you do not need to add a DNS record."
+        ],
+        "netlify_log_drain": [
+          "In Netlify, open your site's Log drains (Enterprise plans) and add a General HTTP endpoint drain.",
+          "Set the endpoint URL below and choose JSON as the format, then add the custom Authorization header below.",
+          "Ansvisor reads each record's user_agent, client_ip, url, status_code, timestamp and country, and keeps only the AI bots."
         ],
         "log_webhook": [
           "In your log shipper (Vector, Fluent Bit, Logstash or your own script), add an HTTP output that POSTs to the endpoint below.",
