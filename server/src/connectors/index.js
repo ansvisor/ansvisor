@@ -1,3 +1,4 @@
+import bigCommerce from './bigcommerce/index.js';
 import feedUrl from './feed-url/index.js';
 import merchantCenter from './merchant-center/index.js';
 import wooCommerce from './woocommerce/index.js';
@@ -58,6 +59,7 @@ export const CONNECTORS = {
   [feedUrl.kind]: feedUrl,
   [merchantCenter.kind]: merchantCenter,
   [wooCommerce.kind]: wooCommerce,
+  [bigCommerce.kind]: bigCommerce,
 };
 
 /** The connector for a source's kind, or null. */

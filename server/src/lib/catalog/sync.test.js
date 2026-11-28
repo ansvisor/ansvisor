@@ -122,8 +122,10 @@ describe('syncCatalog', () => {
     expect(sock.removed_at).toBeNull();
   });
 
-  it("writes a changed price on its variant only, with its product's images again", async () => {
+  it('writes a changed price on its variant only and preserves image identities', async () => {
     await syncCatalog(BRAND, 'feed', feed(), { db: fake.db });
+    const images = globalThis.structuredClone(fake.rows('catalog_images'));
+    fake.writes.length = 0;
     const items = feed();
     items[1] = { ...items[1], price: { amount: 119, currency: 'USD' } };
     const counts = await syncCatalog(BRAND, 'feed', items, { db: fake.db });
@@ -132,9 +134,69 @@ describe('syncCatalog', () => {
     expect(fake.rows('catalog_variants').find((v) => v.external_id === 'TR-100-BLUE').price).toBe(
       119,
     );
-    // The boot's images were written again, once each.
-    const bootImages = fake.rows('catalog_images').filter((i) => i.url.includes('/tr-'));
-    expect(bootImages).toHaveLength(5);
+    expect(fake.rows('catalog_images')).toEqual(images);
+    expect(fake.writes.map((w) => w.table)).toEqual(['catalog_variants']);
+  });
+
+  it('removes obsolete photos while keeping the surviving variant and its unchanged photo', async () => {
+    const [original] = feed();
+    const second = {
+      ...original,
+      id: 'second-variant',
+      imageLink: 'https://shop.example/blue.jpg',
+    };
+    await syncCatalog(BRAND, 'feed', [original, second], { db: fake.db });
+    const originalId = fake.rows('catalog_variants').find((v) => v.external_id === original.id).id;
+    const firstImage = fake
+      .rows('catalog_images')
+      .find((i) => i.variant_id === originalId && i.position === 0);
+    const next = { ...original, additionalImageLinks: ['https://shop.example/new-detail.jpg'] };
+    await syncCatalog(BRAND, 'feed', [next, second], { db: fake.db });
+    expect(fake.rows('catalog_images')).toContainEqual(firstImage);
+    await syncCatalog(BRAND, 'feed', [next], { db: fake.db });
+    const photos = fake.rows('catalog_images');
+    expect(photos).toHaveLength(2);
+    expect(photos).toContainEqual(firstImage);
+    expect(photos).toContainEqual(
+      expect.objectContaining({
+        variant_id: originalId,
+        position: 1,
+        url: next.additionalImageLinks[0],
+      }),
+    );
+  });
+
+  it('preserves category links on a rename and repairs a gallery and links after an interrupted sync', async () => {
+    const [original] = feed();
+    const item = { ...original, productTypes: ['Boots', 'Hiking'] };
+    await syncCatalog(BRAND, 'feed', [item], { db: fake.db });
+    fake.writes.length = 0;
+    item.title = 'Trail boot';
+    await syncCatalog(BRAND, 'feed', [item], { db: fake.db });
+    expect(fake.writes.map((w) => w.table)).toEqual(['catalog_products', 'catalog_variants']);
+    const hikingId = fake.rows('catalog_categories').find((c) => c.name === 'Hiking').id;
+    const hikingLink = fake
+      .rows('catalog_product_categories')
+      .find((l) => l.category_id === hikingId);
+    item.productTypes = ['Hiking', 'Outdoor'];
+    item.imageLink = 'https://shop.example/new-boot.jpg';
+    const unavailable = {
+      from(table) {
+        if (table === 'catalog_images') throw new Error('image read interrupted');
+        return fake.db.from(table);
+      },
+    };
+    await expect(syncCatalog(BRAND, 'feed', [item], { db: unavailable })).rejects.toThrow(
+      'image read interrupted',
+    );
+    const retry = await syncCatalog(BRAND, 'feed', [item], { db: fake.db });
+    expect(retry.variants.unchanged).toBe(1);
+    expect(fake.rows('catalog_images').find((i) => i.position === 0).url).toBe(item.imageLink);
+    const outdoorId = fake.rows('catalog_categories').find((c) => c.name === 'Outdoor').id;
+    expect(fake.rows('catalog_product_categories')).toEqual([
+      hikingLink,
+      expect.objectContaining({ category_id: outdoorId }),
+    ]);
   });
 
   it('keeps sources and brands apart', async () => {
